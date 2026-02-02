@@ -1,1 +1,3 @@
 # BeliefCraft
+
+**BeliefCraft** is a research-oriented toolkit that uses retrieval-augmented generation as a knowledge model to improve belief/state estimation and decision making in partially observable environments. It combines document retrieval with provenance-aware passages, particle-based or learned belief updates, and policy learners (actor-critic / PPO) so agents can make more informed, auditable decisions. The project delivers an end-to-end pipeline: ingest and index domain texts, expose a RAG API, augment agent beliefs at runtime, and evaluate decision performance in controlled simulations.
