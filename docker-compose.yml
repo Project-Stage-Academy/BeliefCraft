@@ -1,0 +1,43 @@
+name: beliefcraft
+
+services:
+  environment-api:
+    build:
+      context: ./services/environment-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./services/environment-api/.env
+
+  rag-service:
+    build:
+      context: ./services/rag-service
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./services/rag-service/.env
+    depends_on:
+      - environment-api
+
+  agent-service:
+    build:
+      context: ./services/agent-service
+    ports:
+      - "8002:8002"
+    env_file:
+      - ./services/agent-service/.env
+    depends_on:
+      - environment-api
+      - rag-service
+
+  ui:
+    build:
+      context: ./services/ui
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./services/ui/.env
+    depends_on:
+      - environment-api
+      - rag-service
+      - agent-service
