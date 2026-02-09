@@ -6,10 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src
 
-COPY pyproject.toml requirements.txt ./
+COPY pyproject.toml uv.lock ./
 
 RUN pip install --no-cache-dir uv \
-  && uv pip install --system -r requirements.txt
+  && uv sync --frozen --system
 
 COPY src ./src
 

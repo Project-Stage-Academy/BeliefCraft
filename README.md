@@ -54,6 +54,6 @@ Service endpoints (host ports):
 - UI: `http://localhost:3000/`
 
 **Development Notes**
-- Python services use `uv` for dependency management; `requirements.txt` can be regenerated via `uv pip compile`.
+- Python services use `uv` for dependency management with `pyproject.toml`.
 - Each service keeps its own `pyproject.toml` or `package.json` for isolated dependencies.
 - Docker Compose runs everything from the repo root via `docker-compose.yml`.
