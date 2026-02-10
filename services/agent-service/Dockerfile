@@ -1,18 +1,32 @@
-FROM python:3.11-slim
+FROM python:3.11-slim as base
 
 WORKDIR /app
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app
 
-COPY pyproject.toml uv.lock ./
+# Copy pyproject.toml for dependencies
+COPY pyproject.toml ./
 
-RUN pip install --no-cache-dir uv \
-  && uv sync --frozen --system
+# Install uv and dependencies
+RUN pip install --no-cache-dir uv && \
+    uv sync --frozen --no-dev
 
-COPY src ./src
+# Copy application code
+COPY app ./app
 
-EXPOSE 8002
+# Create non-root user
+RUN useradd -m -u 1000 agent && chown -R agent:agent /app
+USER agent
 
-CMD ["sh", "-c", "uvicorn agent_service.main:app --host 0.0.0.0 --port ${PORT:-8002}"]
+EXPOSE 8003
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
