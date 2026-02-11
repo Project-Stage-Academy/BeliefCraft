@@ -24,6 +24,8 @@ class WorldBuilder:
         self.products: List[Product] = []
         self.suppliers: List[Supplier] = []
 
+        logger.info('world builder initialized')
+
     def build_all(self) -> None:
         """
         Orchestrator method.
