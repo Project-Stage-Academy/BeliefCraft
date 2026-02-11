@@ -41,7 +41,7 @@ services:
       - ./services/rag-service/.env
     depends_on:
       environment-api:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test:
         [
@@ -73,9 +73,9 @@ services:
       redis:
         condition: service_healthy
       environment-api:
-        condition: service_healthy
+        condition: service_started
       rag-service:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/health"]
       interval: 10s

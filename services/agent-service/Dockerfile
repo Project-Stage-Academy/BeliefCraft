@@ -13,12 +13,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-# Copy pyproject.toml for dependencies
-COPY pyproject.toml ./
+# Install uv
+RUN pip install --no-cache-dir uv
 
-# Install uv and dependencies
-RUN pip install --no-cache-dir uv && \
-    uv sync --frozen --no-dev
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies with uv
+RUN uv sync --frozen --no-dev
 
 # Copy application code
 COPY app ./app
@@ -29,4 +31,4 @@ USER agent
 
 EXPOSE 8003
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
+CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
