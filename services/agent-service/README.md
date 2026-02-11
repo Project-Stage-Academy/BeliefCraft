@@ -1,46 +1,30 @@
 # Agent Service
 
-ReAct-based warehouse decision advisor powered by Claude Sonnet 4.5.
+ReAct-based warehouse decision advisor for the BeliefCraft platform.
 
-## Overview
-
-The Agent Service implements a ReAct (Reasoning and Acting) agent that processes warehouse queries, interacts with external APIs, and provides intelligent decision support using Claude Sonnet 4.5.
-
-## Features
-
-- 🤖 ReAct agent with Claude Sonnet 4.5
-- 🔄 Health check with dependency monitoring
-- 📊 Structured JSON logging
-- 🔒 Request ID tracking
-- 🐳 Docker support
-- 📝 OpenAPI documentation
-
-## Setup
+## Quick Start
 
 ### Local Development
 
-1. **Install dependencies:**
-   ```bash
-   cd services/agent-service
-   pip install uv
-   uv sync
-   ```
+```bash
+cd services/agent-service
 
-2. **Configure environment:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your Anthropic API key
-   ```
+# Install dependencies
+pip install uv
+uv sync
 
-3. **Run the service:**
-   ```bash
-   uv run uvicorn app.main:app --reload --port 8003
-   ```
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys
 
-4. **Access the service:**
-   - Root: http://localhost:8003/
-   - Health: http://localhost:8003/api/v1/health
-   - Docs: http://localhost:8003/api/v1/docs
+# Run the service
+uv run uvicorn app.main:app --reload --port 8003
+```
+
+**Access:**
+- API: http://localhost:8003
+- Health: http://localhost:8003/api/v1/health
+- Docs: http://localhost:8003/api/v1/docs
 
 ### Docker
 
@@ -49,51 +33,25 @@ The Agent Service implements a ReAct (Reasoning and Acting) agent that processes
 docker-compose up agent-service
 ```
 
+## Essential Configuration
+
+Create `.env` file with these **required** variables:
+
+```bash
+ENVIRONMENT_API_URL=http://localhost:8001/api/v1
+RAG_API_URL=http://localhost:8002/api/v1
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+```
+
+See [Configuration Guide](../../docs/agent-service/CONFIGURATION.md) for all options.
+
 ## API Endpoints
 
-### Root
-```
-GET /
-```
-Returns service information and available endpoints
+- **GET** `/api/v1/health` - Health check with dependency status
+- **POST** `/api/v1/agent/analyze` - Agent query (planned; not implemented yet)
+- **GET** `/api/v1/docs` - Interactive API documentation
 
-### Health Check
-```
-GET /api/v1/health
-```
-Returns service status and dependency health:
-- Environment API connectivity
-- RAG API connectivity  
-- Redis connectivity
-- Anthropic API configuration
-
-### Agent Query (Coming Soon)
-```
-POST /api/v1/agent/analyze
-```
-
-### Documentation
-```
-GET /api/v1/docs
-```
-Interactive OpenAPI documentation (Swagger UI)
-
-## Configuration
-
-All configuration is managed via environment variables. See `.env.example` for available options.
-
-### Required Variables
-
-- `ANTHROPIC_API_KEY` - Your Anthropic API key
-- `ENVIRONMENT_API_URL` - Environment API endpoint
-- `RAG_API_URL` - RAG service endpoint
-- `REDIS_URL` - Redis connection URL
-
-### Optional Variables
-
-- `ANTHROPIC_MODEL` - Claude model (default: claude-sonnet-4.5)
-- `MAX_ITERATIONS` - Maximum ReAct iterations (default: 10)
-- `LOG_LEVEL` - Logging level (default: INFO)
+See [API Documentation](../../docs/agent-service/API.md) for detailed endpoint specifications.
 
 ## Testing
 
@@ -101,74 +59,63 @@ All configuration is managed via environment variables. See `.env.example` for a
 # Run all tests
 uv run pytest tests/ -v
 
-# Run with coverage
+# With coverage
 uv run pytest tests/ --cov=app --cov-report=html
 ```
 
-## Architecture
+## Project Structure
 
 ```
-app/
-├── main.py              # FastAPI application
-├── config.py            # Configuration management
-├── api/
-│   └── v1/
-│       └── routes/
-│           ├── health.py    # Health check endpoint
-│           ├── agent.py     # Agent endpoints (TODO)
-│           └── tools.py     # Tool endpoints (TODO)
-├── core/
-│   ├── logging.py       # Structured logging
-│   └── exceptions.py    # Custom exceptions
-├── models/              # Pydantic schemas
-│   ├── requests.py
-│   └── responses.py
-└── services/            # Business logic (TODO)
+services/agent-service/
+ app/
+    main.py              # FastAPI app initialization
+    config.py            # Configuration management
+    api/v1/routes/       # API endpoints
+    core/                # Logging, exceptions
+    models/              # Pydantic schemas
+    services/            # Business logic
+ tests/                   # Unit tests
+ Dockerfile
+ pyproject.toml
+ .env.example
 ```
 
-## Development
+## Documentation
 
-### Adding New Endpoints
+- **[API Documentation](../../docs/agent-service/API.md)** - Complete API reference
+- **[Configuration Guide](../../docs/agent-service/CONFIGURATION.md)** - All configuration options
+- **[Deployment Guide](../../docs/agent-service/DEPLOYMENT.md)** - Deployment instructions
+- **[Architecture](../../docs/agent-service/ARCHITECTURE.md)** - Architecture and design
 
-1. Create route in `app/api/v1/routes/`
-2. Define request/response models in `app/models/`
-3. Include router in `app/main.py`
+## Status
 
-### Logging
+###  Completed
 
-Use structured logging throughout:
+- FastAPI application with health checks
+- Configuration management
+- Structured JSON logging
+- Request ID middleware
+- Error handling middleware
+- CORS configuration
+- OpenAPI documentation
+- Docker support
+- Unit tests
 
-```python
-from app.core.logging import configure_logging
+###  In Progress
 
-logger = configure_logging()
-logger.info("event_name", key1="value1", key2="value2")
-```
+- ReAct agent implementation
+- Agent query endpoint
+- Tool system
 
-### Error Handling
+## Support
 
-Raise custom exceptions for proper error responses:
+For issues or questions:
 
-```python
-from app.core.exceptions import AgentServiceException
-
-raise AgentServiceException(
-    message="Error description",
-    status_code=500,
-    error_code="ERROR_CODE"
-)
-```
-
-## Dependencies
-
-- FastAPI - Web framework
-- Uvicorn - ASGI server
-- Pydantic - Data validation
-- Anthropic - Claude API client
-- Redis - Caching
-- Structlog - Structured logging
-- HTTPX - Async HTTP client
+1. Check the [documentation](../../docs/agent-service/)
+2. Review API docs at `/api/v1/docs`
+3. Check service logs
+4. See [task.md](../../task.md) for requirements
 
 ## License
 
-Internal use only.
+Internal use only - BeliefCraft Project
