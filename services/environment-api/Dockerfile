@@ -4,16 +4,20 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
+    PYTHONPATH=/app/services/environment-api/src \
     PORT=8000
 
-COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv
 
-RUN pip install --no-cache-dir uv \
-  && uv sync --frozen --system
+COPY services/environment-api/pyproject.toml services/environment-api/uv.lock ./
+RUN uv sync --frozen
 
-COPY src ./src
+COPY packages/common /app/packages/common
+RUN uv pip install --python /app/.venv/bin/python -e /app/packages/common
+
+COPY services/environment-api/src /app/services/environment-api/src
+COPY services/environment-api/config /app/services/environment-api/config
 
 EXPOSE 8000
 
-CMD ["uvicorn", "environment_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "environment_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

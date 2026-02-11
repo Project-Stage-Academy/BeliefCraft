@@ -3,8 +3,8 @@ name: beliefcraft
 services:
   environment-api:
     build:
-      context: ./services/environment-api
-      dockerfile: Dockerfile
+       context: .
+       dockerfile: services/environment-api/Dockerfile
     ports:
       - "8000:8000"
     env_file:
@@ -15,7 +15,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status == 200 else 1)",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)",
         ]
       interval: 30s
       timeout: 10s
@@ -23,8 +23,8 @@ services:
 
   rag-service:
     build:
-      context: ./services/rag-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/rag-service/Dockerfile
     ports:
       - "8001:8001"
     env_file:
@@ -38,7 +38,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/healthz').status == 200 else 1)",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status == 200 else 1)",
         ]
       interval: 30s
       timeout: 10s
@@ -46,8 +46,8 @@ services:
 
   agent-service:
     build:
-      context: ./services/agent-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/agent-service/Dockerfile
     ports:
       - "8002:8002"
     env_file:
@@ -63,7 +63,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8002/healthz').status == 200 else 1)",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8002/health').status == 200 else 1)",
         ]
       interval: 30s
       timeout: 10s
