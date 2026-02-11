@@ -4,12 +4,12 @@ Structured JSON logging configuration for all services.
 Usage:
     from common.logging import configure_logging, get_logger
     
-    # In main.py
+    # In main.py (once at startup)
     configure_logging("agent-service", log_level="INFO")
     
     # In any module
     logger = get_logger(__name__)
-    logger.info("processing_started", user_id=123, query="reorder?")
+    logger.info("processing_started", user_id=123)
 """
 
 import logging
@@ -18,22 +18,32 @@ import structlog
 from typing import Any
 
 
+_configured = False  # Track if already configured
+
+
 def configure_logging(service_name: str, log_level: str = "INFO") -> None:
     """
     Configure structured JSON logging for a service.
     
+    This function modifies global logging state and should be called
+    once at application startup. It is idempotent - multiple calls
+    will not duplicate configuration.
+    
     Args:
-        service_name: Name of the service (e.g., "agent-service", "rag-service")
+        service_name: Name of the service (e.g., "agent-service")
         log_level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     
     Features:
         - JSON output for all logs
-        - Automatic trace_id propagation
+        - Automatic trace_id propagation via contextvars
         - Stack traces for errors
         - ISO timestamps
         - Service name in every log entry
     """
-
+    global _configured
+    if _configured:
+        return
+    
     level = getattr(logging, log_level.upper(), logging.INFO)
 
     def add_service_name(logger, method_name, event_dict):
@@ -45,12 +55,12 @@ def configure_logging(service_name: str, log_level: str = "INFO") -> None:
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.StackInfoRenderer(),
-        add_service_name,  # ✅ Service name in every log
-        structlog.contextvars.merge_contextvars,  # ✅ Collect trace_id, client_ip
-        structlog.processors.TimeStamper(fmt="iso"),  # ✅ ISO timestamps
-        structlog.processors.dict_tracebacks,  # ✅ Error tracking
-        structlog.processors.format_exc_info,  # ✅ Capture stack traces
-        structlog.processors.JSONRenderer(),  # ✅ JSON output
+        add_service_name,
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.dict_tracebacks,
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer(),
     ]
 
     structlog.configure(
@@ -61,30 +71,36 @@ def configure_logging(service_name: str, log_level: str = "INFO") -> None:
     )
 
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("%(message)s"))  
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    
     root_logger = logging.getLogger()
-
-    for h in root_logger.handlers[:]:
+    
+    # Safe handler removal (create copy before iteration)
+    handlers_copy = root_logger.handlers[:]
+    for h in handlers_copy:
         root_logger.removeHandler(h)
-        
+    
     root_logger.addHandler(handler)
     root_logger.setLevel(level)
 
+    # Configure uvicorn loggers
     for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         log = logging.getLogger(logger_name)
         log.handlers = [handler]
         log.propagate = False
+    
+    _configured = True
 
 
-def get_logger(name: str):
+def get_logger(name: str = None) -> structlog.BoundLogger:
     """
     Get a structured logger for a module.
     
     Args:
-        name: Module name (typically __name__)
+        name: Module name (typically __name__). Optional.
     
     Returns:
-        structlog logger instance
+        structlog BoundLogger instance
     
     Example:
         logger = get_logger(__name__)

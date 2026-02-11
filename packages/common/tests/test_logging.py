@@ -11,6 +11,7 @@ import logging
 import json
 from io import StringIO
 from common.logging import configure_logging, get_logger
+import common.logging
 
 
 class TestLoggingConfiguration:
@@ -96,6 +97,26 @@ class TestLoggingConfiguration:
 
         assert hasattr(logger, "bind")
         assert callable(logger.bind)
+    
+    def test_configure_logging_idempotent(self, capsys):
+        """configure_logging should be idempotent (multiple calls safe)"""
+        configure_logging("test-service-1", "INFO")
+        logger1 = get_logger("test")
+        logger1.info("first_call")
+        
+        captured1 = capsys.readouterr()
+        log1 = json.loads(captured1.out.strip())
+        assert log1["service"] == "test-service-1"
+        
+        # Second call should not reconfigure
+        configure_logging("test-service-2", "DEBUG")
+        logger2 = get_logger("test")
+        logger2.info("second_call")
+        
+        captured2 = capsys.readouterr()
+        log2 = json.loads(captured2.out.strip())
+        # Should still be test-service-1 (not reconfigured)
+        assert log2["service"] == "test-service-1"
 
 
 class TestLoggerUsage:
@@ -151,7 +172,16 @@ class TestLoggerUsage:
 @pytest.fixture(autouse=True)
 def reset_logging():
     """Reset logging configuration between tests"""
+    # Reset before test
+    common.logging._configured = False
+    logging.root.handlers = []
+    structlog.reset_defaults()
+    structlog.contextvars.clear_contextvars()
+    
     yield
+    
+    # Reset after test
+    common.logging._configured = False
     structlog.reset_defaults()
     logging.root.handlers = []
     structlog.contextvars.clear_contextvars()

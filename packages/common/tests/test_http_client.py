@@ -42,8 +42,20 @@ def mock_httpx_client():
 @pytest.mark.asyncio
 async def test_traced_client_context_manager(mock_httpx_client):
     """Test async context manager properly initializes and closes client."""
-    async with TracedHttpClient("http://test-service") as client:
-        assert client._client is not None
+    with patch("common.http_client.httpx.AsyncClient") as mock_class:
+        mock_class.return_value = mock_httpx_client
+        
+        async with TracedHttpClient("http://test-service") as client:
+            assert client._client is not None
+        
+        # Verify event hooks are registered (mentor feedback)
+        call_kwargs = mock_class.call_args.kwargs
+        assert "event_hooks" in call_kwargs
+        hooks = call_kwargs["event_hooks"]
+        assert "request" in hooks
+        assert "response" in hooks
+        assert len(hooks["request"]) == 1
+        assert len(hooks["response"]) == 1
 
     mock_httpx_client.aclose.assert_called_once()
 
@@ -64,7 +76,7 @@ async def test_trace_id_injection_from_context(capsys):
         mock_request.headers = {}
         
         async with TracedHttpClient("http://test") as client:
-            await client._log_request(mock_request)
+            await client._request_logger.log_request(mock_request)
 
             assert mock_request.headers["X-Request-ID"] == "test-trace-123"
 
@@ -90,7 +102,7 @@ async def test_default_trace_id_when_no_context(capsys):
         mock_request.headers = {}
         
         async with TracedHttpClient("http://test") as client:
-            await client._log_request(mock_request)
+            await client._request_logger.log_request(mock_request)
 
             assert mock_request.headers["X-Request-ID"] == "internal-request"
     
@@ -113,7 +125,7 @@ async def test_response_logging_success(capsys):
         mock_response.request.url = "http://test/resource"
         
         async with TracedHttpClient("http://test") as client:
-            await client._log_response(mock_response)
+            await client._request_logger.log_response(mock_response)
     
     captured = capsys.readouterr()
     assert "http_request_completed" in captured.out
@@ -135,7 +147,7 @@ async def test_response_logging_error(capsys):
         mock_response.request.url = "http://test/action"
         
         async with TracedHttpClient("http://test") as client:
-            await client._log_response(mock_response)
+            await client._request_logger.log_response(mock_response)
     
     captured = capsys.readouterr()
     assert "http_request_failed" in captured.out
@@ -178,11 +190,12 @@ async def test_methods_raise_without_context_manager():
 @pytest.mark.asyncio
 async def test_create_traced_client_factory():
     """Test convenience factory function creates proper client."""
-    client = await create_traced_client("http://factory-test", timeout=15.0)
+    client = await create_traced_client("http://factory-test", timeout=15.0, config={"verify": False})
     
     assert isinstance(client, TracedHttpClient)
     assert client.base_url == "http://factory-test"
     assert client.timeout == 15.0
+    assert client.config == {"verify": False}
 
 
 @pytest.mark.asyncio
