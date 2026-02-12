@@ -1,24 +1,30 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
-    Float,
     Boolean,
-    ForeignKey,
     DateTime,
-    func,
-    Enum as SAEnum,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import (
+    Float,
+    ForeignKey,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.database.src.base import Base
 from packages.database.src.constraints import (
     check_between_zero_one,
     check_non_negative,
 )
-from packages.database.src.enums import DeviceType, DeviceStatus, ObservationType
+from packages.database.src.enums import DeviceStatus, DeviceType, ObservationType
+
+if TYPE_CHECKING:
+    from packages.database.src.inventory import InventoryMove, Location, Product
+    from packages.database.src.logistics import Shipment, Warehouse
 
 
 class SensorDevice(Base):
@@ -49,7 +55,7 @@ class SensorDevice(Base):
 
     # Relationships
     warehouse: Mapped["Warehouse"] = relationship(back_populates="sensor_devices")
-    observations: Mapped[List["Observation"]] = relationship(back_populates="device")
+    observations: Mapped[list["Observation"]] = relationship(back_populates="device")
 
 
 class Observation(Base):
@@ -73,12 +79,12 @@ class Observation(Base):
         SAEnum(ObservationType, name="obs_type"),
         nullable=False,
     )
-    observed_qty: Mapped[Optional[float]] = mapped_column(Float)
+    observed_qty: Mapped[float | None] = mapped_column(Float)
     confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
     is_missing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    reported_noise_sigma: Mapped[Optional[float]] = mapped_column(Float)
-    related_move_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("inventory_moves.id"))
-    related_shipment_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("shipments.id"))
+    reported_noise_sigma: Mapped[float | None] = mapped_column(Float)
+    related_move_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("inventory_moves.id"))
+    related_shipment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("shipments.id"))
 
     # Relationships
     device: Mapped["SensorDevice"] = relationship(back_populates="observations")

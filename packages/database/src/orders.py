@@ -1,17 +1,19 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
-    String,
+    DateTime,
+)
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import (
     Float,
     ForeignKey,
-    DateTime,
+    String,
     func,
-    Enum as SAEnum,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.database.src.base import Base
 from packages.database.src.constraints import (
@@ -21,6 +23,10 @@ from packages.database.src.constraints import (
 )
 from packages.database.src.enums import OrderStatus, POStatus
 from packages.database.src.mixins import AuditTimestampMixin
+
+if TYPE_CHECKING:
+    from packages.database.src.inventory import Product
+    from packages.database.src.logistics import LeadtimeModel, Shipment, Supplier, Warehouse
 
 
 class Order(AuditTimestampMixin, Base):
@@ -37,18 +43,18 @@ class Order(AuditTimestampMixin, Base):
         default=OrderStatus.NEW,
         nullable=False,
     )
-    promised_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    promised_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sla_priority: Mapped[float] = mapped_column(
         Float,
         check_between_zero_one("sla_priority"),
         default=0.5,
         nullable=False,
     )
-    requested_ship_from_region: Mapped[Optional[str]] = mapped_column(String)
+    requested_ship_from_region: Mapped[str | None] = mapped_column(String)
 
     # Relationships
-    lines: Mapped[List["OrderLine"]] = relationship(back_populates="order")
-    shipments: Mapped[List["Shipment"]] = relationship(back_populates="order")
+    lines: Mapped[list["OrderLine"]] = relationship(back_populates="order")
+    shipments: Mapped[list["Shipment"]] = relationship(back_populates="order")
 
 
 class OrderLine(Base):
@@ -95,17 +101,15 @@ class PurchaseOrder(AuditTimestampMixin, Base):
         default=POStatus.DRAFT,
         nullable=False,
     )
-    expected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    leadtime_model_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        ForeignKey("leadtime_models.id")
-    )
+    expected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    leadtime_model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("leadtime_models.id"))
 
     # Relationships
     supplier: Mapped["Supplier"] = relationship(back_populates="purchase_orders")
     destination_warehouse: Mapped["Warehouse"] = relationship("Warehouse")
     leadtime_model: Mapped[Optional["LeadtimeModel"]] = relationship("LeadtimeModel")
-    lines: Mapped[List["POLine"]] = relationship(back_populates="purchase_order")
-    shipments: Mapped[List["Shipment"]] = relationship(back_populates="purchase_order")
+    lines: Mapped[list["POLine"]] = relationship(back_populates="purchase_order")
+    shipments: Mapped[list["Shipment"]] = relationship(back_populates="purchase_order")
 
 
 class POLine(Base):

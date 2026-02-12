@@ -3,8 +3,18 @@
 ## Setup
 
 1. Install uv.
-2. Create the environment and install deps:
-   - `uv sync`
+2. Install root-only tooling (without workspace packages):
+   - `uv sync --no-install-workspace`
+3. Optional install scopes:
+   - All Python workspace packages/services (dev + extras):
+     - `uv sync --all-packages --all-groups --all-extras`
+   - Runtime-only Python dependencies (no dev groups):
+     - `uv sync --all-packages --no-dev`
+   - Selected workspace packages by project name:
+     - `uv sync --package beliefcraft-common`
+     - `uv sync --package beliefcraft-database --package beliefcraft-agent-service`
+4. Install UI dependencies (Node.js):
+   - `cd services/ui && npm install`
 
 ## Code quality (required)
 
