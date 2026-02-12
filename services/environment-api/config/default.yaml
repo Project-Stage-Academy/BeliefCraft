@@ -1,0 +1,10 @@
+app:
+  name: "environment-api"
+  env: "local"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+logging:
+  level: "INFO"
