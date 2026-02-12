@@ -1,10 +1,21 @@
+"""
+World Builder Module.
+
+This module acts as the central orchestrator (the "General Contractor") for the
+data generation process. It coordinates specialized builders to construct a
+coherent and interconnected simulation environment, ensuring that dependencies
+(e.g., Warehouses must exist before Routes) are respected.
+"""
+
 from typing import List
 from sqlalchemy.orm import Session
 from faker import Faker
+
 from packages.common.logging import get_logger
-from packages.database.src.models import Warehouse, Product, Supplier
+from packages.database.src.models import Warehouse, Product, Supplier, Route
 from src.data_generator.builders.catalog import CatalogBuilder
 from src.data_generator.builders.infrastructure import InfrastructureBuilder
+from src.data_generator.builders.logistics import LogisticsBuilder
 
 logger = get_logger(__name__)
 
@@ -19,47 +30,64 @@ class WorldBuilder:
         self.session = session
         self.seed = seed
         self.fake = Faker()
+        Faker.seed(seed)
 
+        # State containers for generated entities
         self.warehouses: List[Warehouse] = []
         self.products: List[Product] = []
         self.suppliers: List[Supplier] = []
+        self.routes: List[Route] = []
 
+        # Initialize specialized builders
         self.infra_builder = InfrastructureBuilder(session)
         self.catalog_builder = CatalogBuilder(session)
+        self.logistics_builder = LogisticsBuilder(session)
 
         logger.info('world_builder_initialized')
 
     def build_all(self) -> None:
         """
         Orchestrator method.
+        Executes the build steps in the specific order required to satisfy
+        database foreign key constraints and logical dependencies.
         """
         self.create_warehouses()
         self.create_products()
+        self.create_suppliers()
+        self.create_logistics_network()
 
     def create_warehouses(self, count: int = 3) -> None:
+        """
+        Delegates the creation of physical infrastructure (Warehouses, Docks, Zones).
+        """
         self.warehouses = self.infra_builder.create_warehouses(count)
-
         logger.info("warehouses_built", count=len(self.warehouses))
 
     def create_products(self, count: int = 50) -> None:
         """
-        1. Create 'count' Product records with realistic categories and shelf life.
-        2. Store in self.products.
+        Delegates the creation of the product catalog.
         """
         self.products = self.catalog_builder.create_products(count)
         logger.info("products_built", count=len(self.products))
 
     def create_suppliers(self, count: int = 5) -> None:
         """
-        1. Create 'count' Supplier records with reliability scores.
-        2. Store in self.suppliers.
+        Delegates the creation of external suppliers.
         """
         self.suppliers = self.catalog_builder.create_suppliers(count)
         logger.info("suppliers_built", count=len(self.suppliers))
 
     def create_logistics_network(self) -> None:
         """
-        1. Create LeadtimeModel (global shipping rules).
-        2. Create Routes connecting the self.warehouses.
+        Establishes the transportation graph.
+        1. Generates global LeadtimeModels (Express, Standard, Ocean).
+        2. Connects all generated warehouses with Routes, assigning appropriate
+           models and transport modes based on distance.
         """
-        pass
+        lt_models = self.logistics_builder.create_global_leadtime_models()
+
+        self.routes = self.logistics_builder.connect_warehouses(self.warehouses, lt_models)
+
+        logger.info("logistics_network_built",
+                    routes=len(self.routes),
+                    models=len(lt_models))
