@@ -33,4 +33,3 @@ include = [
 "middleware.py" = "common/middleware.py"
 "schemas" = "common/schemas"
 "utils" = "common/utils"
-
