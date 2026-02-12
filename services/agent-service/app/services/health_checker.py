@@ -10,11 +10,8 @@ class HealthChecker:
     """Service for checking health of external dependencies"""
 
     def __init__(
-        self,
-        settings: Settings,
-        redis_client: redis.Redis,
-        http_client: httpx.AsyncClient,
-    ) -> None:
+        self, settings: Settings, redis_client: redis.Redis, http_client: httpx.AsyncClient
+    ):
         self.settings = settings
         self._redis_client = redis_client
         self._http_client = http_client

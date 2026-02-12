@@ -2,8 +2,9 @@
 
 import structlog
 from app.config import get_settings
-from common.logging import configure_logging as configure_common_logging
-from common.logging import get_logger
+
+from packages.common.logging import configure_logging as configure_common_logging
+from packages.common.logging import get_logger
 
 _configured = False
 

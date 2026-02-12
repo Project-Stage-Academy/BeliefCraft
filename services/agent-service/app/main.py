@@ -28,10 +28,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
     app.state.http_client = httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT)
-    app.state.redis_pool = redis.ConnectionPool.from_url(
-        settings.REDIS_URL,
-        decode_responses=True,
-    )
+    app.state.redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
     app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
     yield
     # Shutdown
@@ -145,10 +142,19 @@ async def root() -> dict[str, str]:
 
 
 # Include routers
-app.include_router(health.router, prefix=settings.API_V1_PREFIX, tags=["health"])
+app.include_router(
+    health.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["health"],
+)
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+    uvicorn.run(
+        "app.main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=True,
+    )

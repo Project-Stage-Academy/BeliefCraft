@@ -40,6 +40,11 @@ repos:
           - fastapi
           - httpx
           - structlog
+          - pydantic-settings
+          - redis
+          - uvicorn
+          - python-dotenv
+          - anthropic
           - pytest
           - pydantic-settings
           - redis

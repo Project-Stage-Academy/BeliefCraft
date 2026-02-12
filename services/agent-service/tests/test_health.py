@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.config import Settings, get_settings
@@ -21,7 +21,7 @@ def test_health_all_services_healthy(mock_redis: Any, mock_httpx: Any) -> None:
     """Health check should return healthy when all deps are up"""
 
     # Mock settings
-    def override_get_settings() -> Any:
+    def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
         mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
         mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
@@ -29,7 +29,7 @@ def test_health_all_services_healthy(mock_redis: Any, mock_httpx: Any) -> None:
         mock_settings.ANTHROPIC_API_KEY = "test-key"
         mock_settings.SERVICE_NAME = "agent-service"
         mock_settings.SERVICE_VERSION = "0.1.0"
-        return mock_settings
+        return cast(Settings, mock_settings)
 
     app.dependency_overrides[get_settings] = override_get_settings
 
@@ -59,7 +59,7 @@ def test_health_missing_anthropic_key(mock_redis: Any, mock_httpx: Any) -> None:
     """Health check should show degraded when Anthropic key is missing"""
 
     # Mock settings with missing API key
-    def override_get_settings() -> Any:
+    def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
         mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
         mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
@@ -67,7 +67,7 @@ def test_health_missing_anthropic_key(mock_redis: Any, mock_httpx: Any) -> None:
         mock_settings.ANTHROPIC_API_KEY = ""  # Missing key
         mock_settings.SERVICE_NAME = "agent-service"
         mock_settings.SERVICE_VERSION = "0.1.0"
-        return mock_settings
+        return cast(Settings, mock_settings)
 
     app.dependency_overrides[get_settings] = override_get_settings
 
@@ -103,7 +103,7 @@ def test_health_redis_failure(mock_redis: Any, mock_httpx: Any) -> None:
     """Health check should show degraded when Redis is down"""
 
     # Mock settings
-    def override_get_settings() -> Any:
+    def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
         mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
         mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
@@ -111,7 +111,7 @@ def test_health_redis_failure(mock_redis: Any, mock_httpx: Any) -> None:
         mock_settings.ANTHROPIC_API_KEY = "test-key"
         mock_settings.SERVICE_NAME = "agent-service"
         mock_settings.SERVICE_VERSION = "0.1.0"
-        return mock_settings
+        return cast(Settings, mock_settings)
 
     app.dependency_overrides[get_settings] = override_get_settings
 
