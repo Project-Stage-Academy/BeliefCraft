@@ -1,23 +1,36 @@
-from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from collections.abc import Iterator
+from typing import cast
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from app.config import Settings, get_settings
 from app.core.constants import HealthStatus
 from app.main import app
 from fastapi.testclient import TestClient
 
-client = TestClient(app)
+
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    with TestClient(app) as test_client:
+        mock_redis = MagicMock()
+        mock_redis.ping.return_value = True
+        app.state.redis_client = mock_redis
+
+        mock_http_client = AsyncMock()
+        ok_response = MagicMock()
+        ok_response.status_code = 200
+        mock_http_client.get.return_value = ok_response
+        app.state.http_client = mock_http_client
+        yield test_client
 
 
-def test_health_endpoint_exists() -> None:
+def test_health_endpoint_exists(client: TestClient) -> None:
     """Health endpoint should be accessible"""
     response = client.get("/api/v1/health")
     assert response.status_code == 200
 
 
-@patch("app.services.health_checker.httpx.AsyncClient")
-@patch("app.services.health_checker.redis.from_url")
-def test_health_all_services_healthy(mock_redis: Any, mock_httpx: Any) -> None:
+def test_health_all_services_healthy(client: TestClient) -> None:
     """Health check should return healthy when all deps are up"""
 
     # Mock settings
@@ -33,14 +46,6 @@ def test_health_all_services_healthy(mock_redis: Any, mock_httpx: Any) -> None:
 
     app.dependency_overrides[get_settings] = override_get_settings
 
-    # Mock external API calls
-    mock_response = AsyncMock()
-    mock_response.status_code = 200
-    mock_httpx.return_value.__aenter__.return_value.get.return_value = mock_response
-
-    # Mock Redis
-    mock_redis.return_value.ping.return_value = True
-
     response = client.get("/api/v1/health")
 
     app.dependency_overrides.clear()
@@ -53,9 +58,7 @@ def test_health_all_services_healthy(mock_redis: Any, mock_httpx: Any) -> None:
     assert data["dependencies"]["anthropic"] == HealthStatus.CONFIGURED
 
 
-@patch("app.services.health_checker.httpx.AsyncClient")
-@patch("app.services.health_checker.redis.from_url")
-def test_health_missing_anthropic_key(mock_redis: Any, mock_httpx: Any) -> None:
+def test_health_missing_anthropic_key(client: TestClient) -> None:
     """Health check should show degraded when Anthropic key is missing"""
 
     # Mock settings with missing API key
@@ -71,14 +74,6 @@ def test_health_missing_anthropic_key(mock_redis: Any, mock_httpx: Any) -> None:
 
     app.dependency_overrides[get_settings] = override_get_settings
 
-    # Mock external API calls
-    mock_response = AsyncMock()
-    mock_response.status_code = 200
-    mock_httpx.return_value.__aenter__.return_value.get.return_value = mock_response
-
-    # Mock Redis
-    mock_redis.return_value.ping.return_value = True
-
     response = client.get("/api/v1/health")
 
     app.dependency_overrides.clear()
@@ -89,7 +84,7 @@ def test_health_missing_anthropic_key(mock_redis: Any, mock_httpx: Any) -> None:
     assert data["dependencies"]["anthropic"] == HealthStatus.MISSING_KEY
 
 
-def test_health_includes_version() -> None:
+def test_health_includes_version(client: TestClient) -> None:
     """Health check should include service version"""
     response = client.get("/api/v1/health")
     data = response.json()
@@ -97,9 +92,7 @@ def test_health_includes_version() -> None:
     assert "timestamp" in data
 
 
-@patch("app.services.health_checker.httpx.AsyncClient")
-@patch("app.services.health_checker.redis.from_url")
-def test_health_redis_failure(mock_redis: Any, mock_httpx: Any) -> None:
+def test_health_redis_failure(client: TestClient) -> None:
     """Health check should show degraded when Redis is down"""
 
     # Mock settings
@@ -115,13 +108,8 @@ def test_health_redis_failure(mock_redis: Any, mock_httpx: Any) -> None:
 
     app.dependency_overrides[get_settings] = override_get_settings
 
-    # Mock external API calls
-    mock_response = AsyncMock()
-    mock_response.status_code = 200
-    mock_httpx.return_value.__aenter__.return_value.get.return_value = mock_response
-
     # Mock Redis failure
-    mock_redis.return_value.ping.side_effect = Exception("Connection refused")
+    app.state.redis_client.ping.side_effect = Exception("Connection refused")
 
     response = client.get("/api/v1/health")
 

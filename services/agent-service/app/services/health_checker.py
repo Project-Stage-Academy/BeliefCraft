@@ -19,7 +19,6 @@ class HealthChecker:
     async def check_http_endpoint(self, url: str) -> str:
         """
         Check health of an HTTP endpoint
-
         Args:
             url: The endpoint URL to check
 
@@ -43,7 +42,6 @@ class HealthChecker:
     def check_redis(self) -> str:
         """
         Check Redis connectivity
-
         Returns:
             Health status string
         """
@@ -60,7 +58,6 @@ class HealthChecker:
     def check_anthropic_config(self) -> str:
         """
         Check if Anthropic API key is configured
-
         Returns:
             Configuration status string
         """
@@ -73,7 +70,6 @@ class HealthChecker:
     async def check_all_dependencies(self) -> dict[str, str]:
         """
         Check all external dependencies
-
         Returns:
             Dictionary with dependency names and their statuses
         """
@@ -92,7 +88,6 @@ class HealthChecker:
     def determine_overall_status(dependencies: dict[str, str]) -> str:
         """
         Determine overall health status based on all dependencies
-
         Args:
             dependencies: Dictionary of dependency statuses
 

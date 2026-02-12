@@ -5,14 +5,15 @@ Run:
     pytest packages/common/tests/test_logging.py -v
 """
 
+# mypy: disallow-untyped-defs=False, check-untyped-defs=False
+
 import json
 import logging
 
+import common.logging
 import pytest
 import structlog
-
-import packages.common.logging
-from packages.common.logging import configure_logging, get_logger
+from common.logging import configure_logging, get_logger
 
 
 class TestLoggingConfiguration:
@@ -166,7 +167,7 @@ class TestLoggerUsage:
 def reset_logging():
     """Reset logging configuration between tests"""
     # Reset before test
-    packages.common.logging._configured = False
+    common.logging._configured = False
     logging.root.handlers = []
     structlog.reset_defaults()
     structlog.contextvars.clear_contextvars()
@@ -174,7 +175,7 @@ def reset_logging():
     yield
 
     # Reset after test
-    packages.common.logging._configured = False
+    common.logging._configured = False
     structlog.reset_defaults()
     logging.root.handlers = []
     structlog.contextvars.clear_contextvars()

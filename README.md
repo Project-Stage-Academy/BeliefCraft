@@ -40,6 +40,7 @@ graph TD
 - `packages/database/`: shared database models and connection helpers
 - `infrastructure/`: Docker and scripts
 - `docs/`: design docs
+  - `docs/configuration-workflow.md`: YAML config loading, validation, and env placeholder expansion
 - `tests/`: test suites
 
 **Quick Start**
