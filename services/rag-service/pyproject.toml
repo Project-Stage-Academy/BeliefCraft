@@ -9,8 +9,11 @@ dependencies = [
   "pydantic",
   "pyyaml",
   "python-dotenv",
-  "beliefcraft-common @ file:///app/packages/common",
+  "beliefcraft-common",
 ]
+
+[tool.uv.sources]
+beliefcraft-common = { workspace = true }
 
 [dependency-groups]
 dev = [
