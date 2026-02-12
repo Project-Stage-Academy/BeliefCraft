@@ -1,15 +1,15 @@
-
 from datetime import datetime
-
-from sqlalchemy.orm import Session
-
 from typing import List
 import random
 
+from sqlalchemy.orm import Session
+
 from packages.common import logging
 from packages.database.src.models import Warehouse, Product
+from src.data_generator.logic.inbound import InboundManager
 
 logger = logging.get_logger(__name__)
+
 
 class SimulationEngine:
     """
@@ -24,16 +24,21 @@ class SimulationEngine:
 
         self.rng = random.Random(42)
 
-        logger.info('simulation engine initialized',
-                    warehouses=len(warehouses),
-                    products=len(products))
+        # Initialize the specialist manager
+        self.inbound_manager = InboundManager(session)
+
+        logger.info(
+            'simulation_engine_initialized',
+            warehouses_count=len(warehouses),
+            products_count=len(products)
+        )
 
     def tick(self, current_date: datetime) -> None:
         """
         Advances the simulation by one time step (typically 1 day).
 
         The order of operations is critical for causality:
-        1. Shipments arrive (Inventory UP)
+        1. Shipments arrive (Inventory UP) -> Delegated to InboundManager
         2. Customers order (Inventory DOWN)
         3. Manager reviews stock (Decides to buy more)
         4. Sensors record the final state (Observation)
@@ -41,19 +46,15 @@ class SimulationEngine:
 
         logger.debug('tick_started', date=current_date.isoformat())
 
-        self._process_shipments(current_date)
+        # 1. Process Inbound Shipments (Connected!)
+        self.inbound_manager.process_daily_arrivals(current_date)
+
+        # 2. Process Outbound Demand (Placeholders)
         self._generate_demand(current_date)
         self._restock_inventory(current_date)
         self._update_sensors(current_date)
 
         self.session.flush()
-
-    def _process_shipments(self, date: datetime) -> None:
-        """
-        Logic: Look for Shipments where status='IN_TRANSIT' and arrival_date <= today.
-        Action: Update InventoryBalance (+Qty) and set Shipment status to 'DELIVERED'.
-        """
-        pass
 
     def _generate_demand(self, date: datetime) -> None:
         """
