@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal, Optional
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from common.utils.settings_base import BaseSettings
 
 
 class AppConfig(BaseModel):
@@ -24,15 +27,11 @@ class LoggingConfig(BaseModel):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(default="INFO")
 
 
-class Settings(BaseModel):
+class Settings(BaseSettings):
     """
     Root config schema for environment-api.
     Matches YAML structure in services/environment-api/config/*.yaml
     """
-    model_config = ConfigDict(extra="forbid")
-
     app: AppConfig = Field(default_factory=AppConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
-
-    # database_url: Optional[str] = None

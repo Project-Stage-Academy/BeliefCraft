@@ -7,7 +7,7 @@ from typing import Any, Optional, Type, TypeVar
 
 import yaml
 from dotenv import dotenv_values
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from common.utils.config_errors import (
     ConfigFileNotFound,
@@ -15,51 +15,57 @@ from common.utils.config_errors import (
     ConfigValidationError,
     MissingEnvironmentVariable,
 )
+from common.utils.settings_base import BaseSettings
 
-T = TypeVar("T", bound=BaseModel)
+T = TypeVar("T", bound=BaseSettings)
 
 _VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 class ConfigLoader:
     """
-    Monorepo config loader.
+    Service-local config loader.
 
-    Layout assumed:
-      repo_root/
-        services/<service_name>/config/default.yaml
-        services/<service_name>/config/dev.yaml
-        services/<service_name>/config/prod.yaml
+    Layout assumed (relative to service_root):
+      config/default.yaml
+      config/dev.yaml
+      config/prod.yaml
 
     Base config path precedence:
       (1) cli_config_path (--config)
-      (2) <SERVICE_NAME>_CONFIG environment variable
-      (3) services/<service_name>/config/default.yaml
+      (2) config_env_var environment variable (if provided)
+      (3) config/default.yaml
 
     Optional env override:
-      if env is provided -> merge services/<service_name>/config/{env}.yaml on top
+      if env is provided -> merge config/{env}.yaml on top
 
     Placeholder expansion:
       ${VAR} resolved from .env (if present) first, then os.environ.
     """
 
-    def __init__(self, repo_root: Optional[str | Path] = None):
-        self.repo_root = Path(repo_root).resolve() if repo_root else self._detect_repo_root()
+    def __init__(self, service_root: Optional[str | Path] = None, config_dir: str = "config"):
+        self.service_root = Path(service_root).resolve() if service_root else Path.cwd().resolve()
+        config_dir_path = Path(config_dir)
+        self.config_dir = (
+            config_dir_path
+            if config_dir_path.is_absolute()
+            else (self.service_root / config_dir_path)
+        ).resolve()
 
     def load(
         self,
         *,
-        service_name: str,
         schema: Type[T],
         env: Optional[str] = None,                  # "dev" | "prod" | None
         cli_config_path: Optional[str] = None,      # --config
-        dotenv_mode: str = "config_dir_then_repo",  # "config_dir_then_repo" | "repo_only" | "none"
+        config_env_var: Optional[str] = None,
+        dotenv_mode: str = "config_dir_then_service_root",  # "config_dir_then_service_root" | "service_root_only" | "none"
     ) -> T:
-        config_dir = self.repo_root / "services" / service_name / "config"
+        config_dir = self.config_dir
         if not config_dir.exists():
             raise ConfigFileNotFound(f"Config directory not found: {config_dir}")
 
-        base_path = self._resolve_base_path(service_name, config_dir, cli_config_path)
+        base_path = self._resolve_base_path(config_dir, cli_config_path, config_env_var)
         base = self._read_yaml(base_path)
 
         merged = base
@@ -80,32 +86,29 @@ class ConfigLoader:
             return schema.model_validate(merged)
         except ValidationError as e:
             raise ConfigValidationError(
-                f"Validation failed for service '{service_name}' config loaded from '{base_path}'. {e}"
+                f"Validation failed for config loaded from '{base_path}'. {e}"
             ) from e
 
     # ----------------- internal helpers -----------------
 
-    def _detect_repo_root(self) -> Path:
-        # Walk up from current file until we find repo markers
-        here = Path(__file__).resolve().parent
-        for parent in [here] + list(here.parents):
-            if (parent / "services").exists() and (parent / "packages").exists():
-                return parent
-        return Path.cwd().resolve()
-
-    def _resolve_base_path(self, service_name: str, config_dir: Path, cli_config_path: Optional[str]) -> Path:
+    def _resolve_base_path(
+        self,
+        config_dir: Path,
+        cli_config_path: Optional[str],
+        config_env_var: Optional[str],
+    ) -> Path:
         if cli_config_path:
-            p = Path(cli_config_path).expanduser().resolve()
+            raw = Path(cli_config_path).expanduser()
+            p = (raw if raw.is_absolute() else (self.service_root / raw)).resolve()
             if not p.exists():
                 raise ConfigFileNotFound(f"--config file not found: {p}")
             return p
 
-        env_var = f"{service_name.upper().replace('-', '_')}_CONFIG"
-        env_path = os.getenv(env_var)
-        if env_path:
+        env_path = os.getenv(config_env_var) if config_env_var else None
+        if config_env_var and env_path:
             p = Path(env_path).expanduser().resolve()
             if not p.exists():
-                raise ConfigFileNotFound(f"{env_var} points to missing file: {p}")
+                raise ConfigFileNotFound(f"{config_env_var} points to missing file: {p}")
             return p
 
         p = (config_dir / "default.yaml").resolve()
@@ -143,22 +146,22 @@ class ConfigLoader:
         if mode == "none":
             return None
 
-        repo_dotenv = self.repo_root / ".env"
+        service_root_dotenv = self.service_root / ".env"
         service_dotenv = config_dir / ".env"
 
-        if mode == "repo_only":
-            return repo_dotenv if repo_dotenv.exists() else None
+        if mode == "service_root_only":
+            return service_root_dotenv if service_root_dotenv.exists() else None
 
-        if mode != "config_dir_then_repo":
+        if mode != "config_dir_then_service_root":
             raise ConfigParseError(
-                "Invalid dotenv_mode. Expected one of: 'config_dir_then_repo', 'repo_only', 'none'."
+                "Invalid dotenv_mode. Expected one of: 'config_dir_then_service_root', 'service_root_only', 'none'."
             )
 
-        # default: config_dir_then_repo
+        # default: config_dir_then_service_root
         if service_dotenv.exists():
             return service_dotenv
-        if repo_dotenv.exists():
-            return repo_dotenv
+        if service_root_dotenv.exists():
+            return service_root_dotenv
         return None
 
     def _expand_vars(self, obj: Any, dotenv_path: Optional[Path]) -> Any:
