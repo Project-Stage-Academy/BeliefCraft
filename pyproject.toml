@@ -35,7 +35,7 @@ line-length = 100
 select = ["E", "F", "I", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"**/tests/**" = ["S101"]
 
 [tool.mypy]
 #mypy type checker: turned on strict mode for tighter type safety.
