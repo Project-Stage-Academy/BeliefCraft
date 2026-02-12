@@ -58,7 +58,6 @@ explicit_package_bases = true
 namespace_packages = true
 files = [
     "packages/common/common",
-    "packages/common/tests",
     "services/environment-api/src",
     "services/agent-service/app",
     "services/agent-service/tests",
