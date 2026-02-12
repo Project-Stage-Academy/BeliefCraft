@@ -2,11 +2,14 @@
 """
 Catalog Builder Module.
 
-Handles the creation of the static product catalog and the supplier network.
-This provides the "what" (Products) and the "from whom" (Suppliers) for the
-simulation engine.
-"""
+This module is responsible for initializing the master data required for the
+supply chain simulation. It handles the generation of:
+1. Product definitions with category-specific attributes (e.g., shelf life).
+2. Supplier entities with associated reliability scores and regional locations.
 
+This data serves as the foundational "static" layer upon which dynamic
+transactions (Orders, Shipments) are simulated.
+"""
 import random
 from typing import List
 from sqlalchemy.orm import Session
@@ -16,40 +19,41 @@ from packages.database.src.models import Product, Supplier
 
 class CatalogBuilder:
     """
-    Specialist builder for Products and Suppliers.
+    Specialist builder for managing the lifecycle and generation of Products and Suppliers.
     """
-
     def __init__(self, session: Session):
         """
+        Initializes the CatalogBuilder with an active database session.
+
         Args:
-            session (Session): The active SQLAlchemy database session.
+            session (Session): The SQLAlchemy session used to add and flush
+                               newly created entities to the database.
         """
         self.session = session
         self.fake = Faker()
 
     def create_products(self, count: int = 50) -> List[Product]:
         """
-        Generates a variety of products across different categories.
+        Generates a diverse catalog of product entities with realistic attributes.
 
         Args:
-            count (int): Number of unique products to create.
+            count (int): The number of unique product records to generate.
+                         Defaults to 50.
 
         Returns:
-            List[Product]: List of persisted Product entities.
+            List[Product]: A list of the persisted Product SQLAlchemy objects.
         """
         categories = ["Electronics", "Food", "Pharmacy", "Clothing", "Home"]
         products = []
 
         for _ in range(count):
             category = random.choice(categories)
-            # Higher shelf life for electronics, lower for food
             shelf_life = random.randint(3, 14) if category == "Food" else random.randint(180, 720)
 
             product = Product(
                 sku=f"{category[:3].upper()}-{self.fake.unique.ean8()}",
                 name=self.fake.catch_phrase(),
                 category=category,
-                unit_cost=round(random.uniform(5.0, 500.0), 2),
                 shelf_life_days=shelf_life
             )
             self.session.add(product)
@@ -60,17 +64,22 @@ class CatalogBuilder:
 
     def create_suppliers(self, count: int = 5) -> List[Supplier]:
         """
-        Generates suppliers with varying reliability scores.
+        Constructs a network of external suppliers distributed across various regions.
 
         Args:
-            count (int): Number of suppliers to create.
+            count (int): The number of supplier entities to create. Defaults to 5.
+
+        Returns:
+            List[Supplier]: A list of the persisted Supplier SQLAlchemy objects.
         """
+        regions = ["NA-EAST", "EU-WEST", "APAC-SG", "NA-WEST", "EU-CENTRAL"]
         suppliers = []
+
         for _ in range(count):
             supplier = Supplier(
                 name=self.fake.company(),
-                contact_email=self.fake.company_email(),
-                reliability=round(random.uniform(0.7, 0.99), 2)
+                reliability_score=round(random.uniform(0.7, 0.99), 2),
+                region=random.choice(regions)
             )
             self.session.add(supplier)
             suppliers.append(supplier)
