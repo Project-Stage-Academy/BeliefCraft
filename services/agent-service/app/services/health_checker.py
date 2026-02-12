@@ -9,9 +9,16 @@ from app.core.constants import HealthStatus, HTTP_OK_STATUS, HEALTH_CHECK_TIMEOU
 
 class HealthChecker:
     """Service for checking health of external dependencies"""
-    
-    def __init__(self, settings: Settings):
+
+    def __init__(
+        self,
+        settings: Settings,
+        redis_client: redis.Redis,
+        http_client: httpx.AsyncClient
+    ):
         self.settings = settings
+        self._redis_client = redis_client
+        self._http_client = http_client
     
     async def check_http_endpoint(self, url: str) -> str:
         """
@@ -24,13 +31,12 @@ class HealthChecker:
             Health status string
         """
         try:
-            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
-                response = await client.get(f"{url}/health")
-                return (
-                    HealthStatus.HEALTHY 
-                    if response.status_code == HTTP_OK_STATUS 
-                    else HealthStatus.UNHEALTHY
-                )
+            response = await self._http_client.get(f"{url}/health")
+            return (
+                HealthStatus.HEALTHY
+                if response.status_code == HTTP_OK_STATUS
+                else HealthStatus.UNHEALTHY
+            )
         except httpx.TimeoutException:
             return f"{ERROR_PREFIX}timeout"
         except httpx.ConnectError as e:
@@ -46,8 +52,7 @@ class HealthChecker:
             Health status string
         """
         try:
-            r = redis.from_url(self.settings.REDIS_URL, decode_responses=True)  # type: ignore
-            r.ping()  # type: ignore
+            self._redis_client.ping()  # type: ignore
             return HealthStatus.HEALTHY
         except redis.ConnectionError:
             return f"{ERROR_PREFIX}connection refused"

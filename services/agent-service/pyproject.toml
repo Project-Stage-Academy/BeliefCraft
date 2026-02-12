@@ -11,9 +11,13 @@ dependencies = [
   "redis>=5.0",
   "httpx>=0.27",
   "structlog>=24.0",
+  "beliefcraft-common",
   "python-dotenv>=1.0",
   "anthropic>=0.18.0",
 ]
+
+[tool.uv.sources]
+beliefcraft-common = { path = "../../packages/common", editable = true }
 
 [dependency-groups]
 dev = [

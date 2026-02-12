@@ -1,9 +1,10 @@
 """Structured logging configuration for the application"""
 
 import structlog
-import logging
 from app.config import get_settings
+from common.logging import configure_logging as configure_common_logging, get_logger
 
+_configured = False
 
 def configure_logging() -> structlog.BoundLogger:
     """
@@ -16,29 +17,17 @@ def configure_logging() -> structlog.BoundLogger:
         >>> logger = configure_logging()
         >>> logger.info("event_name", key="value")
     """
+    global _configured
+    if _configured:
+        return get_logger(__name__)
+
     settings = get_settings()
     
-    # Configure standard logging
-    logging.basicConfig(
-        format="%(message)s",
-        level=getattr(logging, settings.LOG_LEVEL),
+    configure_common_logging(
+        settings.SERVICE_NAME,
+        log_level=settings.LOG_LEVEL
     )
-    
-    # Configure structlog processors
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer()
-        ],
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
-    
-    return structlog.get_logger()
+
+    _configured = True
+
+    return get_logger(__name__)

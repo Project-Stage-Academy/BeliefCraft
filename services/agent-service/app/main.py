@@ -6,8 +6,11 @@ from typing import Callable, Awaitable
 from app.config import get_settings
 from app.core.logging import configure_logging
 from app.core.exceptions import AgentServiceException
+from app.core.constants import HEALTH_CHECK_TIMEOUT
 from app.api.v1.routes import health
 import structlog
+import httpx
+import redis
 import time
 import uuid
 
@@ -23,8 +26,17 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
+    app.state.http_client = httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT)
+    app.state.redis_pool = redis.ConnectionPool.from_url(  # type: ignore[reportUnknownMemberType]
+        settings.REDIS_URL,
+        decode_responses=True
+    )
+    app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
     yield
     # Shutdown
+    await app.state.http_client.aclose()
+    app.state.redis_client.close()  # type: ignore[reportUnknownMemberType]
+    app.state.redis_pool.disconnect()  # type: ignore[reportUnknownMemberType]
     logger.info("agent_service_stopping")
 
 
@@ -82,21 +94,24 @@ async def add_request_id(
     """Add request ID and timing to all requests"""
     request_id = _generate_request_id()
     request.state.request_id = request_id
-    
-    structlog.contextvars.clear_contextvars()
+
     structlog.contextvars.bind_contextvars(request_id=request_id)
-    
+
     start_time = time.time()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    finally:
+        structlog.contextvars.unbind_contextvars("request_id")
+
     duration_ms = _calculate_duration_ms(start_time)
-    
+
     _log_request_completion(
         method=request.method,
         path=request.url.path,
         status_code=response.status_code,
         duration_ms=duration_ms
     )
-    
+
     response.headers["X-Request-ID"] = request_id
     return response
 

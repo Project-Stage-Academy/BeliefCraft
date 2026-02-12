@@ -1,3 +1,5 @@
+import os
+from typing import Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from pydantic import Field, field_validator
@@ -24,7 +26,14 @@ class Settings(BaseSettings):
     )
     
     # Claude (Anthropic) config
-    ANTHROPIC_API_KEY: str = Field(default="", description="Anthropic API key")
+    ANTHROPIC_API_KEY: Optional[str] = Field(default=None)
+
+    @field_validator("ANTHROPIC_API_KEY")
+    def validate_api_key(cls, v, info):
+        if not v and os.getenv("ENV") == "production":
+            raise ValueError("ANTHROPIC_API_KEY required in production")
+        return v    
+    
     ANTHROPIC_MODEL: str = Field(
         default="claude-sonnet-4.5",
         description="Claude model to use"

@@ -67,6 +67,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
+    { name = "beliefcraft-common" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
@@ -85,6 +86,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.18.0" },
+    { name = "beliefcraft-common", editable = "../../packages/common" },
     { name = "fastapi", specifier = ">=0.110" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -97,6 +99,26 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.0" }]
+
+[[package]]
+name = "beliefcraft-common"
+version = "0.1.0"
+source = { editable = "../../packages/common" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "structlog" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "structlog", specifier = ">=24.1.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "certifi"

@@ -56,8 +56,8 @@ services:
 
   agent-service:
     build:
-      context: ./services/agent-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/agent-service/Dockerfile
     ports:
       - "8003:8003"
     environment:
