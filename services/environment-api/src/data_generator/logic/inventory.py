@@ -60,6 +60,26 @@ class InventoryLedger:
             ref_id=ref_id
         )
 
+    def record_issuance(self, location: Location, product_id: uuid.UUID,
+                        qty: float, date: datetime, ref_id: uuid.UUID) -> None:
+        """
+        Processes an outbound stock decrease (Shipment/Sale).
+
+        Decrements the on-hand quantity and logs the movement.
+        """
+
+        self._update_balance(location, product_id, -qty)
+
+        self._log_movement(
+            location=location,
+            product_id=product_id,
+            qty=qty,
+            move_type=MoveType.OUTBOUND,
+            date=date,
+            reason="CUSTOMER_ORDER",
+            ref_id=ref_id
+        )
+
     def _update_balance(self, location: Location, product_id: uuid.UUID, qty: float) -> None:
         """
         Updates the perpetual inventory balance for a product at a specific location.
@@ -75,7 +95,6 @@ class InventoryLedger:
         if balance:
             balance.on_hand += qty
         else:
-            # Initialize new inventory record if product has never been here before
             balance = InventoryBalance(
                 product_id=product_id,
                 location_id=location.id,
@@ -101,23 +120,3 @@ class InventoryLedger:
             related_shipment_id=ref_id if move_type == MoveType.INBOUND else None
         )
         self.session.add(move)
-
-    def record_issuance(self, location: Location, product_id: uuid.UUID,
-                        qty: float, date: datetime, ref_id: uuid.UUID) -> None:
-        """
-        Processes an outbound stock decrease (Shipment/Sale).
-
-        Decrements the on-hand quantity and logs the movement.
-        """
-
-        self._update_balance(location, product_id, -qty)
-
-        self._log_movement(
-            location=location,
-            product_id=product_id,
-            qty=qty,
-            move_type=MoveType.OUTBOUND,
-            date=date,
-            reason="CUSTOMER_ORDER",
-            ref_id=ref_id
-        )
