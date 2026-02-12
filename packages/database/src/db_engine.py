@@ -3,7 +3,7 @@ from typing import Any
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
-from packages.database.src.db_config import get_database_url, get_connect_args
+from packages.database.src.db_config import get_connect_args, get_database_url
 
 _engine: Engine | None = None
 _engine_config: tuple[str, tuple[tuple[str, Any], ...]] | None = None

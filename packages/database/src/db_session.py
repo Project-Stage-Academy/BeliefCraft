@@ -1,10 +1,9 @@
-from typing import Generator
+from collections.abc import Generator
 
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from packages.database.src.db_engine import get_engine
-
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False)
 

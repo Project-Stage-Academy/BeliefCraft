@@ -2,7 +2,6 @@ import logging
 import os
 from urllib.parse import quote_plus
 
-
 logger = logging.getLogger(__name__)
 
 

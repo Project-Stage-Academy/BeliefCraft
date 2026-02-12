@@ -1,27 +1,34 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
-    String,
+    DateTime,
+)
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import (
     Float,
     ForeignKey,
-    DateTime,
+    String,
     func,
-    Enum as SAEnum,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.database.src.base import Base
 from packages.database.src.constraints import check_between_zero_one, check_non_negative
 from packages.database.src.enums import (
-    ShipmentStatus,
-    ShipmentDirection,
-    TransportMode,
-    LeadtimeScope,
     DistFamily,
+    LeadtimeScope,
+    ShipmentDirection,
+    ShipmentStatus,
+    TransportMode,
 )
+
+if TYPE_CHECKING:
+    from packages.database.src.inventory import Location
+    from packages.database.src.observations import Observation, SensorDevice
+    from packages.database.src.orders import Order, PurchaseOrder
 
 
 class Warehouse(Base):
@@ -37,28 +44,28 @@ class Warehouse(Base):
     tz: Mapped[str] = mapped_column(String, nullable=False)
 
     # Relationships
-    locations: Mapped[List["Location"]] = relationship(back_populates="warehouse")
-    sensor_devices: Mapped[List["SensorDevice"]] = relationship(back_populates="warehouse")
+    locations: Mapped[list["Location"]] = relationship(back_populates="warehouse")
+    sensor_devices: Mapped[list["SensorDevice"]] = relationship(back_populates="warehouse")
 
     # Routes
-    routes_origin: Mapped[List["Route"]] = relationship(
+    routes_origin: Mapped[list["Route"]] = relationship(
         "Route",
         foreign_keys="[Route.origin_warehouse_id]",
         back_populates="origin_warehouse",
     )
-    routes_destination: Mapped[List["Route"]] = relationship(
+    routes_destination: Mapped[list["Route"]] = relationship(
         "Route",
         foreign_keys="[Route.destination_warehouse_id]",
         back_populates="destination_warehouse",
     )
 
     # Shipments
-    shipments_origin: Mapped[List["Shipment"]] = relationship(
+    shipments_origin: Mapped[list["Shipment"]] = relationship(
         "Shipment",
         foreign_keys="[Shipment.origin_warehouse_id]",
         back_populates="origin_warehouse",
     )
-    shipments_destination: Mapped[List["Shipment"]] = relationship(
+    shipments_destination: Mapped[list["Shipment"]] = relationship(
         "Shipment",
         foreign_keys="[Shipment.destination_warehouse_id]",
         back_populates="destination_warehouse",
@@ -82,7 +89,7 @@ class Supplier(Base):
     region: Mapped[str] = mapped_column(String, nullable=False)
 
     # Relationships
-    purchase_orders: Mapped[List["PurchaseOrder"]] = relationship(back_populates="supplier")
+    purchase_orders: Mapped[list["PurchaseOrder"]] = relationship(back_populates="supplier")
 
 
 class LeadtimeModel(Base):
@@ -101,8 +108,8 @@ class LeadtimeModel(Base):
         SAEnum(DistFamily, name="dist_family"),
         nullable=False,
     )
-    p1: Mapped[Optional[float]] = mapped_column(Float)
-    p2: Mapped[Optional[float]] = mapped_column(Float)
+    p1: Mapped[float | None] = mapped_column(Float)
+    p2: Mapped[float | None] = mapped_column(Float)
     p_rare_delay: Mapped[float] = mapped_column(
         Float,
         check_between_zero_one("p_rare_delay"),
@@ -144,9 +151,7 @@ class Route(Base):
         check_non_negative("distance_km"),
         nullable=False,
     )
-    leadtime_model_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        ForeignKey("leadtime_models.id")
-    )
+    leadtime_model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("leadtime_models.id"))
 
     # Relationships
     origin_warehouse: Mapped["Warehouse"] = relationship(
@@ -174,22 +179,18 @@ class Shipment(Base):
         SAEnum(ShipmentDirection, name="shipment_direction"),
         nullable=False,
     )
-    origin_warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("warehouses.id"))
-    destination_warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        ForeignKey("warehouses.id")
-    )
-    order_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("orders.id"))
-    purchase_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        ForeignKey("purchase_orders.id")
-    )
-    route_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("routes.id"))
+    origin_warehouse_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("warehouses.id"))
+    destination_warehouse_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("warehouses.id"))
+    order_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("orders.id"))
+    purchase_order_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("purchase_orders.id"))
+    route_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("routes.id"))
     status: Mapped[ShipmentStatus] = mapped_column(
         SAEnum(ShipmentStatus, name="shipment_status"),
         default=ShipmentStatus.PLANNED,
         nullable=False,
     )
-    shipped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    arrived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Relationships
     origin_warehouse: Mapped[Optional["Warehouse"]] = relationship(
@@ -205,4 +206,4 @@ class Shipment(Base):
     order: Mapped[Optional["Order"]] = relationship(back_populates="shipments")
     purchase_order: Mapped[Optional["PurchaseOrder"]] = relationship(back_populates="shipments")
     route: Mapped[Optional["Route"]] = relationship("Route")
-    observations: Mapped[List["Observation"]] = relationship(back_populates="related_shipment")
+    observations: Mapped[list["Observation"]] = relationship(back_populates="related_shipment")
