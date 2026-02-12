@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from faker import Faker
 from packages.common.logging import get_logger
 from packages.database.src.models import Warehouse, Product, Supplier
+from src.data_generator.builders.catalog import CatalogBuilder
 from src.data_generator.builders.infrastructure import InfrastructureBuilder
 
 logger = get_logger(__name__)
@@ -24,6 +25,7 @@ class WorldBuilder:
         self.suppliers: List[Supplier] = []
 
         self.infra_builder = InfrastructureBuilder(session)
+        self.catalog_builder = CatalogBuilder(session)
 
         logger.info('world_builder_initialized')
 
@@ -44,14 +46,16 @@ class WorldBuilder:
         1. Create 'count' Product records with realistic categories and shelf life.
         2. Store in self.products.
         """
-        pass
+        self.products = self.catalog_builder.create_products(count)
+        logger.info("products_built", count=len(self.products))
 
     def create_suppliers(self, count: int = 5) -> None:
         """
         1. Create 'count' Supplier records with reliability scores.
         2. Store in self.suppliers.
         """
-        pass
+        self.suppliers = self.catalog_builder.create_suppliers(count)
+        logger.info("suppliers_built", count=len(self.suppliers))
 
     def create_logistics_network(self) -> None:
         """
