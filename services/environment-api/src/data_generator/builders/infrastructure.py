@@ -7,12 +7,8 @@ of internal layouts (Docks and Zones) to specialized builder components.
 from typing import List
 from sqlalchemy.orm import Session
 from packages.database.src.models import Warehouse
-from packages.common.logging import get_logger
 
 from .layout import DockBuilder, ZoneBuilder
-
-logger = get_logger(__name__)
-
 
 class InfrastructureBuilder:
     """
@@ -52,8 +48,6 @@ class InfrastructureBuilder:
         created_warehouses = []
         regions = ["NA-EAST", "EU-WEST", "APAC-SG", "NA-WEST", "EU-CENTRAL"]
         timezones = ["UTC-5", "UTC+1", "UTC+8", "UTC-8", "UTC+2"]
-
-        logger.info("infra_builder_started", count=count)
 
         for i in range(count):
             idx = i % len(regions)

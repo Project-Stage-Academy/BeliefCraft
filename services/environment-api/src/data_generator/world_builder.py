@@ -43,7 +43,11 @@ class WorldBuilder:
         self.catalog_builder = CatalogBuilder(session)
         self.logistics_builder = LogisticsBuilder(session)
 
-        logger.info('world_builder_initialized')
+        logger.info(
+            "world_builder_initialized",
+            seed=seed,
+            db_session_id=id(session)
+        )
 
     def build_all(self) -> None:
         """
@@ -56,26 +60,43 @@ class WorldBuilder:
         self.create_suppliers()
         self.create_logistics_network()
 
+        logger.info("world_generation_completed")
+
     def create_warehouses(self, count: int = 3) -> None:
         """
         Delegates the creation of physical infrastructure (Warehouses, Docks, Zones).
         """
         self.warehouses = self.infra_builder.create_warehouses(count)
-        logger.info("warehouses_built", count=len(self.warehouses))
+
+        logger.info(
+            "warehouses_built",
+            count=len(self.warehouses),
+            target_count=count
+        )
 
     def create_products(self, count: int = 50) -> None:
         """
         Delegates the creation of the product catalog.
         """
         self.products = self.catalog_builder.create_products(count)
-        logger.info("products_built", count=len(self.products))
+
+        logger.info(
+            "products_built",
+            count=len(self.products),
+            target_count=count
+        )
 
     def create_suppliers(self, count: int = 5) -> None:
         """
         Delegates the creation of external suppliers.
         """
         self.suppliers = self.catalog_builder.create_suppliers(count)
-        logger.info("suppliers_built", count=len(self.suppliers))
+
+        logger.info(
+            "suppliers_built",
+            count=len(self.suppliers),
+            target_count=count
+        )
 
     def create_logistics_network(self) -> None:
         """
@@ -88,6 +109,9 @@ class WorldBuilder:
 
         self.routes = self.logistics_builder.connect_warehouses(self.warehouses, lt_models)
 
-        logger.info("logistics_network_built",
-                    routes=len(self.routes),
-                    models=len(lt_models))
+        logger.info(
+            "logistics_network_built",
+            routes_count=len(self.routes),
+            leadtime_models_count=len(lt_models),
+            nodes_connected=len(self.warehouses)
+        )
