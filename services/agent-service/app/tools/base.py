@@ -31,7 +31,7 @@ Example:
 
 import time
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from common.logging import get_logger
@@ -87,7 +87,10 @@ class ToolResult(BaseModel):
     error: str | None = Field(default=None, description="Error message if failed")
     execution_time_ms: float = Field(..., description="Execution time in ms")
     cached: bool = Field(default=False, description="Result from cache")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Execution timestamp")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Execution timestamp"
+    )
 
 
 class BaseTool(ABC):
