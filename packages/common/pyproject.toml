@@ -19,18 +19,6 @@ dev = [
     "pytest-asyncio>=0.23.0",
 ]
 
-[tool.hatch.build]
-include = [
-    "*.py",
-    "schemas/**",
-    "utils/**"
-]
-
-[tool.hatch.build.targets.wheel.force-include]
-"__init__.py" = "common/__init__.py"
-"logging.py" = "common/logging.py"
-"http_client.py" = "common/http_client.py"
-"middleware.py" = "common/middleware.py"
-"schemas" = "common/schemas"
-"utils" = "common/utils"
+[tool.hatch.build.targets.wheel]
+packages = ["common"]
 
