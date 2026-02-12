@@ -3,23 +3,24 @@ Tests for TracedHttpClient with automatic trace_id propagation.
 
 These tests verify:
 - X-Request-ID header injection from structlog context
-- Request/response logging with correlation  
+- Request/response logging with correlation
 - Async context manager lifecycle
 - HTTP method delegation (GET, POST, etc.)
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 import pytest
 import structlog
-from unittest.mock import AsyncMock, MagicMock, patch
-import httpx
 
-from common.http_client import TracedHttpClient, create_traced_client
+from packages.common.http_client import TracedHttpClient, create_traced_client
 
 
 @pytest.fixture
 def mock_httpx_client():
     """Mock httpx.AsyncClient for isolated testing."""
-    with patch("common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
         mock_instance = AsyncMock()
         mock_class.return_value = mock_instance
         mock_response = MagicMock()
@@ -35,19 +36,19 @@ def mock_httpx_client():
         mock_instance.delete.return_value = mock_response
         mock_instance.patch.return_value = mock_response
         mock_instance.aclose = AsyncMock()
-        
+
         yield mock_instance
 
 
 @pytest.mark.asyncio
 async def test_traced_client_context_manager(mock_httpx_client):
     """Test async context manager properly initializes and closes client."""
-    with patch("common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
         mock_class.return_value = mock_httpx_client
-        
+
         async with TracedHttpClient("http://test-service") as client:
             assert client._client is not None
-        
+
         # Verify event hooks are registered (mentor feedback)
         call_kwargs = mock_class.call_args.kwargs
         assert "event_hooks" in call_kwargs
@@ -65,8 +66,8 @@ async def test_trace_id_injection_from_context(capsys):
     """Test X-Request-ID header is injected from structlog contextvars."""
 
     structlog.contextvars.bind_contextvars(trace_id="test-trace-123")
-    
-    with patch("common.http_client.httpx.AsyncClient") as mock_class:
+
+    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
 
@@ -74,7 +75,7 @@ async def test_trace_id_injection_from_context(capsys):
         mock_request.method = "GET"
         mock_request.url = "http://test/api"
         mock_request.headers = {}
-        
+
         async with TracedHttpClient("http://test") as client:
             await client._request_logger.log_request(mock_request)
 
@@ -91,21 +92,21 @@ async def test_trace_id_injection_from_context(capsys):
 async def test_default_trace_id_when_no_context(capsys):
     """Test default trace_id used when no contextvars present."""
     structlog.contextvars.clear_contextvars()
-    
-    with patch("common.http_client.httpx.AsyncClient") as mock_class:
+
+    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
-        
+
         mock_request = MagicMock(spec=httpx.Request)
         mock_request.method = "POST"
         mock_request.url = "http://test/create"
         mock_request.headers = {}
-        
+
         async with TracedHttpClient("http://test") as client:
             await client._request_logger.log_request(mock_request)
 
             assert mock_request.headers["X-Request-ID"] == "internal-request"
-    
+
     captured = capsys.readouterr()
     assert "internal-request" in captured.out
 
@@ -113,7 +114,7 @@ async def test_default_trace_id_when_no_context(capsys):
 @pytest.mark.asyncio
 async def test_response_logging_success(capsys):
     """Test successful response is logged with duration."""
-    with patch("common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
 
@@ -123,20 +124,20 @@ async def test_response_logging_success(capsys):
         mock_response.elapsed.total_seconds.return_value = 0.456
         mock_response.request.method = "GET"
         mock_response.request.url = "http://test/resource"
-        
+
         async with TracedHttpClient("http://test") as client:
             await client._request_logger.log_response(mock_response)
-    
+
     captured = capsys.readouterr()
     assert "http_request_completed" in captured.out
     assert "200" in captured.out
-    assert "456" in captured.out  
+    assert "456" in captured.out
 
 
 @pytest.mark.asyncio
 async def test_response_logging_error(capsys):
     """Test failed response logs warning with response body."""
-    with patch("common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
         mock_response = AsyncMock(spec=httpx.Response)
@@ -145,10 +146,10 @@ async def test_response_logging_error(capsys):
         mock_response.elapsed.total_seconds.return_value = 0.123
         mock_response.request.method = "POST"
         mock_response.request.url = "http://test/action"
-        
+
         async with TracedHttpClient("http://test") as client:
             await client._request_logger.log_response(mock_response)
-    
+
     captured = capsys.readouterr()
     assert "http_request_failed" in captured.out
     assert "500" in captured.out
@@ -161,10 +162,10 @@ async def test_http_methods_delegation(mock_httpx_client):
     async with TracedHttpClient("http://test") as client:
         await client.get("/resource")
         mock_httpx_client.get.assert_called_once_with("/resource")
- 
+
         await client.post("/create", json={"key": "value"})
         mock_httpx_client.post.assert_called_once_with("/create", json={"key": "value"})
- 
+
         await client.put("/update/123", json={"status": "updated"})
         mock_httpx_client.put.assert_called_once()
 
@@ -179,10 +180,10 @@ async def test_http_methods_delegation(mock_httpx_client):
 async def test_methods_raise_without_context_manager():
     """Test HTTP methods raise error when called outside context manager."""
     client = TracedHttpClient("http://test")
-    
+
     with pytest.raises(RuntimeError, match="Client not initialized"):
         await client.get("/resource")
-    
+
     with pytest.raises(RuntimeError, match="Client not initialized"):
         await client.post("/create")
 
@@ -190,8 +191,10 @@ async def test_methods_raise_without_context_manager():
 @pytest.mark.asyncio
 async def test_create_traced_client_factory():
     """Test convenience factory function creates proper client."""
-    client = await create_traced_client("http://factory-test", timeout=15.0, config={"verify": False})
-    
+    client = await create_traced_client(
+        "http://factory-test", timeout=15.0, config={"verify": False}
+    )
+
     assert isinstance(client, TracedHttpClient)
     assert client.base_url == "http://factory-test"
     assert client.timeout == 15.0
@@ -201,9 +204,9 @@ async def test_create_traced_client_factory():
 @pytest.mark.asyncio
 async def test_custom_timeout_configuration(mock_httpx_client):
     """Test custom timeout is passed to httpx client."""
-    with patch("common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
         mock_class.return_value = mock_httpx_client
-        
+
         async with TracedHttpClient("http://test", timeout=30.0):
             pass
 

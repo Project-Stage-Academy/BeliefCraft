@@ -1,21 +1,21 @@
 import enum
 
 
-class QualityStatus(str, enum.Enum):
+class QualityStatus(enum.StrEnum):
     OK = "ok"
     DAMAGED = "damaged"
     EXPIRED = "expired"
     QUARANTINE = "quarantine"
 
 
-class MoveType(str, enum.Enum):
+class MoveType(enum.StrEnum):
     INBOUND = "inbound"
     OUTBOUND = "outbound"
     TRANSFER = "transfer"
     ADJUSTMENT = "adjustment"
 
 
-class LocationType(str, enum.Enum):
+class LocationType(enum.StrEnum):
     SHELF = "shelf"
     BIN = "bin"
     PALLET_POS = "pallet_pos"
@@ -23,7 +23,7 @@ class LocationType(str, enum.Enum):
     VIRTUAL = "virtual"
 
 
-class OrderStatus(str, enum.Enum):
+class OrderStatus(enum.StrEnum):
     NEW = "new"
     ALLOCATED = "allocated"
     PICKED = "picked"
@@ -31,7 +31,7 @@ class OrderStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class POStatus(str, enum.Enum):
+class POStatus(enum.StrEnum):
     DRAFT = "draft"
     SUBMITTED = "submitted"
     PARTIAL = "partial"
@@ -39,52 +39,52 @@ class POStatus(str, enum.Enum):
     CLOSED = "closed"
 
 
-class DeviceType(str, enum.Enum):
+class DeviceType(enum.StrEnum):
     CAMERA = "camera"
     RFID_READER = "rfid_reader"
     WEIGHT_SENSOR = "weight_sensor"
     SCANNER = "scanner"
 
 
-class DeviceStatus(str, enum.Enum):
+class DeviceStatus(enum.StrEnum):
     ACTIVE = "active"
     OFFLINE = "offline"
     MAINTENANCE = "maintenance"
 
 
-class ShipmentStatus(str, enum.Enum):
+class ShipmentStatus(enum.StrEnum):
     PLANNED = "planned"
     IN_TRANSIT = "in_transit"
     DELIVERED = "delivered"
     EXCEPTION = "exception"
 
 
-class ShipmentDirection(str, enum.Enum):
+class ShipmentDirection(enum.StrEnum):
     INBOUND = "inbound"
     OUTBOUND = "outbound"
     TRANSFER = "transfer"
 
 
-class TransportMode(str, enum.Enum):
+class TransportMode(enum.StrEnum):
     TRUCK = "truck"
     AIR = "air"
     RAIL = "rail"
     SEA = "sea"
 
 
-class LeadtimeScope(str, enum.Enum):
+class LeadtimeScope(enum.StrEnum):
     SUPPLIER = "supplier"
     ROUTE = "route"
     GLOBAL = "global"
 
 
-class DistFamily(str, enum.Enum):
+class DistFamily(enum.StrEnum):
     NORMAL = "normal"
     LOGNORMAL = "lognormal"
     POISSON = "poisson"
 
 
-class ObservationType(str, enum.Enum):
+class ObservationType(enum.StrEnum):
     SCAN = "scan"
     IMAGE_RECOG = "image_recog"
     MANUAL_COUNT = "manual_count"
