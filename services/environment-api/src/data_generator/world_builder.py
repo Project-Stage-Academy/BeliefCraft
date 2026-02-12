@@ -1,45 +1,43 @@
 from typing import List
-
 from sqlalchemy.orm import Session
 from faker import Faker
-
 from packages.common.logging import get_logger
-from packages.database.src.models import Warehouse, Product, Supplier, Route
+from packages.database.src.models import Warehouse, Product, Supplier
+from src.data_generator.builders.infrastructure import InfrastructureBuilder
 
 logger = get_logger(__name__)
 
+
 class WorldBuilder:
     """
-    Architect of the static environment.
-    Responsible for creating the physical infrastructure (Warehouses),
-    the catalog (Products), and the supply network (Suppliers, Routes).
+    The General Contractor.
+    Orchestrates specialized builders to construct the world.
     """
+
     def __init__(self, session: Session, seed: int = 42):
         self.session = session
         self.seed = seed
-
         self.fake = Faker()
 
         self.warehouses: List[Warehouse] = []
         self.products: List[Product] = []
         self.suppliers: List[Supplier] = []
 
-        logger.info('world builder initialized')
+        self.infra_builder = InfrastructureBuilder(session)
+
+        logger.info('world_builder_initialized')
 
     def build_all(self) -> None:
         """
         Orchestrator method.
-        Calls the sub-methods in the correct order to respect Foreign Key dependencies.
         """
-        pass
+        self.create_warehouses()
+        self.create_products()
 
     def create_warehouses(self, count: int = 3) -> None:
-        """
-        1. Create 'count' Warehouse records.
-        2. For each Warehouse, create the internal Location hierarchy (Zones -> Aisles -> Shelves).
-        3. Store created warehouses in self.warehouses.
-        """
-        pass
+        self.warehouses = self.infra_builder.create_warehouses(count)
+
+        logger.info("warehouses_built", count=len(self.warehouses))
 
     def create_products(self, count: int = 50) -> None:
         """
@@ -61,4 +59,3 @@ class WorldBuilder:
         2. Create Routes connecting the self.warehouses.
         """
         pass
-
