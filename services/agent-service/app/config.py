@@ -17,65 +17,36 @@ class Settings(BaseSettings):
 
     # External services
     ENVIRONMENT_API_URL: str = Field(
-        default="http://localhost:8000/api/v1",
-        description="Environment API base URL"
+        default="http://localhost:8000/api/v1", description="Environment API base URL"
     )
-    RAG_API_URL: str = Field(
-        default="http://localhost:8001/api/v1",
-        description="RAG API base URL"
-    )
+    RAG_API_URL: str = Field(default="http://localhost:8001/api/v1", description="RAG API base URL")
 
     # Claude (Anthropic) config
     ANTHROPIC_API_KEY: str | None = Field(default=None)
 
     @field_validator("ANTHROPIC_API_KEY")
-    
     @classmethod
     def validate_api_key(cls, value: str | None, info: object) -> str | None:
         if not value and os.getenv("ENV") == "production":
             raise ValueError("ANTHROPIC_API_KEY required in production")
         return value
 
-    ANTHROPIC_MODEL: str = Field(
-        default="claude-sonnet-4.5",
-        description="Claude model to use"
-    )
+    ANTHROPIC_MODEL: str = Field(default="claude-sonnet-4.5", description="Claude model to use")
     ANTHROPIC_TEMPERATURE: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Model temperature"
+        default=0.0, ge=0.0, le=1.0, description="Model temperature"
     )
     ANTHROPIC_MAX_TOKENS: int = Field(
-        default=4000,
-        ge=1,
-        le=100000,
-        description="Maximum tokens for completion"
+        default=4000, ge=1, le=100000, description="Maximum tokens for completion"
     )
 
     # Redis cache
-    REDIS_URL: str = Field(
-        default="redis://localhost:6379",
-        description="Redis connection URL"
-    )
-    CACHE_TTL_SECONDS: int = Field(
-        default=3600,
-        ge=0,
-        description="Cache TTL in seconds"
-    )
+    REDIS_URL: str = Field(default="redis://localhost:6379", description="Redis connection URL")
+    CACHE_TTL_SECONDS: int = Field(default=3600, ge=0, description="Cache TTL in seconds")
 
     # Agent config
-    MAX_ITERATIONS: int = Field(
-        default=10,
-        ge=1,
-        le=50,
-        description="Maximum agent iterations"
-    )
+    MAX_ITERATIONS: int = Field(default=10, ge=1, le=50, description="Maximum agent iterations")
     TOOL_TIMEOUT_SECONDS: int = Field(
-        default=30,
-        ge=1,
-        le=300,
-        description="Tool execution timeout in seconds"
+        default=30, ge=1, le=300, description="Tool execution timeout in seconds"
     )
 
     # Logging

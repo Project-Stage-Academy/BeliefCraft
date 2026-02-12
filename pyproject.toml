@@ -49,21 +49,12 @@ select = ["E", "F", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
 [tool.mypy]
 #mypy type checker: turned on strict mode for tighter type safety.
 strict = true
-<<<<<<< #17-agent-service-project-setup
-ignore_missing_imports = true
-allow_untyped_decorators = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-warn_unused_ignores = false
-exclude = [
-    "^tests/",
-    "^packages/.*/tests/",
-    "^services/.*/tests/",
-]
-=======
 
 [[tool.mypy.overrides]]
 module = ["packages.common.tests.*"]
 disallow_untyped_defs = false
 check_untyped_defs = false
->>>>>>> main
+
+[[tool.mypy.overrides]]
+module = ["common.*"]
+ignore_missing_imports = true

@@ -11,6 +11,7 @@ settings_dependency = Depends(get_settings)
 
 class HealthResponse(BaseModel):
     """Health check response model"""
+
     status: str
     service: str
     version: str
@@ -29,11 +30,7 @@ async def health_check(
     Returns:
         HealthResponse with overall status and individual dependency statuses
     """
-    checker = HealthChecker(
-        settings,
-        request.app.state.redis_client,
-        request.app.state.http_client
-    )
+    checker = HealthChecker(settings, request.app.state.redis_client, request.app.state.http_client)
     dependencies = await checker.check_all_dependencies()
     overall_status = checker.determine_overall_status(dependencies)
 
@@ -42,5 +39,5 @@ async def health_check(
         service=settings.SERVICE_NAME,
         version=settings.SERVICE_VERSION,
         timestamp=datetime.now(UTC).isoformat(),
-        dependencies=dependencies
+        dependencies=dependencies,
     )

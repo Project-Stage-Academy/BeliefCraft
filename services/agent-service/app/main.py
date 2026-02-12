@@ -1,18 +1,19 @@
+import time
+import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+
+import httpx
+import redis
+import structlog
+from app.api.v1.routes import health
+from app.config import get_settings
+from app.core.constants import HEALTH_CHECK_TIMEOUT
+from app.core.exceptions import AgentServiceException
+from app.core.logging import configure_logging
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
-from typing import Callable, Awaitable
-from app.config import get_settings
-from app.core.logging import configure_logging
-from app.core.exceptions import AgentServiceException
-from app.core.constants import HEALTH_CHECK_TIMEOUT
-from app.api.v1.routes import health
-import structlog
-import httpx
-import redis
-import time
-import uuid
 
 # Configure logging
 logger = configure_logging()
@@ -22,21 +23,18 @@ settings = get_settings()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager"""
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
     app.state.http_client = httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT)
-    app.state.redis_pool = redis.ConnectionPool.from_url(  # type: ignore[reportUnknownMemberType]
-        settings.REDIS_URL,
-        decode_responses=True
-    )
+    app.state.redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
     app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
     yield
     # Shutdown
     await app.state.http_client.aclose()
-    app.state.redis_client.close()  # type: ignore[reportUnknownMemberType]
-    app.state.redis_pool.disconnect()  # type: ignore[reportUnknownMemberType]
+    app.state.redis_client.close()
+    app.state.redis_pool.disconnect()
     logger.info("agent_service_stopping")
 
 
@@ -46,7 +44,7 @@ app = FastAPI(
     version=settings.SERVICE_VERSION,
     docs_url=f"{settings.API_V1_PREFIX}/docs",
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS
@@ -69,27 +67,21 @@ def _calculate_duration_ms(start_time: float) -> float:
     return round((time.time() - start_time) * 1000, 2)
 
 
-def _log_request_completion(
-    method: str,
-    path: str,
-    status_code: int,
-    duration_ms: float
-) -> None:
+def _log_request_completion(method: str, path: str, status_code: int, duration_ms: float) -> None:
     """Log request completion with details"""
     logger.info(
         "request_completed",
         method=method,
         path=path,
         status_code=status_code,
-        duration_ms=duration_ms
+        duration_ms=duration_ms,
     )
 
 
 # Request ID middleware
 @app.middleware("http")
 async def add_request_id(
-    request: Request,
-    call_next: Callable[[Request], Awaitable[Response]]
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
     """Add request ID and timing to all requests"""
     request_id = _generate_request_id()
@@ -109,7 +101,7 @@ async def add_request_id(
         method=request.method,
         path=request.url.path,
         status_code=response.status_code,
-        duration_ms=duration_ms
+        duration_ms=duration_ms,
     )
 
     response.headers["X-Request-ID"] = request_id
@@ -118,30 +110,27 @@ async def add_request_id(
 
 # Exception handler
 @app.exception_handler(AgentServiceException)
-async def agent_exception_handler(
-    request: Request,
-    exc: AgentServiceException
-) -> JSONResponse:
+async def agent_exception_handler(request: Request, exc: AgentServiceException) -> JSONResponse:
     """Handle custom agent service exceptions"""
     logger.error(
         "agent_error",
         error_type=type(exc).__name__,
         error_message=str(exc),
-        request_id=request.state.request_id
+        request_id=request.state.request_id,
     )
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": exc.error_code,
             "message": str(exc),
-            "request_id": request.state.request_id
-        }
+            "request_id": request.state.request_id,
+        },
     )
 
 
 # Root endpoint
 @app.get("/", tags=["root"])
-async def root():
+async def root() -> dict[str, str]:
     """Root endpoint with service information"""
     return {
         "service": settings.SERVICE_NAME,
@@ -156,15 +145,16 @@ async def root():
 app.include_router(
     health.router,
     prefix=settings.API_V1_PREFIX,
-    tags=["health"]
+    tags=["health"],
 )
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=True
+        reload=True,
     )

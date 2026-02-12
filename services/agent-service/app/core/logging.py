@@ -3,12 +3,12 @@
 from typing import cast
 
 import structlog
+from app.config import get_settings
 from common.logging import configure_logging as configure_common_logging
 from common.logging import get_logger
 
-from app.config import get_settings
-
 _configured = False
+
 
 def configure_logging() -> structlog.BoundLogger:
     """
@@ -27,10 +27,7 @@ def configure_logging() -> structlog.BoundLogger:
 
     settings = get_settings()
 
-    configure_common_logging(
-        settings.SERVICE_NAME,
-        log_level=settings.LOG_LEVEL
-    )
+    configure_common_logging(settings.SERVICE_NAME, log_level=settings.LOG_LEVEL)
 
     _configured = True
 
