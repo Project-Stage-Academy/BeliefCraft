@@ -1,0 +1,56 @@
+[project]
+name = "beliefcraft"
+version = "0.1.0"
+description = "research-oriented toolkit"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "black>=26.1.0",
+    "isort>=7.0.0",
+    "mypy>=1.19.1",
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "packages/common",
+    "packages/database",
+    "services/environment-api",
+    "services/rag-service",
+    "services/agent-service",
+]
+
+[tool.black]
+#black formatter: keeps lines readable and consistent with other tools.
+line-length = 100
+
+[tool.isort]
+#isort import sorter: mimic black's style and uses the same wrap width.
+profile = "black"
+line_length = 100
+
+[tool.ruff]
+#ruff linter/formatter: aligns its idea of max line length with black.
+line-length = 100
+
+[tool.ruff.lint]
+#enables common lint families: E/W (pycodestyle), F (Pyflakes),
+#N (pep8-naming) to catch broad issues.
+select = ["E", "F", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101"]
+
+[tool.mypy]
+#mypy type checker: turned on strict mode for tighter type safety.
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["packages.common.tests.*"]
+disallow_untyped_defs = false
+check_untyped_defs = false

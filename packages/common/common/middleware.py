@@ -4,16 +4,17 @@ FastAPI middleware for request tracing and logging.
 Usage:
     from fastapi import FastAPI
     from common.middleware import setup_logging_middleware
-    
+
     app = FastAPI()
     setup_logging_middleware(app)
 """
 
 import time
 import uuid
+from collections.abc import Awaitable, Callable
+
 import structlog
 from fastapi import FastAPI, Request, Response
-from typing import Callable
 
 logger = structlog.get_logger("infrastructure.middleware")
 
@@ -23,10 +24,10 @@ EXCLUDE_PATHS = {"/health", "/metrics", "/docs", "/openapi.json", "/redoc"}
 def get_client_ip(request: Request) -> str:
     """
     Extract real client IP address (works behind proxies).
-    
+
     Args:
         request: FastAPI Request object
-    
+
     Returns:
         Client IP address or "unknown"
     """
@@ -34,7 +35,9 @@ def get_client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
 
-    return request.client.host if request.client else "unknown"
+    if request.client and request.client.host:
+        return str(request.client.host)
+    return "unknown"
 
 
 def _should_log_request(path: str) -> bool:
@@ -42,32 +45,31 @@ def _should_log_request(path: str) -> bool:
     return path not in EXCLUDE_PATHS
 
 
-async def logging_middleware(request: Request, call_next: Callable) -> Response:
+async def logging_middleware(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     """
     HTTP request logging middleware with automatic tracing.
-    
+
     Features:
     - Automatic trace_id generation/propagation
     - Request/response logging
     - Performance metrics (duration)
     - Error tracking with stack traces
     - Client IP extraction (proxy-aware)
-    
+
     Args:
         request: Incoming HTTP request
         call_next: Next middleware/handler in chain
-    
+
     Returns:
         HTTP response with X-Request-ID header
     """
     # Generate or extract trace_id with validation
     raw_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     if len(raw_id) > 64:
-        logger.warning(
-            "trace_id_truncated",
-            original_length=len(raw_id),
-            truncated_to=64
-        )
+        logger.warning("trace_id_truncated", original_length=len(raw_id), truncated_to=64)
     trace_id = raw_id[:64]
 
     # Bind request context
@@ -80,7 +82,7 @@ async def logging_middleware(request: Request, call_next: Callable) -> Response:
 
     start_time = time.time()
     should_log = _should_log_request(request.url.path)
-    
+
     try:
         if should_log:
             logger.debug(
@@ -111,7 +113,7 @@ async def logging_middleware(request: Request, call_next: Callable) -> Response:
             exc_info=True,
         )
         raise
-    
+
     finally:
         structlog.contextvars.clear_contextvars()
 
@@ -119,7 +121,7 @@ async def logging_middleware(request: Request, call_next: Callable) -> Response:
 def setup_logging_middleware(app: FastAPI) -> None:
     """
     Register logging middleware with FastAPI application.
-    
+
     Args:
         app: FastAPI application instance
     """
