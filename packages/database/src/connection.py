@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 
 def _ensure_repo_root() -> None:
@@ -16,12 +16,12 @@ def _ensure_repo_root() -> None:
 
 
 try:
-    from packages.database.src.db_config import get_env_variable, get_database_url
+    from packages.database.src.db_config import get_database_url, get_env_variable
     from packages.database.src.db_engine import get_engine
     from packages.database.src.db_session import SessionLocal, get_db
 except ModuleNotFoundError:
     _ensure_repo_root()
-    from packages.database.src.db_config import get_env_variable, get_database_url
+    from packages.database.src.db_config import get_database_url, get_env_variable
     from packages.database.src.db_engine import get_engine
     from packages.database.src.db_session import SessionLocal, get_db
 

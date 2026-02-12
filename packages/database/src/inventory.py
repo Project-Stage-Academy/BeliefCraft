@@ -1,22 +1,29 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
-    String,
-    Integer,
+    DateTime,
+)
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import (
     Float,
     ForeignKey,
-    DateTime,
+    Integer,
+    String,
     func,
-    Enum as SAEnum,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.database.src.base import Base
 from packages.database.src.constraints import check_non_negative, check_positive
-from packages.database.src.enums import QualityStatus, MoveType, LocationType
+from packages.database.src.enums import LocationType, MoveType, QualityStatus
+
+if TYPE_CHECKING:
+    from packages.database.src.logistics import Warehouse
+    from packages.database.src.observations import Observation
+    from packages.database.src.orders import OrderLine, POLine
 
 
 class Product(Base):
@@ -30,16 +37,16 @@ class Product(Base):
     sku: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     category: Mapped[str] = mapped_column(String, nullable=False)
-    shelf_life_days: Mapped[Optional[int]] = mapped_column(
+    shelf_life_days: Mapped[int | None] = mapped_column(
         Integer,
         check_non_negative("shelf_life_days"),
     )
 
     # Relationships
-    inventory_balances: Mapped[List["InventoryBalance"]] = relationship(back_populates="product")
-    inventory_moves: Mapped[List["InventoryMove"]] = relationship(back_populates="product")
-    order_lines: Mapped[List["OrderLine"]] = relationship(back_populates="product")
-    po_lines: Mapped[List["POLine"]] = relationship(back_populates="product")
+    inventory_balances: Mapped[list["InventoryBalance"]] = relationship(back_populates="product")
+    inventory_moves: Mapped[list["InventoryMove"]] = relationship(back_populates="product")
+    order_lines: Mapped[list["OrderLine"]] = relationship(back_populates="product")
+    po_lines: Mapped[list["POLine"]] = relationship(back_populates="product")
 
 
 class Location(Base):
@@ -51,7 +58,7 @@ class Location(Base):
         server_default=func.gen_random_uuid(),
     )
     warehouse_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("warehouses.id"), nullable=False)
-    parent_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("locations.id"))
+    parent_location_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("locations.id"))
     code: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[LocationType] = mapped_column(
         SAEnum(LocationType, name="location_type"),
@@ -70,8 +77,8 @@ class Location(Base):
         remote_side=[id],
         back_populates="children",
     )
-    children: Mapped[List["Location"]] = relationship("Location", back_populates="parent")
-    inventory_balances: Mapped[List["InventoryBalance"]] = relationship(back_populates="location")
+    children: Mapped[list["Location"]] = relationship("Location", back_populates="parent")
+    inventory_balances: Mapped[list["InventoryBalance"]] = relationship(back_populates="location")
 
 
 class InventoryBalance(Base):
@@ -90,7 +97,7 @@ class InventoryBalance(Base):
     location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("locations.id"), nullable=False)
     on_hand: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     reserved: Mapped[float] = mapped_column(Float, default=0, nullable=False)
-    last_count_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_count_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     quality_status: Mapped[QualityStatus] = mapped_column(
         SAEnum(QualityStatus, name="quality_status"),
         default=QualityStatus.OK,
@@ -116,17 +123,17 @@ class InventoryMove(Base):
         server_default=func.gen_random_uuid(),
     )
     product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id"), nullable=False)
-    from_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("locations.id"))
-    to_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("locations.id"))
+    from_location_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("locations.id"))
+    to_location_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("locations.id"))
     move_type: Mapped[MoveType] = mapped_column(
         SAEnum(MoveType, name="move_type"),
         nullable=False,
     )
     qty: Mapped[float] = mapped_column(Float, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    reason_code: Mapped[Optional[str]] = mapped_column(String)
-    reported_qty: Mapped[Optional[float]] = mapped_column(Float)
-    actual_qty: Mapped[Optional[float]] = mapped_column(Float)
+    reason_code: Mapped[str | None] = mapped_column(String)
+    reported_qty: Mapped[float | None] = mapped_column(Float)
+    actual_qty: Mapped[float | None] = mapped_column(Float)
 
     # Relationships
     product: Mapped["Product"] = relationship(back_populates="inventory_moves")
@@ -138,4 +145,4 @@ class InventoryMove(Base):
         "Location",
         foreign_keys=[to_location_id],
     )
-    observations: Mapped[List["Observation"]] = relationship(back_populates="related_move")
+    observations: Mapped[list["Observation"]] = relationship(back_populates="related_move")

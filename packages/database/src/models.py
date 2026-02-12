@@ -6,8 +6,8 @@ while domain models live in separate modules.
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 
 def _ensure_repo_root() -> None:
@@ -22,83 +22,83 @@ def _ensure_repo_root() -> None:
 try:
     from packages.database.src.base import Base
     from packages.database.src.enums import (
-        QualityStatus,
-        MoveType,
+        DeviceStatus,
+        DeviceType,
+        DistFamily,
+        LeadtimeScope,
         LocationType,
+        MoveType,
+        ObservationType,
         OrderStatus,
         POStatus,
-        DeviceType,
-        DeviceStatus,
-        ShipmentStatus,
+        QualityStatus,
         ShipmentDirection,
+        ShipmentStatus,
         TransportMode,
-        LeadtimeScope,
-        DistFamily,
-        ObservationType,
     )
     from packages.database.src.inventory import (
-        Product,
-        Location,
         InventoryBalance,
         InventoryMove,
+        Location,
+        Product,
+    )
+    from packages.database.src.logistics import (
+        LeadtimeModel,
+        Route,
+        Shipment,
+        Supplier,
+        Warehouse,
+    )
+    from packages.database.src.observations import (
+        Observation,
+        SensorDevice,
     )
     from packages.database.src.orders import (
         Order,
         OrderLine,
-        PurchaseOrder,
         POLine,
-    )
-    from packages.database.src.logistics import (
-        Warehouse,
-        Supplier,
-        LeadtimeModel,
-        Route,
-        Shipment,
-    )
-    from packages.database.src.observations import (
-        SensorDevice,
-        Observation,
+        PurchaseOrder,
     )
 except ModuleNotFoundError:
     _ensure_repo_root()
     from packages.database.src.base import Base
     from packages.database.src.enums import (
-        QualityStatus,
-        MoveType,
+        DeviceStatus,
+        DeviceType,
+        DistFamily,
+        LeadtimeScope,
         LocationType,
+        MoveType,
+        ObservationType,
         OrderStatus,
         POStatus,
-        DeviceType,
-        DeviceStatus,
-        ShipmentStatus,
+        QualityStatus,
         ShipmentDirection,
+        ShipmentStatus,
         TransportMode,
-        LeadtimeScope,
-        DistFamily,
-        ObservationType,
     )
     from packages.database.src.inventory import (
-        Product,
-        Location,
         InventoryBalance,
         InventoryMove,
+        Location,
+        Product,
+    )
+    from packages.database.src.logistics import (
+        LeadtimeModel,
+        Route,
+        Shipment,
+        Supplier,
+        Warehouse,
+    )
+    from packages.database.src.observations import (
+        Observation,
+        SensorDevice,
     )
     from packages.database.src.orders import (
         Order,
         OrderLine,
-        PurchaseOrder,
         POLine,
-    )
-    from packages.database.src.logistics import (
-        Warehouse,
-        Supplier,
-        LeadtimeModel,
-        Route,
-        Shipment,
-    )
-    from packages.database.src.observations import (
-        SensorDevice,
-        Observation,
+        PurchaseOrder,
     )
 
 

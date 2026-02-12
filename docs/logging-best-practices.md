@@ -170,10 +170,10 @@ logger = get_logger(__name__)
 @router.post("/agent/action")
 async def execute_action(request: ActionRequest):
     """Agent endpoint that calls RAG service."""
-    
+
     # Current trace_id is already in context (set by middleware)
     logger.info("executing_agent_action", action_type=request.action)
-    
+
     # HTTP client automatically reads trace_id from context and adds X-Request-ID header
     async with TracedHttpClient("http://rag-service:8000", timeout=15.0) as client:
         rag_response = await client.post(
@@ -181,7 +181,7 @@ async def execute_action(request: ActionRequest):
             json={"query": request.query}
         )
         documents = rag_response.json()
-    
+
     logger.info("rag_search_completed", doc_count=len(documents))
     return {"documents": documents}
 ```
@@ -219,16 +219,16 @@ docker-compose logs | grep "abc-123-def"
 async with TracedHttpClient("http://environment-api:8000") as client:
     # GET
     state = await client.get("/api/state/current")
-    
+
     # POST
     result = await client.post("/api/action", json={"type": "move"})
-    
+
     # PUT
     updated = await client.put("/api/config/123", json={"setting": "new"})
-    
+
     # PATCH
     patched = await client.patch("/api/partial/456", json={"field": "value"})
-    
+
     # DELETE
     await client.delete("/api/resource/789")
 ```
@@ -404,7 +404,7 @@ logger.info("recommendation_generated", product_id="P001", confidence=0.92)
 
 ### Aggregation (Future: Prometheus/Grafana)
 
-Current MVP: Parse JSON logs manually  
+Current MVP: Parse JSON logs manually
 Future: Send logs to aggregation service (ELK, Loki, etc.)
 
 ---
@@ -462,4 +462,3 @@ Or add paths to `EXCLUDE_PATHS` in `middleware.py`.
 - Story 0.4 implementation: `packages/common/logging.py`, `packages/common/middleware.py`
 
 ---
-
