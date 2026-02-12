@@ -40,8 +40,6 @@ line-length = 100
 
 [tool.ruff.lint]
 #enables common lint families: E/W (pycodestyle), F (Pyflakes),
-#I (import order), N (pep8-naming) to catch broad issues.
-select = ["E", "F", "I", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
 #N (pep8-naming) to catch broad issues.
 select = ["E", "F", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
 
