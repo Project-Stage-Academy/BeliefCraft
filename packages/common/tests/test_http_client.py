@@ -63,7 +63,7 @@ async def test_traced_client_context_manager(mock_httpx_client):
 
 
 @pytest.mark.asyncio
-async def test_trace_id_injection_from_context(capsys):
+async def test_trace_id_injection_from_context(caplog):
     """Test X-Request-ID header is injected from structlog contextvars."""
 
     structlog.contextvars.bind_contextvars(trace_id="test-trace-123")
@@ -84,13 +84,12 @@ async def test_trace_id_injection_from_context(capsys):
 
     structlog.contextvars.clear_contextvars()
 
-    captured = capsys.readouterr()
-    assert "http_request_started" in captured.out
-    assert "test-trace-123" in captured.out
+    assert "http_request_started" in caplog.text
+    assert "test-trace-123" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_default_trace_id_when_no_context(capsys):
+async def test_default_trace_id_when_no_context(caplog):
     """Test default trace_id used when no contextvars present."""
     structlog.contextvars.clear_contextvars()
 
@@ -108,12 +107,11 @@ async def test_default_trace_id_when_no_context(capsys):
 
             assert mock_request.headers["X-Request-ID"] == "internal-request"
 
-    captured = capsys.readouterr()
-    assert "internal-request" in captured.out
+    assert "internal-request" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_response_logging_success(capsys):
+async def test_response_logging_success(caplog):
     """Test successful response is logged with duration."""
     with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
@@ -129,14 +127,13 @@ async def test_response_logging_success(capsys):
         async with TracedHttpClient("http://test") as client:
             await client._request_logger.log_response(mock_response)
 
-    captured = capsys.readouterr()
-    assert "http_request_completed" in captured.out
-    assert "200" in captured.out
-    assert "456" in captured.out
+    assert "http_request_completed" in caplog.text
+    assert "200" in caplog.text
+    assert "456" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_response_logging_error(capsys):
+async def test_response_logging_error(caplog):
     """Test failed response logs warning with response body."""
     with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
@@ -151,10 +148,9 @@ async def test_response_logging_error(capsys):
         async with TracedHttpClient("http://test") as client:
             await client._request_logger.log_response(mock_response)
 
-    captured = capsys.readouterr()
-    assert "http_request_failed" in captured.out
-    assert "500" in captured.out
-    assert "Internal Server Error" in captured.out
+    assert "http_request_failed" in caplog.text
+    assert "500" in caplog.text
+    assert "Internal Server Error" in caplog.text
 
 
 @pytest.mark.asyncio
