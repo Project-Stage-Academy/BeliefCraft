@@ -1,6 +1,16 @@
 name: beliefcraft
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   environment-api:
     build:
       context: ./services/environment-api
@@ -31,7 +41,7 @@ services:
       - ./services/rag-service/.env
     depends_on:
       environment-api:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test:
         [
@@ -46,27 +56,30 @@ services:
 
   agent-service:
     build:
-      context: ./services/agent-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/agent-service/Dockerfile
     ports:
-      - "8002:8002"
+      - "8003:8003"
+    environment:
+      - ENVIRONMENT_API_URL=http://environment-api:8000/api/v1
+      - RAG_API_URL=http://rag-service:8001/api/v1
+      - REDIS_URL=redis://redis:6379
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=claude-sonnet-4.5
+      - LOG_LEVEL=INFO
     env_file:
       - ./services/agent-service/.env
     depends_on:
+      redis:
+        condition: service_healthy
       environment-api:
-        condition: service_healthy
+        condition: service_started
       rag-service:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8002/healthz').status == 200 else 1)",
-        ]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/health"]
+      interval: 10s
+      timeout: 5s
       retries: 3
 
   ui:
