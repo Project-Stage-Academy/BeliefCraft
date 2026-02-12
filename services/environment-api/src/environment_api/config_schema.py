@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from common.utils.settings_base import BaseSettings
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AppConfig(BaseModel):
@@ -17,7 +16,7 @@ class AppConfig(BaseModel):
 class ServerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    host: str = Field(default="0.0.0.0")
+    host: str = Field(default="0.0.0.0")  # noqa: S104
     port: int = Field(default=8000, ge=1, le=65535)
 
 
@@ -32,6 +31,7 @@ class Settings(BaseSettings):
     Root config schema for environment-api.
     Matches YAML structure in services/environment-api/config/*.yaml
     """
+
     app: AppConfig = Field(default_factory=AppConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

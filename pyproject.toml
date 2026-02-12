@@ -52,8 +52,27 @@ select = ["E", "F", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
 [tool.mypy]
 #mypy type checker: turned on strict mode for tighter type safety.
 strict = true
+mypy_path = ["packages/common", "services/environment-api/src", "services/agent-service"]
+explicit_package_bases = true
+namespace_packages = true
+files = [
+    "packages/common/common",
+    "packages/common/tests",
+    "services/environment-api/src",
+    "services/agent-service/app",
+    "services/agent-service/tests",
+]
 
 [[tool.mypy.overrides]]
 module = ["packages.common.tests.*"]
 disallow_untyped_defs = false
 check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["test_config_loader", "test_health", "test_http_client", "test_logging"]
+disallow_untyped_defs = false
+check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["yaml", "dotenv", "dotenv.*", "redis", "redis.*", "uvicorn"]
+ignore_missing_imports = true

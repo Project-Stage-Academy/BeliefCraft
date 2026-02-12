@@ -1,9 +1,9 @@
 from common.utils.config_errors import (
     ConfigError,
-    ConfigFileNotFound,
+    ConfigFileNotFoundError,
     ConfigParseError,
     ConfigValidationError,
-    MissingEnvironmentVariable,
+    MissingEnvironmentVariableError,
 )
 from common.utils.config_loader import ConfigLoader
 from common.utils.settings_base import BaseSettings
@@ -11,9 +11,9 @@ from common.utils.settings_base import BaseSettings
 __all__ = [
     "BaseSettings",
     "ConfigError",
-    "ConfigFileNotFound",
+    "ConfigFileNotFoundError",
     "ConfigParseError",
     "ConfigValidationError",
-    "MissingEnvironmentVariable",
+    "MissingEnvironmentVariableError",
     "ConfigLoader",
 ]

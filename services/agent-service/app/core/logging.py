@@ -1,14 +1,12 @@
 """Structured logging configuration for the application"""
 
-from typing import cast
-
 import structlog
+from app.config import get_settings
 from common.logging import configure_logging as configure_common_logging
 from common.logging import get_logger
 
-from app.config import get_settings
-
 _configured = False
+
 
 def configure_logging() -> structlog.BoundLogger:
     """
@@ -23,15 +21,12 @@ def configure_logging() -> structlog.BoundLogger:
     """
     global _configured
     if _configured:
-        return cast(structlog.BoundLogger, get_logger(__name__))
+        return get_logger(__name__)
 
     settings = get_settings()
 
-    configure_common_logging(
-        settings.SERVICE_NAME,
-        log_level=settings.LOG_LEVEL
-    )
+    configure_common_logging(settings.SERVICE_NAME, log_level=settings.LOG_LEVEL)
 
     _configured = True
 
-    return cast(structlog.BoundLogger, get_logger(__name__))
+    return get_logger(__name__)

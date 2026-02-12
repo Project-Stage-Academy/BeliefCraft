@@ -3,19 +3,18 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 import yaml
-from dotenv import dotenv_values
-from pydantic import ValidationError
-
 from common.utils.config_errors import (
-    ConfigFileNotFound,
+    ConfigFileNotFoundError,
     ConfigParseError,
     ConfigValidationError,
-    MissingEnvironmentVariable,
+    MissingEnvironmentVariableError,
 )
 from common.utils.settings_base import BaseSettings
+from dotenv import dotenv_values
+from pydantic import ValidationError
 
 T = TypeVar("T", bound=BaseSettings)
 
@@ -43,7 +42,7 @@ class ConfigLoader:
       ${VAR} resolved from .env (if present) first, then os.environ.
     """
 
-    def __init__(self, service_root: Optional[str | Path] = None, config_dir: str = "config"):
+    def __init__(self, service_root: str | Path | None = None, config_dir: str = "config"):
         self.service_root = Path(service_root).resolve() if service_root else Path.cwd().resolve()
         config_dir_path = Path(config_dir)
         self.config_dir = (
@@ -55,15 +54,17 @@ class ConfigLoader:
     def load(
         self,
         *,
-        schema: Type[T],
-        env: Optional[str] = None,                  # "dev" | "prod" | None
-        cli_config_path: Optional[str] = None,      # --config
-        config_env_var: Optional[str] = None,
-        dotenv_mode: str = "config_dir_then_service_root",  # "config_dir_then_service_root" | "service_root_only" | "none"
+        schema: type[T],
+        env: str | None = None,  # "dev" | "prod" | None
+        cli_config_path: str | None = None,  # --config
+        config_env_var: str | None = None,
+        dotenv_mode: str = (
+            "config_dir_then_service_root"
+        ),  # "config_dir_then_service_root" | "service_root_only" | "none"
     ) -> T:
         config_dir = self.config_dir
         if not config_dir.exists():
-            raise ConfigFileNotFound(f"Config directory not found: {config_dir}")
+            raise ConfigFileNotFoundError(f"Config directory not found: {config_dir}")
 
         base_path = self._resolve_base_path(config_dir, cli_config_path, config_env_var)
         base = self._read_yaml(base_path)
@@ -94,33 +95,33 @@ class ConfigLoader:
     def _resolve_base_path(
         self,
         config_dir: Path,
-        cli_config_path: Optional[str],
-        config_env_var: Optional[str],
+        cli_config_path: str | None,
+        config_env_var: str | None,
     ) -> Path:
         if cli_config_path:
             raw = Path(cli_config_path).expanduser()
             p = (raw if raw.is_absolute() else (self.service_root / raw)).resolve()
             if not p.exists():
-                raise ConfigFileNotFound(f"--config file not found: {p}")
+                raise ConfigFileNotFoundError(f"--config file not found: {p}")
             return p
 
         env_path = os.getenv(config_env_var) if config_env_var else None
         if config_env_var and env_path:
             p = Path(env_path).expanduser().resolve()
             if not p.exists():
-                raise ConfigFileNotFound(f"{config_env_var} points to missing file: {p}")
+                raise ConfigFileNotFoundError(f"{config_env_var} points to missing file: {p}")
             return p
 
         p = (config_dir / "default.yaml").resolve()
         if not p.exists():
-            raise ConfigFileNotFound(f"Default config not found: {p}")
+            raise ConfigFileNotFoundError(f"Default config not found: {p}")
         return p
 
     def _read_yaml(self, path: Path) -> dict[str, Any]:
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as e:
-            raise ConfigFileNotFound(f"Cannot read config file: {path}. {e}") from e
+            raise ConfigFileNotFoundError(f"Cannot read config file: {path}. {e}") from e
 
         try:
             data = yaml.safe_load(text)
@@ -142,7 +143,7 @@ class ConfigLoader:
         # lists and scalars: replace (predictable)
         return override
 
-    def _resolve_dotenv_path(self, mode: str, config_dir: Path) -> Optional[Path]:
+    def _resolve_dotenv_path(self, mode: str, config_dir: Path) -> Path | None:
         if mode == "none":
             return None
 
@@ -154,7 +155,8 @@ class ConfigLoader:
 
         if mode != "config_dir_then_service_root":
             raise ConfigParseError(
-                "Invalid dotenv_mode. Expected one of: 'config_dir_then_service_root', 'service_root_only', 'none'."
+                "Invalid dotenv_mode. Expected one of: "
+                "'config_dir_then_service_root', 'service_root_only', 'none'."
             )
 
         # default: config_dir_then_service_root
@@ -164,7 +166,7 @@ class ConfigLoader:
             return service_root_dotenv
         return None
 
-    def _expand_vars(self, obj: Any, dotenv_path: Optional[Path]) -> Any:
+    def _expand_vars(self, obj: Any, dotenv_path: Path | None) -> Any:
         dotenv_vars: dict[str, str] = {}
         if dotenv_path:
             raw = dotenv_values(dotenv_path)
@@ -175,7 +177,7 @@ class ConfigLoader:
                 return dotenv_vars[var]
             if var in os.environ:
                 return os.environ[var]
-            raise MissingEnvironmentVariable(var, key_path)
+            raise MissingEnvironmentVariableError(var, key_path)
 
         def walk(x: Any, path: str) -> Any:
             if isinstance(x, dict):
@@ -183,8 +185,10 @@ class ConfigLoader:
             if isinstance(x, list):
                 return [walk(v, f"{path}[{i}]") for i, v in enumerate(x)]
             if isinstance(x, str):
-                def repl(m: re.Match) -> str:
+
+                def repl(m: re.Match[str]) -> str:
                     return resolve(m.group(1), path)
+
                 return _VAR_PATTERN.sub(repl, x)
             return x
 

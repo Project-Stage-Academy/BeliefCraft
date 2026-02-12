@@ -1,11 +1,10 @@
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel, ConfigDict
-
 from common.utils import BaseSettings
-from common.utils.config_errors import ConfigValidationError, MissingEnvironmentVariable
+from common.utils.config_errors import ConfigValidationError, MissingEnvironmentVariableError
 from common.utils.config_loader import ConfigLoader
+from pydantic import BaseModel, ConfigDict
 
 
 class AppConfig(BaseModel):
@@ -92,7 +91,9 @@ def test_merges_environment_override(fake_service: Path, monkeypatch: pytest.Mon
     assert settings.logging.level == "DEBUG"
 
 
-def test_precedence_cli_over_env_var_over_default(fake_service: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_precedence_cli_over_env_var_over_default(
+    fake_service: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     override_file = fake_service / "custom.yaml"
     _write(
         override_file,
@@ -143,7 +144,9 @@ api_key: "${API_KEY}"
     assert settings_from_cli.app.name == "cli-config"
 
 
-def test_resolves_vars_from_dotenv_before_os_env(fake_service: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolves_vars_from_dotenv_before_os_env(
+    fake_service: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _write(fake_service / "config" / ".env", "API_KEY=dotenv-value")
     monkeypatch.setenv("API_KEY", "os-env-value")
 
@@ -154,10 +157,15 @@ def test_resolves_vars_from_dotenv_before_os_env(fake_service: Path, monkeypatch
     assert settings.api_key == "dotenv-value"
 
 
-def test_missing_var_raises_helpful_error(fake_service: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_var_raises_helpful_error(
+    fake_service: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("API_KEY", raising=False)
 
-    with pytest.raises(MissingEnvironmentVariable, match="Define it in .env or export it in the environment"):
+    with pytest.raises(
+        MissingEnvironmentVariableError,
+        match="Define it in .env or export it in the environment",
+    ):
         ConfigLoader(service_root=fake_service).load(
             schema=TestSettings,
             dotenv_mode="none",

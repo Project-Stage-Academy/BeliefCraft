@@ -1,10 +1,10 @@
 import os
 from pathlib import Path
 
+from common.utils.config_loader import ConfigLoader
 from fastapi import FastAPI
 
-from common.utils.config_loader import ConfigLoader
-from environment_api.config_schema import Settings
+from .config_schema import Settings
 
 env = os.getenv("ENV")  # dev/prod/local or None
 service_root = Path(__file__).resolve().parents[2]
@@ -18,5 +18,5 @@ app = FastAPI()
 
 
 @app.get("/health")
-def health():
+def health() -> dict[str, str]:
     return {"status": "ok", "env": settings.app.env}

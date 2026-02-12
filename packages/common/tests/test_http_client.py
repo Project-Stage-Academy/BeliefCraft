@@ -8,19 +8,20 @@ These tests verify:
 - HTTP method delegation (GET, POST, etc.)
 """
 
+# mypy: disallow-untyped-defs=False, check-untyped-defs=False
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 import structlog
-
-from packages.common.http_client import TracedHttpClient, create_traced_client
+from common.http_client import TracedHttpClient, create_traced_client
 
 
 @pytest.fixture
 def mock_httpx_client():
     """Mock httpx.AsyncClient for isolated testing."""
-    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_instance = AsyncMock()
         mock_class.return_value = mock_instance
         mock_response = MagicMock()
@@ -43,7 +44,7 @@ def mock_httpx_client():
 @pytest.mark.asyncio
 async def test_traced_client_context_manager(mock_httpx_client):
     """Test async context manager properly initializes and closes client."""
-    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_class.return_value = mock_httpx_client
 
         async with TracedHttpClient("http://test-service") as client:
@@ -67,7 +68,7 @@ async def test_trace_id_injection_from_context(capsys):
 
     structlog.contextvars.bind_contextvars(trace_id="test-trace-123")
 
-    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
 
@@ -93,7 +94,7 @@ async def test_default_trace_id_when_no_context(capsys):
     """Test default trace_id used when no contextvars present."""
     structlog.contextvars.clear_contextvars()
 
-    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
 
@@ -114,7 +115,7 @@ async def test_default_trace_id_when_no_context(capsys):
 @pytest.mark.asyncio
 async def test_response_logging_success(capsys):
     """Test successful response is logged with duration."""
-    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
 
@@ -137,7 +138,7 @@ async def test_response_logging_success(capsys):
 @pytest.mark.asyncio
 async def test_response_logging_error(capsys):
     """Test failed response logs warning with response body."""
-    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
         mock_response = AsyncMock(spec=httpx.Response)
@@ -204,7 +205,7 @@ async def test_create_traced_client_factory():
 @pytest.mark.asyncio
 async def test_custom_timeout_configuration(mock_httpx_client):
     """Test custom timeout is passed to httpx client."""
-    with patch("packages.common.http_client.httpx.AsyncClient") as mock_class:
+    with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_class.return_value = mock_httpx_client
 
         async with TracedHttpClient("http://test", timeout=30.0):
