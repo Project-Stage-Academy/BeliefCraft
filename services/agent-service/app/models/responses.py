@@ -18,11 +18,13 @@ class AgentQueryResponse(BaseModel):
     """Response model for agent query"""
 
     request_id: str
-    answer: str
-    reasoning_steps: list[AgentStep]
-    total_iterations: int
-    execution_time_ms: float
-    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    query: str
+    status: str
+    answer: str | None
+    iterations: int
+    total_tokens: int
+    reasoning_trace: list[dict[str, Any]]
+    duration_seconds: float
 
 
 class ToolExecutionResponse(BaseModel):

@@ -6,11 +6,11 @@ from pydantic import BaseModel, Field
 class AgentQueryRequest(BaseModel):
     """Request model for agent query"""
 
-    query: str = Field(..., description="User query for the agent", min_length=1)
-    context: dict[str, Any] | None = Field(
-        default=None, description="Additional context for the query"
+    query: str = Field(..., description="User query for the agent", min_length=10, max_length=1000)
+    context: dict[str, Any] = Field(
+        default_factory=dict, description="Additional context for the query"
     )
-    max_iterations: int | None = Field(
+    max_iterations: int = Field(
         default=10, description="Maximum number of ReAct iterations", ge=1, le=20
     )
 
