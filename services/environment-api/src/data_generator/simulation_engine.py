@@ -20,6 +20,7 @@ from src.data_generator.logic.inbound import InboundManager
 from src.data_generator.logic.outbound import OutboundManager
 from src.data_generator.logic.replenishment import ReplenishmentManager
 from src.data_generator.logic.sensors import SensorManager
+from src.config import settings
 
 logger = logging.get_logger(__name__)
 
@@ -52,7 +53,7 @@ class SimulationEngine:
         self.suppliers = suppliers
 
         # Seed the random number generator for reproducible simulations
-        self.rng = random.Random(42)
+        self.rng = random.Random(settings.simulation.random_seed)
 
         # Initialize specialized subsystems
         # 1. Inbound: Handles arriving trucks and receiving stock.
