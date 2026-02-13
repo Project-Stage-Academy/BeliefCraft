@@ -32,6 +32,7 @@ class CatalogBuilder:
         """
         self.session = session
         self.fake = Faker()
+        self.rng = random.Random(settings.simulation.seed)
 
     def create_products(self, count: int) -> List[Product]:
         """
@@ -48,13 +49,13 @@ class CatalogBuilder:
         available_categories = list(settings.catalog.category_shelf_life.keys())
 
         for _ in range(count):
-            category = random.choice(available_categories) # nosec B311 - non-crypto random for simulation
+            category = self.rng.choice(available_categories)
 
             shelf_life_range = settings.catalog.category_shelf_life[category]
-            shelf_life = random.randint(
+            shelf_life = self.rng.randint(
                 shelf_life_range.min_days,
                 shelf_life_range.max_days
-            ) # nosec B311 - non-crypto random for simulation
+            )
 
             product = Product(
                 sku=f"{category[:3].upper()}-{self.fake.unique.ean8()}",
@@ -83,12 +84,12 @@ class CatalogBuilder:
         for _ in range(count):
             supplier = Supplier(
                 name=self.fake.company(),
-                reliability_score=round(random.uniform(
+                reliability_score=round(self.rng.uniform(
                     settings.catalog.supplier_reliability.min,
                     settings.catalog.supplier_reliability.max
                 ), 2),
-                region=random.choice(settings.catalog.supplier_regions) # nosec B311 - non-crypto random for simulation
-            ) # nosec B311 - non-crypto random for simulation
+                region=self.rng.choice(settings.catalog.supplier_regions)
+            )
             self.session.add(supplier)
             suppliers.append(supplier)
 

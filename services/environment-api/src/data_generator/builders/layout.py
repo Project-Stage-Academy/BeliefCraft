@@ -73,6 +73,7 @@ class ZoneBuilder:
             session (Session): The active SQLAlchemy database session.
         """
         self.session = session
+        self.rng = random.Random(settings.simulation.seed)
 
     def build_zones(self, warehouse: Warehouse) -> List[Location]:
         """
@@ -88,7 +89,7 @@ class ZoneBuilder:
             List[Location]: A list of created Zone location entities.
         """
         created_zones = []
-        zone_count = random.randint(2, 5) # nosec B311 - non-crypto random for simulation
+        zone_count = self.rng.randint(2, 5)
 
         zone_letters = [chr(65 + i) for i in range(zone_count)]
 
@@ -99,7 +100,7 @@ class ZoneBuilder:
                 warehouse_id=warehouse.id,
                 code=f"{warehouse.name}-{zone_name}",
                 type=LocationType.VIRTUAL,
-                capacity_units=random.randint(
+                capacity_units=self.rng.randint(
                     settings.layout.zone.capacity_min,
                     settings.layout.zone.capacity_max
                 ) # nosec B311 - non-crypto random for simulation
@@ -124,20 +125,20 @@ class ZoneBuilder:
             zone (Location): The parent zone location.
             zone_name (str): The code prefix for the zone (e.g., "ZONE-A").
         """
-        aisle_count = random.randint(
+        aisle_count = self.rng.randint(
             settings.layout.aisle.count_min,
             settings.layout.aisle.count_max
-        ) # nosec B311 - non-crypto random for simulation
+        )
         for aisle_num in range(1, aisle_count + 1):
             aisle = Location(
                 warehouse_id=warehouse.id,
                 parent_location_id=zone.id,
                 code=f"{zone_name}-AISLE-{aisle_num:02d}",
                 type=LocationType.SHELF,
-                capacity_units=random.randint(
+                capacity_units=self.rng.randint(
                     settings.layout.aisle.capacity_min,
                     settings.layout.aisle.capacity_max
-                ) # nosec B311 - non-crypto random for simulation
+                )
             )
             self.session.add(aisle)
             self.session.flush()
@@ -155,36 +156,36 @@ class ZoneBuilder:
             warehouse (Warehouse): The warehouse that owns the device.
         """
 
-        if random.random() > settings.layout.sensor.attach_probability:
+        if self.rng.random() > settings.layout.sensor.attach_probability:
             return
 
-        device_type = random.choices(
+        device_type = self.rng.choices(
             [DeviceType.CAMERA, DeviceType.RFID_READER],
             weights=[
                 settings.layout.sensor.camera.weight,
                 settings.layout.sensor.rfid.weight
             ],
             k=1
-        )[0] # nosec B311 - non-crypto random for simulation
+        )[0]
 
         if device_type == DeviceType.CAMERA:
-            noise = random.uniform(
+            noise = self.rng.uniform(
                 settings.layout.sensor.camera.noise_min,
                 settings.layout.sensor.camera.noise_max
-            ) # nosec B311 - non-crypto random for simulation
-            missing = random.uniform(
+            )
+            missing = self.rng.uniform(
                 settings.layout.sensor.camera.missing_min,
                 settings.layout.sensor.camera.missing_max
-            ) # nosec B311 - non-crypto random for simulation
+            )
         else:
-            noise = random.uniform(
+            noise = self.rng.uniform(
                 settings.layout.sensor.rfid.noise_min,
                 settings.layout.sensor.rfid.noise_max
-            ) # nosec B311 - non-crypto random for simulation
-            missing = random.uniform(
+            )
+            missing = self.rng.uniform(
                 settings.layout.sensor.rfid.missing_min,
                 settings.layout.sensor.rfid.missing_max
-            ) # nosec B311 - non-crypto random for simulation
+            )
 
         device = SensorDevice(
             warehouse_id=warehouse.id,

@@ -34,6 +34,7 @@ class LogisticsBuilder:
 
     def __init__(self, session: Session):
         self.session = session
+        self.rng = random.Random(settings.simulation.seed)
 
     def create_global_leadtime_models(self) -> List[LeadtimeModel]:
         """
@@ -120,10 +121,10 @@ class LogisticsBuilder:
                 if i == j:
                     continue
 
-                dist = random.randint(
+                dist = self.rng.randint(
                     settings.logistics.distance.min_km,
                     settings.logistics.distance.max_km
-                ) # nosec B311 - non-crypto random for simulation
+                )
 
                 if dist < settings.logistics.thresholds.truck_max_km:
                     mode = TransportMode.TRUCK
