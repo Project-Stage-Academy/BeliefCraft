@@ -28,6 +28,7 @@ members = [
 
 [tool.uv.sources]
 beliefcraft-common = { workspace = true }
+beliefcraft-environment-api = { workspace = true }
 
 [tool.black]
 #black formatter: keeps lines readable and consistent with other tools.

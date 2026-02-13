@@ -15,11 +15,20 @@ dependencies = [
   "faker"
 ]
 
-[tool.uv.sources]
-beliefcraft-common = { workspace = true }
-beliefcraft-database = { workspace = true }
-
 [dependency-groups]
 dev = [
   "pytest>=8.0",
 ]
+
+[tool.uv.sources]
+beliefcraft-common = { workspace = true }
+beliefcraft-database = { workspace = true }
+beliefcraft-environment-api = { path = ".", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "."}
+packages = ["src"]
+
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"

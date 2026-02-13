@@ -197,7 +197,7 @@ dev = [{ name = "pytest", specifier = ">=9.0.2" }]
 [[package]]
 name = "beliefcraft-environment-api"
 version = "0.1.0"
-source = { virtual = "services/environment-api" }
+source = { editable = "services/environment-api" }
 dependencies = [
     { name = "beliefcraft-common" },
     { name = "beliefcraft-database" },
