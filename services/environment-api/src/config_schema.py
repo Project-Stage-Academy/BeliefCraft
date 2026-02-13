@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from config_simulation_schema import (
     WorldConfig, SimulationConfig, CatalogConfig, InfrastructureConfig, LayoutConfig, LogisticsConfig, OutboundConfig,
-    ReplenishmentConfig,
+    ReplenishmentConfig, SensorsConfig,
 
 )
 
@@ -45,3 +45,4 @@ class Settings(BaseSettings):
     logistics: LogisticsConfig = Field(default_factory=LogisticsConfig)
     outbound: OutboundConfig = Field(default_factory=OutboundConfig)
     replenishment: ReplenishmentConfig = Field(default_factory=ReplenishmentConfig)
+    sensors: SensorsConfig = Field(default_factory=SensorsConfig)

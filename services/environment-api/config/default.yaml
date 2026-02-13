@@ -123,3 +123,25 @@ outbound:
     - "Kyiv Home Comfort"
     - "Hutsul Craft Brewery"
   missed_sale_penalty_per_unit: 10.0
+
+replenishment:
+  review_catalog_fraction: 0.10
+  policy:
+    reorder_point: 20.0
+    target_level: 100.0
+  lead_time:
+    mean_days: 5.0
+    std_dev_days: 1.0
+    min_days: 1
+
+sensors:
+  scan_probabilities:
+    dock: 0.90
+    default: 0.05
+  noise_model:
+    min_sigma_units: 1.0
+    noise_mean: 0.0
+    min_observed_qty: 0.0
+    min_confidence: 0.1
+    base_confidence: 1.0
+    noise_multiplier: 10.0

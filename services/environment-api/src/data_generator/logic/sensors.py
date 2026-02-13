@@ -18,6 +18,7 @@ from packages.database.src.models import (
 from packages.database.src.enums import (
     DeviceStatus, ObservationType, LocationType
 )
+from src.config import settings
 
 logger = get_logger(__name__)
 
@@ -33,7 +34,7 @@ class SensorManager:
 
     def __init__(self, session: Session):
         self.session = session
-        self.rng = random.Random(42)
+        self.rng = random.Random(settings.simulation.random_seed)
 
     def generate_daily_observations(self, date: datetime, warehouses: List[Warehouse]) -> None:
         """
@@ -93,7 +94,11 @@ class SensorManager:
         Determines if an item is detected during this simulation tick based on
         its location type.
         """
-        scan_probability = 0.90 if balance.location.type == LocationType.DOCK else 0.05
+        if balance.location.type == LocationType.DOCK:
+            scan_probability = settings.sensors.scan_probabilities.dock
+        else:
+            scan_probability = settings.sensors.scan_probabilities.default
+
         return self.rng.random() <= scan_probability
 
     def _create_observation(self, sensor: SensorDevice, balance: InventoryBalance,
@@ -123,11 +128,17 @@ class SensorManager:
         if is_missing:
             return None, 0.0, True
 
-        sigma_units = max(1.0, actual_qty * sensor.noise_sigma)
-        noise = self.rng.gauss(0, sigma_units)
+        cfg = settings.sensors.noise_model
 
-        observed_qty = max(0.0, actual_qty + noise)
-        confidence = max(0.1, 1.0 - (sensor.noise_sigma * 10))
+        sigma_units = max(cfg.min_sigma_units, actual_qty * sensor.noise_sigma)
+
+        noise = self.rng.gauss(cfg.noise_mean, sigma_units)
+
+        observed_qty = max(cfg.min_observed_qty, actual_qty + noise)
+        confidence = max(
+            cfg.min_confidence,
+            cfg.base_confidence - (sensor.noise_sigma * cfg.noise_multiplier)
+        )
 
         return observed_qty, confidence, False
 
