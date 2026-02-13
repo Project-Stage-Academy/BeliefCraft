@@ -47,6 +47,8 @@ repos:
           - anthropic
           - pytest
           - tenacity
+          - pydantic-settings
+          - redis
           - pyyaml
           - types-PyYAML
           - python-dotenv
