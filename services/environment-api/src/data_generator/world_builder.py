@@ -16,6 +16,7 @@ from packages.database.src.models import Warehouse, Product, Supplier, Route
 from src.data_generator.builders.catalog import CatalogBuilder
 from src.data_generator.builders.infrastructure import InfrastructureBuilder
 from src.data_generator.builders.logistics import LogisticsBuilder
+from src.config import settings
 
 logger = get_logger(__name__)
 
@@ -26,7 +27,7 @@ class WorldBuilder:
     Orchestrates specialized builders to construct the world.
     """
 
-    def __init__(self, session: Session, seed: int = 42):
+    def __init__(self, session: Session, seed):
         self.session = session
         self.seed = seed
         self.fake = Faker()
@@ -55,14 +56,14 @@ class WorldBuilder:
         Executes the build steps in the specific order required to satisfy
         database foreign key constraints and logical dependencies.
         """
-        self.create_warehouses()
-        self.create_products()
-        self.create_suppliers()
+        self.create_warehouses(settings.world.warehouse_count)
+        self.create_products(settings.world.product_count)
+        self.create_suppliers(settings.world.supplier_count)
         self.create_logistics_network()
 
         logger.info("world_generation_completed")
 
-    def create_warehouses(self, count: int = 3) -> None:
+    def create_warehouses(self, count: int) -> None:
         """
         Delegates the creation of physical infrastructure (Warehouses, Docks, Zones).
         """
@@ -74,7 +75,7 @@ class WorldBuilder:
             target_count=count
         )
 
-    def create_products(self, count: int = 50) -> None:
+    def create_products(self, count: int) -> None:
         """
         Delegates the creation of the product catalog.
         """
@@ -86,7 +87,7 @@ class WorldBuilder:
             target_count=count
         )
 
-    def create_suppliers(self, count: int = 5) -> None:
+    def create_suppliers(self, count: int) -> None:
         """
         Delegates the creation of external suppliers.
         """

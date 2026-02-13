@@ -13,3 +13,8 @@ simulation:
   default_days: 365
   random_seed: 42
   commit_interval: 10
+
+world:
+  warehouse_count: 3
+  product_count: 50
+  supplier_count: 5
