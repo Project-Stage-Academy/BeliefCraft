@@ -80,9 +80,7 @@ class TestInventoryLedger:
         )
         mock_session.query().filter_by().first.return_value = existing_balance
 
-        ledger.record_receipt(
-            mock_location, product_id, 10.0, datetime.now(tz=UTC), uuid.uuid4()
-        )
+        ledger.record_receipt(mock_location, product_id, 10.0, datetime.now(tz=UTC), uuid.uuid4())
 
         # Verify balance was updated
         assert existing_balance.on_hand == 60.0
@@ -101,9 +99,7 @@ class TestInventoryLedger:
         )
         mock_session.query().filter_by().first.return_value = existing_balance
 
-        ledger.record_issuance(
-            mock_location, product_id, 30.0, datetime.now(tz=UTC), ref_id
-        )
+        ledger.record_issuance(mock_location, product_id, 30.0, datetime.now(tz=UTC), ref_id)
 
         # Verify decrement
         assert existing_balance.on_hand == 70.0
