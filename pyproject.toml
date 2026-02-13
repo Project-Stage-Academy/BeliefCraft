@@ -80,6 +80,3 @@ ignore_missing_imports = true
 
 [tool.uv]
 package = false
-
-[tool.ruff.per-file-ignores]
-"services/environment-api/src/data_generator/**" = ["S311"]

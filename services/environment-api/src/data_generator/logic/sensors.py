@@ -34,7 +34,7 @@ class SensorManager:
 
     def __init__(self, session: Session):
         self.session = session
-        self.rng = random.Random(settings.simulation.random_seed)
+        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
 
     def generate_daily_observations(self, date: datetime, warehouses: List[Warehouse]) -> None:
         """

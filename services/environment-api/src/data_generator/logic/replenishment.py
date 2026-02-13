@@ -37,7 +37,7 @@ class ReplenishmentManager:
     def __init__(self, session: Session, suppliers: List[Supplier]):
         self.session = session
         self.suppliers = suppliers
-        self.rng = random.Random(settings.simulation.random_seed)
+        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
 
         self.standard_lt_model = self.session.query(LeadtimeModel).filter_by(
             scope=LeadtimeScope.GLOBAL,

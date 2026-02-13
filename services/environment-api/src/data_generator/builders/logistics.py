@@ -34,7 +34,7 @@ class LogisticsBuilder:
 
     def __init__(self, session: Session):
         self.session = session
-        self.rng = random.Random(settings.simulation.seed)
+        self.rng = random.Random(settings.simulation.seed) # noqa: S311
 
     def create_global_leadtime_models(self) -> List[LeadtimeModel]:
         """

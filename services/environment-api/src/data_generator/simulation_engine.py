@@ -52,7 +52,7 @@ class SimulationEngine:
         self.suppliers = suppliers
 
         # Seed the random number generator for reproducible simulations
-        self.rng = random.Random(settings.simulation.random_seed)
+        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
 
         # Initialize specialized subsystems
         # 1. Inbound: Handles arriving trucks and receiving stock.

@@ -73,7 +73,7 @@ class ZoneBuilder:
             session (Session): The active SQLAlchemy database session.
         """
         self.session = session
-        self.rng = random.Random(settings.simulation.seed)
+        self.rng = random.Random(settings.simulation.seed) # noqa: S311
 
     def build_zones(self, warehouse: Warehouse) -> List[Location]:
         """

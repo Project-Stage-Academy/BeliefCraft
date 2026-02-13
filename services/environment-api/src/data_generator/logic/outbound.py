@@ -38,7 +38,7 @@ class OutboundManager:
     def __init__(self, session: Session):
         self.session = session
         self.ledger = InventoryLedger(session)
-        self.rng = random.Random(settings.simulation.random_seed)
+        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
 
     def process_daily_demand(self, date: datetime, warehouses: List[Warehouse],
                              products: List[Product]) -> None:

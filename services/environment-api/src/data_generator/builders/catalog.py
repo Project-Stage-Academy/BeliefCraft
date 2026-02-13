@@ -32,7 +32,7 @@ class CatalogBuilder:
         """
         self.session = session
         self.fake = Faker()
-        self.rng = random.Random(settings.simulation.seed)
+        self.rng = random.Random(settings.simulation.seed) # noqa: S311
 
     def create_products(self, count: int) -> List[Product]:
         """
