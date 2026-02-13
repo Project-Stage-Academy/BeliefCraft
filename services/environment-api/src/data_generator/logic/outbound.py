@@ -20,6 +20,7 @@ from packages.database.src.models import (
 from packages.database.src.enums import (
     OrderStatus, ShipmentStatus, ShipmentDirection, LocationType
 )
+from src.config import settings
 from src.data_generator.logic.inventory import InventoryLedger
 
 logger = get_logger(__name__)
@@ -37,7 +38,7 @@ class OutboundManager:
     def __init__(self, session: Session):
         self.session = session
         self.ledger = InventoryLedger(session)
-        self.rng = random.Random(42)
+        self.rng = random.Random(settings.simulation.random_seed)
 
     def process_daily_demand(self, date: datetime, warehouses: List[Warehouse],
                              products: List[Product]) -> None:
@@ -55,11 +56,16 @@ class OutboundManager:
         """
         orders_created = 0
 
-        active_products = self.rng.sample(products, k=max(1, int(len(products) * 0.2)))
+        active_products = self.rng.sample(
+            products,
+            k=max(1, int(len(products) * settings.outbound.active_catalog_fraction))
+        )
 
         for wh in warehouses:
             for product in active_products:
-                qty_demanded = self._simulate_poisson_demand(mean=2.0)
+                qty_demanded = self._simulate_poisson_demand(
+                    mean=settings.outbound.poisson_mean
+                )
 
                 if qty_demanded <= 0:
                     continue
@@ -123,7 +129,7 @@ class OutboundManager:
         status = OrderStatus.SHIPPED if allocated_qty > 0 else OrderStatus.CANCELLED
 
         order = Order(
-            customer_name=self.rng.choice(["Acme Corp", "Globex", "Soylent Corp"]),
+            customer_name=self.rng.choice(settings.outbound.customer_names),
             status=status,
             requested_ship_from_region=warehouse.region,
         )
@@ -143,9 +149,7 @@ class OutboundManager:
             qty_ordered=ordered,
             qty_allocated=allocated,
             qty_shipped=allocated,
-            # Simple penalty logic: $10 per unit we couldn't supply
-            service_level_penalty=(ordered - allocated) * 10.0
-        )
+            service_level_penalty=(ordered - allocated) * settings.outbound.missed_sale_penalty_per_unit        )
         self.session.add(line)
 
     def _execute_outbound_logistics(self, warehouse: Warehouse, dock: Location,

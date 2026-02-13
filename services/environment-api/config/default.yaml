@@ -106,3 +106,20 @@ logistics:
   thresholds:
     truck_max_km: 800
     air_max_km: 5000
+
+outbound:
+  active_catalog_fraction: 0.2
+  poisson_mean: 2.0
+  customer_names:
+    - "Kalyna Market"
+    - "Dnipro Build Group"
+    - "Lviv Coffee Roasters"
+    - "Stepova Apteka"
+    - "Tryzub Logistics"
+    - "Black Sea Fishery"
+    - "Zerno & Co"
+    - "Karpaty Travel Club"
+    - "Golden Wheat Bakery"
+    - "Kyiv Home Comfort"
+    - "Hutsul Craft Brewery"
+  missed_sale_penalty_per_unit: 10.0
