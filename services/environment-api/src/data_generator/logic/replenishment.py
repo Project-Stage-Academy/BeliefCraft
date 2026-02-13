@@ -40,7 +40,8 @@ class ReplenishmentManager:
         self.rng = random.Random(settings.simulation.random_seed)
 
         self.standard_lt_model = self.session.query(LeadtimeModel).filter_by(
-            scope=LeadtimeScope.GLOBAL
+            scope=LeadtimeScope.GLOBAL,
+            p1=settings.logistics.models.standard.p1
         ).first()
 
     def review_stock_levels(self, date: datetime, warehouses: List[Warehouse],

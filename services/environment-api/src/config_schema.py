@@ -5,7 +5,7 @@ from typing import Literal
 from packages.common.common.utils.settings_base import BaseSettings
 from pydantic import BaseModel, ConfigDict, Field
 
-from config_simulation_schema import (
+from .config_simulation_schema import (
     WorldConfig, SimulationConfig, CatalogConfig, InfrastructureConfig, LayoutConfig, LogisticsConfig, OutboundConfig,
     ReplenishmentConfig, SensorsConfig,
 

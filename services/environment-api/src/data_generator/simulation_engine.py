@@ -14,8 +14,7 @@ import random
 from sqlalchemy.orm import Session
 
 from packages.common.common import logging
-from packages.database.src.logistics import Supplier
-from packages.database.src.models import Warehouse, Product
+from packages.database.src.models import Warehouse, Product, Supplier
 from src.data_generator.logic.inbound import InboundManager
 from src.data_generator.logic.outbound import OutboundManager
 from src.data_generator.logic.replenishment import ReplenishmentManager

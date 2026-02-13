@@ -135,8 +135,8 @@ class ZoneBuilder:
                 code=f"{zone_name}-AISLE-{aisle_num:02d}",
                 type=LocationType.SHELF,
                 capacity_units=random.randint(
-                    settings.layout.zone.count_min,
-                    settings.layout.zone.count_max
+                    settings.layout.aisle.capacity_min,
+                    settings.layout.aisle.capacity_max
                 )
             )
             self.session.add(aisle)

@@ -6,10 +6,11 @@ data generation process. It coordinates specialized builders to construct a
 coherent and interconnected simulation environment, ensuring that dependencies
 (e.g., Warehouses must exist before Routes) are respected.
 """
-
-from typing import List
 from sqlalchemy.orm import Session
 from faker import Faker
+
+import random
+from typing import List
 
 from packages.common.common.logging import get_logger
 from packages.database.src.models import Warehouse, Product, Supplier, Route
@@ -32,6 +33,7 @@ class WorldBuilder:
         self.seed = seed
         self.fake = Faker()
         Faker.seed(seed)
+        random.seed(seed)
 
         # State containers for generated entities
         self.warehouses: List[Warehouse] = []
