@@ -9,10 +9,10 @@ This package provides HTTP clients for communicating with external services:
 Example:
     ```python
     from app.clients import EnvironmentAPIClient, RAGAPIClient
-    
+
     async with EnvironmentAPIClient() as env_client:
         obs = await env_client.get_current_observations()
-    
+
     async with RAGAPIClient() as rag_client:
         results = await rag_client.search_knowledge_base(
             query="inventory policy"
@@ -29,4 +29,3 @@ __all__ = [
     "EnvironmentAPIClient",
     "RAGAPIClient",
 ]
-
