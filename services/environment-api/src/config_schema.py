@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from packages.common.common.utils.settings_base import BaseSettings
+from common.utils.settings_base import BaseSettings
 from pydantic import BaseModel, ConfigDict, Field
 
 from .config_simulation_schema import (
