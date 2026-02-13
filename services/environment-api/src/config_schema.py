@@ -6,10 +6,9 @@ from packages.common.common.utils.settings_base import BaseSettings
 from pydantic import BaseModel, ConfigDict, Field
 
 from config_simulation_schema import (
-    WorldConfig, SimulationConfig, CatalogConfig, InfrastructureConfig,
+    WorldConfig, SimulationConfig, CatalogConfig, InfrastructureConfig, LayoutConfig, LogisticsConfig,
 
 )
-
 
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -41,3 +40,5 @@ class Settings(BaseSettings):
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
     catalog: CatalogConfig = Field(default_factory=CatalogConfig)
     infrastructure: InfrastructureConfig = Field(default_factory=InfrastructureConfig)
+    layout: LayoutConfig = Field(default_factory=LayoutConfig)
+    logistics: LogisticsConfig = Field(default_factory=LogisticsConfig)

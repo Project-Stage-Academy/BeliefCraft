@@ -54,4 +54,55 @@ infrastructure:
     NA-WEST: "UTC-8"
     EU-CENTRAL: "UTC+2"
 
+layout:
+  dock:
+    capacity_min: 50000
+    capacity_max: 100000
+  zone:
+    count_min: 2
+    count_max: 5
+    capacity_min: 10000
+    capacity_max: 30000
+  aisle:
+    count_min: 3
+    count_max: 8
+    capacity_min: 500
+    capacity_max: 2000
+  sensor:
+    attach_probability: 0.2
+    camera:
+      weight: 0.7
+      noise_min: 0.02
+      noise_max: 0.05
+      missing_min: 0.01
+      missing_max: 0.10
+    rfid:
+      weight: 0.3
+      noise_min: 0.00
+      noise_max: 0.01
+      missing_min: 0.00
+      missing_max: 0.01
 
+logistics:
+  models:
+    express:
+      p1: 2.0
+      p2: 0.5
+      p_rare_delay: 0.05
+      rare_delay_add_days: 2.0
+    standard:
+      p1: 5.0
+      p2: 1.2
+      p_rare_delay: 0.10
+      rare_delay_add_days: 5.0
+    ocean:
+      p1: 3.0
+      p2: 0.5
+      p_rare_delay: 0.20
+      rare_delay_add_days: 15.0
+  distance:
+    min_km: 50
+    max_km: 12000
+  thresholds:
+    truck_max_km: 800
+    air_max_km: 5000

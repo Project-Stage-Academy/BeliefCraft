@@ -10,13 +10,16 @@ Classes:
     ZoneBuilder: Handles creation of the internal storage hierarchy and sensor assets.
 """
 
+from sqlalchemy.orm import Session
+
 import random
 from typing import List
-from sqlalchemy.orm import Session
+
 from packages.database.src.models import (
     Warehouse, Location, LocationType,
     SensorDevice, DeviceType, DeviceStatus
 )
+from src.config import settings
 
 
 class DockBuilder:
@@ -48,8 +51,11 @@ class DockBuilder:
             warehouse_id=warehouse.id,
             code=f"{warehouse.name}-DOCK",
             type=LocationType.DOCK,
-            # Random capacity between 50k and 100k units
-            capacity_units=random.randint(50000, 100000)
+
+            capacity_units=random.randint(
+                settings.layout.dock.capacity_min,
+                settings.layout.dock.capacity_max
+            )
         )
         self.session.add(dock)
         return dock
@@ -72,7 +78,7 @@ class ZoneBuilder:
         """
         Generates a randomized layout of storage zones for the warehouse.
 
-        Creates 2 to 5 virtual 'ZONE' locations (e.g., ZONE-A, ZONE-B).
+        Creates virtual 'ZONE' locations (e.g., ZONE-A, ZONE-B).
         Each zone acts as a parent container for physical aisles.
 
         Args:
@@ -93,7 +99,10 @@ class ZoneBuilder:
                 warehouse_id=warehouse.id,
                 code=f"{warehouse.name}-{zone_name}",
                 type=LocationType.VIRTUAL,
-                capacity_units=random.randint(10000, 30000)
+                capacity_units=random.randint(
+                    settings.layout.zone.capacity_min,
+                    settings.layout.zone.capacity_max
+                )
             )
             self.session.add(zone)
             self.session.flush()
@@ -107,7 +116,7 @@ class ZoneBuilder:
         """
         Helper method to create physical shelves (Aisles) within a specific zone.
 
-        Creates 3 to 8 'SHELF' locations per zone. Also triggers the probability
+        Creates 'SHELF' locations per zone. Also triggers the probability
         check to add a sensor for each created aisle.
 
         Args:
@@ -115,14 +124,20 @@ class ZoneBuilder:
             zone (Location): The parent zone location.
             zone_name (str): The code prefix for the zone (e.g., "ZONE-A").
         """
-        aisle_count = random.randint(3, 8)
+        aisle_count = random.randint(
+            settings.layout.aisle.count_min,
+            settings.layout.aisle.count_max
+        )
         for aisle_num in range(1, aisle_count + 1):
             aisle = Location(
                 warehouse_id=warehouse.id,
                 parent_location_id=zone.id,
                 code=f"{zone_name}-AISLE-{aisle_num:02d}",
                 type=LocationType.SHELF,
-                capacity_units=random.randint(500, 2000)
+                capacity_units=random.randint(
+                    settings.layout.zone.count_min,
+                    settings.layout.zone.count_max
+                )
             )
             self.session.add(aisle)
             self.session.flush()
@@ -136,30 +151,40 @@ class ZoneBuilder:
         There is an 80% chance this method does nothing (no sensor).
         If a sensor is created, it is linked to the Warehouse ID (not the specific aisle).
 
-        Logic:
-            - 70% chance: Camera (High noise, High missing rate).
-            - 30% chance: RFID Reader (Low noise, Low missing rate).
-
         Args:
             warehouse (Warehouse): The warehouse that owns the device.
         """
-        # 80% chance of no sensor for this iteration
-        if random.random() > 0.8:
+
+        if random.random() > settings.layout.sensor.attach_probability:
             return
 
-        # Weighted choice: Cameras are more common than RFID
         device_type = random.choices(
             [DeviceType.CAMERA, DeviceType.RFID_READER],
-            weights=[0.7, 0.3], k=1
+            weights=[
+                settings.layout.sensor.camera.weight,
+                settings.layout.sensor.rfid.weight
+            ],
+            k=1
         )[0]
 
-        # Define noise characteristics based on hardware type
         if device_type == DeviceType.CAMERA:
-            noise = random.uniform(0.02, 0.05)
-            missing = random.uniform(0.01, 0.10)
+            noise = random.uniform(
+                settings.layout.sensor.camera.noise_min,
+                settings.layout.sensor.camera.noise_max
+            )
+            missing = random.uniform(
+                settings.layout.sensor.camera.missing_min,
+                settings.layout.sensor.camera.missing_max
+            )
         else:
-            noise = random.uniform(0.00, 0.01)
-            missing = random.uniform(0.00, 0.01)
+            noise = random.uniform(
+                settings.layout.sensor.rfid.noise_min,
+                settings.layout.sensor.rfid.noise_max
+            )
+            missing = random.uniform(
+                settings.layout.sensor.rfid.missing_min,
+                settings.layout.sensor.rfid.missing_max
+            )
 
         device = SensorDevice(
             warehouse_id=warehouse.id,

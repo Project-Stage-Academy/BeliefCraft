@@ -19,6 +19,7 @@ from typing import List
 from sqlalchemy.orm import Session
 from packages.database.src.models import Warehouse, Route, LeadtimeModel
 from packages.database.src.enums import LeadtimeScope, DistFamily, TransportMode
+from src.config import settings
 
 
 class LogisticsBuilder:
@@ -51,33 +52,34 @@ class LogisticsBuilder:
             List[LeadtimeModel]: A list containing the three persisted LeadtimeModel objects
                                  in the order [Express, Standard, Ocean].
         """
+        cfg = settings.logistics.models
         models = [
             # Express Model (Air Freight)
             LeadtimeModel(
                 scope=LeadtimeScope.GLOBAL,
                 dist_family=DistFamily.NORMAL,
-                p1=2.0,  # Mean days
-                p2=0.5,  # Std Dev
-                p_rare_delay=0.05,
-                rare_delay_add_days=2.0
+                p1=cfg.express.p1,
+                p2=cfg.express.p2,
+                p_rare_delay=cfg.express.p_rare_delay,
+                rare_delay_add_days=cfg.express.rare_delay_add_days
             ),
             # Standard Model (Truck/Ground)
             LeadtimeModel(
                 scope=LeadtimeScope.GLOBAL,
                 dist_family=DistFamily.NORMAL,
-                p1=5.0,
-                p2=1.2,
-                p_rare_delay=0.10,
-                rare_delay_add_days=5.0
+                p1=cfg.standard.p1,
+                p2=cfg.standard.p2,
+                p_rare_delay=cfg.standard.p_rare_delay,
+                rare_delay_add_days=cfg.standard.rare_delay_add_days
             ),
             # Bulk Model (Ocean Freight)
             LeadtimeModel(
                 scope=LeadtimeScope.GLOBAL,
                 dist_family=DistFamily.LOGNORMAL,
-                p1=3.0,  # Mu (scale parameter for lognormal)
-                p2=0.5,  # Sigma (shape parameter)
-                p_rare_delay=0.20,
-                rare_delay_add_days=15.0
+                p1=cfg.ocean.p1,
+                p2=cfg.ocean.p2,
+                p_rare_delay=cfg.ocean.p_rare_delay,
+                rare_delay_add_days=cfg.ocean.rare_delay_add_days
             )
         ]
         self.session.add_all(models)
@@ -118,13 +120,16 @@ class LogisticsBuilder:
                 if i == j:
                     continue
 
-                dist = random.randint(50, 12000)
+                dist = random.randint(
+                    settings.logistics.distance.min_km,
+                    settings.logistics.distance.max_km
+                )
 
-                if dist < 800:
+                if dist < settings.logistics.thresholds.truck_max_km:
                     mode = TransportMode.TRUCK
                     selected_model = standard_model
 
-                elif dist < 5000:
+                elif dist < settings.logistics.thresholds.air_max_km:
                     mode = TransportMode.AIR
                     selected_model = express_model
 
