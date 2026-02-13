@@ -72,14 +72,6 @@ class TestSimulationEngine:
 
         engine.tick(current_date)
 
-        # Verify call order
-        expected_calls = [
-            pytest.mark.inbound(current_date),
-            pytest.mark.outbound(current_date, engine.warehouses, engine.products),
-            pytest.mark.replenishment(current_date, engine.warehouses, engine.products),
-            pytest.mark.sensors(current_date, engine.warehouses)
-        ]
-
         # Check that they were called in the exact sequence defined in the tick method
         call_names = [call[0] for call in call_tracker.method_calls]
         assert call_names == ['inbound', 'outbound', 'replenishment', 'sensors']
