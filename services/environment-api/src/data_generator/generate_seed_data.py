@@ -30,12 +30,13 @@ from datetime import datetime, timedelta
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from packages.database.src.connection import SessionLocal
+from packages.database.src.connection import SessionLocal, get_engine
 from packages.database.src.base import Base
 from packages.common.common.logging import configure_logging, get_logger
 
 from src.data_generator.world_builder import WorldBuilder
 from src.data_generator.simulation_engine import SimulationEngine
+from src.config import settings
 
 configure_logging("seed-generator", "INFO")
 logger = get_logger(__name__)
@@ -54,7 +55,7 @@ class SimulationRunner:
     def __init__(self, engine: Engine):
         self.engine = engine
 
-    def run(self, days: int = 365) -> None:
+    def run(self, days: int) -> None:
         """
         Main entry point. Executes the simulation pipeline.
         """
@@ -92,7 +93,7 @@ class SimulationRunner:
         """
         logger.info("phase_1_static_build_started")
 
-        world = WorldBuilder(session, seed=42)
+        world = WorldBuilder(session, seed=settings.simulation.random_seed)
         world.build_all()
 
         session.commit()
@@ -133,7 +134,7 @@ class SimulationRunner:
         while current_date <= end:
             engine.tick(current_date)
 
-            if total_ticks % 10 == 0:
+            if total_ticks % settings.simulation.commit_interval == 0:
                 session.commit()
                 logger.info("simulation_progress", progress=f"{total_ticks}/{total_days}")
 
@@ -141,3 +142,8 @@ class SimulationRunner:
             total_ticks += 1
 
         session.commit()
+
+if __name__ == "__main__":
+    engine = get_engine()
+    runner = SimulationRunner(engine)
+    runner.run(days=settings.simulation.default_days)

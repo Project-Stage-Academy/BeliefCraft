@@ -19,6 +19,12 @@ class ServerConfig(BaseModel):
     host: str = Field(default="0.0.0.0")  # noqa: S104
     port: int = Field(default=8000, ge=1, le=65535)
 
+class SimulationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_days: int = Field(default=365, gt=0)
+    random_seed: int = Field(default=42)
+    commit_interval: int = Field(default=10, gt=0)
 
 class LoggingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")

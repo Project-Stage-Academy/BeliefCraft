@@ -8,3 +8,8 @@ server:
 
 logging:
   level: "INFO"
+
+simulation:
+  default_days: 365
+  random_seed: 42
+  commit_interval: 10
