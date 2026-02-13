@@ -1,24 +1,27 @@
 """Application constants"""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class HealthStatus(str, Enum):
+class HealthStatus(StrEnum):
     """Health check status values"""
+
     HEALTHY = "healthy"
     UNHEALTHY = "unhealthy"
     DEGRADED = "degraded"
     CONFIGURED = "configured"
     MISSING_KEY = "missing_key"
     UNKNOWN = "unknown"
+    MISSING_CONFIG = "missing_config"
 
 
-class DependencyName(str, Enum):
+class DependencyName(StrEnum):
     """Dependency identifiers"""
+
     ENVIRONMENT_API = "environment_api"
     RAG_API = "rag_api"
     REDIS = "redis"
-    ANTHROPIC = "anthropic"
+    AWS_BEDROCK = "aws_bedrock"
 
 
 # HTTP

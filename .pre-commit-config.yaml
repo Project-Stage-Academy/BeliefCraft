@@ -32,6 +32,7 @@ repos:
     rev: v1.18.2
     hooks:
       - id: mypy
+        pass_filenames: false
         args: ["--config-file=pyproject.toml"]
         additional_dependencies:
           - sqlalchemy
@@ -39,4 +40,15 @@ repos:
           - fastapi
           - httpx
           - structlog
+          - pydantic-settings
+          - redis
+          - uvicorn
+          - python-dotenv
+          - anthropic
           - pytest
+          - pydantic-settings
+          - redis
+          - pyyaml
+          - types-PyYAML
+          - python-dotenv
+          - uvicorn

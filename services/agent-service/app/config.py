@@ -1,7 +1,7 @@
 import os
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -17,65 +17,39 @@ class Settings(BaseSettings):
 
     # External services
     ENVIRONMENT_API_URL: str = Field(
-        default="http://localhost:8000/api/v1",
-        description="Environment API base URL"
+        default="http://localhost:8000/api/v1", description="Environment API base URL"
     )
-    RAG_API_URL: str = Field(
-        default="http://localhost:8001/api/v1",
-        description="RAG API base URL"
+    RAG_API_URL: str = Field(default="http://localhost:8001/api/v1", description="RAG API base URL")
+
+    # AWS Bedrock (Claude) config
+    AWS_DEFAULT_REGION: str = Field(default="us-east-1", description="AWS Region")
+    BEDROCK_MODEL_ID: str = Field(
+        default="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        description="AWS Bedrock Claude model ID",
+    )
+    BEDROCK_TEMPERATURE: float = Field(default=0.0, ge=0.0, le=1.0, description="Model temperature")
+    BEDROCK_MAX_TOKENS: int = Field(
+        default=4000, ge=1, le=100000, description="Maximum tokens for completion"
     )
 
-    # Claude (Anthropic) config
-    ANTHROPIC_API_KEY: str | None = Field(default=None)
+    AWS_ACCESS_KEY_ID: str | None = Field(default=None)
+    AWS_SECRET_ACCESS_KEY: str | None = Field(default=None)
 
-    @field_validator("ANTHROPIC_API_KEY")
-    
+    @field_validator("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
     @classmethod
-    def validate_api_key(cls, value: str | None, info: object) -> str | None:
-        if not value and os.getenv("ENV") == "production":
-            raise ValueError("ANTHROPIC_API_KEY required in production")
-        return value
-
-    ANTHROPIC_MODEL: str = Field(
-        default="claude-sonnet-4.5",
-        description="Claude model to use"
-    )
-    ANTHROPIC_TEMPERATURE: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Model temperature"
-    )
-    ANTHROPIC_MAX_TOKENS: int = Field(
-        default=4000,
-        ge=1,
-        le=100000,
-        description="Maximum tokens for completion"
-    )
+    def validate_remote_credentials(cls, v: str | None, info: ValidationInfo) -> str | None:
+        if not v and os.getenv("ENV") == "production":
+            raise ValueError(f"{info.field_name} is required in production environment")
+        return v
 
     # Redis cache
-    REDIS_URL: str = Field(
-        default="redis://localhost:6379",
-        description="Redis connection URL"
-    )
-    CACHE_TTL_SECONDS: int = Field(
-        default=3600,
-        ge=0,
-        description="Cache TTL in seconds"
-    )
+    REDIS_URL: str = Field(default="redis://localhost:6379", description="Redis connection URL")
+    CACHE_TTL_SECONDS: int = Field(default=3600, ge=0, description="Cache TTL in seconds")
 
     # Agent config
-    MAX_ITERATIONS: int = Field(
-        default=10,
-        ge=1,
-        le=50,
-        description="Maximum agent iterations"
-    )
+    MAX_ITERATIONS: int = Field(default=10, ge=1, le=50, description="Maximum agent iterations")
     TOOL_TIMEOUT_SECONDS: int = Field(
-        default=30,
-        ge=1,
-        le=300,
-        description="Tool execution timeout in seconds"
+        default=30, ge=1, le=300, description="Tool execution timeout in seconds"
     )
 
     # Logging
@@ -94,6 +68,7 @@ class Settings(BaseSettings):
     model_config = {
         "env_file": ".env",
         "case_sensitive": True,
+        "extra": "ignore",
     }
 
 

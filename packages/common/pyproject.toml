@@ -11,6 +11,9 @@ dependencies = [
     "structlog>=24.1.0",
     "fastapi>=0.110",
     "httpx>=0.27.0",
+    "pyyaml",
+    "python-dotenv",
+    "pydantic",
 ]
 
 [project.optional-dependencies]
@@ -21,4 +24,3 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["common"]
-
