@@ -15,6 +15,7 @@ from typing import List
 from sqlalchemy.orm import Session
 from faker import Faker
 from packages.database.src.models import Product, Supplier
+from src.config import settings
 
 
 class CatalogBuilder:
@@ -32,7 +33,7 @@ class CatalogBuilder:
         self.session = session
         self.fake = Faker()
 
-    def create_products(self, count: int = 50) -> List[Product]:
+    def create_products(self, count: int) -> List[Product]:
         """
         Generates a diverse catalog of product entities with realistic attributes.
 
@@ -43,12 +44,17 @@ class CatalogBuilder:
         Returns:
             List[Product]: A list of the persisted Product SQLAlchemy objects.
         """
-        categories = ["Electronics", "Food", "Pharmacy", "Clothing", "Home"]
         products = []
+        available_categories = list(settings.catalog.category_shelf_life.keys())
 
         for _ in range(count):
-            category = random.choice(categories)
-            shelf_life = random.randint(3, 14) if category == "Food" else random.randint(180, 720)
+            category = random.choice(available_categories)
+
+            shelf_life_range = settings.catalog.category_shelf_life[category]
+            shelf_life = random.randint(
+                shelf_life_range.min_days,
+                shelf_life_range.max_days
+            )
 
             product = Product(
                 sku=f"{category[:3].upper()}-{self.fake.unique.ean8()}",

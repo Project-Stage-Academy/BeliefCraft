@@ -18,3 +18,30 @@ world:
   warehouse_count: 3
   product_count: 50
   supplier_count: 5
+
+catalog:
+  category_shelf_life:
+    Electronics:
+      min_days: 180
+      max_days: 720
+    Food:
+      min_days: 3
+      max_days: 14
+    Pharmacy:
+      min_days: 30
+      max_days: 90
+    Clothing:
+      min_days: 180
+      max_days: 720
+    Home:
+      min_days: 180
+      max_days: 720
+  supplier_regions:
+    - "NA-EAST"
+    - "EU-WEST"
+    - "APAC-SG"
+    - "NA-WEST"
+    - "EU-CENTRAL"
+  supplier_reliability:
+    min: 0.7
+    max: 0.99
