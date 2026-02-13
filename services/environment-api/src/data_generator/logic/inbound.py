@@ -88,7 +88,16 @@ class InboundManager:
             shipment (Shipment): The shipment entity to process.
             date (datetime): The effective date of the receipt.
         """
-        # Data integrity check: Destination warehouse must exist
+        # 1. Data integrity check: A shipment must have a source document (PO)
+        po = shipment.purchase_order
+        if not po:
+            logger.warning(
+                "shipment_missing_po",
+                shipment_id=str(shipment.id)
+            )
+            return
+
+        # 2. Data integrity check: Destination warehouse must exist
         dest_warehouse = shipment.destination_warehouse
         if not dest_warehouse:
             logger.error(
@@ -97,9 +106,8 @@ class InboundManager:
             )
             return
 
-        # Data integrity check: Destination warehouse must have a receiving area (Dock)
+        # 3. Data integrity check: Destination warehouse must have a receiving area (Dock)
         destination_dock = self._get_warehouse_dock(dest_warehouse)
-
         if not destination_dock:
             logger.error(
                 "warehouse_missing_dock",
@@ -107,8 +115,8 @@ class InboundManager:
             )
             return
 
-        # Process receipt for each line item
-        for line in shipment.purchase_order.lines:
+        # Process receipt for each line item using the safe 'po' variable
+        for line in po.lines:
             # Assumption: No partial shipments/loss yet; received equals ordered
             qty_received = line.qty_ordered
 
