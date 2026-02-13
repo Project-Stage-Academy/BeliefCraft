@@ -8,6 +8,7 @@ from app.core.constants import HealthStatus
 from app.main import app
 from fastapi.testclient import TestClient
 
+
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     with TestClient(app) as test_client:
@@ -22,10 +23,12 @@ def client() -> Iterator[TestClient]:
         app.state.http_client = mock_http_client
         yield test_client
 
+
 def test_health_endpoint_exists(client: TestClient) -> None:
     """Health endpoint should be accessible"""
     response = client.get("/api/v1/health")
     assert response.status_code == 200
+
 
 def test_health_all_services_healthy(client: TestClient) -> None:
     """Health check should return healthy when all deps are up"""
@@ -50,6 +53,7 @@ def test_health_all_services_healthy(client: TestClient) -> None:
     assert data["status"] == HealthStatus.HEALTHY
     assert data["dependencies"]["aws_bedrock"] == HealthStatus.CONFIGURED
 
+
 def test_health_missing_aws_config(client: TestClient) -> None:
     """Health check should show degraded when AWS config is missing"""
 
@@ -72,6 +76,7 @@ def test_health_missing_aws_config(client: TestClient) -> None:
     data = response.json()
     assert data["status"] == HealthStatus.DEGRADED
     # Or HealthStatus.MISSING_KEY, depending on how you named the constant in app.core.constants
+
 
 def test_health_redis_failure(client: TestClient) -> None:
     """Health check should show degraded when Redis is down"""

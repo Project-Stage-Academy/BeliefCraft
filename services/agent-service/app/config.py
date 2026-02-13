@@ -1,4 +1,3 @@
-import os
 from functools import lru_cache
 
 from pydantic import Field, field_validator
@@ -25,12 +24,10 @@ class Settings(BaseSettings):
     # Note: AWS credentials are automatically picked up by boto3 from `aws configure`
     AWS_DEFAULT_REGION: str = Field(default="us-east-1", description="AWS Region")
     BEDROCK_MODEL_ID: str = Field(
-        default="us.anthropic.claude-sonnet-4-5-20250929-v1:0", 
-        description="AWS Bedrock Claude model ID"
+        default="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        description="AWS Bedrock Claude model ID",
     )
-    LLM_TEMPERATURE: float = Field(
-        default=0.0, ge=0.0, le=1.0, description="Model temperature"
-    )
+    LLM_TEMPERATURE: float = Field(default=0.0, ge=0.0, le=1.0, description="Model temperature")
     LLM_MAX_TOKENS: int = Field(
         default=4000, ge=1, le=100000, description="Maximum tokens for completion"
     )
