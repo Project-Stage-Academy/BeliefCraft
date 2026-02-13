@@ -11,7 +11,7 @@ from typing import List
 from sqlalchemy.orm import Session
 from faker import Faker
 
-from packages.common.logging import get_logger
+from packages.common.common.logging import get_logger
 from packages.database.src.models import Warehouse, Product, Supplier, Route
 from src.data_generator.builders.catalog import CatalogBuilder
 from src.data_generator.builders.infrastructure import InfrastructureBuilder

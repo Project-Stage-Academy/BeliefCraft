@@ -13,7 +13,7 @@ import random
 
 from sqlalchemy.orm import Session
 
-from packages.common import logging
+from packages.common.common import logging
 from packages.database.src.logistics import Supplier
 from packages.database.src.models import Warehouse, Product
 from src.data_generator.logic.inbound import InboundManager

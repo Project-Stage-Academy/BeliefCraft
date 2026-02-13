@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from common.utils.config_loader import ConfigLoader
+from packages.common.common.utils.config_loader import ConfigLoader
 from fastapi import FastAPI
 
 from .config_schema import Settings
