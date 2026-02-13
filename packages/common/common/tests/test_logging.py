@@ -10,7 +10,7 @@ Run:
 import json
 import logging
 
-from packages.common.common import logging
+from packages.common.common import logging as common_logging
 import pytest
 import structlog
 from packages.common.common.logging import configure_logging, get_logger
@@ -167,7 +167,7 @@ class TestLoggerUsage:
 def reset_logging():
     """Reset logging configuration between tests"""
     # Reset before test
-    logging._configured = False
+    common_logging._configured = False
     logging.root.handlers = []
     structlog.reset_defaults()
     structlog.contextvars.clear_contextvars()
@@ -175,7 +175,7 @@ def reset_logging():
     yield
 
     # Reset after test
-    logging._configured = False
+    common_logging._configured = False
     structlog.reset_defaults()
     logging.root.handlers = []
     structlog.contextvars.clear_contextvars()
