@@ -52,6 +52,11 @@ class Settings(BaseSettings):
         default=30, ge=1, le=300, description="Tool execution timeout in seconds"
     )
 
+    # CORS
+    CORS_ORIGINS: list[str] = Field(
+        default=["*"], description="Allowed CORS origins (comma-separated in env)"
+    )
+
     # Logging
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
 

@@ -6,10 +6,10 @@ from contextlib import asynccontextmanager
 import httpx
 import redis
 import structlog
-from app.api.v1.routes import health
+from app.api.v1.routes import agent, health
 from app.config import get_settings
 from app.core.constants import HEALTH_CHECK_TIMEOUT
-from app.core.exceptions import AgentServiceException
+from app.core.exceptions import AgentServiceError
 from app.core.logging import configure_logging
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,7 +50,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly for production
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,8 +109,8 @@ async def add_request_id(
 
 
 # Exception handler
-@app.exception_handler(AgentServiceException)
-async def agent_exception_handler(request: Request, exc: AgentServiceException) -> JSONResponse:
+@app.exception_handler(AgentServiceError)
+async def agent_exception_handler(request: Request, exc: AgentServiceError) -> JSONResponse:
     """Handle custom agent service exceptions"""
     logger.error(
         "agent_error",
@@ -146,6 +146,12 @@ app.include_router(
     health.router,
     prefix=settings.API_V1_PREFIX,
     tags=["health"],
+)
+
+app.include_router(
+    agent.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["agent"],
 )
 
 
