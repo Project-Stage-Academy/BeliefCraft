@@ -171,7 +171,7 @@ class OutboundManager:
             order_id=order.id,
             origin_warehouse_id=warehouse.id,
             direction=ShipmentDirection.OUTBOUND,
-            status=ShipmentStatus.SHIPPED,
+            status=ShipmentStatus.IN_TRANSIT,
             shipped_at=date
         )
         self.session.add(shipment)

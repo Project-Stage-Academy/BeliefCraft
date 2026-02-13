@@ -76,3 +76,6 @@ check_untyped_defs = false
 [[tool.mypy.overrides]]
 module = ["yaml", "dotenv", "dotenv.*", "redis", "redis.*", "uvicorn"]
 ignore_missing_imports = true
+
+[tool.uv]
+package = false

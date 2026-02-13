@@ -21,7 +21,6 @@ from src.config import settings
 
 logger = get_logger(__name__)
 
-
 class WorldBuilder:
     """
     The General Contractor.

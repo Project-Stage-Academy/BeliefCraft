@@ -117,6 +117,5 @@ class InventoryLedger:
             qty=qty,
             occurred_at=date,
             reason_code=reason,
-            related_shipment_id=ref_id if move_type == MoveType.INBOUND else None
         )
         self.session.add(move)

@@ -9,11 +9,15 @@ dependencies = [
   "pydantic",
   "pyyaml",
   "python-dotenv",
+  "sqlalchemy>=2.0.0",
   "beliefcraft-common",
+  "beliefcraft-database",
+  "faker"
 ]
 
 [tool.uv.sources]
 beliefcraft-common = { workspace = true }
+beliefcraft-database = { workspace = true }
 
 [dependency-groups]
 dev = [
