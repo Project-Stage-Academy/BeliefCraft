@@ -78,14 +78,16 @@ class CatalogBuilder:
         Returns:
             List[Supplier]: A list of the persisted Supplier SQLAlchemy objects.
         """
-        regions = ["NA-EAST", "EU-WEST", "APAC-SG", "NA-WEST", "EU-CENTRAL"]
         suppliers = []
 
         for _ in range(count):
             supplier = Supplier(
                 name=self.fake.company(),
-                reliability_score=round(random.uniform(0.7, 0.99), 2),
-                region=random.choice(regions)
+                reliability_score=round(random.uniform(
+                    settings.catalog.supplier_reliability.min,
+                    settings.catalog.supplier_reliability.max
+                ), 2),
+                region=random.choice(settings.catalog.supplier_regions)
             )
             self.session.add(supplier)
             suppliers.append(supplier)
