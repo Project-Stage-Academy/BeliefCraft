@@ -1,5 +1,7 @@
 """Health check service for external dependencies"""
 
+import os
+
 import httpx
 import redis
 from app.config import Settings
@@ -58,14 +60,19 @@ class HealthChecker:
     def check_bedrock_config(self) -> str:
         """
         Check if AWS Bedrock is configured
-        Returns:
-            Configuration status string
         """
-        return (
-            HealthStatus.CONFIGURED
-            if (self.settings.BEDROCK_MODEL_ID and self.settings.BEDROCK_MODEL_ID.strip())
-            else HealthStatus.MISSING_KEY
-        )
+        if not (self.settings.BEDROCK_MODEL_ID and self.settings.BEDROCK_MODEL_ID.strip()):
+            return HealthStatus.MISSING_CONFIG
+
+        if not (self.settings.AWS_DEFAULT_REGION and self.settings.AWS_DEFAULT_REGION.strip()):
+            return HealthStatus.MISSING_CONFIG
+
+        if os.getenv("ENV") == "production" and (
+            not self.settings.AWS_ACCESS_KEY_ID or not self.settings.AWS_SECRET_ACCESS_KEY
+        ):
+            return HealthStatus.MISSING_KEY
+
+        return HealthStatus.CONFIGURED
 
     async def check_all_dependencies(self) -> dict[str, str]:
         """

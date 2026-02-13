@@ -1,6 +1,7 @@
+import os
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -21,16 +22,25 @@ class Settings(BaseSettings):
     RAG_API_URL: str = Field(default="http://localhost:8001/api/v1", description="RAG API base URL")
 
     # AWS Bedrock (Claude) config
-    # Note: AWS credentials are automatically picked up by boto3 from `aws configure`
     AWS_DEFAULT_REGION: str = Field(default="us-east-1", description="AWS Region")
     BEDROCK_MODEL_ID: str = Field(
         default="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
         description="AWS Bedrock Claude model ID",
     )
-    LLM_TEMPERATURE: float = Field(default=0.0, ge=0.0, le=1.0, description="Model temperature")
-    LLM_MAX_TOKENS: int = Field(
+    BEDROCK_TEMPERATURE: float = Field(default=0.0, ge=0.0, le=1.0, description="Model temperature")
+    BEDROCK_MAX_TOKENS: int = Field(
         default=4000, ge=1, le=100000, description="Maximum tokens for completion"
     )
+
+    AWS_ACCESS_KEY_ID: str | None = Field(default=None)
+    AWS_SECRET_ACCESS_KEY: str | None = Field(default=None)
+
+    @field_validator("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+    @classmethod
+    def validate_remote_credentials(cls, v: str | None, info: ValidationInfo) -> str | None:
+        if not v and os.getenv("ENV") == "production":
+            raise ValueError(f"{info.field_name} is required in production environment")
+        return v
 
     # Redis cache
     REDIS_URL: str = Field(default="redis://localhost:6379", description="Redis connection URL")

@@ -12,6 +12,7 @@ class HealthStatus(StrEnum):
     CONFIGURED = "configured"
     MISSING_KEY = "missing_key"
     UNKNOWN = "unknown"
+    MISSING_CONFIG = "missing_config"
 
 
 class DependencyName(StrEnum):

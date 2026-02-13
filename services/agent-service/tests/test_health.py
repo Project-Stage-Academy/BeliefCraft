@@ -38,6 +38,7 @@ def test_health_all_services_healthy(client: TestClient) -> None:
         mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
         mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
         mock_settings.REDIS_URL = "redis://localhost:6379"
+        mock_settings.AWS_DEFAULT_REGION = "us-east-1"
         mock_settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
         mock_settings.SERVICE_NAME = "agent-service"
         mock_settings.SERVICE_VERSION = "0.1.0"
@@ -50,19 +51,24 @@ def test_health_all_services_healthy(client: TestClient) -> None:
 
     assert response.status_code == 200
     data = response.json()
+
+    # Відновлено перевірки структури за запитом ментора
     assert data["status"] == HealthStatus.HEALTHY
+    assert data["service"] == "agent-service"
+    assert "dependencies" in data
     assert data["dependencies"]["aws_bedrock"] == HealthStatus.CONFIGURED
 
 
 def test_health_missing_aws_config(client: TestClient) -> None:
-    """Health check should show degraded when AWS config is missing"""
+    """Health check should show degraded when AWS region or model is missing"""
 
     def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
         mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
         mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
         mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.BEDROCK_MODEL_ID = ""  # We simulate the absence of configuration
+        mock_settings.AWS_DEFAULT_REGION = ""  # Тепер перевіряємо і регіон
+        mock_settings.BEDROCK_MODEL_ID = ""
         mock_settings.SERVICE_NAME = "agent-service"
         mock_settings.SERVICE_VERSION = "0.1.0"
         return cast(Settings, mock_settings)
@@ -75,7 +81,8 @@ def test_health_missing_aws_config(client: TestClient) -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == HealthStatus.DEGRADED
-    # Or HealthStatus.MISSING_KEY, depending on how you named the constant in app.core.constants
+    # Прибрано коментар про невпевненість
+    assert data["dependencies"]["aws_bedrock"] == HealthStatus.MISSING_CONFIG
 
 
 def test_health_redis_failure(client: TestClient) -> None:
@@ -86,6 +93,7 @@ def test_health_redis_failure(client: TestClient) -> None:
         mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
         mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
         mock_settings.REDIS_URL = "redis://localhost:6379"
+        mock_settings.AWS_DEFAULT_REGION = "us-east-1"
         mock_settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
         mock_settings.SERVICE_NAME = "agent-service"
         mock_settings.SERVICE_VERSION = "0.1.0"
