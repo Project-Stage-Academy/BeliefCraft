@@ -12,7 +12,7 @@ from typing import List, Optional
 from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
 
-from packages.common.common.logging import get_logger
+from common.logging import get_logger
 from packages.database.src.models import Shipment, Location, Warehouse
 from packages.database.src.enums import ShipmentStatus, LocationType
 from src.data_generator.logic.inventory import InventoryLedger

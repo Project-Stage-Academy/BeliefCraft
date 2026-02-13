@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from packages.database.src.connection import SessionLocal, get_engine
 from packages.database.src.base import Base
-from packages.common.common.logging import configure_logging, get_logger
+from common.logging import configure_logging, get_logger
 
 from src.data_generator.world_builder import WorldBuilder
 from src.data_generator.simulation_engine import SimulationEngine

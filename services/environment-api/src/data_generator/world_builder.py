@@ -12,7 +12,7 @@ from faker import Faker
 import random
 from typing import List
 
-from packages.common.common.logging import get_logger
+from common.logging import get_logger
 from packages.database.src.models import Warehouse, Product, Supplier, Route
 from src.data_generator.builders.catalog import CatalogBuilder
 from src.data_generator.builders.infrastructure import InfrastructureBuilder

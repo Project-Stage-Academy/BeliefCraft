@@ -65,7 +65,7 @@ files = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["packages.common.tests.*"]
+module = ["common.tests.*"]
 disallow_untyped_defs = false
 check_untyped_defs = false
 

@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
-from packages.common.common.logging import get_logger
+from common.logging import get_logger
 from packages.database.src.models import (
     Warehouse, Product, Order, OrderLine, Shipment, InventoryBalance, Location
 )
