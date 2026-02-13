@@ -33,7 +33,7 @@ class DockBuilder:
             session (Session): The active SQLAlchemy database session.
         """
         self.session = session
-        self.rng = random.Random(settings.simulation.random_seed)
+        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
 
     def build(self, warehouse: Warehouse) -> Location:
         """
