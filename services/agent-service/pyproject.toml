@@ -30,3 +30,6 @@ dev = [
 
 [tool.uv.sources]
 beliefcraft-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_service"]
