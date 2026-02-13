@@ -9,7 +9,7 @@ inventory from external suppliers.
 """
 import random
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List
 
 from sqlalchemy.orm import Session
 from packages.common.common.logging import get_logger
@@ -20,6 +20,7 @@ from packages.database.src.models import (
 from packages.database.src.enums import (
     POStatus, ShipmentStatus, ShipmentDirection, LeadtimeScope
 )
+from src.config import settings
 
 logger = get_logger(__name__)
 
@@ -36,7 +37,7 @@ class ReplenishmentManager:
     def __init__(self, session: Session, suppliers: List[Supplier]):
         self.session = session
         self.suppliers = suppliers
-        self.rng = random.Random(42)
+        self.rng = random.Random(settings.simulation.random_seed)
 
         self.standard_lt_model = self.session.query(LeadtimeModel).filter_by(
             scope=LeadtimeScope.GLOBAL
@@ -51,7 +52,10 @@ class ReplenishmentManager:
         every product every day. It samples a subset (10%) of the catalog to
         simulate a periodic review cycle.
         """
-        products_to_review = self.rng.sample(products, k=max(1, int(len(products) * 0.10)))
+        products_to_review = self.rng.sample(
+            products,
+            k=max(1, int(len(products) * settings.replenishment.review_catalog_fraction))
+        )
         pos_created = 0
 
         for wh in warehouses:
@@ -78,8 +82,8 @@ class ReplenishmentManager:
         """
         current_qty = self._get_current_stock_level(location_id, product.id)
 
-        reorder_point = 20.0
-        target_level = 100.0
+        reorder_point = settings.replenishment.policy.reorder_point
+        target_level = settings.replenishment.policy.target_level
 
         if current_qty < reorder_point:
             order_qty = target_level - current_qty
@@ -166,8 +170,14 @@ class ReplenishmentManager:
         Simulates stochastic lead time variability.
         Returns the expected arrival date based on a Gaussian distribution.
         """
-        lead_time_days = int(self.rng.gauss(5, 1))
+        lead_time_days = int(self.rng.gauss(
+            settings.replenishment.lead_time.mean_days,
+            settings.replenishment.lead_time.std_dev_days
+        ))
 
-        lead_time_days = max(1, lead_time_days)
+        lead_time_days = max(
+            settings.replenishment.lead_time.min_days,
+            lead_time_days
+        )
 
         return current_date + timedelta(days=lead_time_days)
