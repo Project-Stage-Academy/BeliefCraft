@@ -27,7 +27,7 @@ class WorldBuilder:
     Orchestrates specialized builders to construct the world.
     """
 
-    def __init__(self, session: Session, seed):
+    def __init__(self, session: Session, seed: int):
         self.session = session
         self.seed = seed
         self.fake = Faker()

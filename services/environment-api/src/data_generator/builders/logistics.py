@@ -34,7 +34,7 @@ class LogisticsBuilder:
 
     def __init__(self, session: Session):
         self.session = session
-        self.rng = random.Random(settings.simulation.seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
 
     def create_global_leadtime_models(self) -> List[LeadtimeModel]:
         """
@@ -108,7 +108,7 @@ class LogisticsBuilder:
         Returns:
             List[Route]: A list of all created Route entities connecting the warehouses.
         """
-        routes = []
+        routes: List[Route] = []
         if len(warehouses) < 2:
             return routes
 

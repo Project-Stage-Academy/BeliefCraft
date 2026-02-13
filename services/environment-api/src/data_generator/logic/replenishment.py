@@ -8,6 +8,7 @@ defined safety thresholds and generates Purchase Orders (POs) to restock
 inventory from external suppliers.
 """
 import random
+import uuid
 from datetime import datetime, timedelta
 from typing import List
 
@@ -75,7 +76,7 @@ class ReplenishmentManager:
                 date=date.isoformat()
             )
 
-    def _check_and_replenish_product(self, warehouse: Warehouse, location_id: str,
+    def _check_and_replenish_product(self, warehouse: Warehouse, location_id: uuid.UUID,
                                      product: Product, date: datetime) -> bool:
         """
         Evaluates the inventory position for a single product and executes a
@@ -93,7 +94,7 @@ class ReplenishmentManager:
 
         return False
 
-    def _get_current_stock_level(self, location_id: str, product_id: str) -> float:
+    def _get_current_stock_level(self, location_id: uuid.UUID, product_id: uuid.UUID) -> float:
         """
         Queries the current On-Hand balance from the ledger.
         """

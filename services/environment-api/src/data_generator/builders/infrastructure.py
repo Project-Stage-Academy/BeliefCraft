@@ -31,7 +31,7 @@ class InfrastructureBuilder:
         self.dock_builder = DockBuilder(session)
         self.zone_builder = ZoneBuilder(session)
 
-    def create_warehouses(self, count) -> List[Warehouse]:
+    def create_warehouses(self, count: int) -> List[Warehouse]:
         """
         Generates and persists a specified number of Warehouse records with
         pre-configured regions, timezones, and internal layouts.

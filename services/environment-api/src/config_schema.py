@@ -39,10 +39,9 @@ class Settings(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     world: WorldConfig = Field(default_factory=WorldConfig)
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
-    catalog: CatalogConfig = Field(default_factory=CatalogConfig)
-    infrastructure: InfrastructureConfig = Field(default_factory=InfrastructureConfig)
-    layout: LayoutConfig = Field(default_factory=LayoutConfig)
-    logistics: LogisticsConfig = Field(default_factory=LogisticsConfig)
-    outbound: OutboundConfig = Field(default_factory=OutboundConfig)
-    replenishment: ReplenishmentConfig = Field(default_factory=ReplenishmentConfig)
-    sensors: SensorsConfig = Field(default_factory=SensorsConfig)
+    catalog: CatalogConfig
+    infrastructure: InfrastructureConfig
+    layout: LayoutConfig
+    logistics: LogisticsConfig
+    outbound: OutboundConfig
+    replenishment: ReplenishmentConfig

@@ -130,6 +130,7 @@ class InboundManager:
         Retrieves the designated 'DOCK' location for a given warehouse.
         Returns None if no such location exists.
         """
+
         return next(
             (loc for loc in warehouse.locations if loc.type == LocationType.DOCK),
             None

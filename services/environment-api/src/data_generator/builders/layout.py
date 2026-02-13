@@ -33,6 +33,7 @@ class DockBuilder:
             session (Session): The active SQLAlchemy database session.
         """
         self.session = session
+        self.rng = random.Random(settings.simulation.random_seed)
 
     def build(self, warehouse: Warehouse) -> Location:
         """
@@ -73,7 +74,7 @@ class ZoneBuilder:
             session (Session): The active SQLAlchemy database session.
         """
         self.session = session
-        self.rng = random.Random(settings.simulation.seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
 
     def build_zones(self, warehouse: Warehouse) -> List[Location]:
         """
