@@ -60,7 +60,7 @@ class TestOutboundManager:
         Verifies Order is SHIPPED and ledger is called.
         """
         wh, dock, prod = dummy_data
-        date = datetime.now(tzinfo=timezone.utc)
+        date = datetime.now(tz=timezone.utc)
         mock_settings.outbound.customer_names = ["Test Customer"]
         mock_settings.outbound.missed_sale_penalty_per_unit = 10.0
 
@@ -102,7 +102,7 @@ class TestOutboundManager:
         # Stock is 5, but customer wants 10
         outbound_manager._check_stock_availability = MagicMock(return_value=5.0)
 
-        outbound_manager._process_single_order(wh, prod, 10.0, datetime.now(tzinfo=timezone.utc))
+        outbound_manager._process_single_order(wh, prod, 10.0, datetime.now(tz=timezone.utc))
 
         # Verify Order Line
         line = [call[0][0] for call in mock_session.add.call_args_list if isinstance(call[0][0], OrderLine)][0]
@@ -121,7 +121,7 @@ class TestOutboundManager:
         mock_settings.outbound.customer_names = ["Test Customer"]
         outbound_manager._check_stock_availability = MagicMock(return_value=0.0)
 
-        outbound_manager._process_single_order(wh, prod, 10.0, datetime.now(tzinfo=timezone.utc))
+        outbound_manager._process_single_order(wh, prod, 10.0, datetime.now(tz=timezone.utc))
 
         # Verify Order Header status
         order = [call[0][0] for call in mock_session.add.call_args_list if isinstance(call[0][0], Order)][0]

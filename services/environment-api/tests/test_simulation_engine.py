@@ -61,7 +61,7 @@ class TestSimulationEngine:
         Verifies the 'Physics Engine' sequence. The order must be:
         1. Inbound -> 2. Outbound -> 3. Replenishment -> 4. Sensors
         """
-        current_date = datetime(2024, 5, 20)
+        current_date = datetime(2024, 5, 20, tzinfo=timezone.utc)
 
         # Use a Manager to track call order across multiple mocks
         call_tracker = MagicMock()
@@ -88,5 +88,5 @@ class TestSimulationEngine:
         """
         Verifies that the engine flushes the session at the end of every tick.
         """
-        engine.tick(datetime.now(tzinfo=timezone.utc))
+        engine.tick(datetime.now(tz=timezone.utc))
         mock_session.flush.assert_called_once()

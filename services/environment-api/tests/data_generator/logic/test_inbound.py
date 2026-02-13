@@ -43,7 +43,7 @@ class TestInboundManager:
         Verifies that only shipments arriving on or before the current date
         are selected for processing.
         """
-        current_date = datetime(2024, 1, 10)
+        current_date = datetime(2024, 1, 10, tzinfo=timezone.utc)
 
         # Mocking the internal database query result
         shipment_1 = MagicMock(spec=Shipment)
@@ -64,7 +64,7 @@ class TestInboundManager:
         4. Updates PO line received quantity.
         5. Updates Shipment status to DELIVERED.
         """
-        date = datetime(2024, 1, 10)
+        date = datetime(2024, 1, 10, tzinfo=timezone.utc)
 
         # Setup Destination Warehouse with a Dock
         mock_dock = MagicMock(spec=Location)
@@ -116,7 +116,7 @@ class TestInboundManager:
         mock_shipment.purchase_order = MagicMock()
         mock_shipment.destination_warehouse = mock_warehouse
 
-        inbound_manager._process_single_shipment(mock_shipment, datetime.now(tzinfo=timezone.utc))
+        inbound_manager._process_single_shipment(mock_shipment, datetime.now(tz=timezone.utc))
 
         # Verify ledger was never called
         mock_ledger.record_receipt.assert_not_called()

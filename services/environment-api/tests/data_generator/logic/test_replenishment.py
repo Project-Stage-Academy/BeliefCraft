@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from packages.database.src.models import (
-    Warehouse, Product, Location, InventoryBalance, Supplier,
+    Warehouse, Product, Location, Supplier,
     PurchaseOrder, POLine, Shipment, LeadtimeModel
 )
 from packages.database.src.enums import POStatus, ShipmentStatus, LocationType
@@ -65,7 +65,7 @@ class TestReplenishmentManager:
         wh, dock = dummy_warehouse_with_dock
         prod = MagicMock(spec=Product)
         prod.id = "prod-uuid"
-        date = datetime.now(tzinfo=timezone.utc)
+        date = datetime.now(tz=timezone.utc)
 
         # Config: s=20, S=100
         mock_settings.replenishment.policy.reorder_point = 20.0
@@ -93,7 +93,7 @@ class TestReplenishmentManager:
         replenishment_manager._get_current_stock_level = MagicMock(return_value=25.0)
         replenishment_manager._execute_procurement = MagicMock()
 
-        triggered = replenishment_manager._check_and_replenish_product(wh, dock.id, MagicMock(), datetime.now(tzinfo=timezone.utc))
+        triggered = replenishment_manager._check_and_replenish_product(wh, dock.id, MagicMock(), datetime.now(tz=timezone.utc))
 
         assert triggered is False
         replenishment_manager._execute_procurement.assert_not_called()
@@ -108,7 +108,7 @@ class TestReplenishmentManager:
         prod = MagicMock(spec=Product)
         prod.id = "prod-uuid"
         qty = 50.0
-        date = datetime.now(tzinfo=timezone.utc)
+        date = datetime.now(tz=timezone.utc)
 
         replenishment_manager._execute_procurement(wh, prod, qty, date)
 
@@ -131,7 +131,7 @@ class TestReplenishmentManager:
         Ensures that even with extreme Gaussian noise, arrival date
         respects the min_days configuration.
         """
-        date = datetime(2024, 1, 1)
+        date = datetime(2024, 1, 1, tzinfo=timezone.utc)
         mock_settings.replenishment.lead_time.mean_days = 5.0
         mock_settings.replenishment.lead_time.std_dev_days = 1.0
         mock_settings.replenishment.lead_time.min_days = 2

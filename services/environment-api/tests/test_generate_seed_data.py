@@ -8,7 +8,7 @@ Verifies the high-level orchestration of the seeding process:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from src.data_generator.generate_seed_data import SimulationRunner
 
@@ -92,8 +92,8 @@ class TestSimulationRunner:
         mock_settings.simulation.commit_interval = 2
 
         # 3 days simulation (Today, Today+1, Today+2)
-        start_date = datetime(2026, 1, 1)
-        end_date = datetime(2026, 1, 3)
+        start_date = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        end_date = datetime(2026, 1, 3, tzinfo=timezone.utc)
 
         runner._run_time_loop(mock_session, mock_engine, start_date, end_date)
 
