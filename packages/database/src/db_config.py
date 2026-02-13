@@ -15,6 +15,7 @@ while env_path != env_path.parent:
         break
     env_path = env_path.parent
 
+
 def get_env_variable(var_name: str) -> str:
     value = os.environ.get(var_name)
     if not value:

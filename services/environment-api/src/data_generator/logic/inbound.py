@@ -7,15 +7,16 @@ orchestrates the process of "docking" them—updating the shipment status,
 verifying the content against Purchase Orders, and triggering the inventory
 ledger to record the stock increase.
 """
+
 from datetime import datetime
-from typing import List, Optional
-from sqlalchemy import select, and_
-from sqlalchemy.orm import Session
 
 from common.logging import get_logger
-from packages.database.src.models import Shipment, Location, Warehouse
-from packages.database.src.enums import ShipmentStatus, LocationType
+from sqlalchemy import and_, select
+from sqlalchemy.orm import Session
 from src.data_generator.logic.inventory import InventoryLedger
+
+from packages.database.src.enums import LocationType, ShipmentStatus
+from packages.database.src.models import Location, Shipment, Warehouse
 
 logger = get_logger(__name__)
 
@@ -55,24 +56,17 @@ class InboundManager:
         if not shipments:
             return
 
-        logger.info(
-            "processing_shipments",
-            count=len(shipments),
-            date=date.isoformat()
-        )
+        logger.info("processing_shipments", count=len(shipments), date=date.isoformat())
 
         for shipment in shipments:
             self._process_single_shipment(shipment, date)
 
-    def _fetch_arriving_shipments(self, date: datetime) -> List[Shipment]:
+    def _fetch_arriving_shipments(self, date: datetime) -> list[Shipment]:
         """
         Queries the database for qualifying inbound shipments.
         """
         stmt = select(Shipment).where(
-            and_(
-                Shipment.status == ShipmentStatus.IN_TRANSIT,
-                Shipment.arrived_at <= date
-            )
+            and_(Shipment.status == ShipmentStatus.IN_TRANSIT, Shipment.arrived_at <= date)
         )
         return list(self.session.execute(stmt).scalars().all())
 
@@ -91,28 +85,19 @@ class InboundManager:
         # 1. Data integrity check: A shipment must have a source document (PO)
         po = shipment.purchase_order
         if not po:
-            logger.warning(
-                "shipment_missing_po",
-                shipment_id=str(shipment.id)
-            )
+            logger.warning("shipment_missing_po", shipment_id=str(shipment.id))
             return
 
         # 2. Data integrity check: Destination warehouse must exist
         dest_warehouse = shipment.destination_warehouse
         if not dest_warehouse:
-            logger.error(
-                "shipment_missing_destination",
-                shipment_id=str(shipment.id)
-            )
+            logger.error("shipment_missing_destination", shipment_id=str(shipment.id))
             return
 
         # 3. Data integrity check: Destination warehouse must have a receiving area (Dock)
         destination_dock = self._get_warehouse_dock(dest_warehouse)
         if not destination_dock:
-            logger.error(
-                "warehouse_missing_dock",
-                warehouse_id=str(dest_warehouse.id)
-            )
+            logger.error("warehouse_missing_dock", warehouse_id=str(dest_warehouse.id))
             return
 
         # Process receipt for each line item using the safe 'po' variable
@@ -125,7 +110,7 @@ class InboundManager:
                 product_id=line.product_id,
                 qty=qty_received,
                 date=date,
-                ref_id=shipment.id
+                ref_id=shipment.id,
             )
 
             # Update the Purchase Order Line to reflect the received quantity
@@ -135,13 +120,10 @@ class InboundManager:
         shipment.status = ShipmentStatus.DELIVERED
         logger.debug("shipment_finalized", shipment_id=str(shipment.id))
 
-    def _get_warehouse_dock(self, warehouse: Warehouse) -> Optional[Location]:
+    def _get_warehouse_dock(self, warehouse: Warehouse) -> Location | None:
         """
         Retrieves the designated 'DOCK' location for a given warehouse.
         Returns None if no such location exists.
         """
 
-        return next(
-            (loc for loc in warehouse.locations if loc.type == LocationType.DOCK),
-            None
-        )
+        return next((loc for loc in warehouse.locations if loc.type == LocationType.DOCK), None)

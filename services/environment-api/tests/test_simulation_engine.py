@@ -6,9 +6,10 @@ triggers each subsystem (Inbound, Outbound, Replenishment, Sensors)
 in the strictly required order to maintain causal integrity.
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
+
+import pytest
 from src.data_generator.simulation_engine import SimulationEngine
 
 
@@ -33,10 +34,12 @@ def engine(mock_session, dummy_data):
     warehouses, products, suppliers = dummy_data
 
     # We patch the managers so we can verify the call sequence
-    with patch("src.data_generator.simulation_engine.InboundManager"), \
-        patch("src.data_generator.simulation_engine.OutboundManager"), \
-        patch("src.data_generator.simulation_engine.ReplenishmentManager"), \
-        patch("src.data_generator.simulation_engine.SensorManager"):
+    with (
+        patch("src.data_generator.simulation_engine.InboundManager"),
+        patch("src.data_generator.simulation_engine.OutboundManager"),
+        patch("src.data_generator.simulation_engine.ReplenishmentManager"),
+        patch("src.data_generator.simulation_engine.SensorManager"),
+    ):
         return SimulationEngine(mock_session, warehouses, products, suppliers)
 
 
@@ -61,7 +64,7 @@ class TestSimulationEngine:
         Verifies the 'Physics Engine' sequence. The order must be:
         1. Inbound -> 2. Outbound -> 3. Replenishment -> 4. Sensors
         """
-        current_date = datetime(2024, 5, 20, tzinfo=timezone.utc)
+        current_date = datetime(2024, 5, 20, tzinfo=UTC)
 
         # Use a Manager to track call order across multiple mocks
         call_tracker = MagicMock()
@@ -74,11 +77,11 @@ class TestSimulationEngine:
 
         # Check that they were called in the exact sequence defined in the tick method
         call_names = [call[0] for call in call_tracker.method_calls]
-        assert call_names == ['inbound', 'outbound', 'replenishment', 'sensors']
+        assert call_names == ["inbound", "outbound", "replenishment", "sensors"]
 
     def test_tick_persists_changes(self, engine, mock_session):
         """
         Verifies that the engine flushes the session at the end of every tick.
         """
-        engine.tick(datetime.now(tz=timezone.utc))
+        engine.tick(datetime.now(tz=UTC))
         mock_session.flush.assert_called_once()

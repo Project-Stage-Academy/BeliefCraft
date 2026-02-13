@@ -15,11 +15,12 @@ The module handles:
 """
 
 import random
-from typing import List
+
 from sqlalchemy.orm import Session
-from packages.database.src.models import Warehouse, Route, LeadtimeModel
-from packages.database.src.enums import LeadtimeScope, DistFamily, TransportMode
 from src.config_load import settings
+
+from packages.database.src.enums import DistFamily, LeadtimeScope, TransportMode
+from packages.database.src.models import LeadtimeModel, Route, Warehouse
 
 
 class LogisticsBuilder:
@@ -34,9 +35,9 @@ class LogisticsBuilder:
 
     def __init__(self, session: Session):
         self.session = session
-        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
 
-    def create_global_leadtime_models(self) -> List[LeadtimeModel]:
+    def create_global_leadtime_models(self) -> list[LeadtimeModel]:
         """
         Initializes the standard set of global shipping performance definitions.
 
@@ -62,7 +63,7 @@ class LogisticsBuilder:
                 p1=cfg.express.p1,
                 p2=cfg.express.p2,
                 p_rare_delay=cfg.express.p_rare_delay,
-                rare_delay_add_days=cfg.express.rare_delay_add_days
+                rare_delay_add_days=cfg.express.rare_delay_add_days,
             ),
             # Standard Model (Truck/Ground)
             LeadtimeModel(
@@ -71,7 +72,7 @@ class LogisticsBuilder:
                 p1=cfg.standard.p1,
                 p2=cfg.standard.p2,
                 p_rare_delay=cfg.standard.p_rare_delay,
-                rare_delay_add_days=cfg.standard.rare_delay_add_days
+                rare_delay_add_days=cfg.standard.rare_delay_add_days,
             ),
             # Bulk Model (Ocean Freight)
             LeadtimeModel(
@@ -80,14 +81,16 @@ class LogisticsBuilder:
                 p1=cfg.ocean.p1,
                 p2=cfg.ocean.p2,
                 p_rare_delay=cfg.ocean.p_rare_delay,
-                rare_delay_add_days=cfg.ocean.rare_delay_add_days
-            )
+                rare_delay_add_days=cfg.ocean.rare_delay_add_days,
+            ),
         ]
         self.session.add_all(models)
         self.session.flush()
         return models
 
-    def connect_warehouses(self, warehouses: List[Warehouse], models: List[LeadtimeModel]) -> List[Route]:
+    def connect_warehouses(
+        self, warehouses: list[Warehouse], models: list[LeadtimeModel]
+    ) -> list[Route]:
         """
         Constructs a fully connected mesh network between the provided warehouses.
 
@@ -108,7 +111,7 @@ class LogisticsBuilder:
         Returns:
             List[Route]: A list of all created Route entities connecting the warehouses.
         """
-        routes: List[Route] = []
+        routes: list[Route] = []
         if len(warehouses) < 2:
             return routes
 
@@ -122,8 +125,7 @@ class LogisticsBuilder:
                     continue
 
                 dist = self.rng.randint(
-                    settings.logistics.distance.min_km,
-                    settings.logistics.distance.max_km
+                    settings.logistics.distance.min_km, settings.logistics.distance.max_km
                 )
 
                 if dist < settings.logistics.thresholds.truck_max_km:
@@ -143,7 +145,7 @@ class LogisticsBuilder:
                     destination_warehouse_id=warehouses[j].id,
                     leadtime_model_id=selected_model.id,
                     distance_km=dist,
-                    mode=mode
+                    mode=mode,
                 )
                 self.session.add(route)
                 routes.append(route)

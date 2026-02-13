@@ -5,10 +5,11 @@ Verifies the orchestration of warehouse creation, including regional distributio
 naming conventions, and the delegation to internal layout builders (Dock/Zone).
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from src.data_generator.builders.infrastructure import InfrastructureBuilder
+
 
 @pytest.fixture
 def mock_session():
@@ -24,10 +25,7 @@ def mock_settings():
     the modulo cycling logic regardless of actual configuration file changes.
     """
     with patch("src.data_generator.builders.infrastructure.settings") as mock_set:
-        mock_set.infrastructure.region_timezones = {
-            "EU-WEST": "UTC+1",
-            "US-EAST": "UTC-5"
-        }
+        mock_set.infrastructure.region_timezones = {"EU-WEST": "UTC+1", "US-EAST": "UTC-5"}
         yield mock_set
 
 
@@ -37,8 +35,10 @@ def builder(mock_session, mock_settings):
     Initializes the InfrastructureBuilder with mocked dependencies.
     Mocks DockBuilder and ZoneBuilder to isolate the facade's orchestration logic.
     """
-    with patch("src.data_generator.builders.infrastructure.DockBuilder"), \
-         patch("src.data_generator.builders.infrastructure.ZoneBuilder"):
+    with (
+        patch("src.data_generator.builders.infrastructure.DockBuilder"),
+        patch("src.data_generator.builders.infrastructure.ZoneBuilder"),
+    ):
         yield InfrastructureBuilder(mock_session)
 
 

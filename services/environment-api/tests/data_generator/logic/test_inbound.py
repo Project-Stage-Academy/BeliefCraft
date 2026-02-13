@@ -6,13 +6,14 @@ validation of source documents (POs), physical stock receipt delegation,
 and status updates.
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-from packages.database.src.models import Shipment, PurchaseOrder, POLine, Location
-from packages.database.src.enums import ShipmentStatus, LocationType
+import pytest
 from src.data_generator.logic.inbound import InboundManager
+
+from packages.database.src.enums import LocationType, ShipmentStatus
+from packages.database.src.models import Location, POLine, PurchaseOrder, Shipment
 
 
 @pytest.fixture
@@ -43,7 +44,7 @@ class TestInboundManager:
         Verifies that only shipments arriving on or before the current date
         are selected for processing.
         """
-        current_date = datetime(2024, 1, 10, tzinfo=timezone.utc)
+        current_date = datetime(2024, 1, 10, tzinfo=UTC)
 
         # Mocking the internal database query result
         shipment_1 = MagicMock(spec=Shipment)
@@ -64,7 +65,7 @@ class TestInboundManager:
         4. Updates PO line received quantity.
         5. Updates Shipment status to DELIVERED.
         """
-        date = datetime(2024, 1, 10, tzinfo=timezone.utc)
+        date = datetime(2024, 1, 10, tzinfo=UTC)
 
         # Setup Destination Warehouse with a Dock
         mock_dock = MagicMock(spec=Location)
@@ -93,11 +94,7 @@ class TestInboundManager:
 
         # Verify physical receipt recorded in ledger
         mock_ledger.record_receipt.assert_called_once_with(
-            location=mock_dock,
-            product_id="prod-123",
-            qty=50.0,
-            date=date,
-            ref_id="ship-999"
+            location=mock_dock, product_id="prod-123", qty=50.0, date=date, ref_id="ship-999"
         )
 
         # Verify business logic updates
@@ -116,7 +113,7 @@ class TestInboundManager:
         mock_shipment.purchase_order = MagicMock()
         mock_shipment.destination_warehouse = mock_warehouse
 
-        inbound_manager._process_single_shipment(mock_shipment, datetime.now(tz=timezone.utc))
+        inbound_manager._process_single_shipment(mock_shipment, datetime.now(tz=UTC))
 
         # Verify ledger was never called
         mock_ledger.record_receipt.assert_not_called()

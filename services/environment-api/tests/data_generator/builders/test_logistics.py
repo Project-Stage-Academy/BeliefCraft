@@ -6,12 +6,13 @@ fully connected mesh network (Routes) between warehouses with distance-based
 transport mode selection.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from packages.database.src.models import Warehouse, Route, LeadtimeModel
-from packages.database.src.enums import TransportMode, LeadtimeScope
+import pytest
 from src.data_generator.builders.logistics import LogisticsBuilder
+
+from packages.database.src.enums import LeadtimeScope, TransportMode
+from packages.database.src.models import LeadtimeModel, Warehouse
 
 
 @pytest.fixture
@@ -69,8 +70,9 @@ class TestLogisticsBuilder:
 
     @patch("src.data_generator.builders.logistics.settings")
     @patch("src.data_generator.builders.logistics.random.randint")
-    def test_transport_mode_selection_logic(self, mock_randint, mock_settings,
-                                            mock_session, dummy_warehouses, dummy_models):
+    def test_transport_mode_selection_logic(
+        self, mock_randint, mock_settings, mock_session, dummy_warehouses, dummy_models
+    ):
         """
         Verifies that the correct transport mode and leadtime model are
         selected based on the generated distance tiers.

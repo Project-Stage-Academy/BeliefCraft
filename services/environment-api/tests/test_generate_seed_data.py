@@ -7,9 +7,10 @@ Verifies the high-level orchestration of the seeding process:
 3. Phase 2 (Time-series simulation loop).
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
+
+import pytest
 from src.data_generator.generate_seed_data import SimulationRunner
 
 
@@ -76,7 +77,7 @@ class TestSimulationRunner:
             session=mock_session,
             warehouses=mock_world.warehouses,
             products=mock_world.products,
-            suppliers=mock_world.suppliers
+            suppliers=mock_world.suppliers,
         )
         runner._run_time_loop.assert_called_once()
 
@@ -92,8 +93,8 @@ class TestSimulationRunner:
         mock_settings.simulation.commit_interval = 2
 
         # 3 days simulation (Today, Today+1, Today+2)
-        start_date = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        end_date = datetime(2026, 1, 3, tzinfo=timezone.utc)
+        start_date = datetime(2026, 1, 1, tzinfo=UTC)
+        end_date = datetime(2026, 1, 3, tzinfo=UTC)
 
         runner._run_time_loop(mock_session, mock_engine, start_date, end_date)
 

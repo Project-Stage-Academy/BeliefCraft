@@ -6,8 +6,9 @@ sub-builders are called in the correct order and that internal state
 is correctly updated after each build step.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from src.data_generator.world_builder import WorldBuilder
 
 
@@ -23,9 +24,11 @@ def world_builder(mock_session):
     Initializes WorldBuilder with mocked sub-builders to isolate
     the orchestration logic.
     """
-    with patch("src.data_generator.world_builder.InfrastructureBuilder"), \
-        patch("src.data_generator.world_builder.CatalogBuilder"), \
-        patch("src.data_generator.world_builder.LogisticsBuilder"):
+    with (
+        patch("src.data_generator.world_builder.InfrastructureBuilder"),
+        patch("src.data_generator.world_builder.CatalogBuilder"),
+        patch("src.data_generator.world_builder.LogisticsBuilder"),
+    ):
         return WorldBuilder(mock_session, seed=42)
 
 
@@ -36,8 +39,10 @@ class TestWorldBuilder:
         Faker and the standard random library.
         """
         seed = 12345
-        with patch("src.data_generator.world_builder.random.seed") as mock_rseed, \
-            patch("src.data_generator.world_builder.Faker") as mock_faker_cls:
+        with (
+            patch("src.data_generator.world_builder.random.seed") as mock_rseed,
+            patch("src.data_generator.world_builder.Faker") as mock_faker_cls,
+        ):
             WorldBuilder(mock_session, seed)
 
             # Verify standard random was seeded

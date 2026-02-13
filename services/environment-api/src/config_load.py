@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from common.utils.config_loader import ConfigLoader
+
 from .config_schema import Settings
 
 env = os.getenv("ENV")

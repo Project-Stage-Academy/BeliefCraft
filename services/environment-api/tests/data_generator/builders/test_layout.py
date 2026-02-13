@@ -6,12 +6,13 @@ location types, and the probabilistic generation of IoT sensors without
 over-constraining the exact numeric values from configurations.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from packages.database.src.models import Warehouse, Location, SensorDevice
-from packages.database.src.enums import LocationType, DeviceType
+import pytest
 from src.data_generator.builders.layout import DockBuilder, ZoneBuilder
+
+from packages.database.src.enums import DeviceType, LocationType
+from packages.database.src.models import Location, SensorDevice, Warehouse
 
 
 @pytest.fixture
@@ -85,7 +86,9 @@ class TestZoneBuilder:
 
     @patch("src.data_generator.builders.layout.settings")
     @patch("src.data_generator.builders.layout.random")
-    def test_attach_sensor_trigger_success(self, mock_random, mock_settings, mock_session, dummy_warehouse):
+    def test_attach_sensor_trigger_success(
+        self, mock_random, mock_settings, mock_session, dummy_warehouse
+    ):
         """
         Verifies that a sensor is generated and attached to the warehouse
         when the random probability threshold is met.
@@ -111,7 +114,9 @@ class TestZoneBuilder:
 
     @patch("src.data_generator.builders.layout.settings")
     @patch("src.data_generator.builders.layout.random")
-    def test_attach_sensor_trigger_bypass(self, mock_random, mock_settings, mock_session, dummy_warehouse):
+    def test_attach_sensor_trigger_bypass(
+        self, mock_random, mock_settings, mock_session, dummy_warehouse
+    ):
         """
         Verifies that NO sensor is created if the random probability check fails.
         """

@@ -10,18 +10,21 @@ supply chain simulation. It handles the generation of:
 This data serves as the foundational "static" layer upon which dynamic
 transactions (Orders, Shipments) are simulated.
 """
+
 import random
-from typing import List
-from sqlalchemy.orm import Session
+
 from faker import Faker
-from packages.database.src.models import Product, Supplier
+from sqlalchemy.orm import Session
 from src.config_load import settings
+
+from packages.database.src.models import Product, Supplier
 
 
 class CatalogBuilder:
     """
     Specialist builder for managing the lifecycle and generation of Products and Suppliers.
     """
+
     def __init__(self, session: Session):
         """
         Initializes the CatalogBuilder with an active database session.
@@ -32,9 +35,9 @@ class CatalogBuilder:
         """
         self.session = session
         self.fake = Faker()
-        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
 
-    def create_products(self, count: int) -> List[Product]:
+    def create_products(self, count: int) -> list[Product]:
         """
         Generates a diverse catalog of product entities with realistic attributes.
 
@@ -52,16 +55,13 @@ class CatalogBuilder:
             category = self.rng.choice(available_categories)
 
             shelf_life_range = settings.catalog.category_shelf_life[category]
-            shelf_life = self.rng.randint(
-                shelf_life_range.min_days,
-                shelf_life_range.max_days
-            )
+            shelf_life = self.rng.randint(shelf_life_range.min_days, shelf_life_range.max_days)
 
             product = Product(
                 sku=f"{category[:3].upper()}-{self.fake.unique.ean8()}",
                 name=self.fake.catch_phrase(),
                 category=category,
-                shelf_life_days=shelf_life
+                shelf_life_days=shelf_life,
             )
             self.session.add(product)
             products.append(product)
@@ -69,7 +69,7 @@ class CatalogBuilder:
         self.session.flush()
         return products
 
-    def create_suppliers(self, count: int = 5) -> List[Supplier]:
+    def create_suppliers(self, count: int = 5) -> list[Supplier]:
         """
         Constructs a network of external suppliers distributed across various regions.
 
@@ -84,11 +84,14 @@ class CatalogBuilder:
         for _ in range(count):
             supplier = Supplier(
                 name=self.fake.company(),
-                reliability_score=round(self.rng.uniform(
-                    settings.catalog.supplier_reliability.min,
-                    settings.catalog.supplier_reliability.max
-                ), 2),
-                region=self.rng.choice(settings.catalog.supplier_regions)
+                reliability_score=round(
+                    self.rng.uniform(
+                        settings.catalog.supplier_reliability.min,
+                        settings.catalog.supplier_reliability.max,
+                    ),
+                    2,
+                ),
+                region=self.rng.choice(settings.catalog.supplier_regions),
             )
             self.session.add(supplier)
             suppliers.append(supplier)

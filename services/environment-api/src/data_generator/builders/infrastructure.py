@@ -4,11 +4,13 @@ It handles the creation of Warehouse entities and delegates the construction
 of internal layouts (Docks and Zones) to specialized builder components.
 """
 
-from typing import List
 from sqlalchemy.orm import Session
-from packages.database.src.models import Warehouse
 from src.config_load import settings
+
+from packages.database.src.models import Warehouse
+
 from .layout import DockBuilder, ZoneBuilder
+
 
 class InfrastructureBuilder:
     """
@@ -31,7 +33,7 @@ class InfrastructureBuilder:
         self.dock_builder = DockBuilder(session)
         self.zone_builder = ZoneBuilder(session)
 
-    def create_warehouses(self, count: int) -> List[Warehouse]:
+    def create_warehouses(self, count: int) -> list[Warehouse]:
         """
         Generates and persists a specified number of Warehouse records with
         pre-configured regions, timezones, and internal layouts.
@@ -52,11 +54,7 @@ class InfrastructureBuilder:
             idx = i % len(region_tz_pairs)
             region, tz = region_tz_pairs[idx]
 
-            wh = Warehouse(
-                name=f"WH-{region}-{i + 1:02d}",
-                region=region,
-                tz=tz
-            )
+            wh = Warehouse(name=f"WH-{region}-{i + 1:02d}", region=region, tz=tz)
             self.session.add(wh)
             self.session.flush()
 

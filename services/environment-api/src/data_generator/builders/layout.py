@@ -10,16 +10,19 @@ Classes:
     ZoneBuilder: Handles creation of the internal storage hierarchy and sensor assets.
 """
 
-from sqlalchemy.orm import Session
-
 import random
-from typing import List
+
+from sqlalchemy.orm import Session
+from src.config_load import settings
 
 from packages.database.src.models import (
-    Warehouse, Location, LocationType,
-    SensorDevice, DeviceType, DeviceStatus
+    DeviceStatus,
+    DeviceType,
+    Location,
+    LocationType,
+    SensorDevice,
+    Warehouse,
 )
-from src.config_load import settings
 
 
 class DockBuilder:
@@ -33,7 +36,7 @@ class DockBuilder:
             session (Session): The active SQLAlchemy database session.
         """
         self.session = session
-        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
 
     def build(self, warehouse: Warehouse) -> Location:
         """
@@ -52,11 +55,9 @@ class DockBuilder:
             warehouse_id=warehouse.id,
             code=f"{warehouse.name}-DOCK",
             type=LocationType.DOCK,
-
             capacity_units=self.rng.randint(
-                settings.layout.dock.capacity_min,
-                settings.layout.dock.capacity_max
-            )
+                settings.layout.dock.capacity_min, settings.layout.dock.capacity_max
+            ),
         )
         self.session.add(dock)
         return dock
@@ -74,9 +75,9 @@ class ZoneBuilder:
             session (Session): The active SQLAlchemy database session.
         """
         self.session = session
-        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
 
-    def build_zones(self, warehouse: Warehouse) -> List[Location]:
+    def build_zones(self, warehouse: Warehouse) -> list[Location]:
         """
         Generates a randomized layout of storage zones for the warehouse.
 
@@ -102,9 +103,8 @@ class ZoneBuilder:
                 code=f"{warehouse.name}-{zone_name}",
                 type=LocationType.VIRTUAL,
                 capacity_units=self.rng.randint(
-                    settings.layout.zone.capacity_min,
-                    settings.layout.zone.capacity_max
-                )
+                    settings.layout.zone.capacity_min, settings.layout.zone.capacity_max
+                ),
             )
             self.session.add(zone)
             self.session.flush()
@@ -127,8 +127,7 @@ class ZoneBuilder:
             zone_name (str): The code prefix for the zone (e.g., "ZONE-A").
         """
         aisle_count = self.rng.randint(
-            settings.layout.aisle.count_min,
-            settings.layout.aisle.count_max
+            settings.layout.aisle.count_min, settings.layout.aisle.count_max
         )
         for aisle_num in range(1, aisle_count + 1):
             aisle = Location(
@@ -137,9 +136,8 @@ class ZoneBuilder:
                 code=f"{zone_name}-AISLE-{aisle_num:02d}",
                 type=LocationType.SHELF,
                 capacity_units=self.rng.randint(
-                    settings.layout.aisle.capacity_min,
-                    settings.layout.aisle.capacity_max
-                )
+                    settings.layout.aisle.capacity_min, settings.layout.aisle.capacity_max
+                ),
             )
             self.session.add(aisle)
             self.session.flush()
@@ -162,30 +160,23 @@ class ZoneBuilder:
 
         device_type = self.rng.choices(
             [DeviceType.CAMERA, DeviceType.RFID_READER],
-            weights=[
-                settings.layout.sensor.camera.weight,
-                settings.layout.sensor.rfid.weight
-            ],
-            k=1
+            weights=[settings.layout.sensor.camera.weight, settings.layout.sensor.rfid.weight],
+            k=1,
         )[0]
 
         if device_type == DeviceType.CAMERA:
             noise = self.rng.uniform(
-                settings.layout.sensor.camera.noise_min,
-                settings.layout.sensor.camera.noise_max
+                settings.layout.sensor.camera.noise_min, settings.layout.sensor.camera.noise_max
             )
             missing = self.rng.uniform(
-                settings.layout.sensor.camera.missing_min,
-                settings.layout.sensor.camera.missing_max
+                settings.layout.sensor.camera.missing_min, settings.layout.sensor.camera.missing_max
             )
         else:
             noise = self.rng.uniform(
-                settings.layout.sensor.rfid.noise_min,
-                settings.layout.sensor.rfid.noise_max
+                settings.layout.sensor.rfid.noise_min, settings.layout.sensor.rfid.noise_max
             )
             missing = self.rng.uniform(
-                settings.layout.sensor.rfid.missing_min,
-                settings.layout.sensor.rfid.missing_max
+                settings.layout.sensor.rfid.missing_min, settings.layout.sensor.rfid.missing_max
             )
 
         device = SensorDevice(
@@ -193,6 +184,6 @@ class ZoneBuilder:
             device_type=device_type,
             status=DeviceStatus.ACTIVE,
             noise_sigma=noise,
-            missing_rate=missing
+            missing_rate=missing,
         )
         self.session.add(device)

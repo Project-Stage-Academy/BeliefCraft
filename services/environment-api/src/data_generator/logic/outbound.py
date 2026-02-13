@@ -7,21 +7,26 @@ Responsible for the 'Demand' side of the simulation. This module:
 3. Creates the necessary database records: Orders, OrderLines, and Shipments.
 4. Triggers the InventoryLedger to physically deduct stock.
 """
-import random
-import math
-from datetime import datetime
-from typing import List, Optional
 
-from sqlalchemy.orm import Session
+import math
+import random
+from datetime import datetime
+
 from common.logging import get_logger
-from packages.database.src.models import (
-    Warehouse, Product, Order, OrderLine, Shipment, InventoryBalance, Location
-)
-from packages.database.src.enums import (
-    OrderStatus, ShipmentStatus, ShipmentDirection, LocationType
-)
+from sqlalchemy.orm import Session
 from src.config_load import settings
 from src.data_generator.logic.inventory import InventoryLedger
+
+from packages.database.src.enums import LocationType, OrderStatus, ShipmentDirection, ShipmentStatus
+from packages.database.src.models import (
+    InventoryBalance,
+    Location,
+    Order,
+    OrderLine,
+    Product,
+    Shipment,
+    Warehouse,
+)
 
 logger = get_logger(__name__)
 
@@ -38,10 +43,11 @@ class OutboundManager:
     def __init__(self, session: Session):
         self.session = session
         self.ledger = InventoryLedger(session)
-        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
 
-    def process_daily_demand(self, date: datetime, warehouses: List[Warehouse],
-                             products: List[Product]) -> None:
+    def process_daily_demand(
+        self, date: datetime, warehouses: list[Warehouse], products: list[Product]
+    ) -> None:
         """
         Main entry point: Generates and attempts to fulfill random orders.
 
@@ -57,15 +63,12 @@ class OutboundManager:
         orders_created = 0
 
         active_products = self.rng.sample(
-            products,
-            k=max(1, int(len(products) * settings.outbound.active_catalog_fraction))
+            products, k=max(1, int(len(products) * settings.outbound.active_catalog_fraction))
         )
 
         for wh in warehouses:
             for product in active_products:
-                qty_demanded = self._simulate_poisson_demand(
-                    mean=settings.outbound.poisson_mean
-                )
+                qty_demanded = self._simulate_poisson_demand(mean=settings.outbound.poisson_mean)
 
                 if qty_demanded <= 0:
                     continue
@@ -75,13 +78,12 @@ class OutboundManager:
 
         if orders_created > 0:
             logger.info(
-                "daily_demand_processed",
-                date=date.isoformat(),
-                orders_created=orders_created
+                "daily_demand_processed", date=date.isoformat(), orders_created=orders_created
             )
 
-    def _process_single_order(self, warehouse: Warehouse, product: Product,
-                              qty_ordered: float, date: datetime) -> bool:
+    def _process_single_order(
+        self, warehouse: Warehouse, product: Product, qty_ordered: float, date: datetime
+    ) -> bool:
         """
         Orchestrates the fulfillment workflow for a single potential order.
         Returns True if an order was successfully created.
@@ -105,7 +107,7 @@ class OutboundManager:
                 product=product,
                 order=order,
                 qty=qty_to_ship,
-                date=date
+                date=date,
             )
 
         return True
@@ -114,10 +116,11 @@ class OutboundManager:
         """
         Queries the current On-Hand balance for a product at a location.
         """
-        balance = self.session.query(InventoryBalance).filter_by(
-            location_id=location.id,
-            product_id=product.id
-        ).first()
+        balance = (
+            self.session.query(InventoryBalance)
+            .filter_by(location_id=location.id, product_id=product.id)
+            .first()
+        )
 
         return balance.on_hand if balance else 0.0
 
@@ -137,8 +140,9 @@ class OutboundManager:
         self.session.flush()
         return order
 
-    def _create_order_line(self, order: Order, product: Product,
-                           ordered: float, allocated: float) -> None:
+    def _create_order_line(
+        self, order: Order, product: Product, ordered: float, allocated: float
+    ) -> None:
         """
         Creates the OrderLine detail record.
         Calculates service level penalties for missed sales (Lost Sales).
@@ -149,22 +153,26 @@ class OutboundManager:
             qty_ordered=ordered,
             qty_allocated=allocated,
             qty_shipped=allocated,
-            service_level_penalty=(ordered - allocated) * settings.outbound.missed_sale_penalty_per_unit        )
+            service_level_penalty=(ordered - allocated)
+            * settings.outbound.missed_sale_penalty_per_unit,
+        )
         self.session.add(line)
 
-    def _execute_outbound_logistics(self, warehouse: Warehouse, dock: Location,
-                                    product: Product, order: Order,
-                                    qty: float, date: datetime) -> None:
+    def _execute_outbound_logistics(
+        self,
+        warehouse: Warehouse,
+        dock: Location,
+        product: Product,
+        order: Order,
+        qty: float,
+        date: datetime,
+    ) -> None:
         """
         Handles the physical movement of goods and shipment generation.
         Only called if stock was successfully allocated.
         """
         self.ledger.record_issuance(
-            location=dock,
-            product_id=product.id,
-            qty=qty,
-            date=date,
-            ref_id=order.id
+            location=dock, product_id=product.id, qty=qty, date=date, ref_id=order.id
         )
 
         shipment = Shipment(
@@ -172,7 +180,7 @@ class OutboundManager:
             origin_warehouse_id=warehouse.id,
             direction=ShipmentDirection.OUTBOUND,
             status=ShipmentStatus.IN_TRANSIT,
-            shipped_at=date
+            shipped_at=date,
         )
         self.session.add(shipment)
 
@@ -189,6 +197,6 @@ class OutboundManager:
             p *= self.rng.random()
         return k - 1
 
-    def _get_dock(self, warehouse: Warehouse) -> Optional[Location]:
+    def _get_dock(self, warehouse: Warehouse) -> Location | None:
         """Retrieves the designated loading dock for the warehouse."""
         return next((loc for loc in warehouse.locations if loc.type == LocationType.DOCK), None)

@@ -25,18 +25,18 @@ Dependencies:
     - WorldBuilder for static data.
     - SimulationEngine for dynamic event generation.
 """
-from datetime import datetime, timedelta, timezone
 
+from datetime import UTC, datetime, timedelta
+
+from common.logging import configure_logging, get_logger
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
-
-from packages.database.src.connection import SessionLocal, get_engine
-from packages.database.src.base import Base
-from common.logging import configure_logging, get_logger
-
-from src.data_generator.world_builder import WorldBuilder
-from src.data_generator.simulation_engine import SimulationEngine
 from src.config_load import settings
+from src.data_generator.simulation_engine import SimulationEngine
+from src.data_generator.world_builder import WorldBuilder
+
+from packages.database.src.base import Base
+from packages.database.src.connection import SessionLocal, get_engine
 
 configure_logging("seed-generator", "INFO")
 logger = get_logger(__name__)
@@ -104,26 +104,23 @@ class SimulationRunner:
         """
         Phase 2: Runs the Simulation Engine loop to generate historical events.
         """
-        end_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         start_date = end_date - timedelta(days=days)
 
-        logger.info(
-            "phase_2_simulation_started",
-            days=days,
-            start=start_date.isoformat()
-        )
+        logger.info("phase_2_simulation_started", days=days, start=start_date.isoformat())
 
         sim_engine = SimulationEngine(
             session=session,
             warehouses=world.warehouses,
             products=world.products,
-            suppliers=world.suppliers
+            suppliers=world.suppliers,
         )
 
         self._run_time_loop(session, sim_engine, start_date, end_date)
 
-    def _run_time_loop(self, session: Session, engine: SimulationEngine,
-                       start: datetime, end: datetime) -> None:
+    def _run_time_loop(
+        self, session: Session, engine: SimulationEngine, start: datetime, end: datetime
+    ) -> None:
         """
         Iterates through every day in the simulation window.
         """
@@ -142,6 +139,7 @@ class SimulationRunner:
             total_ticks += 1
 
         session.commit()
+
 
 if __name__ == "__main__":
     engine = get_engine()

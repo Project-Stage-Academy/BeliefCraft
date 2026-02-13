@@ -5,16 +5,23 @@ Verifies the (s, S) inventory policy logic, purchase order generation,
 supplier selection, and the stochastic calculation of inbound lead times.
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from packages.database.src.models import (
-    Warehouse, Product, Location, Supplier,
-    PurchaseOrder, POLine, Shipment, LeadtimeModel
-)
-from packages.database.src.enums import POStatus, ShipmentStatus, LocationType
+import pytest
 from src.data_generator.logic.replenishment import ReplenishmentManager
+
+from packages.database.src.enums import LocationType, ShipmentStatus
+from packages.database.src.models import (
+    LeadtimeModel,
+    Location,
+    POLine,
+    Product,
+    PurchaseOrder,
+    Shipment,
+    Supplier,
+    Warehouse,
+)
 
 
 @pytest.fixture
@@ -56,8 +63,9 @@ def dummy_warehouse_with_dock():
 
 class TestReplenishmentManager:
     @patch("src.data_generator.logic.replenishment.settings")
-    def test_check_and_replenish_triggers_correctly(self, mock_settings, replenishment_manager,
-                                                    mock_session, dummy_warehouse_with_dock):
+    def test_check_and_replenish_triggers_correctly(
+        self, mock_settings, replenishment_manager, mock_session, dummy_warehouse_with_dock
+    ):
         """
         Verifies that an order is triggered when stock is below reorder point.
         Calculation: order_qty = target_level - current_qty
@@ -65,7 +73,7 @@ class TestReplenishmentManager:
         wh, dock = dummy_warehouse_with_dock
         prod = MagicMock(spec=Product)
         prod.id = "prod-uuid"
-        date = datetime.now(tz=timezone.utc)
+        date = datetime.now(tz=UTC)
 
         # Config: s=20, S=100
         mock_settings.replenishment.policy.reorder_point = 20.0
@@ -81,8 +89,9 @@ class TestReplenishmentManager:
         replenishment_manager._execute_procurement.assert_called_once_with(wh, prod, 85.0, date)
 
     @patch("src.data_generator.logic.replenishment.settings")
-    def test_check_and_replenish_skips_when_stocked(self, mock_settings, replenishment_manager,
-                                                    dummy_warehouse_with_dock):
+    def test_check_and_replenish_skips_when_stocked(
+        self, mock_settings, replenishment_manager, dummy_warehouse_with_dock
+    ):
         """
         Verifies that no order is created if stock is above the reorder point.
         """
@@ -93,13 +102,16 @@ class TestReplenishmentManager:
         replenishment_manager._get_current_stock_level = MagicMock(return_value=25.0)
         replenishment_manager._execute_procurement = MagicMock()
 
-        triggered = replenishment_manager._check_and_replenish_product(wh, dock.id, MagicMock(), datetime.now(tz=timezone.utc))
+        triggered = replenishment_manager._check_and_replenish_product(
+            wh, dock.id, MagicMock(), datetime.now(tz=UTC)
+        )
 
         assert triggered is False
         replenishment_manager._execute_procurement.assert_not_called()
 
-    def test_execute_procurement_orchestration(self, replenishment_manager, mock_session,
-                                               dummy_warehouse_with_dock):
+    def test_execute_procurement_orchestration(
+        self, replenishment_manager, mock_session, dummy_warehouse_with_dock
+    ):
         """
         Verifies that execute_procurement creates the full chain of objects:
         PO -> PO Line -> Inbound Shipment.
@@ -108,7 +120,7 @@ class TestReplenishmentManager:
         prod = MagicMock(spec=Product)
         prod.id = "prod-uuid"
         qty = 50.0
-        date = datetime.now(tz=timezone.utc)
+        date = datetime.now(tz=UTC)
 
         replenishment_manager._execute_procurement(wh, prod, qty, date)
 
@@ -131,7 +143,7 @@ class TestReplenishmentManager:
         Ensures that even with extreme Gaussian noise, arrival date
         respects the min_days configuration.
         """
-        date = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        date = datetime(2024, 1, 1, tzinfo=UTC)
         mock_settings.replenishment.lead_time.mean_days = 5.0
         mock_settings.replenishment.lead_time.std_dev_days = 1.0
         mock_settings.replenishment.lead_time.min_days = 2

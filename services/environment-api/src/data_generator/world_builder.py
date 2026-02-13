@@ -6,20 +6,21 @@ data generation process. It coordinates specialized builders to construct a
 coherent and interconnected simulation environment, ensuring that dependencies
 (e.g., Warehouses must exist before Routes) are respected.
 """
-from sqlalchemy.orm import Session
-from faker import Faker
 
 import random
-from typing import List
 
 from common.logging import get_logger
-from packages.database.src.models import Warehouse, Product, Supplier, Route
+from faker import Faker
+from sqlalchemy.orm import Session
+from src.config_load import settings
 from src.data_generator.builders.catalog import CatalogBuilder
 from src.data_generator.builders.infrastructure import InfrastructureBuilder
 from src.data_generator.builders.logistics import LogisticsBuilder
-from src.config_load import settings
+
+from packages.database.src.models import Product, Route, Supplier, Warehouse
 
 logger = get_logger(__name__)
+
 
 class WorldBuilder:
     """
@@ -35,21 +36,17 @@ class WorldBuilder:
         random.seed(seed)
 
         # State containers for generated entities
-        self.warehouses: List[Warehouse] = []
-        self.products: List[Product] = []
-        self.suppliers: List[Supplier] = []
-        self.routes: List[Route] = []
+        self.warehouses: list[Warehouse] = []
+        self.products: list[Product] = []
+        self.suppliers: list[Supplier] = []
+        self.routes: list[Route] = []
 
         # Initialize specialized builders
         self.infra_builder = InfrastructureBuilder(session)
         self.catalog_builder = CatalogBuilder(session)
         self.logistics_builder = LogisticsBuilder(session)
 
-        logger.info(
-            "world_builder_initialized",
-            seed=seed,
-            db_session_id=id(session)
-        )
+        logger.info("world_builder_initialized", seed=seed, db_session_id=id(session))
 
     def build_all(self) -> None:
         """
@@ -70,11 +67,7 @@ class WorldBuilder:
         """
         self.warehouses = self.infra_builder.create_warehouses(count)
 
-        logger.info(
-            "warehouses_built",
-            count=len(self.warehouses),
-            target_count=count
-        )
+        logger.info("warehouses_built", count=len(self.warehouses), target_count=count)
 
     def create_products(self, count: int) -> None:
         """
@@ -82,11 +75,7 @@ class WorldBuilder:
         """
         self.products = self.catalog_builder.create_products(count)
 
-        logger.info(
-            "products_built",
-            count=len(self.products),
-            target_count=count
-        )
+        logger.info("products_built", count=len(self.products), target_count=count)
 
     def create_suppliers(self, count: int) -> None:
         """
@@ -94,11 +83,7 @@ class WorldBuilder:
         """
         self.suppliers = self.catalog_builder.create_suppliers(count)
 
-        logger.info(
-            "suppliers_built",
-            count=len(self.suppliers),
-            target_count=count
-        )
+        logger.info("suppliers_built", count=len(self.suppliers), target_count=count)
 
     def create_logistics_network(self) -> None:
         """
@@ -115,5 +100,5 @@ class WorldBuilder:
             "logistics_network_built",
             routes_count=len(self.routes),
             leadtime_models_count=len(lt_models),
-            nodes_connected=len(self.warehouses)
+            nodes_connected=len(self.warehouses),
         )

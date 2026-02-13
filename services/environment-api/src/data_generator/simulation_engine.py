@@ -7,19 +7,19 @@ It acts as the "Physics Engine" of the simulation, ensuring that time progresses
 linearly and that events occur in a logically consistent order (e.g., you cannot
 sell an item before it has arrived).
 """
-from datetime import datetime
-from typing import List
-import random
 
-from sqlalchemy.orm import Session
+import random
+from datetime import datetime
 
 from common import logging
-from packages.database.src.models import Warehouse, Product, Supplier
+from sqlalchemy.orm import Session
+from src.config_load import settings
 from src.data_generator.logic.inbound import InboundManager
 from src.data_generator.logic.outbound import OutboundManager
 from src.data_generator.logic.replenishment import ReplenishmentManager
 from src.data_generator.logic.sensors import SensorManager
-from src.config_load import settings
+
+from packages.database.src.models import Product, Supplier, Warehouse
 
 logger = logging.get_logger(__name__)
 
@@ -35,8 +35,13 @@ class SimulationEngine:
     maintaining the global state and synchronization of the simulation.
     """
 
-    def __init__(self, session: Session, warehouses: List[Warehouse],
-                 products: List[Product], suppliers: List[Supplier]):
+    def __init__(
+        self,
+        session: Session,
+        warehouses: list[Warehouse],
+        products: list[Product],
+        suppliers: list[Supplier],
+    ):
         """
         Initialize the simulation environment.
 
@@ -52,7 +57,7 @@ class SimulationEngine:
         self.suppliers = suppliers
 
         # Seed the random number generator for reproducible simulations
-        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
 
         # Initialize specialized subsystems
         # 1. Inbound: Handles arriving trucks and receiving stock.
@@ -68,9 +73,9 @@ class SimulationEngine:
         self.sensor_manager = SensorManager(session)
 
         logger.info(
-            'simulation_engine_initialized',
+            "simulation_engine_initialized",
             warehouses_count=len(warehouses),
-            products_count=len(products)
+            products_count=len(products),
         )
 
     def tick(self, current_date: datetime) -> None:
@@ -104,24 +109,16 @@ class SimulationEngine:
         Args:
             current_date (datetime): The specific date to simulate.
         """
-        logger.debug('tick_started', date=current_date.isoformat())
+        logger.debug("tick_started", date=current_date.isoformat())
 
         # Step 1: Receive Goods
         self.inbound_manager.process_daily_arrivals(current_date)
 
         # Step 2: Sell Goods
-        self.outbound_manager.process_daily_demand(
-            current_date,
-            self.warehouses,
-            self.products
-        )
+        self.outbound_manager.process_daily_demand(current_date, self.warehouses, self.products)
 
         # Step 3: Reorder Goods
-        self.replenishment_manager.review_stock_levels(
-            current_date,
-            self.warehouses,
-            self.products
-        )
+        self.replenishment_manager.review_stock_levels(current_date, self.warehouses, self.products)
 
         # Step 4: Observe State
         self.sensor_manager.generate_daily_observations(

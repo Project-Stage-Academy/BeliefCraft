@@ -6,14 +6,15 @@ stock increases/decreases correctly update the balance records and always
 generate an immutable audit log (InventoryMove).
 """
 
-import pytest
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
-from packages.database.src.models import InventoryBalance, InventoryMove, Location
-from packages.database.src.enums import MoveType, QualityStatus
+import pytest
 from src.data_generator.logic.inventory import InventoryLedger
+
+from packages.database.src.enums import MoveType
+from packages.database.src.models import InventoryBalance, InventoryMove, Location
 
 
 @pytest.fixture
@@ -44,7 +45,7 @@ class TestInventoryLedger:
         """
         product_id = uuid.uuid4()
         ref_id = uuid.uuid4()
-        date = datetime.now(tz=timezone.utc)
+        date = datetime.now(tz=UTC)
         qty = 100.0
 
         # Mock database query returning None (no existing balance)
@@ -75,13 +76,13 @@ class TestInventoryLedger:
         """
         product_id = uuid.uuid4()
         existing_balance = InventoryBalance(
-            product_id=product_id,
-            location_id=mock_location.id,
-            on_hand=50.0
+            product_id=product_id, location_id=mock_location.id, on_hand=50.0
         )
         mock_session.query().filter_by().first.return_value = existing_balance
 
-        ledger.record_receipt(mock_location, product_id, 10.0, datetime.now(tz=timezone.utc), uuid.uuid4())
+        ledger.record_receipt(
+            mock_location, product_id, 10.0, datetime.now(tz=UTC), uuid.uuid4()
+        )
 
         # Verify balance was updated
         assert existing_balance.on_hand == 60.0
@@ -96,13 +97,13 @@ class TestInventoryLedger:
         product_id = uuid.uuid4()
         ref_id = uuid.uuid4()
         existing_balance = InventoryBalance(
-            product_id=product_id,
-            location_id=mock_location.id,
-            on_hand=100.0
+            product_id=product_id, location_id=mock_location.id, on_hand=100.0
         )
         mock_session.query().filter_by().first.return_value = existing_balance
 
-        ledger.record_issuance(mock_location, product_id, 30.0, datetime.now(tz=timezone.utc), ref_id)
+        ledger.record_issuance(
+            mock_location, product_id, 30.0, datetime.now(tz=UTC), ref_id
+        )
 
         # Verify decrement
         assert existing_balance.on_hand == 70.0

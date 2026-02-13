@@ -9,11 +9,14 @@ occurred (e.g., Shipments, Orders, Adjustments).
 This separation ensures that the simulation engine can simulate various
 scenarios (theft, spoilage, sales) using a consistent accounting interface.
 """
+
 import uuid
 from datetime import datetime
+
 from sqlalchemy.orm import Session
-from packages.database.src.models import InventoryBalance, InventoryMove, Location
+
 from packages.database.src.enums import MoveType, QualityStatus
+from packages.database.src.models import InventoryBalance, InventoryMove, Location
 
 
 class InventoryLedger:
@@ -32,8 +35,14 @@ class InventoryLedger:
         """
         self.session = session
 
-    def record_receipt(self, location: Location, product_id: uuid.UUID,
-                       qty: float, date: datetime, ref_id: uuid.UUID) -> None:
+    def record_receipt(
+        self,
+        location: Location,
+        product_id: uuid.UUID,
+        qty: float,
+        date: datetime,
+        ref_id: uuid.UUID,
+    ) -> None:
         """
         Processes an inbound stock increase.
 
@@ -57,11 +66,17 @@ class InventoryLedger:
             move_type=MoveType.INBOUND,
             date=date,
             reason="PO_RECEIPT",
-            ref_id=ref_id
+            ref_id=ref_id,
         )
 
-    def record_issuance(self, location: Location, product_id: uuid.UUID,
-                        qty: float, date: datetime, ref_id: uuid.UUID) -> None:
+    def record_issuance(
+        self,
+        location: Location,
+        product_id: uuid.UUID,
+        qty: float,
+        date: datetime,
+        ref_id: uuid.UUID,
+    ) -> None:
         """
         Processes an outbound stock decrease (Shipment/Sale).
 
@@ -77,7 +92,7 @@ class InventoryLedger:
             move_type=MoveType.OUTBOUND,
             date=date,
             reason="CUSTOMER_ORDER",
-            ref_id=ref_id
+            ref_id=ref_id,
         )
 
     def _update_balance(self, location: Location, product_id: uuid.UUID, qty: float) -> None:
@@ -87,10 +102,11 @@ class InventoryLedger:
         If a balance record does not exist (e.g., new product in this warehouse),
         it initializes a new record with the starting quantity.
         """
-        balance = self.session.query(InventoryBalance).filter_by(
-            product_id=product_id,
-            location_id=location.id
-        ).first()
+        balance = (
+            self.session.query(InventoryBalance)
+            .filter_by(product_id=product_id, location_id=location.id)
+            .first()
+        )
 
         if balance:
             balance.on_hand += qty
@@ -100,13 +116,20 @@ class InventoryLedger:
                 location_id=location.id,
                 on_hand=qty,
                 reserved=0,
-                quality_status=QualityStatus.OK
+                quality_status=QualityStatus.OK,
             )
             self.session.add(balance)
 
-    def _log_movement(self, location: Location, product_id: uuid.UUID, qty: float,
-                      move_type: MoveType, date: datetime, reason: str,
-                      ref_id: uuid.UUID) -> None:
+    def _log_movement(
+        self,
+        location: Location,
+        product_id: uuid.UUID,
+        qty: float,
+        move_type: MoveType,
+        date: datetime,
+        reason: str,
+        ref_id: uuid.UUID,
+    ) -> None:
         """
         Persists an immutable audit record of the inventory change.
         """

@@ -6,11 +6,12 @@ ensuring that random generation respects the configured boundaries and
 business logic (e.g., SKU formatting).
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from packages.database.src.models import Product, Supplier
+import pytest
 from src.data_generator.builders.catalog import CatalogBuilder
+
+from packages.database.src.models import Product, Supplier
 
 
 @pytest.fixture

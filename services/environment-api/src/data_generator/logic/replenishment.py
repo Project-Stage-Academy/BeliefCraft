@@ -7,21 +7,27 @@ Inventory Management System (IMS). It periodically reviews stock levels against
 defined safety thresholds and generates Purchase Orders (POs) to restock
 inventory from external suppliers.
 """
+
 import random
 import uuid
 from datetime import datetime, timedelta
-from typing import List
 
-from sqlalchemy.orm import Session
 from common.logging import get_logger
-from packages.database.src.models import (
-    Warehouse, Product, InventoryBalance, Supplier,
-    PurchaseOrder, POLine, Shipment, LocationType, LeadtimeModel
-)
-from packages.database.src.enums import (
-    POStatus, ShipmentStatus, ShipmentDirection, LeadtimeScope
-)
+from sqlalchemy.orm import Session
 from src.config_load import settings
+
+from packages.database.src.enums import LeadtimeScope, POStatus, ShipmentDirection, ShipmentStatus
+from packages.database.src.models import (
+    InventoryBalance,
+    LeadtimeModel,
+    LocationType,
+    POLine,
+    Product,
+    PurchaseOrder,
+    Shipment,
+    Supplier,
+    Warehouse,
+)
 
 logger = get_logger(__name__)
 
@@ -35,18 +41,20 @@ class ReplenishmentManager:
     - S (Order-Up-To Level): Order enough to bring stock back to this level.
     """
 
-    def __init__(self, session: Session, suppliers: List[Supplier]):
+    def __init__(self, session: Session, suppliers: list[Supplier]):
         self.session = session
         self.suppliers = suppliers
-        self.rng = random.Random(settings.simulation.random_seed) # noqa: S311
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
 
-        self.standard_lt_model = self.session.query(LeadtimeModel).filter_by(
-            scope=LeadtimeScope.GLOBAL,
-            p1=settings.logistics.models.standard.p1
-        ).first()
+        self.standard_lt_model = (
+            self.session.query(LeadtimeModel)
+            .filter_by(scope=LeadtimeScope.GLOBAL, p1=settings.logistics.models.standard.p1)
+            .first()
+        )
 
-    def review_stock_levels(self, date: datetime, warehouses: List[Warehouse],
-                            products: List[Product]) -> None:
+    def review_stock_levels(
+        self, date: datetime, warehouses: list[Warehouse], products: list[Product]
+    ) -> None:
         """
         Main entry point: Reviews inventory positions and triggers replenishment.
 
@@ -55,8 +63,7 @@ class ReplenishmentManager:
         simulate a periodic review cycle.
         """
         products_to_review = self.rng.sample(
-            products,
-            k=max(1, int(len(products) * settings.replenishment.review_catalog_fraction))
+            products, k=max(1, int(len(products) * settings.replenishment.review_catalog_fraction))
         )
         pos_created = 0
 
@@ -71,13 +78,12 @@ class ReplenishmentManager:
 
         if pos_created > 0:
             logger.info(
-                "replenishment_run_completed",
-                pos_created=pos_created,
-                date=date.isoformat()
+                "replenishment_run_completed", pos_created=pos_created, date=date.isoformat()
             )
 
-    def _check_and_replenish_product(self, warehouse: Warehouse, location_id: uuid.UUID,
-                                     product: Product, date: datetime) -> bool:
+    def _check_and_replenish_product(
+        self, warehouse: Warehouse, location_id: uuid.UUID, product: Product, date: datetime
+    ) -> bool:
         """
         Evaluates the inventory position for a single product and executes a
         buy order if the policy criteria are met.
@@ -98,15 +104,17 @@ class ReplenishmentManager:
         """
         Queries the current On-Hand balance from the ledger.
         """
-        balance = self.session.query(InventoryBalance).filter_by(
-            location_id=location_id,
-            product_id=product_id
-        ).first()
+        balance = (
+            self.session.query(InventoryBalance)
+            .filter_by(location_id=location_id, product_id=product_id)
+            .first()
+        )
 
         return balance.on_hand if balance else 0.0
 
-    def _execute_procurement(self, warehouse: Warehouse, product: Product,
-                             qty: float, date: datetime) -> None:
+    def _execute_procurement(
+        self, warehouse: Warehouse, product: Product, qty: float, date: datetime
+    ) -> None:
         """
         Orchestrator for the creation of all procurement records.
 
@@ -125,15 +133,16 @@ class ReplenishmentManager:
         """Selects a random supplier from the approved list."""
         return self.rng.choice(self.suppliers)
 
-    def _create_purchase_order(self, warehouse: Warehouse, supplier: Supplier,
-                               date: datetime) -> PurchaseOrder:
+    def _create_purchase_order(
+        self, warehouse: Warehouse, supplier: Supplier, date: datetime
+    ) -> PurchaseOrder:
         """Creates the Purchase Order header record."""
         po = PurchaseOrder(
             supplier_id=supplier.id,
             destination_warehouse_id=warehouse.id,
             status=POStatus.SUBMITTED,
             created_at=date,
-            leadtime_model_id=self.standard_lt_model.id if self.standard_lt_model else None
+            leadtime_model_id=self.standard_lt_model.id if self.standard_lt_model else None,
         )
         self.session.add(po)
         self.session.flush()
@@ -142,15 +151,13 @@ class ReplenishmentManager:
     def _create_po_line(self, po: PurchaseOrder, product: Product, qty: float) -> None:
         """Creates the specific line item for the product being ordered."""
         line = POLine(
-            purchase_order_id=po.id,
-            product_id=product.id,
-            qty_ordered=qty,
-            qty_received=0.0
+            purchase_order_id=po.id, product_id=product.id, qty_ordered=qty, qty_received=0.0
         )
         self.session.add(line)
 
-    def _create_inbound_shipment(self, po: PurchaseOrder, warehouse: Warehouse,
-                                 date: datetime) -> None:
+    def _create_inbound_shipment(
+        self, po: PurchaseOrder, warehouse: Warehouse, date: datetime
+    ) -> None:
         """
         Creates the shipment record representing the vendor's promise to deliver.
         Calculates the expected arrival date based on stochastic lead times.
@@ -163,7 +170,7 @@ class ReplenishmentManager:
             direction=ShipmentDirection.INBOUND,
             status=ShipmentStatus.IN_TRANSIT,
             shipped_at=date,
-            arrived_at=arrival_date
+            arrived_at=arrival_date,
         )
         self.session.add(shipment)
 
@@ -172,14 +179,13 @@ class ReplenishmentManager:
         Simulates stochastic lead time variability.
         Returns the expected arrival date based on a Gaussian distribution.
         """
-        lead_time_days = int(self.rng.gauss(
-            settings.replenishment.lead_time.mean_days,
-            settings.replenishment.lead_time.std_dev_days
-        ))
-
-        lead_time_days = max(
-            settings.replenishment.lead_time.min_days,
-            lead_time_days
+        lead_time_days = int(
+            self.rng.gauss(
+                settings.replenishment.lead_time.mean_days,
+                settings.replenishment.lead_time.std_dev_days,
+            )
         )
+
+        lead_time_days = max(settings.replenishment.lead_time.min_days, lead_time_days)
 
         return current_date + timedelta(days=lead_time_days)
