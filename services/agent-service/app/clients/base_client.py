@@ -26,7 +26,7 @@ from app.config import get_settings
 from app.core.exceptions import ExternalServiceError
 from common.http_client import TracedHttpClient
 from common.logging import get_logger
-from tenacity import (  # type: ignore[import-not-found]
+from tenacity import (
     AsyncRetrying,
     retry_if_exception_type,
     stop_after_attempt,
