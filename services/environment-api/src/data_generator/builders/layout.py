@@ -52,10 +52,10 @@ class DockBuilder:
             code=f"{warehouse.name}-DOCK",
             type=LocationType.DOCK,
 
-            capacity_units=random.randint(
+            capacity_units=self.rng.randint(
                 settings.layout.dock.capacity_min,
                 settings.layout.dock.capacity_max
-            ) # nosec B311 - non-crypto random for simulation
+            )
         )
         self.session.add(dock)
         return dock
@@ -103,7 +103,7 @@ class ZoneBuilder:
                 capacity_units=self.rng.randint(
                     settings.layout.zone.capacity_min,
                     settings.layout.zone.capacity_max
-                ) # nosec B311 - non-crypto random for simulation
+                )
             )
             self.session.add(zone)
             self.session.flush()
