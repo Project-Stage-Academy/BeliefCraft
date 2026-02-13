@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
-from packages.common.logging import get_logger
+from packages.common.common.logging import get_logger
 from packages.database.src.models import (
     Warehouse, SensorDevice, Observation, InventoryBalance, Location
 )
