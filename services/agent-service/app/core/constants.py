@@ -20,7 +20,7 @@ class DependencyName(StrEnum):
     ENVIRONMENT_API = "environment_api"
     RAG_API = "rag_api"
     REDIS = "redis"
-    ANTHROPIC = "anthropic"
+    AWS_BEDROCK = "aws_bedrock"
 
 
 # HTTP

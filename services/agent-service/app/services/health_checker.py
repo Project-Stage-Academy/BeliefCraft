@@ -55,15 +55,15 @@ class HealthChecker:
         except Exception as e:
             return f"{ERROR_PREFIX}{str(e)}"
 
-    def check_anthropic_config(self) -> str:
+    def check_bedrock_config(self) -> str:
         """
-        Check if Anthropic API key is configured
+        Check if AWS Bedrock is configured
         Returns:
             Configuration status string
         """
         return (
             HealthStatus.CONFIGURED
-            if (self.settings.ANTHROPIC_API_KEY and self.settings.ANTHROPIC_API_KEY.strip())
+            if (self.settings.BEDROCK_MODEL_ID and self.settings.BEDROCK_MODEL_ID.strip())
             else HealthStatus.MISSING_KEY
         )
 
@@ -81,7 +81,7 @@ class HealthChecker:
             ),
             DependencyName.RAG_API: await self.check_http_endpoint(self.settings.RAG_API_URL),
             DependencyName.REDIS: self.check_redis(),
-            DependencyName.ANTHROPIC: self.check_anthropic_config(),
+            DependencyName.AWS_BEDROCK: self.check_bedrock_config(),
         }
 
     @staticmethod
