@@ -4,10 +4,14 @@ from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage  # type: ignore[import-not-found]
-
 from app.core.exceptions import LLMServiceError
 from app.services.llm_service import LLMService
+from langchain_core.messages import (  # type: ignore[import-not-found]
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 
 
 @pytest.fixture()
@@ -15,7 +19,7 @@ def mock_settings() -> MagicMock:
     settings = MagicMock()
     settings.AWS_DEFAULT_REGION = "us-east-1"
     settings.AWS_ACCESS_KEY_ID = "test-key"
-    settings.AWS_SECRET_ACCESS_KEY = "test-secret"
+    settings.AWS_SECRET_ACCESS_KEY = "test-secret"  # noqa: S105
     settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     settings.BEDROCK_TEMPERATURE = 0.0
     settings.BEDROCK_MAX_TOKENS = 4000
@@ -86,9 +90,7 @@ class TestMessageConversion:
         assert result[0].name == "search"
 
     def test_tool_message_default_name(self, llm_service: LLMService) -> None:
-        messages = [
-            {"role": "tool", "content": "result", "tool_call_id": "tc_1"}
-        ]
+        messages = [{"role": "tool", "content": "result", "tool_call_id": "tc_1"}]
         result = llm_service._convert_messages_to_langchain(messages)
         assert result[0].name == "tool"
 
@@ -191,9 +193,7 @@ class TestChatCompletion:
                 "usage": {"input_tokens": 5, "output_tokens": 10},
                 "stop_reason": "end_turn",
             },
-            tool_calls=[
-                {"id": "call_456", "name": "lookup", "args": {"id": "1"}}
-            ],
+            tool_calls=[{"id": "call_456", "name": "lookup", "args": {"id": "1"}}],
         )
         mock_chain = MagicMock()
         mock_chain.ainvoke = AsyncMock(return_value=mock_response)
@@ -217,9 +217,7 @@ class TestChatCompletion:
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        result = await llm_service.chat_completion(
-            messages=[{"role": "user", "content": "Hi"}]
-        )
+        result = await llm_service.chat_completion(messages=[{"role": "user", "content": "Hi"}])
         assert result["message"]["content"] == "hello"
 
     @pytest.mark.asyncio()
@@ -238,9 +236,7 @@ class TestChatCompletion:
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        result = await llm_service.chat_completion(
-            messages=[{"role": "user", "content": "Hi"}]
-        )
+        result = await llm_service.chat_completion(messages=[{"role": "user", "content": "Hi"}])
         assert result["message"]["content"] == "first second"
 
     @pytest.mark.asyncio()
@@ -252,23 +248,17 @@ class TestChatCompletion:
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        result = await llm_service.chat_completion(
-            messages=[{"role": "user", "content": "Hi"}]
-        )
+        result = await llm_service.chat_completion(messages=[{"role": "user", "content": "Hi"}])
         assert result["tokens"]["prompt"] == 0
         assert result["tokens"]["completion"] == 0
         assert result["tokens"]["total"] == 0
 
     @pytest.mark.asyncio()
     async def test_exception_wraps_in_llm_service_exception(self, llm_service: LLMService) -> None:
-        llm_service.llm.ainvoke = AsyncMock(
-            side_effect=RuntimeError("Connection refused")
-        )
+        llm_service.llm.ainvoke = AsyncMock(side_effect=RuntimeError("Connection refused"))
 
         with pytest.raises(LLMServiceError, match="Bedrock LLM call failed"):
-            await llm_service.chat_completion(
-                messages=[{"role": "user", "content": "Hi"}]
-            )
+            await llm_service.chat_completion(messages=[{"role": "user", "content": "Hi"}])
 
     @pytest.mark.asyncio()
     async def test_tools_are_bound_when_provided(self, llm_service: LLMService) -> None:
@@ -301,9 +291,7 @@ class TestChatCompletion:
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        await llm_service.chat_completion(
-            messages=[{"role": "user", "content": "test"}]
-        )
+        await llm_service.chat_completion(messages=[{"role": "user", "content": "test"}])
 
         llm_service.llm.ainvoke.assert_called_once()
 
@@ -342,7 +330,7 @@ class TestLLMServiceInit:
                 "bedrock-runtime",
                 region_name="us-east-1",
                 aws_access_key_id="test-key",
-                aws_secret_access_key="test-secret",
+                aws_secret_access_key="test-secret",  # noqa: S106
             )
             mock_chat_bedrock.assert_called_once_with(
                 client=mock_boto3.client.return_value,

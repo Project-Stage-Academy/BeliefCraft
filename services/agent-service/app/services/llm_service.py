@@ -1,9 +1,12 @@
 """LLM Service wrapper for AWS Bedrock (Claude) with retry logic."""
+
 import json
 from typing import Any
 
 import boto3  # type: ignore[import-not-found]
 import structlog
+from app.config import get_settings
+from app.core.exceptions import LLMServiceError
 from langchain_aws import ChatBedrock  # type: ignore[import-not-found]
 from langchain_core.messages import (  # type: ignore[import-not-found]
     AIMessage,
@@ -18,9 +21,6 @@ from tenacity import (  # type: ignore[import-not-found]
     stop_after_attempt,
     wait_exponential,
 )
-
-from app.config import get_settings
-from app.core.exceptions import LLMServiceError
 
 logger = structlog.get_logger()
 
@@ -153,9 +153,11 @@ class LLMService:
                         "type": "function",
                         "function": {
                             "name": tc["name"],
-                            "arguments": json.dumps(tc["args"])
-                            if isinstance(tc["args"], dict)
-                            else str(tc["args"]),
+                            "arguments": (
+                                json.dumps(tc["args"])
+                                if isinstance(tc["args"], dict)
+                                else str(tc["args"])
+                            ),
                         },
                     }
                     for tc in response.tool_calls

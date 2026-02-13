@@ -7,9 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from app.core.exceptions import AgentExecutionError
-from app.models.agent_state import AgentState, ThoughtStep, ToolCall, create_initial_state
+from app.models.agent_state import AgentState, create_initial_state
 from app.services.react_agent import ReActAgent
 
 
@@ -195,7 +193,9 @@ class TestThinkNode:
     ) -> None:
         initial_state["total_tokens"] = 50
         mock_llm_service.chat_completion.return_value = _make_llm_response(
-            content="OK", prompt_tokens=20, completion_tokens=30,
+            content="OK",
+            prompt_tokens=20,
+            completion_tokens=30,
         )
 
         result = await agent._think_node(initial_state)
@@ -251,7 +251,9 @@ class TestActNode:
         assert result["tool_calls"][0].result is not None
         assert result["iteration"] == 1
 
-    def test_act_adds_tool_result_message(self, agent: ReActAgent, initial_state: AgentState) -> None:
+    def test_act_adds_tool_result_message(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
         initial_state["messages"] = [
             {
                 "role": "assistant",
@@ -300,7 +302,9 @@ class TestActNode:
         assert len(tool_msgs) == 1
         assert "error" in json.loads(tool_msgs[0]["content"])
 
-    def test_act_handles_multiple_tool_calls(self, agent: ReActAgent, initial_state: AgentState) -> None:
+    def test_act_handles_multiple_tool_calls(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
         initial_state["messages"] = [
             {
                 "role": "assistant",
@@ -329,11 +333,11 @@ class TestActNode:
         tool_msgs = [m for m in result["messages"] if m["role"] == "tool"]
         assert len(tool_msgs) == 2
 
-    def test_act_no_tool_calls_in_message(self, agent: ReActAgent, initial_state: AgentState) -> None:
+    def test_act_no_tool_calls_in_message(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
         """Act node handles messages without tool_calls gracefully."""
-        initial_state["messages"] = [
-            {"role": "assistant", "content": "No tools needed."}
-        ]
+        initial_state["messages"] = [{"role": "assistant", "content": "No tools needed."}]
 
         result = agent._act_node(initial_state)
 
@@ -342,15 +346,15 @@ class TestActNode:
 
     def test_act_increments_iteration(self, agent: ReActAgent, initial_state: AgentState) -> None:
         initial_state["iteration"] = 3
-        initial_state["messages"] = [
-            {"role": "assistant", "content": "done"}
-        ]
+        initial_state["messages"] = [{"role": "assistant", "content": "done"}]
 
         result = agent._act_node(initial_state)
 
         assert result["iteration"] == 4
 
-    def test_act_preserves_existing_messages(self, agent: ReActAgent, initial_state: AgentState) -> None:
+    def test_act_preserves_existing_messages(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
         initial_state["messages"] = [
             {"role": "user", "content": "query"},
             {
@@ -421,7 +425,9 @@ class TestShouldContinue:
         initial_state["status"] = "failed"
         assert agent._should_continue(initial_state) == "finalize"
 
-    def test_finalize_when_has_final_answer(self, agent: ReActAgent, initial_state: AgentState) -> None:
+    def test_finalize_when_has_final_answer(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
         initial_state["final_answer"] = "The answer is 42."
         assert agent._should_continue(initial_state) == "finalize"
 
@@ -543,7 +549,9 @@ class TestRun:
         assert result["completed_at"] is not None
 
     @pytest.mark.asyncio()
-    async def test_run_with_tool_use_loop(self, agent: ReActAgent, mock_llm_service: MagicMock) -> None:
+    async def test_run_with_tool_use_loop(
+        self, agent: ReActAgent, mock_llm_service: MagicMock
+    ) -> None:
         """Agent performs one tool-use cycle then gives final answer."""
         mock_llm_service.chat_completion.side_effect = [
             _make_llm_response(
@@ -617,9 +625,7 @@ class TestRun:
     ) -> None:
         """LLM errors are caught in the think node, producing a failed state
         rather than raising out of run()."""
-        mock_llm_service.chat_completion.side_effect = Exception(
-            "Service unavailable"
-        )
+        mock_llm_service.chat_completion.side_effect = Exception("Service unavailable")
 
         result = await agent.run("What is inventory?")
 
@@ -627,7 +633,9 @@ class TestRun:
         assert result["error"] is not None
 
     @pytest.mark.asyncio()
-    async def test_run_sets_request_id(self, agent: ReActAgent, mock_llm_service: MagicMock) -> None:
+    async def test_run_sets_request_id(
+        self, agent: ReActAgent, mock_llm_service: MagicMock
+    ) -> None:
         mock_llm_service.chat_completion.return_value = _make_llm_response(
             content="FINAL ANSWER: Done.",
         )
@@ -638,7 +646,9 @@ class TestRun:
         assert len(result["request_id"]) > 0
 
     @pytest.mark.asyncio()
-    async def test_run_records_started_at(self, agent: ReActAgent, mock_llm_service: MagicMock) -> None:
+    async def test_run_records_started_at(
+        self, agent: ReActAgent, mock_llm_service: MagicMock
+    ) -> None:
         mock_llm_service.chat_completion.return_value = _make_llm_response(
             content="FINAL ANSWER: Done.",
         )

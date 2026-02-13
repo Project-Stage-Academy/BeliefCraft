@@ -1,6 +1,5 @@
 from datetime import UTC, datetime
 
-import pytest
 from app.models.agent_state import (
     AgentState,
     ThoughtStep,
@@ -57,9 +56,7 @@ class TestThoughtStep:
 
     def test_thought_step_timestamp_is_recent(self) -> None:
         before = datetime.now(UTC)
-        step = ThoughtStep(
-            thought="t", reasoning="r", next_action="a"
-        )
+        step = ThoughtStep(thought="t", reasoning="r", next_action="a")
         after = datetime.now(UTC)
         assert before <= step.timestamp <= after
 

@@ -5,12 +5,11 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
-from langgraph.graph import END, StateGraph  # type: ignore[import-not-found]
-
 from app.core.exceptions import AgentExecutionError
 from app.models.agent_state import AgentState, ThoughtStep, ToolCall, create_initial_state
 from app.prompts.system_prompts import WAREHOUSE_ADVISOR_SYSTEM_PROMPT, format_react_prompt
 from app.services.llm_service import LLMService
+from langgraph.graph import END, StateGraph  # type: ignore[import-not-found]
 
 logger = structlog.get_logger()
 
@@ -105,9 +104,7 @@ class ReActAgent:
             # Detect final answer: LLM stopped without requesting tools
             if response["finish_reason"] == "stop" and not response["tool_calls"]:
                 if "FINAL ANSWER:" in message_content:
-                    updates["final_answer"] = message_content.split(
-                        "FINAL ANSWER:", 1
-                    )[1].strip()
+                    updates["final_answer"] = message_content.split("FINAL ANSWER:", 1)[1].strip()
                 else:
                     # Bare stop without tools treated as implicit final answer
                     updates["final_answer"] = message_content
@@ -162,9 +159,7 @@ class ReActAgent:
             func_name = tool_call["function"]["name"]
             tool_call_id = tool_call["id"]
 
-            func_args = self._parse_tool_arguments(
-                tool_call["function"]["arguments"]
-            )
+            func_args = self._parse_tool_arguments(tool_call["function"]["arguments"])
 
             logger.info(
                 "executing_tool",
@@ -183,12 +178,14 @@ class ReActAgent:
                         result=result,
                     )
                 )
-                new_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "name": func_name,
-                    "content": json.dumps(result),
-                })
+                new_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": func_name,
+                        "content": json.dumps(result),
+                    }
+                )
 
                 logger.info(
                     "tool_execution_success",
@@ -215,12 +212,14 @@ class ReActAgent:
                     )
                 )
                 # Report error back to LLM so it can reason about it
-                new_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "name": func_name,
-                    "content": json.dumps({"error": error_msg}),
-                })
+                new_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": func_name,
+                        "content": json.dumps({"error": error_msg}),
+                    }
+                )
 
         return {
             "messages": state["messages"] + new_messages,
@@ -344,7 +343,7 @@ class ReActAgent:
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            raise AgentExecutionError(f"ReAct agent execution failed: {e}")
+            raise AgentExecutionError(f"ReAct agent execution failed: {e}") from e
 
         logger.info(
             "react_agent_complete",
