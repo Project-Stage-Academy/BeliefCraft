@@ -32,4 +32,4 @@ dev = [
 beliefcraft-common = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["agent_service"]
+packages = ["app"]
