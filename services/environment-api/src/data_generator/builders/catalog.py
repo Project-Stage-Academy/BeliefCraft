@@ -48,13 +48,13 @@ class CatalogBuilder:
         available_categories = list(settings.catalog.category_shelf_life.keys())
 
         for _ in range(count):
-            category = random.choice(available_categories)
+            category = random.choice(available_categories) # nosec B311 - non-crypto random for simulation
 
             shelf_life_range = settings.catalog.category_shelf_life[category]
             shelf_life = random.randint(
                 shelf_life_range.min_days,
                 shelf_life_range.max_days
-            )
+            ) # nosec B311 - non-crypto random for simulation
 
             product = Product(
                 sku=f"{category[:3].upper()}-{self.fake.unique.ean8()}",
@@ -87,8 +87,8 @@ class CatalogBuilder:
                     settings.catalog.supplier_reliability.min,
                     settings.catalog.supplier_reliability.max
                 ), 2),
-                region=random.choice(settings.catalog.supplier_regions)
-            )
+                region=random.choice(settings.catalog.supplier_regions) # nosec B311 - non-crypto random for simulation
+            ) # nosec B311 - non-crypto random for simulation
             self.session.add(supplier)
             suppliers.append(supplier)
 

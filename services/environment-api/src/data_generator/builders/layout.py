@@ -55,7 +55,7 @@ class DockBuilder:
             capacity_units=random.randint(
                 settings.layout.dock.capacity_min,
                 settings.layout.dock.capacity_max
-            )
+            ) # nosec B311 - non-crypto random for simulation
         )
         self.session.add(dock)
         return dock
@@ -88,7 +88,7 @@ class ZoneBuilder:
             List[Location]: A list of created Zone location entities.
         """
         created_zones = []
-        zone_count = random.randint(2, 5)
+        zone_count = random.randint(2, 5) # nosec B311 - non-crypto random for simulation
 
         zone_letters = [chr(65 + i) for i in range(zone_count)]
 
@@ -102,7 +102,7 @@ class ZoneBuilder:
                 capacity_units=random.randint(
                     settings.layout.zone.capacity_min,
                     settings.layout.zone.capacity_max
-                )
+                ) # nosec B311 - non-crypto random for simulation
             )
             self.session.add(zone)
             self.session.flush()
@@ -127,7 +127,7 @@ class ZoneBuilder:
         aisle_count = random.randint(
             settings.layout.aisle.count_min,
             settings.layout.aisle.count_max
-        )
+        ) # nosec B311 - non-crypto random for simulation
         for aisle_num in range(1, aisle_count + 1):
             aisle = Location(
                 warehouse_id=warehouse.id,
@@ -137,7 +137,7 @@ class ZoneBuilder:
                 capacity_units=random.randint(
                     settings.layout.aisle.capacity_min,
                     settings.layout.aisle.capacity_max
-                )
+                ) # nosec B311 - non-crypto random for simulation
             )
             self.session.add(aisle)
             self.session.flush()
@@ -165,26 +165,26 @@ class ZoneBuilder:
                 settings.layout.sensor.rfid.weight
             ],
             k=1
-        )[0]
+        )[0] # nosec B311 - non-crypto random for simulation
 
         if device_type == DeviceType.CAMERA:
             noise = random.uniform(
                 settings.layout.sensor.camera.noise_min,
                 settings.layout.sensor.camera.noise_max
-            )
+            ) # nosec B311 - non-crypto random for simulation
             missing = random.uniform(
                 settings.layout.sensor.camera.missing_min,
                 settings.layout.sensor.camera.missing_max
-            )
+            ) # nosec B311 - non-crypto random for simulation
         else:
             noise = random.uniform(
                 settings.layout.sensor.rfid.noise_min,
                 settings.layout.sensor.rfid.noise_max
-            )
+            ) # nosec B311 - non-crypto random for simulation
             missing = random.uniform(
                 settings.layout.sensor.rfid.missing_min,
                 settings.layout.sensor.rfid.missing_max
-            )
+            ) # nosec B311 - non-crypto random for simulation
 
         device = SensorDevice(
             warehouse_id=warehouse.id,

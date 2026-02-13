@@ -123,7 +123,7 @@ class LogisticsBuilder:
                 dist = random.randint(
                     settings.logistics.distance.min_km,
                     settings.logistics.distance.max_km
-                )
+                ) # nosec B311 - non-crypto random for simulation
 
                 if dist < settings.logistics.thresholds.truck_max_km:
                     mode = TransportMode.TRUCK
