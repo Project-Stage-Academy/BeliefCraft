@@ -6,7 +6,7 @@ supplier selection, and the stochastic calculation of inbound lead times.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from packages.database.src.models import (
@@ -65,7 +65,7 @@ class TestReplenishmentManager:
         wh, dock = dummy_warehouse_with_dock
         prod = MagicMock(spec=Product)
         prod.id = "prod-uuid"
-        date = datetime.now()
+        date = datetime.now(tzinfo=timezone.utc)
 
         # Config: s=20, S=100
         mock_settings.replenishment.policy.reorder_point = 20.0
@@ -93,7 +93,7 @@ class TestReplenishmentManager:
         replenishment_manager._get_current_stock_level = MagicMock(return_value=25.0)
         replenishment_manager._execute_procurement = MagicMock()
 
-        triggered = replenishment_manager._check_and_replenish_product(wh, dock.id, MagicMock(), datetime.now())
+        triggered = replenishment_manager._check_and_replenish_product(wh, dock.id, MagicMock(), datetime.now(tzinfo=timezone.utc))
 
         assert triggered is False
         replenishment_manager._execute_procurement.assert_not_called()
@@ -108,7 +108,7 @@ class TestReplenishmentManager:
         prod = MagicMock(spec=Product)
         prod.id = "prod-uuid"
         qty = 50.0
-        date = datetime.now()
+        date = datetime.now(tzinfo=timezone.utc)
 
         replenishment_manager._execute_procurement(wh, prod, qty, date)
 

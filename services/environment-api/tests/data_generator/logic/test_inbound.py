@@ -7,7 +7,7 @@ and status updates.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from packages.database.src.models import Shipment, PurchaseOrder, POLine, Location
@@ -116,7 +116,7 @@ class TestInboundManager:
         mock_shipment.purchase_order = MagicMock()
         mock_shipment.destination_warehouse = mock_warehouse
 
-        inbound_manager._process_single_shipment(mock_shipment, datetime.now())
+        inbound_manager._process_single_shipment(mock_shipment, datetime.now(tzinfo=timezone.utc))
 
         # Verify ledger was never called
         mock_ledger.record_receipt.assert_not_called()

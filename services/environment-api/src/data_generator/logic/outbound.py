@@ -181,10 +181,10 @@ class OutboundManager:
         Generates a random integer from a Poisson distribution (Knuth's algorithm).
         Used to simulate natural variability in customer daily demand.
         """
-        L = math.exp(-mean)
+        l = math.exp(-mean)
         k = 0
         p = 1.0
-        while p > L:
+        while p > l:
             k += 1
             p *= self.rng.random()
         return k - 1

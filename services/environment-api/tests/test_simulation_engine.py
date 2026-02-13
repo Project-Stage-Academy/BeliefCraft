@@ -7,7 +7,7 @@ in the strictly required order to maintain causal integrity.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 from src.data_generator.simulation_engine import SimulationEngine
 
@@ -88,5 +88,5 @@ class TestSimulationEngine:
         """
         Verifies that the engine flushes the session at the end of every tick.
         """
-        engine.tick(datetime.now())
+        engine.tick(datetime.now(tzinfo=timezone.utc))
         mock_session.flush.assert_called_once()
