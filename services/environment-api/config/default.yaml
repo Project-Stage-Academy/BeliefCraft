@@ -45,3 +45,13 @@ catalog:
   supplier_reliability:
     min: 0.7
     max: 0.99
+
+infrastructure:
+  region_timezones:
+    NA-EAST: "UTC-5"
+    EU-WEST: "UTC+1"
+    APAC-SG: "UTC+8"
+    NA-WEST: "UTC-8"
+    EU-CENTRAL: "UTC+2"
+
+

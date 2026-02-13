@@ -7,7 +7,7 @@ of internal layouts (Docks and Zones) to specialized builder components.
 from typing import List
 from sqlalchemy.orm import Session
 from packages.database.src.models import Warehouse
-
+from src.config import settings
 from .layout import DockBuilder, ZoneBuilder
 
 class InfrastructureBuilder:
@@ -31,7 +31,7 @@ class InfrastructureBuilder:
         self.dock_builder = DockBuilder(session)
         self.zone_builder = ZoneBuilder(session)
 
-    def create_warehouses(self, count: int = 3) -> List[Warehouse]:
+    def create_warehouses(self, count) -> List[Warehouse]:
         """
         Generates and persists a specified number of Warehouse records with
         pre-configured regions, timezones, and internal layouts.
@@ -46,15 +46,16 @@ class InfrastructureBuilder:
             List[Warehouse]: A list of the successfully created Warehouse objects.
         """
         created_warehouses = []
-        regions = ["NA-EAST", "EU-WEST", "APAC-SG", "NA-WEST", "EU-CENTRAL"]
-        timezones = ["UTC-5", "UTC+1", "UTC+8", "UTC-8", "UTC+2"]
+        region_tz_pairs = list(settings.infrastructure.region_timezones.items())
 
         for i in range(count):
-            idx = i % len(regions)
+            idx = i % len(region_tz_pairs)
+            region, tz = region_tz_pairs[idx]
+
             wh = Warehouse(
-                name=f"WH-{regions[idx]}-{i + 1:02d}",
-                region=regions[idx],
-                tz=timezones[idx]
+                name=f"WH-{region}-{i + 1:02d}",
+                region=region,
+                tz=tz
             )
             self.session.add(wh)
             self.session.flush()
