@@ -25,7 +25,7 @@ Dependencies:
     - WorldBuilder for static data.
     - SimulationEngine for dynamic event generation.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
@@ -61,7 +61,7 @@ class SimulationRunner:
         """
         self._reset_database()
 
-        session = SessionLocal()
+        session = SessionLocal(bind=self.engine)
         try:
             # Phase 1: Create the physical world
             world = self._build_static_world(session)
@@ -104,7 +104,7 @@ class SimulationRunner:
         """
         Phase 2: Runs the Simulation Engine loop to generate historical events.
         """
-        end_date = datetime.now()
+        end_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         start_date = end_date - timedelta(days=days)
 
         logger.info(
