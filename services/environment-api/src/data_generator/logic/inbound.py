@@ -88,20 +88,22 @@ class InboundManager:
             shipment (Shipment): The shipment entity to process.
             date (datetime): The effective date of the receipt.
         """
-        # Data integrity check: A shipment must have a source document (PO)
-        if not shipment.purchase_order:
-            logger.warning(
-                "shipment_missing_po",
+        # Data integrity check: Destination warehouse must exist
+        dest_warehouse = shipment.destination_warehouse
+        if not dest_warehouse:
+            logger.error(
+                "shipment_missing_destination",
                 shipment_id=str(shipment.id)
             )
             return
 
         # Data integrity check: Destination warehouse must have a receiving area (Dock)
-        destination_dock = self._get_warehouse_dock(shipment.destination_warehouse)
+        destination_dock = self._get_warehouse_dock(dest_warehouse)
+
         if not destination_dock:
             logger.error(
                 "warehouse_missing_dock",
-                warehouse_id=str(shipment.destination_warehouse_id)
+                warehouse_id=str(dest_warehouse.id)
             )
             return
 

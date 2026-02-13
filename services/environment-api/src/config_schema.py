@@ -37,11 +37,12 @@ class Settings(BaseSettings):
     app: AppConfig = Field(default_factory=AppConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    world: WorldConfig = Field(default_factory=WorldConfig)
-    simulation: SimulationConfig = Field(default_factory=SimulationConfig)
+    world: WorldConfig
+    simulation: SimulationConfig
     catalog: CatalogConfig
     infrastructure: InfrastructureConfig
     layout: LayoutConfig
     logistics: LogisticsConfig
     outbound: OutboundConfig
     replenishment: ReplenishmentConfig
+    sensors: SensorsConfig
