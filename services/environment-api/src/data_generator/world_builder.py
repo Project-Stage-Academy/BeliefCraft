@@ -17,7 +17,7 @@ from packages.database.src.models import Warehouse, Product, Supplier, Route
 from src.data_generator.builders.catalog import CatalogBuilder
 from src.data_generator.builders.infrastructure import InfrastructureBuilder
 from src.data_generator.builders.logistics import LogisticsBuilder
-from src.config import settings
+from src.config_load import settings
 
 logger = get_logger(__name__)
 

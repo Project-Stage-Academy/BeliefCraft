@@ -15,7 +15,7 @@ from typing import List
 from sqlalchemy.orm import Session
 from faker import Faker
 from packages.database.src.models import Product, Supplier
-from src.config import settings
+from src.config_load import settings
 
 
 class CatalogBuilder:

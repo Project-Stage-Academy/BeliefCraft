@@ -7,7 +7,7 @@ of internal layouts (Docks and Zones) to specialized builder components.
 from typing import List
 from sqlalchemy.orm import Session
 from packages.database.src.models import Warehouse
-from src.config import settings
+from src.config_load import settings
 from .layout import DockBuilder, ZoneBuilder
 
 class InfrastructureBuilder:

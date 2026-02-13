@@ -36,7 +36,7 @@ from packages.common.common.logging import configure_logging, get_logger
 
 from src.data_generator.world_builder import WorldBuilder
 from src.data_generator.simulation_engine import SimulationEngine
-from src.config import settings
+from src.config_load import settings
 
 configure_logging("seed-generator", "INFO")
 logger = get_logger(__name__)

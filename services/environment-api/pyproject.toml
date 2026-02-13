@@ -12,7 +12,8 @@ dependencies = [
   "sqlalchemy>=2.0.0",
   "beliefcraft-common",
   "beliefcraft-database",
-  "faker"
+  "faker",
+  "types-Faker"
 ]
 
 [dependency-groups]

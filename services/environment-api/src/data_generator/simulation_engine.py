@@ -19,7 +19,7 @@ from src.data_generator.logic.inbound import InboundManager
 from src.data_generator.logic.outbound import OutboundManager
 from src.data_generator.logic.replenishment import ReplenishmentManager
 from src.data_generator.logic.sensors import SensorManager
-from src.config import settings
+from src.config_load import settings
 
 logger = logging.get_logger(__name__)
 

@@ -20,7 +20,7 @@ from packages.database.src.models import (
 from packages.database.src.enums import (
     OrderStatus, ShipmentStatus, ShipmentDirection, LocationType
 )
-from src.config import settings
+from src.config_load import settings
 from src.data_generator.logic.inventory import InventoryLedger
 
 logger = get_logger(__name__)

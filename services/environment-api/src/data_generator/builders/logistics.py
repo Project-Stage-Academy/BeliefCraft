@@ -19,7 +19,7 @@ from typing import List
 from sqlalchemy.orm import Session
 from packages.database.src.models import Warehouse, Route, LeadtimeModel
 from packages.database.src.enums import LeadtimeScope, DistFamily, TransportMode
-from src.config import settings
+from src.config_load import settings
 
 
 class LogisticsBuilder:

@@ -18,7 +18,7 @@ from packages.database.src.models import (
 from packages.database.src.enums import (
     DeviceStatus, ObservationType, LocationType
 )
-from src.config import settings
+from src.config_load import settings
 
 logger = get_logger(__name__)
 

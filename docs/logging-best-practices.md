@@ -38,7 +38,7 @@ pip install -e packages/common
 # services/agent-service/main.py
 import os
 from fastapi import FastAPI
-from common.logging import configure_logging, get_logger
+from packages.common.common.logging import configure_logging, get_logger
 from common.middleware import setup_logging_middleware
 
 # Configure logging (once at startup)
@@ -74,7 +74,7 @@ LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 ### Basic Logging
 
 ```python
-from common.logging import get_logger
+from packages.common.common.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -163,7 +163,7 @@ async def call_rag_service(query: str):
 ```python
 # services/agent-service/api/endpoints.py
 from common.http_client import TracedHttpClient
-from common.logging import get_logger
+from packages.common.common.logging import get_logger
 
 logger = get_logger(__name__)
 

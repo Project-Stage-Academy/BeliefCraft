@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .config import settings
+from .config_load import settings
 
 app = FastAPI()
 

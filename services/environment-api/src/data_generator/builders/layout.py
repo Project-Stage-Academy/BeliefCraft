@@ -19,7 +19,7 @@ from packages.database.src.models import (
     Warehouse, Location, LocationType,
     SensorDevice, DeviceType, DeviceStatus
 )
-from src.config import settings
+from src.config_load import settings
 
 
 class DockBuilder:
