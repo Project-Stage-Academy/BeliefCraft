@@ -12,6 +12,7 @@ class HealthStatus(StrEnum):
     CONFIGURED = "configured"
     MISSING_KEY = "missing_key"
     UNKNOWN = "unknown"
+    MISSING_CONFIG = "missing_config"
 
 
 class DependencyName(StrEnum):
@@ -20,7 +21,7 @@ class DependencyName(StrEnum):
     ENVIRONMENT_API = "environment_api"
     RAG_API = "rag_api"
     REDIS = "redis"
-    ANTHROPIC = "anthropic"
+    AWS_BEDROCK = "aws_bedrock"
 
 
 # HTTP

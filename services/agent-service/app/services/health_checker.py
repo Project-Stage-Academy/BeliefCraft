@@ -1,5 +1,7 @@
 """Health check service for external dependencies"""
 
+import os
+
 import httpx
 import redis
 from app.config import Settings
@@ -55,17 +57,22 @@ class HealthChecker:
         except Exception as e:
             return f"{ERROR_PREFIX}{str(e)}"
 
-    def check_anthropic_config(self) -> str:
+    def check_bedrock_config(self) -> str:
         """
-        Check if Anthropic API key is configured
-        Returns:
-            Configuration status string
+        Check if AWS Bedrock is configured
         """
-        return (
-            HealthStatus.CONFIGURED
-            if (self.settings.ANTHROPIC_API_KEY and self.settings.ANTHROPIC_API_KEY.strip())
-            else HealthStatus.MISSING_KEY
-        )
+        if not (self.settings.BEDROCK_MODEL_ID and self.settings.BEDROCK_MODEL_ID.strip()):
+            return HealthStatus.MISSING_CONFIG
+
+        if not (self.settings.AWS_DEFAULT_REGION and self.settings.AWS_DEFAULT_REGION.strip()):
+            return HealthStatus.MISSING_CONFIG
+
+        if os.getenv("ENV") == "production" and (
+            not self.settings.AWS_ACCESS_KEY_ID or not self.settings.AWS_SECRET_ACCESS_KEY
+        ):
+            return HealthStatus.MISSING_KEY
+
+        return HealthStatus.CONFIGURED
 
     async def check_all_dependencies(self) -> dict[str, str]:
         """
@@ -81,7 +88,7 @@ class HealthChecker:
             ),
             DependencyName.RAG_API: await self.check_http_endpoint(self.settings.RAG_API_URL),
             DependencyName.REDIS: self.check_redis(),
-            DependencyName.ANTHROPIC: self.check_anthropic_config(),
+            DependencyName.AWS_BEDROCK: self.check_bedrock_config(),
         }
 
     @staticmethod
