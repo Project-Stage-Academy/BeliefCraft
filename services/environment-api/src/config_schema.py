@@ -46,3 +46,5 @@ class Settings(BaseSettings):
     app: AppConfig = Field(default_factory=AppConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    world: WorldConfig = Field(default_factory=WorldConfig)
+    simulation: SimulationConfig = Field(default_factory=SimulationConfig)
