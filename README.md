@@ -45,11 +45,11 @@ graph TD
 
 **Quick Start**
 1. Copy env templates:
-  - `copy .env.example .env`
-  - `copy services\environment-api\.env.example services\environment-api\.env`
-  - `copy services\rag-service\.env.example services\rag-service\.env`
-  - `copy services\agent-service\.env.example services\agent-service\.env`
-  - `copy services\ui\.env.example services\ui\.env`
+  - `cp .env.example .env`
+  - `cp services/environment-api/.env.example services/environment-api/.env`
+  - `cp services/rag-service/.env.example services/rag-service/.env`
+  - `cp services/agent-service/.env.example services/agent-service/.env`
+  - `cp services/ui/.env.example services/ui/.env`
 2. Install local dependencies for all services with `make setup`.
 3. Start development mode with hot reload using `make dev`.
 4. Verify stack health with `powershell -ExecutionPolicy Bypass -File infrastructure/scripts/health/check-services.ps1`.

@@ -18,7 +18,7 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/services/environment-api/src \
+    PYTHONPATH=/app/services/environment-api/src:/app/packages/common \
     PORT=8000
 
 COPY --from=builder /app/.venv /app/.venv
