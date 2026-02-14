@@ -38,10 +38,8 @@ class TestSearchKnowledgeBaseTool:
 
         assert metadata.name == "search_knowledge_base"
         assert metadata.category == "rag"
-        assert (
-            "knowledge" in metadata.description.lower()
-            or "algorithm" in metadata.description.lower()
-        )
+        assert "knowledge" in metadata.description.lower()
+        assert "algorithm" in metadata.description.lower()
         assert "query" in metadata.parameters["properties"]
         assert "k" in metadata.parameters["properties"]
         assert "traverse_types" in metadata.parameters["properties"]
@@ -85,7 +83,7 @@ class TestSearchKnowledgeBaseTool:
             result = await tool.execute(
                 query="POMDP belief update",
                 k=10,
-                traverse_types=["formula", "algorithm_code"],
+                traverse_types=["formula", "algorithm"],
                 filters={"chapter": "16"},
             )
 
@@ -93,7 +91,7 @@ class TestSearchKnowledgeBaseTool:
             mock_rag_client.search_knowledge_base.assert_called_once_with(
                 query="POMDP belief update",
                 k=10,
-                traverse_types=["formula", "algorithm_code"],
+                traverse_types=["formula", "algorithm"],
                 filters={"chapter": "16"},
             )
 
@@ -133,9 +131,8 @@ class TestExpandGraphByIdsTool:
 
         assert metadata.name == "expand_graph_by_ids"
         assert metadata.category == "rag"
-        assert (
-            "linked" in metadata.description.lower() or "entities" in metadata.description.lower()
-        )
+        assert "linked" in metadata.description.lower()
+        assert "entities" in metadata.description.lower()
         assert "document_ids" in metadata.parameters["properties"]
         assert "traverse_types" in metadata.parameters["properties"]
         assert metadata.parameters["required"] == ["document_ids"]
@@ -172,12 +169,12 @@ class TestExpandGraphByIdsTool:
 
         with patch("app.tools.rag_tools.RAGAPIClient", return_value=mock_rag_client):
             result = await tool.execute(
-                document_ids=["doc1"], traverse_types=["formula", "table", "algorithm_code"]
+                document_ids=["doc1"], traverse_types=["formula", "table", "algorithm"]
             )
 
             assert result == mock_response
             mock_rag_client.expand_graph_by_ids.assert_called_once_with(
-                document_ids=["doc1"], traverse_types=["formula", "table", "algorithm_code"]
+                document_ids=["doc1"], traverse_types=["formula", "table", "algorithm"]
             )
 
     @pytest.mark.asyncio
@@ -207,7 +204,8 @@ class TestGetEntityByNumberTool:
 
         assert metadata.name == "get_entity_by_number"
         assert metadata.category == "rag"
-        assert "entity" in metadata.description.lower() or "number" in metadata.description.lower()
+        assert "entity" in metadata.description.lower()
+        assert "number" in metadata.description.lower()
         assert "entity_type" in metadata.parameters["properties"]
         assert "number" in metadata.parameters["properties"]
         assert metadata.parameters["required"] == ["entity_type", "number"]
@@ -327,13 +325,10 @@ class TestToolIntegration:
         tool = SearchKnowledgeBaseTool()
 
         # Create a mock that raises exception when method is called
-        async def mock_search(*args: Any, **kwargs: Any) -> None:
-            raise Exception("RAG API Error")
-
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.search_knowledge_base = mock_search
+        mock_client.search_knowledge_base = AsyncMock(side_effect=Exception("RAG API Error"))
 
         with patch("app.tools.rag_tools.RAGAPIClient", return_value=mock_client):
             result = await tool.run(query="test")
@@ -376,6 +371,71 @@ class TestToolIntegration:
             # Step 2: Expand from search results
             doc_ids = [r["id"] for r in search_result["results"]]
             expand_result = await expand_tool.execute(
-                document_ids=doc_ids, traverse_types=["formula", "algorithm_code"]
+                document_ids=doc_ids, traverse_types=["formula", "algorithm"]
             )
             assert len(expand_result["expanded"]) == 2
+
+            # Verify call order
+            assert mock_rag_client.search_knowledge_base.call_count == 1
+            assert mock_rag_client.expand_graph_by_ids.call_count == 1
+
+            # Verify search was called first
+            search_call = mock_rag_client.search_knowledge_base.call_args
+            assert search_call.kwargs["query"] == "inventory control"
+            assert search_call.kwargs["k"] == 5
+
+            # Verify expand received correct document_ids and traverse_types
+            expand_call = mock_rag_client.expand_graph_by_ids.call_args
+            assert expand_call.kwargs["document_ids"] == ["doc1", "doc2"]
+            assert expand_call.kwargs["traverse_types"] == ["formula", "algorithm"]
+
+
+class TestTraverseTypesValidation:
+    """Tests for traverse_types parameter validation."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_traverse_type_in_search(self) -> None:
+        """Test that invalid traverse_type raises ValueError in search."""
+        tool = SearchKnowledgeBaseTool()
+
+        with pytest.raises(ValueError, match="Invalid traverse_types.*invalid_type"):
+            await tool.execute(query="test", traverse_types=["formula", "invalid_type"])
+
+    @pytest.mark.asyncio
+    async def test_valid_traverse_types_in_search(self, mock_rag_client: AsyncMock) -> None:
+        """Test that valid traverse_types are accepted."""
+        tool = SearchKnowledgeBaseTool()
+        mock_rag_client.search_knowledge_base.return_value = {"results": []}
+
+        with patch("app.tools.rag_tools.RAGAPIClient", return_value=mock_rag_client):
+            # All valid types
+            await tool.execute(
+                query="test",
+                traverse_types=[
+                    "formula",
+                    "table",
+                    "figure",
+                    "section",
+                    "example",
+                    "exercise",
+                    "algorithm",
+                    "appendix",
+                ],
+            )
+            # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_invalid_traverse_type_in_expand(self) -> None:
+        """Test that invalid traverse_type raises ValueError in expand."""
+        tool = ExpandGraphByIdsTool()
+
+        with pytest.raises(ValueError, match="Invalid traverse_types.*bad_type"):
+            await tool.execute(document_ids=["doc1"], traverse_types=["formula", "bad_type"])
+
+    @pytest.mark.asyncio
+    async def test_traverse_types_not_list(self) -> None:
+        """Test that non-list traverse_types raises ValueError."""
+        tool = SearchKnowledgeBaseTool()
+
+        with pytest.raises(ValueError, match="traverse_types must be a list"):
+            await tool.execute(query="test", traverse_types="formula")

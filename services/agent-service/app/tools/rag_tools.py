@@ -2,7 +2,7 @@
 RAG tools for querying knowledge base and retrieving algorithms.
 
 This module provides tools that allow the ReAct agent to:
-- Search 'Algorithms for Decision Making' book semantically
+- Search knowledge base book semantically
 - Expand knowledge graph from document IDs
 - Retrieve specific entities (formulas, algorithms, tables) by number
 
@@ -26,17 +26,22 @@ Example:
     ```
 """
 
-from typing import Any
+from typing import Any, cast
 
-from app.clients.rag_client import RAGAPIClient
-from app.tools.base import BaseTool, ToolMetadata
+from app.clients.rag_client import RAGAPIClient, RAGClientProtocol
+from app.core.constants import (
+    DEFAULT_TRAVERSE_TYPES,
+    KNOWLEDGE_BASE_BOOK_NAME,
+    KnowledgeGraphEntityType,
+)
+from app.tools.base import APIClientTool, ToolMetadata
 
 
-class SearchKnowledgeBaseTool(BaseTool):
+class SearchKnowledgeBaseTool(APIClientTool):
     """
     Tool to search the knowledge base semantically.
 
-    Performs vector similarity search on 'Algorithms for Decision Making' book
+    Performs vector similarity search on knowledge base book
     to find relevant algorithms, formulas, and theoretical concepts for
     warehouse decision problems.
 
@@ -47,14 +52,24 @@ class SearchKnowledgeBaseTool(BaseTool):
     - Searching for Bayesian estimation techniques
     """
 
+    def __init__(self, client: RAGClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> RAGClientProtocol:
+        """Get RAG API client instance."""
+        return self._client if self._client is not None else cast(RAGClientProtocol, RAGAPIClient())
+
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
         return ToolMetadata(
             name="search_knowledge_base",
             description=(
-                "Search 'Algorithms for Decision Making' book for relevant algorithms, "
-                "formulas, and concepts. Use this to find theoretical foundations "
-                "for warehouse decisions (inventory control, POMDP, Bayesian estimation, CVaR). "
+                f"Search the knowledge base '{KNOWLEDGE_BASE_BOOK_NAME}' book "
+                "for relevant algorithms, formulas, and concepts. "
+                "Use this to find theoretical foundations for warehouse decisions "
+                "(inventory control, POMDP, Bayesian estimation, CVaR). "
                 "Returns semantically similar text chunks from the book."
             ),
             parameters={
@@ -78,12 +93,26 @@ class SearchKnowledgeBaseTool(BaseTool):
                     },
                     "traverse_types": {
                         "type": "array",
-                        "items": {"type": "string"},
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                KnowledgeGraphEntityType.FORMULA.value,
+                                KnowledgeGraphEntityType.TABLE.value,
+                                KnowledgeGraphEntityType.FIGURE.value,
+                                KnowledgeGraphEntityType.SECTION.value,
+                                KnowledgeGraphEntityType.EXAMPLE.value,
+                                KnowledgeGraphEntityType.EXERCISE.value,
+                                KnowledgeGraphEntityType.ALGORITHM.value,
+                                KnowledgeGraphEntityType.APPENDIX.value,
+                            ],
+                        },
                         "description": (
                             "Optional: Types of linked entities to automatically retrieve. "
-                            "Examples: ['formula', 'algorithm_code'] will fetch "
-                            "all formulas and code referenced by matched text."
+                            "Valid values: 'formula', 'table', 'figure', 'section', "
+                            "'example', 'exercise', 'algorithm', 'appendix'. "
+                            "Default: all types. Use to filter which entity types to include."
                         ),
+                        "default": DEFAULT_TRAVERSE_TYPES,
                     },
                     "filters": {
                         "type": "object",
@@ -114,20 +143,46 @@ class SearchKnowledgeBaseTool(BaseTool):
 
         Returns:
             Dictionary with search results and metadata from RAG API
-        """
-        query = kwargs["query"]
-        k = kwargs.get("k", 5)
-        traverse_types = kwargs.get("traverse_types")
-        filters = kwargs.get("filters")
 
-        async with RAGAPIClient() as client:
-            result = await client.search_knowledge_base(  # type: ignore[attr-defined]
+        Raises:
+            ValueError: If query is missing or parameters are invalid
+        """
+        self._validate_required_params(["query"], kwargs)
+
+        # Validate query type
+        query = kwargs["query"]
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be a non-empty string")
+
+        # Validate k parameter
+        k = kwargs.get("k", 5)
+        if not isinstance(k, int) or k < 1 or k > 20:
+            raise ValueError("k must be an integer between 1 and 20")
+
+        # Validate traverse_types parameter
+        traverse_types = kwargs.get("traverse_types")
+        if traverse_types is not None:
+            if not isinstance(traverse_types, list):
+                raise ValueError("traverse_types must be a list")
+            valid_types = [e.value for e in KnowledgeGraphEntityType]
+            invalid_types = [t for t in traverse_types if t not in valid_types]
+            if invalid_types:
+                raise ValueError(
+                    f"Invalid traverse_types: {invalid_types}. " f"Valid values are: {valid_types}"
+                )
+
+        # Validate filters parameter
+        filters = kwargs.get("filters")
+        if filters is not None and not isinstance(filters, dict):
+            raise ValueError("filters must be a dictionary")
+
+        async with self.get_client() as client:
+            return await client.search_knowledge_base(
                 query=query, k=k, traverse_types=traverse_types, filters=filters
             )
-        return result  # type: ignore[no-any-return]
 
 
-class ExpandGraphByIdsTool(BaseTool):
+class ExpandGraphByIdsTool(APIClientTool):
     """
     Tool to expand knowledge graph from specific document IDs.
 
@@ -141,6 +196,15 @@ class ExpandGraphByIdsTool(BaseTool):
     - Finding related tables and figures
     - Expanding citations and references
     """
+
+    def __init__(self, client: RAGClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> RAGClientProtocol:
+        """Get RAG API client instance."""
+        return self._client if self._client is not None else cast(RAGClientProtocol, RAGAPIClient())
 
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
@@ -165,11 +229,26 @@ class ExpandGraphByIdsTool(BaseTool):
                     },
                     "traverse_types": {
                         "type": "array",
-                        "items": {"type": "string"},
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                KnowledgeGraphEntityType.FORMULA.value,
+                                KnowledgeGraphEntityType.TABLE.value,
+                                KnowledgeGraphEntityType.FIGURE.value,
+                                KnowledgeGraphEntityType.SECTION.value,
+                                KnowledgeGraphEntityType.EXAMPLE.value,
+                                KnowledgeGraphEntityType.EXERCISE.value,
+                                KnowledgeGraphEntityType.ALGORITHM.value,
+                                KnowledgeGraphEntityType.APPENDIX.value,
+                            ],
+                        },
                         "description": (
                             "Optional: Types of entities to retrieve. "
-                            "Examples: ['formula', 'algorithm_code', 'table', 'image']"
+                            "Valid values: 'formula', 'table', 'figure', 'section', "
+                            "'example', 'exercise', 'algorithm', 'appendix'. "
+                            "Default: all types."
                         ),
+                        "default": DEFAULT_TRAVERSE_TYPES,
                     },
                 },
                 "required": ["document_ids"],
@@ -187,23 +266,47 @@ class ExpandGraphByIdsTool(BaseTool):
 
         Returns:
             Dictionary with expanded entities and relationships from RAG API
-        """
-        document_ids = kwargs["document_ids"]
-        traverse_types = kwargs.get("traverse_types")
 
-        async with RAGAPIClient() as client:
-            result = await client.expand_graph_by_ids(  # type: ignore[attr-defined]
+        Raises:
+            ValueError: If document_ids is missing or parameters are invalid
+        """
+        self._validate_required_params(["document_ids"], kwargs)
+
+        # Validate document_ids type and content
+        document_ids = kwargs["document_ids"]
+        if not isinstance(document_ids, list):
+            raise ValueError("document_ids must be a list")
+        if not document_ids:
+            raise ValueError("document_ids cannot be empty")
+        if not all(isinstance(doc_id, str) for doc_id in document_ids):
+            raise ValueError("all document_ids must be strings")
+
+        # Validate traverse_types parameter
+        traverse_types = kwargs.get("traverse_types")
+        if traverse_types is not None:
+            if not isinstance(traverse_types, list):
+                raise ValueError("traverse_types must be a list")
+            valid_types = [e.value for e in KnowledgeGraphEntityType]
+            if not all(isinstance(t, str) for t in traverse_types):
+                raise ValueError("all traverse_types must be strings")
+            invalid_types = [t for t in traverse_types if t not in valid_types]
+            if invalid_types:
+                raise ValueError(
+                    f"Invalid traverse_types: {invalid_types}. " f"Valid values are: {valid_types}"
+                )
+
+        async with self.get_client() as client:
+            return await client.expand_graph_by_ids(
                 document_ids=document_ids, traverse_types=traverse_types
             )
-        return result  # type: ignore[no-any-return]
 
 
-class GetEntityByNumberTool(BaseTool):
+class GetEntityByNumberTool(APIClientTool):
     """
     Tool to retrieve specific numbered entity from the book.
 
     Directly fetches a specific algorithm, formula, table, or figure by its
-    number as it appears in 'Algorithms for Decision Making'.
+    number as it appears in the knowledge base book.
 
     Use Cases:
     - Retrieving "Algorithm 3.2 - (s,S) Inventory Policy"
@@ -212,12 +315,21 @@ class GetEntityByNumberTool(BaseTool):
     - Accessing specific figures/diagrams
     """
 
+    def __init__(self, client: RAGClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> RAGClientProtocol:
+        """Get RAG API client instance."""
+        return self._client if self._client is not None else cast(RAGClientProtocol, RAGAPIClient())
+
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
         return ToolMetadata(
             name="get_entity_by_number",
             description=(
-                "Retrieve a specific numbered entity from 'Algorithms for Decision Making' "
+                f"Retrieve a specific numbered entity from '{KNOWLEDGE_BASE_BOOK_NAME}' "
                 "by its exact number. Use this when you know the specific entity you need "
                 "(e.g., Algorithm 3.2, Formula 16.4, Table 5.1). "
                 "This is faster than semantic search for known entities."
@@ -255,12 +367,22 @@ class GetEntityByNumberTool(BaseTool):
 
         Returns:
             Dictionary with entity content and metadata from RAG API
-        """
-        entity_type = kwargs["entity_type"]
-        number = kwargs["number"]
 
-        async with RAGAPIClient() as client:
-            result = await client.get_entity_by_number(  # type: ignore[attr-defined]
-                entity_type=entity_type, number=number
-            )
-        return result  # type: ignore[no-any-return]
+        Raises:
+            ValueError: If entity_type or number is missing or invalid
+        """
+        self._validate_required_params(["entity_type", "number"], kwargs)
+
+        # Validate entity_type
+        entity_type = kwargs["entity_type"]
+        valid_types = ["formula", "table", "algorithm", "figure"]
+        if entity_type not in valid_types:
+            raise ValueError(f"entity_type must be one of {valid_types}, got '{entity_type}'")
+
+        # Validate number
+        number = kwargs["number"]
+        if not isinstance(number, str) or not number.strip():
+            raise ValueError("number must be a non-empty string")
+
+        async with self.get_client() as client:
+            return await client.get_entity_by_number(entity_type=entity_type, number=number)

@@ -24,6 +24,32 @@ class DependencyName(StrEnum):
     AWS_BEDROCK = "aws_bedrock"
 
 
+class KnowledgeGraphEntityType(StrEnum):
+    """Knowledge graph entity types for RAG tools"""
+
+    FORMULA = "formula"
+    TABLE = "table"
+    FIGURE = "figure"
+    SECTION = "section"
+    EXAMPLE = "example"
+    EXERCISE = "exercise"
+    ALGORITHM = "algorithm"
+    APPENDIX = "appendix"
+
+
+# Knowledge base
+KNOWLEDGE_BASE_BOOK_NAME = "Algorithms for Decision Making"
+DEFAULT_TRAVERSE_TYPES = [
+    KnowledgeGraphEntityType.FORMULA.value,
+    KnowledgeGraphEntityType.TABLE.value,
+    KnowledgeGraphEntityType.FIGURE.value,
+    KnowledgeGraphEntityType.SECTION.value,
+    KnowledgeGraphEntityType.EXAMPLE.value,
+    KnowledgeGraphEntityType.EXERCISE.value,
+    KnowledgeGraphEntityType.ALGORITHM.value,
+    KnowledgeGraphEntityType.APPENDIX.value,
+]
+
 # HTTP
 HTTP_OK_STATUS = 200
 HEALTH_CHECK_TIMEOUT = 5.0

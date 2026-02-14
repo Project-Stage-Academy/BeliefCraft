@@ -30,13 +30,16 @@ Example:
     ```
 """
 
-from typing import Any
+from typing import Any, cast
 
-from app.clients.environment_client import EnvironmentAPIClient
-from app.tools.base import BaseTool, ToolMetadata
+from app.clients.environment_client import (
+    EnvironmentAPIClient,
+    EnvironmentClientProtocol,
+)
+from app.tools.base import APIClientTool, ToolMetadata
 
 
-class GetCurrentObservationsTool(BaseTool):
+class GetCurrentObservationsTool(APIClientTool):
     """
     Tool to retrieve current warehouse observations.
 
@@ -49,6 +52,19 @@ class GetCurrentObservationsTool(BaseTool):
     - Checking real-time warehouse state before decisions
     - Identifying discrepancies between expected and observed inventory
     """
+
+    def __init__(self, client: EnvironmentClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> EnvironmentClientProtocol:
+        """Get Environment API client instance."""
+        return (
+            self._client
+            if self._client is not None
+            else cast(EnvironmentClientProtocol, EnvironmentAPIClient())
+        )
 
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
@@ -91,16 +107,15 @@ class GetCurrentObservationsTool(BaseTool):
         Returns:
             Dictionary with current observations data from Environment API
         """
-        async with EnvironmentAPIClient() as client:
-            result = await client.get_current_observations(  # type: ignore[attr-defined]
+        async with self.get_client() as client:
+            return await client.get_current_observations(
                 product_id=kwargs.get("product_id"),
                 location_id=kwargs.get("location_id"),
                 warehouse_id=kwargs.get("warehouse_id"),
             )
-        return result  # type: ignore[no-any-return]
 
 
-class GetOrderBacklogTool(BaseTool):
+class GetOrderBacklogTool(APIClientTool):
     """
     Tool to retrieve current order backlog.
 
@@ -112,6 +127,19 @@ class GetOrderBacklogTool(BaseTool):
     - Prioritizing order fulfillment based on urgency
     - Assessing warehouse capacity vs. demand
     """
+
+    def __init__(self, client: EnvironmentClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> EnvironmentClientProtocol:
+        """Get Environment API client instance."""
+        return (
+            self._client
+            if self._client is not None
+            else cast(EnvironmentClientProtocol, EnvironmentAPIClient())
+        )
 
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
@@ -151,15 +179,14 @@ class GetOrderBacklogTool(BaseTool):
         Returns:
             Dictionary with order backlog data from Environment API
         """
-        async with EnvironmentAPIClient() as client:
-            result = await client.get_order_backlog(  # type: ignore[attr-defined]
+        async with self.get_client() as client:
+            return await client.get_order_backlog(
                 status=kwargs.get("status"),
                 priority=kwargs.get("priority"),
             )
-        return result  # type: ignore[no-any-return]
 
 
-class GetShipmentsInTransitTool(BaseTool):
+class GetShipmentsInTransitTool(APIClientTool):
     """
     Tool to retrieve shipments currently in transit.
 
@@ -171,6 +198,19 @@ class GetShipmentsInTransitTool(BaseTool):
     - Assessing delivery risks and delays
     - Planning for incoming inventory capacity
     """
+
+    def __init__(self, client: EnvironmentClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> EnvironmentClientProtocol:
+        """Get Environment API client instance."""
+        return (
+            self._client
+            if self._client is not None
+            else cast(EnvironmentClientProtocol, EnvironmentAPIClient())
+        )
 
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
@@ -204,14 +244,11 @@ class GetShipmentsInTransitTool(BaseTool):
         Returns:
             Dictionary with shipment data from Environment API
         """
-        async with EnvironmentAPIClient() as client:
-            result = await client.get_shipments_in_transit(  # type: ignore[attr-defined]
-                warehouse_id=kwargs.get("warehouse_id")
-            )
-        return result  # type: ignore[no-any-return]
+        async with self.get_client() as client:
+            return await client.get_shipments_in_transit(warehouse_id=kwargs.get("warehouse_id"))
 
 
-class CalculateStockoutProbabilityTool(BaseTool):
+class CalculateStockoutProbabilityTool(APIClientTool):
     """
     Tool to calculate stockout probability for a product.
 
@@ -223,6 +260,19 @@ class CalculateStockoutProbabilityTool(BaseTool):
     - Prioritizing inventory replenishment
     - Assessing inventory policy effectiveness
     """
+
+    def __init__(self, client: EnvironmentClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> EnvironmentClientProtocol:
+        """Get Environment API client instance."""
+        return (
+            self._client
+            if self._client is not None
+            else cast(EnvironmentClientProtocol, EnvironmentAPIClient())
+        )
 
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
@@ -256,16 +306,18 @@ class CalculateStockoutProbabilityTool(BaseTool):
 
         Returns:
             Dictionary with probability and risk metrics from Environment API
+
+        Raises:
+            ValueError: If product_id is missing
         """
+        self._validate_required_params(["product_id"], kwargs)
         product_id = kwargs["product_id"]
-        async with EnvironmentAPIClient() as client:
-            result = await client.calculate_stockout_probability(  # type: ignore[attr-defined]
-                product_id=product_id
-            )
-        return result  # type: ignore[no-any-return]
+
+        async with self.get_client() as client:
+            return await client.calculate_stockout_probability(product_id=product_id)
 
 
-class CalculateLeadTimeRiskTool(BaseTool):
+class CalculateLeadTimeRiskTool(APIClientTool):
     """
     Tool to calculate lead time risk (tail risk, CVaR).
 
@@ -278,6 +330,19 @@ class CalculateLeadTimeRiskTool(BaseTool):
     - Planning safety stock levels
     - CVaR (Conditional Value at Risk) analysis
     """
+
+    def __init__(self, client: EnvironmentClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> EnvironmentClientProtocol:
+        """Get Environment API client instance."""
+        return (
+            self._client
+            if self._client is not None
+            else cast(EnvironmentClientProtocol, EnvironmentAPIClient())
+        )
 
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
@@ -316,15 +381,14 @@ class CalculateLeadTimeRiskTool(BaseTool):
         Returns:
             Dictionary with lead time statistics and risk metrics from Environment API
         """
-        async with EnvironmentAPIClient() as client:
-            result = await client.calculate_lead_time_risk(  # type: ignore[attr-defined]
+        async with self.get_client() as client:
+            return await client.calculate_lead_time_risk(
                 supplier_id=kwargs.get("supplier_id"),
                 route_id=kwargs.get("route_id"),
             )
-        return result  # type: ignore[no-any-return]
 
 
-class GetInventoryHistoryTool(BaseTool):
+class GetInventoryHistoryTool(APIClientTool):
     """
     Tool to get historical inventory data.
 
@@ -337,6 +401,19 @@ class GetInventoryHistoryTool(BaseTool):
     - Validating forecasting models
     - Historical comparison for decision-making
     """
+
+    def __init__(self, client: EnvironmentClientProtocol | None = None) -> None:
+        """Initialize tool with optional client for dependency injection."""
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> EnvironmentClientProtocol:
+        """Get Environment API client instance."""
+        return (
+            self._client
+            if self._client is not None
+            else cast(EnvironmentClientProtocol, EnvironmentAPIClient())
+        )
 
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata with OpenAI function calling schema."""
@@ -376,11 +453,19 @@ class GetInventoryHistoryTool(BaseTool):
 
         Returns:
             Dictionary with historical inventory data from Environment API
+
+        Raises:
+            ValueError: If product_id is missing or days is invalid
         """
+        self._validate_required_params(["product_id"], kwargs)
+
         product_id = kwargs["product_id"]
+        if not isinstance(product_id, str) or not product_id.strip():
+            raise ValueError("product_id must be a non-empty string")
+
         days = kwargs.get("days", 30)
-        async with EnvironmentAPIClient() as client:
-            result = await client.get_inventory_history(  # type: ignore[attr-defined]
-                product_id=product_id, days=days
-            )
-        return result  # type: ignore[no-any-return]
+        if not isinstance(days, int) or days < 1 or days > 365:
+            raise ValueError("days must be an integer between 1 and 365")
+
+        async with self.get_client() as client:
+            return await client.get_inventory_history(product_id=product_id, days=days)
