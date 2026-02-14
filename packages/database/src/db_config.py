@@ -1,19 +1,12 @@
 import logging
 import os
-from pathlib import Path
 from urllib.parse import quote_plus
 
-from dotenv import load_dotenv
+from common.utils.env_loader import load_service_env
 
 logger = logging.getLogger(__name__)
 
-env_path = Path(__file__).resolve().parent
-while env_path != env_path.parent:
-    if (env_path / ".env").exists():
-        load_dotenv(env_path / ".env")
-        logger.info("Loaded environment from: %s", env_path / ".env")
-        break
-    env_path = env_path.parent
+load_service_env(__file__)
 
 
 def get_env_variable(var_name: str) -> str:
