@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.core.constants import HEALTH_CHECK_TIMEOUT
 from app.core.exceptions import AgentServiceException
 from app.core.logging import configure_logging
+from app.services.health_checker import HealthChecker
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -138,6 +139,20 @@ async def root() -> dict[str, str]:
         "status": "running",
         "docs": f"{settings.API_V1_PREFIX}/docs",
         "health": f"{settings.API_V1_PREFIX}/health",
+    }
+
+
+@app.get("/health", tags=["health"])
+async def root_health(request: Request) -> dict[str, object]:
+    """Root health endpoint for container orchestration checks"""
+    checker = HealthChecker(settings, request.app.state.redis_client, request.app.state.http_client)
+    dependencies = await checker.check_all_dependencies()
+    overall_status = checker.determine_overall_status(dependencies)
+    return {
+        "status": overall_status,
+        "service": settings.SERVICE_NAME,
+        "version": settings.SERVICE_VERSION,
+        "dependencies": dependencies,
     }
 
 
