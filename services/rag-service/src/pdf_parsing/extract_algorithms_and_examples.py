@@ -1,5 +1,7 @@
+import json
 import re
 from enum import Enum
+from pathlib import Path
 
 import fitz
 
@@ -133,3 +135,40 @@ def extract_algorithms_and_examples(file_path):  # extract algorithms and exampl
     for page in doc:
         algorithms_and_examples.extend(_extract_page_algorithms_and_examples(page))
     return algorithms_and_examples
+
+def get_algorithm_caption_from_jsons(algorithm_number):
+    count = 0
+    for json_path in sorted(Path("pdf_jsons").glob("*.json")):
+        with json_path.open("r", encoding="utf-8") as fh:
+            json_data = json.load(fh)
+        for block in json_data:
+            for element in block['prunedResult']['parsing_res_list']:
+                if algorithm_number in element["block_content"]:
+                    # return element["block_content"]
+                    count += 1
+                    text = element["block_content"]
+                    clean = re.sub(r'<[^>]+>', '', text)
+                    idx = clean.find(algorithm_number)
+                    result = clean[idx:]
+                    return result
+    print(f"Found {count} captions containing '{algorithm_number}' in JSON files.")
+
+
+def extract_algorithms(pymu_clocks):
+    algorithms = []
+    for block in pymu_clocks:
+        if block["block_type"] != BlockType.ALGORITHM.value:
+            continue
+
+        algorithm_number = f"{block["caption"].split(" ")[0]} {block["caption"].split(" ")[1]}"
+        # algorithms.append(algorithm_number)
+        algorith = {
+            "caption": get_algorithm_caption_from_jsons(algorithm_number),
+            "text": block["text"],
+        }
+        algorithms.append(algorith)
+        print(algorith)
+    return algorithms
+
+res = extract_algorithms(extract_algorithms_and_examples("dm.pdf"))
+print(res)
