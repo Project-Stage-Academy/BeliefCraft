@@ -32,6 +32,9 @@ from app.clients.rag_client import RAGAPIClient, RAGClientProtocol
 from app.core.constants import (
     DEFAULT_TRAVERSE_TYPES,
     KNOWLEDGE_BASE_BOOK_NAME,
+    RAG_SEARCH_DEFAULT_K,
+    RAG_SEARCH_MAX_K,
+    RAG_SEARCH_MIN_K,
     KnowledgeGraphEntityType,
 )
 from app.tools.base import APIClientTool, ToolMetadata
@@ -86,10 +89,13 @@ class SearchKnowledgeBaseTool(APIClientTool):
                     },
                     "k": {
                         "type": "integer",
-                        "description": "Number of results to return (default: 5, max: 20)",
-                        "minimum": 1,
-                        "maximum": 20,
-                        "default": 5,
+                        "description": (
+                            "Number of results to return "
+                            f"(default: {RAG_SEARCH_DEFAULT_K}, max: {RAG_SEARCH_MAX_K})"
+                        ),
+                        "minimum": RAG_SEARCH_MIN_K,
+                        "maximum": RAG_SEARCH_MAX_K,
+                        "default": RAG_SEARCH_DEFAULT_K,
                     },
                     "traverse_types": {
                         "type": "array",
@@ -155,9 +161,11 @@ class SearchKnowledgeBaseTool(APIClientTool):
             raise ValueError("query must be a non-empty string")
 
         # Validate k parameter
-        k = kwargs.get("k", 5)
-        if not isinstance(k, int) or k < 1 or k > 20:
-            raise ValueError("k must be an integer between 1 and 20")
+        k = kwargs.get("k", RAG_SEARCH_DEFAULT_K)
+        if not isinstance(k, int) or k < RAG_SEARCH_MIN_K or k > RAG_SEARCH_MAX_K:
+            raise ValueError(
+                f"k must be an integer between {RAG_SEARCH_MIN_K} and {RAG_SEARCH_MAX_K}"
+            )
 
         # Validate traverse_types parameter
         traverse_types = kwargs.get("traverse_types")
