@@ -139,12 +139,3 @@ class TestOutboundManager:
 
         # Verify Ledger was NOT called
         mock_ledger.record_issuance.assert_not_called()
-
-    def test_poisson_demand_generation(self, outbound_manager):
-        """
-        Sanity check for the Poisson sampler.
-        Ensures it returns integers and respects the seed.
-        """
-        demand = outbound_manager._simulate_poisson_demand(mean=2.0)
-        assert isinstance(demand, int)
-        assert demand >= 0

@@ -45,12 +45,25 @@ class ReplenishmentManager:
         self.session = session
         self.suppliers = suppliers
         self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
+        self._standard_lt_model: LeadtimeModel | None = None
 
-        self.standard_lt_model = (
-            self.session.query(LeadtimeModel)
-            .filter_by(scope=LeadtimeScope.GLOBAL, p1=settings.logistics.models.standard.p1)
-            .first()
-        )
+    @property
+    def standard_lt_model(self) -> LeadtimeModel:
+        """
+        Lazy-loads the standard lead time model from the database.
+        Cached after the first access.
+        """
+        if self._standard_lt_model is None:
+            self._standard_lt_model = (
+                self.session.query(LeadtimeModel)
+                .filter_by(scope=LeadtimeScope.GLOBAL, p1=settings.logistics.models.standard.p1)
+                .first()
+            )
+
+            if self._standard_lt_model is None:
+                raise ValueError("Critical configuration error: Standard LeadtimeModel not found.")
+
+        return self._standard_lt_model
 
     def review_stock_levels(
         self, date: datetime, warehouses: list[Warehouse], products: list[Product]

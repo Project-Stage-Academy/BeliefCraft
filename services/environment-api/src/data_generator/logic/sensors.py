@@ -26,6 +26,32 @@ from packages.database.src.models import (
 logger = get_logger(__name__)
 
 
+def calculate_sensor_reading(
+    actual_qty: float, noise_sigma: float, missing_rate: float, rng: random.Random
+) -> tuple[float | None, float, bool]:
+    """
+    Pure math logic: applies noise and checks for missing data.
+    No database models or complex state required here.
+    """
+    # 1. Check for missing data (Bernoulli trial)
+    if rng.random() < missing_rate:
+        return None, 0.0, True
+
+    cfg = settings.sensors.noise_model
+
+    # 2. Calculate noise
+    sigma_units = max(cfg.min_sigma_units, actual_qty * noise_sigma)
+    noise = rng.gauss(cfg.noise_mean, sigma_units)
+
+    # 3. Apply bounds
+    observed_qty = max(cfg.min_observed_qty, actual_qty + noise)
+
+    # 4. Calculate confidence
+    confidence = max(cfg.min_confidence, cfg.base_confidence - (noise_sigma * cfg.noise_multiplier))
+
+    return observed_qty, confidence, False
+
+
 class SensorManager:
     """
     Simulates the observation layer of the warehouse.
@@ -125,26 +151,14 @@ class SensorManager:
         self, sensor: SensorDevice, actual_qty: float
     ) -> tuple[float | None, float, bool]:
         """
-        Applies stochastic noise models (Gaussian noise and Bernoulli failure)
-        to the actual quantity.
+        Orchestrates the data flow between the database object and the math logic.
         """
-        is_missing = self.rng.random() < sensor.missing_rate
-
-        if is_missing:
-            return None, 0.0, True
-
-        cfg = settings.sensors.noise_model
-
-        sigma_units = max(cfg.min_sigma_units, actual_qty * sensor.noise_sigma)
-
-        noise = self.rng.gauss(cfg.noise_mean, sigma_units)
-
-        observed_qty = max(cfg.min_observed_qty, actual_qty + noise)
-        confidence = max(
-            cfg.min_confidence, cfg.base_confidence - (sensor.noise_sigma * cfg.noise_multiplier)
+        return calculate_sensor_reading(
+            actual_qty=actual_qty,
+            noise_sigma=sensor.noise_sigma,
+            missing_rate=sensor.missing_rate,
+            rng=self.rng,
         )
-
-        return observed_qty, confidence, False
 
     def _persist_observation(
         self,

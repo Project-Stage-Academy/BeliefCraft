@@ -12,7 +12,8 @@ dependencies = [
   "sqlalchemy>=2.0.0",
   "beliefcraft-common",
   "beliefcraft-database",
-  "faker"
+  "faker",
+  "numpy"
 ]
 
 [dependency-groups]
@@ -26,8 +27,11 @@ beliefcraft-database = { workspace = true }
 beliefcraft-environment-api = { path = ".", editable = true }
 
 [tool.setuptools]
-package-dir = {"" = "."}
-packages = ["src"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 
 [build-system]
 requires = ["setuptools >= 61.0"]

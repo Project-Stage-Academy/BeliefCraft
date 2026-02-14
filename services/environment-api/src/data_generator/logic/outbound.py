@@ -8,10 +8,10 @@ Responsible for the 'Demand' side of the simulation. This module:
 4. Triggers the InventoryLedger to physically deduct stock.
 """
 
-import math
 import random
 from datetime import datetime
 
+import numpy as np
 from common.logging import get_logger
 from sqlalchemy.orm import Session
 from src.config_load import settings
@@ -68,7 +68,7 @@ class OutboundManager:
 
         for wh in warehouses:
             for product in active_products:
-                qty_demanded = self._simulate_poisson_demand(mean=settings.outbound.poisson_mean)
+                qty_demanded = np.random.poisson(settings.outbound.poisson_mean)
 
                 if qty_demanded <= 0:
                     continue
@@ -185,19 +185,6 @@ class OutboundManager:
             shipped_at=date,
         )
         self.session.add(shipment)
-
-    def _simulate_poisson_demand(self, mean: float) -> int:
-        """
-        Generates a random integer from a Poisson distribution (Knuth's algorithm).
-        Used to simulate natural variability in customer daily demand.
-        """
-        lambda_exp = math.exp(-mean)
-        k = 0
-        p = 1.0
-        while p > lambda_exp:
-            k += 1
-            p *= self.rng.random()
-        return k - 1
 
     def _get_dock(self, warehouse: Warehouse) -> Location | None:
         """Retrieves the designated loading dock for the warehouse."""
