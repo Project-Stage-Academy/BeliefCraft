@@ -15,7 +15,7 @@ from datetime import datetime
 from common.logging import get_logger
 from sqlalchemy.orm import Session
 from src.config_load import settings
-from src.data_generator.logic.inventory import InventoryLedger
+from src.data_generator.logic.inventory import InventoryLedger, ReceiptCommand
 
 from packages.database.src.enums import LocationType, OrderStatus, ShipmentDirection, ShipmentStatus
 from packages.database.src.models import (
@@ -171,9 +171,11 @@ class OutboundManager:
         Handles the physical movement of goods and shipment generation.
         Only called if stock was successfully allocated.
         """
-        self.ledger.record_issuance(
+        command: ReceiptCommand = ReceiptCommand(
             location=dock, product_id=product.id, qty=qty, date=date, ref_id=order.id
         )
+
+        self.ledger.record_issuance(command)
 
         shipment = Shipment(
             order_id=order.id,

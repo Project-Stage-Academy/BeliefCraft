@@ -55,8 +55,11 @@ class TestZoneBuilder:
         Verifies the creation of the Zone -> Aisle hierarchy.
         Mocks random to strictly control the flow and test the parent-child relationships.
         """
+        # Fix: Configure the mock instance returned by random.Random()
+        mock_rng = mock_random.Random.return_value
+
         # Force a predictable layout: 2 Zones, each with 2 Aisles
-        mock_random.randint.side_effect = [
+        mock_rng.randint.side_effect = [
             2,  # zone_count
             20000,  # zone 1 capacity
             2,  # aisle_count for zone 1
@@ -69,7 +72,7 @@ class TestZoneBuilder:
         ]
 
         # Prevent sensors from generating to keep this specific test isolated
-        mock_random.random.return_value = 1.0
+        mock_rng.random.return_value = 1.0
 
         builder = ZoneBuilder(mock_session)
         zones = builder.build_zones(dummy_warehouse)
@@ -93,13 +96,16 @@ class TestZoneBuilder:
         Verifies that a sensor is generated and attached to the warehouse
         when the random probability threshold is met.
         """
+        # Fix: Configure the mock instance returned by random.Random()
+        mock_rng = mock_random.Random.return_value
+
         # Set a 50% probability threshold
         mock_settings.layout.sensor.attach_probability = 0.5
 
         # Force random.random() to return a "success" value (<= 0.5)
-        mock_random.random.return_value = 0.2
+        mock_rng.random.return_value = 0.2
         # Force choice to predictably pick a CAMERA
-        mock_random.choices.return_value = [DeviceType.CAMERA]
+        mock_rng.choices.return_value = [DeviceType.CAMERA]
 
         builder = ZoneBuilder(mock_session)
         builder._attach_sensor(dummy_warehouse)
@@ -120,11 +126,14 @@ class TestZoneBuilder:
         """
         Verifies that NO sensor is created if the random probability check fails.
         """
+        # Fix: Configure the mock instance returned by random.Random()
+        mock_rng = mock_random.Random.return_value
+
         # Set a 50% probability threshold
         mock_settings.layout.sensor.attach_probability = 0.5
 
         # Force random.random() to return a "failure" value (> 0.5)
-        mock_random.random.return_value = 0.9
+        mock_rng.random.return_value = 0.9
 
         builder = ZoneBuilder(mock_session)
         builder._attach_sensor(dummy_warehouse)

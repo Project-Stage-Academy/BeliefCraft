@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
-from src.data_generator.logic.inventory import InventoryLedger
+from src.data_generator.logic.inventory import InventoryLedger, ReceiptCommand
 
 from packages.database.src.enums import MoveType
 from packages.database.src.models import InventoryBalance, InventoryMove, Location
@@ -51,7 +51,10 @@ class TestInventoryLedger:
         # Mock database query returning None (no existing balance)
         mock_session.query().filter_by().first.return_value = None
 
-        ledger.record_receipt(mock_location, product_id, qty, date, ref_id)
+        command = ReceiptCommand(
+            location=mock_location, product_id=product_id, date=date, qty=qty, ref_id=ref_id
+        )
+        ledger.record_receipt(command)
 
         # 1. Verify Balance Initialization
         # We expect 2 calls to session.add: one for Balance, one for Move
@@ -80,7 +83,14 @@ class TestInventoryLedger:
         )
         mock_session.query().filter_by().first.return_value = existing_balance
 
-        ledger.record_receipt(mock_location, product_id, 10.0, datetime.now(tz=UTC), uuid.uuid4())
+        command = ReceiptCommand(
+            location=mock_location,
+            product_id=product_id,
+            date=datetime.now(tz=UTC),
+            qty=10,
+            ref_id=uuid.uuid4(),
+        )
+        ledger.record_receipt(command)
 
         # Verify balance was updated
         assert existing_balance.on_hand == 60.0
@@ -93,13 +103,19 @@ class TestInventoryLedger:
         and creates an OUTBOUND movement record.
         """
         product_id = uuid.uuid4()
-        ref_id = uuid.uuid4()
         existing_balance = InventoryBalance(
             product_id=product_id, location_id=mock_location.id, on_hand=100.0
         )
         mock_session.query().filter_by().first.return_value = existing_balance
 
-        ledger.record_issuance(mock_location, product_id, 30.0, datetime.now(tz=UTC), ref_id)
+        command = ReceiptCommand(
+            location=mock_location,
+            product_id=uuid.uuid4(),
+            date=datetime.now(tz=UTC),
+            qty=30,
+            ref_id=uuid.uuid4(),
+        )
+        ledger.record_issuance(command)
 
         # Verify decrement
         assert existing_balance.on_hand == 70.0

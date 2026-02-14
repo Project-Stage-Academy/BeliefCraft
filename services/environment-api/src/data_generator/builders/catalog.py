@@ -12,8 +12,9 @@ transactions (Orders, Shipments) are simulated.
 """
 
 import random
+from typing import Any
 
-from faker import Faker
+import faker
 from sqlalchemy.orm import Session
 from src.config_load import settings
 
@@ -34,8 +35,20 @@ class CatalogBuilder:
                                newly created entities to the database.
         """
         self.session = session
-        self.fake = Faker()
+        self.fake = faker.Faker()
         self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
+
+    def get_unique_id(self) -> Any:
+        """
+        Constructs a unique identifier and checks its uniqueness.
+        """
+        try:
+            ean = self.fake.unique.ean8()
+        except faker.exceptions.UniquenessException:
+            self.fake.unique.clear()
+            ean = self.fake.unique.ean8()
+
+        return ean
 
     def create_products(self, count: int) -> list[Product]:
         """
@@ -57,8 +70,10 @@ class CatalogBuilder:
             shelf_life_range = settings.catalog.category_shelf_life[category]
             shelf_life = self.rng.randint(shelf_life_range.min_days, shelf_life_range.max_days)
 
+            ean = self.get_unique_id()
+
             product = Product(
-                sku=f"{category[:3].upper()}-{self.fake.unique.ean8()}",
+                sku=f"{category[:3].upper()}-{ean}",
                 name=self.fake.catch_phrase(),
                 category=category,
                 shelf_life_days=shelf_life,

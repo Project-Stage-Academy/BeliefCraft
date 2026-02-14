@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from src.data_generator.logic.inbound import InboundManager
+from src.data_generator.logic.inventory import ReceiptCommand
 
 from packages.database.src.enums import LocationType, ShipmentStatus
 from packages.database.src.models import Location, POLine, PurchaseOrder, Shipment
@@ -94,7 +95,9 @@ class TestInboundManager:
 
         # Verify physical receipt recorded in ledger
         mock_ledger.record_receipt.assert_called_once_with(
-            location=mock_dock, product_id="prod-123", qty=50.0, date=date, ref_id="ship-999"
+            ReceiptCommand(
+                location=mock_dock, product_id="prod-123", qty=50.0, date=date, ref_id="ship-999"
+            )
         )
 
         # Verify business logic updates

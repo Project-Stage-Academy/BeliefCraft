@@ -13,10 +13,10 @@ from datetime import datetime
 from common.logging import get_logger
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
-from src.data_generator.logic.inventory import InventoryLedger
+from src.data_generator.logic.inventory import InventoryLedger, ReceiptCommand
 
 from packages.database.src.enums import LocationType, ShipmentStatus
-from packages.database.src.models import Location, Shipment, Warehouse
+from packages.database.src.models import Location, PurchaseOrder, Shipment, Warehouse
 
 logger = get_logger(__name__)
 
@@ -70,6 +70,33 @@ class InboundManager:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def _validate_shipment_integrity(
+        self, shipment: Shipment
+    ) -> tuple[PurchaseOrder, Location] | None:
+        """
+        Validates shipment prerequisites.
+        Returns (PurchaseOrder, DestinationDock) if valid, else None.
+        """
+        # 1. Check for source document (PO)
+        po = shipment.purchase_order
+        if not po:
+            logger.warning("shipment_missing_po", shipment_id=str(shipment.id))
+            return None
+
+        # 2. Check for destination warehouse
+        dest_warehouse = shipment.destination_warehouse
+        if not dest_warehouse:
+            logger.error("shipment_missing_destination", shipment_id=str(shipment.id))
+            return None
+
+        # 3. Check for receiving area (Dock)
+        destination_dock = self._get_warehouse_dock(dest_warehouse)
+        if not destination_dock:
+            logger.error("warehouse_missing_dock", warehouse_id=str(dest_warehouse.id))
+            return None
+
+        return po, destination_dock
+
     def _process_single_shipment(self, shipment: Shipment, date: datetime) -> None:
         """
         Executes the receiving workflow for a specific shipment.
@@ -82,36 +109,27 @@ class InboundManager:
             shipment (Shipment): The shipment entity to process.
             date (datetime): The effective date of the receipt.
         """
-        # 1. Data integrity check: A shipment must have a source document (PO)
-        po = shipment.purchase_order
-        if not po:
-            logger.warning("shipment_missing_po", shipment_id=str(shipment.id))
+
+        validation_result = self._validate_shipment_integrity(shipment)
+        if not validation_result:
             return
 
-        # 2. Data integrity check: Destination warehouse must exist
-        dest_warehouse = shipment.destination_warehouse
-        if not dest_warehouse:
-            logger.error("shipment_missing_destination", shipment_id=str(shipment.id))
-            return
-
-        # 3. Data integrity check: Destination warehouse must have a receiving area (Dock)
-        destination_dock = self._get_warehouse_dock(dest_warehouse)
-        if not destination_dock:
-            logger.error("warehouse_missing_dock", warehouse_id=str(dest_warehouse.id))
-            return
+        po, destination_dock = validation_result
 
         # Process receipt for each line item using the safe 'po' variable
         for line in po.lines:
             # Assumption: No partial shipments/loss yet; received equals ordered
             qty_received = line.qty_ordered
 
-            self.ledger.record_receipt(
+            command: ReceiptCommand = ReceiptCommand(
                 location=destination_dock,
                 product_id=line.product_id,
                 qty=qty_received,
                 date=date,
                 ref_id=shipment.id,
             )
+
+            self.ledger.record_receipt(command)
 
             # Update the Purchase Order Line to reflect the received quantity
             line.qty_received += qty_received

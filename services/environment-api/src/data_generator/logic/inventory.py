@@ -11,12 +11,30 @@ scenarios (theft, spoilage, sales) using a consistent accounting interface.
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from packages.database.src.enums import MoveType, QualityStatus
 from packages.database.src.models import InventoryBalance, InventoryMove, Location
+
+
+@dataclass
+class ReceiptCommand:
+    """
+    location (Location): The physical location (e.g., DOCK) receiving goods.
+    product_id (uuid.UUID): The unique identifier of the product.
+    qty (float): The quantity received. Must be positive.
+    date (datetime): The simulation timestamp of the receipt.
+    ref_id (uuid.UUID): The ID of the source document (e.g., Shipment ID).
+    """
+
+    location: Location
+    product_id: uuid.UUID
+    qty: float
+    date: datetime
+    ref_id: uuid.UUID
 
 
 class InventoryLedger:
@@ -35,14 +53,7 @@ class InventoryLedger:
         """
         self.session = session
 
-    def record_receipt(
-        self,
-        location: Location,
-        product_id: uuid.UUID,
-        qty: float,
-        date: datetime,
-        ref_id: uuid.UUID,
-    ) -> None:
+    def record_receipt(self, command: ReceiptCommand) -> None:
         """
         Processes an inbound stock increase.
 
@@ -50,49 +61,28 @@ class InventoryLedger:
         is physically received at a dock. It updates the on-hand quantity
         and logs the event as an INBOUND move.
 
-        Args:
-            location (Location): The physical location (e.g., DOCK) receiving goods.
-            product_id (uuid.UUID): The unique identifier of the product.
-            qty (float): The quantity received. Must be positive.
-            date (datetime): The simulation timestamp of the receipt.
-            ref_id (uuid.UUID): The ID of the source document (e.g., Shipment ID).
         """
-        self._update_balance(location, product_id, qty)
+        self._update_balance(command.location, command.product_id, command.qty)
 
         self._log_movement(
-            location=location,
-            product_id=product_id,
-            qty=qty,
+            command=command,
             move_type=MoveType.INBOUND,
-            date=date,
             reason="PO_RECEIPT",
-            ref_id=ref_id,
         )
 
-    def record_issuance(
-        self,
-        location: Location,
-        product_id: uuid.UUID,
-        qty: float,
-        date: datetime,
-        ref_id: uuid.UUID,
-    ) -> None:
+    def record_issuance(self, command: ReceiptCommand) -> None:
         """
         Processes an outbound stock decrease (Shipment/Sale).
 
         Decrements the on-hand quantity and logs the movement.
         """
 
-        self._update_balance(location, product_id, -qty)
+        self._update_balance(command.location, command.product_id, -command.qty)
 
         self._log_movement(
-            location=location,
-            product_id=product_id,
-            qty=qty,
+            command=command,
             move_type=MoveType.OUTBOUND,
-            date=date,
             reason="CUSTOMER_ORDER",
-            ref_id=ref_id,
         )
 
     def _update_balance(self, location: Location, product_id: uuid.UUID, qty: float) -> None:
@@ -120,25 +110,16 @@ class InventoryLedger:
             )
             self.session.add(balance)
 
-    def _log_movement(
-        self,
-        location: Location,
-        product_id: uuid.UUID,
-        qty: float,
-        move_type: MoveType,
-        date: datetime,
-        reason: str,
-        ref_id: uuid.UUID,
-    ) -> None:
+    def _log_movement(self, command: ReceiptCommand, move_type: MoveType, reason: str) -> None:
         """
         Persists an immutable audit record of the inventory change.
         """
         move = InventoryMove(
-            product_id=product_id,
-            to_location_id=location.id,
+            product_id=command.product_id,
+            to_location_id=command.location.id,
             move_type=move_type,
-            qty=qty,
-            occurred_at=date,
+            qty=command.qty,
+            occurred_at=command.date,
             reason_code=reason,
         )
         self.session.add(move)
