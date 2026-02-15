@@ -1,32 +1,75 @@
 name: beliefcraft
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      ENVIRONMENT_DB: ${ENVIRONMENT_DB}
+      RAG_DB: ${RAG_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/scripts/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+      - ./infrastructure/scripts/postgres/migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} && psql -U ${POSTGRES_USER} -lqt | cut -d \\| -f 1 | grep -qw ${ENVIRONMENT_DB}"]
+      timeout: 5s
+      retries: 8
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_PORT}:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
 
+  db-migrate:
+    image: postgres:15-alpine
+    command: ["sh", "/migrations/run-migrations.sh"]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./infrastructure/scripts/postgres/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   environment-api:
     build:
-       context: .
-       dockerfile: services/environment-api/Dockerfile
+      context: .
+      dockerfile: services/environment-api/Dockerfile
     ports:
       - "8000:8000"
     env_file:
       - ./services/environment-api/.env
+    command: ["/app/.venv/bin/uvicorn", "environment_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./services/environment-api/src:/app/services/environment-api/src
+      - ./packages/common:/app/packages/common
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -39,17 +82,19 @@ services:
       - "8001:8001"
     env_file:
       - ./services/rag-service/.env
+    command: ["/app/.venv/bin/uvicorn", "rag_service.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    volumes:
+      - ./services/rag-service/src:/app/src
+      - ./packages/common:/app/packages/common
     depends_on:
-      environment-api:
+      postgres:
+        condition: service_healthy
+      qdrant:
         condition: service_started
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status == 200 else 1)",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -60,57 +105,46 @@ services:
       dockerfile: services/agent-service/Dockerfile
     ports:
       - "8003:8003"
-    environment:
-      - ENVIRONMENT_API_URL=http://environment-api:8000/api/v1
-      - RAG_API_URL=http://rag-service:8001/api/v1
-      - REDIS_URL=redis://redis:6379
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ANTHROPIC_MODEL=claude-sonnet-4.5
-      - LOG_LEVEL=INFO
     env_file:
       - ./services/agent-service/.env
+    command: ["/app/services/agent-service/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
+    volumes:
+      - ./services/agent-service/app:/app/services/agent-service/app
+      - ./packages/common:/app/packages/common
     depends_on:
       redis:
         condition: service_healthy
       environment-api:
-        condition: service_started
+        condition: service_healthy
       rag-service:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/api/v1/health').status == 200 else 1)",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/health').status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   ui:
     build:
-      context: ./services/ui
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ui/Dockerfile
     ports:
       - "3000:3000"
     env_file:
       - ./services/ui/.env
+    command: ["sh", "-c", "npm run dev -- --hostname 0.0.0.0 --port 3000"]
+    volumes:
+      - ./services/ui:/app/services/ui
+      - /app/services/ui/node_modules
     depends_on:
-      environment-api:
-        condition: service_healthy
-      rag-service:
-        condition: service_healthy
       agent-service:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://localhost:3000/', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
-        ]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+volumes:
+  postgres-data:
+  qdrant-data:
