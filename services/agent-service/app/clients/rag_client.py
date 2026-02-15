@@ -19,13 +19,41 @@ Example:
     ```
 """
 
-from typing import Any
+from typing import Any, Protocol
 
 from app.clients.base_client import BaseAPIClient
 from app.config import get_settings
 from common.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class RAGClientProtocol(Protocol):
+    """
+    Protocol defining the interface for RAG API clients.
+
+    This protocol ensures type safety when using RAGAPIClient
+    in tools and avoids type: ignore comments.
+    """
+
+    async def __aenter__(self) -> "RAGClientProtocol": ...
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None: ...
+
+    async def search_knowledge_base(
+        self,
+        query: str,
+        k: int = 5,
+        traverse_types: list[str] | None = None,
+        filters: dict[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def expand_graph_by_ids(
+        self, document_ids: list[str], traverse_types: list[str] | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_entity_by_number(self, entity_type: str, number: str) -> dict[str, Any]: ...
 
 
 class RAGAPIClient(BaseAPIClient):

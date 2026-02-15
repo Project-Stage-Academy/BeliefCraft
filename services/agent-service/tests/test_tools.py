@@ -3,10 +3,11 @@ Unit tests for tool system (BaseTool, ToolRegistry).
 """
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from app.core.exceptions import ToolExecutionError
-from app.tools.base import BaseTool, ToolMetadata
+from app.tools.base import APIClientTool, BaseTool, ToolMetadata
 from app.tools.registry import ToolRegistry
 
 
@@ -188,3 +189,127 @@ class TestToolRegistry:
         assert stats["by_category"]["utility"] == 2
         assert stats["by_category"]["environment"] == 1
         assert stats["by_category"]["rag"] == 1
+
+
+class TestValidateRequiredParams:
+    """Tests for _validate_required_params method."""
+
+    def test_validate_all_params_present(self) -> None:
+        """Test validation passes when all required params present."""
+        tool = MockSuccessTool()
+        # Should not raise
+        tool._validate_required_params(["value"], {"value": "test"})
+
+    def test_validate_missing_single_param(self) -> None:
+        """Test validation fails when single required param missing."""
+        tool = MockSuccessTool()
+        with pytest.raises(ValueError, match="Missing required parameter.*value"):
+            tool._validate_required_params(["value"], {})
+
+    def test_validate_missing_multiple_params(self) -> None:
+        """Test validation fails when multiple required params missing."""
+        tool = MockSuccessTool()
+        with pytest.raises(ValueError, match="Missing required parameter.*param1.*param2"):
+            tool._validate_required_params(["param1", "param2"], {})
+
+    def test_validate_partial_params(self) -> None:
+        """Test validation fails when only some params present."""
+        tool = MockSuccessTool()
+        with pytest.raises(ValueError, match="Missing required parameter.*param2"):
+            tool._validate_required_params(["param1", "param2"], {"param1": "value"})
+
+    def test_validate_extra_params_allowed(self) -> None:
+        """Test validation passes with extra parameters."""
+        tool = MockSuccessTool()
+        # Should not raise - extra params are ok
+        tool._validate_required_params(["value"], {"value": "test", "extra": "ignored"})
+
+
+class MockAPIClient:
+    """Mock API client for testing APIClientTool."""
+
+    def __init__(self) -> None:
+        self.fetch_data = AsyncMock(return_value={"result": "default"})
+
+    async def __aenter__(self) -> "MockAPIClient":
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        pass
+
+
+class MockAPIClientTool(APIClientTool):
+    """Mock tool using APIClientTool base class."""
+
+    def __init__(self, client: MockAPIClient | None = None) -> None:
+        self._client = client
+        super().__init__()
+
+    def get_client(self) -> MockAPIClient:
+        """Get API client instance."""
+        return self._client or MockAPIClient()
+
+    def get_metadata(self) -> ToolMetadata:
+        return ToolMetadata(
+            name="mock_api_tool",
+            description="Test API tool",
+            parameters={
+                "type": "object",
+                "properties": {"param": {"type": "string"}},
+                "required": ["param"],
+            },
+            category="test",
+        )
+
+    async def execute(self, **kwargs: Any) -> dict[str, Any]:
+        self._validate_required_params(["param"], kwargs)
+        async with self.get_client() as client:
+            result: dict[str, Any] = await client.fetch_data(kwargs["param"])
+            return result
+
+
+class TestAPIClientTool:
+    """Tests for APIClientTool base class."""
+
+    @pytest.mark.asyncio
+    async def test_api_client_tool_with_injected_client(self) -> None:
+        """Test APIClientTool works with injected client."""
+        mock_client = MockAPIClient()
+        mock_client.fetch_data = AsyncMock(return_value={"result": "test_value"})
+
+        tool = MockAPIClientTool(client=mock_client)
+        result = await tool.execute(param="test_value")
+
+        assert result == {"result": "test_value"}
+        mock_client.fetch_data.assert_called_once_with("test_value")
+
+    @pytest.mark.asyncio
+    async def test_api_client_tool_creates_client_if_none(self) -> None:
+        """Test APIClientTool creates client if none injected."""
+        tool = MockAPIClientTool()
+        # Should create client internally - just check tool works
+        assert tool.get_client() is not None
+
+    @pytest.mark.asyncio
+    async def test_api_client_tool_validates_params(self) -> None:
+        """Test APIClientTool validates required parameters."""
+        tool = MockAPIClientTool()
+
+        with pytest.raises(ValueError, match="Missing required parameter.*param"):
+            await tool.execute()  # Missing required param
+
+    def test_get_client_not_implemented(self) -> None:
+        """Test that APIClientTool.get_client() must be overridden."""
+
+        class IncompleteAPITool(APIClientTool):
+            def get_metadata(self) -> ToolMetadata:
+                return ToolMetadata(name="incomplete", description="test", category="test")
+
+            async def execute(self, **kwargs: Any) -> dict[str, Any]:
+                return {}
+
+            # Missing get_client() override
+
+        tool = IncompleteAPITool()
+        with pytest.raises(NotImplementedError):
+            tool.get_client()

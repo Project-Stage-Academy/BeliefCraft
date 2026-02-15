@@ -2,13 +2,17 @@
 Unit tests for HTTP API clients.
 """
 
+from typing import cast
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
 from app.clients.base_client import BaseAPIClient
-from app.clients.environment_client import EnvironmentAPIClient
-from app.clients.rag_client import RAGAPIClient
+from app.clients.environment_client import (
+    EnvironmentAPIClient,
+    EnvironmentClientProtocol,
+)
+from app.clients.rag_client import RAGAPIClient, RAGClientProtocol
 from app.core.exceptions import ExternalServiceError
 
 # Fixtures
@@ -216,3 +220,38 @@ class TestRAGAPIClient:
             with patch.object(client, "get", return_value={}) as mock_get:
                 await client.get_entity_by_number(entity_type="algorithm", number="3.2")
                 mock_get.assert_called_once_with("/entity/algorithm/3.2")
+
+
+class TestProtocolCompliance:
+    """Tests that clients comply with their Protocol definitions."""
+
+    @pytest.mark.asyncio
+    async def test_environment_client_implements_protocol(self, mock_settings: Mock) -> None:
+        """Test EnvironmentAPIClient implements EnvironmentClientProtocol."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client: EnvironmentClientProtocol = cast(
+                EnvironmentClientProtocol, EnvironmentAPIClient()
+            )
+
+            # Check that client has all required methods
+            assert hasattr(client, "__aenter__")
+            assert hasattr(client, "__aexit__")
+            assert hasattr(client, "get_current_observations")
+            assert hasattr(client, "get_inventory_history")
+            assert hasattr(client, "get_order_backlog")
+            assert hasattr(client, "get_shipments_in_transit")
+            assert hasattr(client, "calculate_stockout_probability")
+            assert hasattr(client, "calculate_lead_time_risk")
+
+    @pytest.mark.asyncio
+    async def test_rag_client_implements_protocol(self, mock_settings: Mock) -> None:
+        """Test RAGAPIClient implements RAGClientProtocol."""
+        with patch("app.clients.rag_client.get_settings", return_value=mock_settings):
+            client: RAGClientProtocol = cast(RAGClientProtocol, RAGAPIClient())
+
+            # Check that client has all required methods
+            assert hasattr(client, "__aenter__")
+            assert hasattr(client, "__aexit__")
+            assert hasattr(client, "search_knowledge_base")
+            assert hasattr(client, "expand_graph_by_ids")
+            assert hasattr(client, "get_entity_by_number")
