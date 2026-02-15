@@ -4,6 +4,14 @@ from typing import Literal
 
 from common.utils.settings_base import BaseSettings
 from pydantic import BaseModel, ConfigDict, Field
+from src.simulation_configs.catalog import CatalogConfig
+from src.simulation_configs.infrastructure import InfrastructureConfig
+from src.simulation_configs.layout import LayoutConfig
+from src.simulation_configs.logistics import LogisticsConfig
+from src.simulation_configs.outbound import OutboundConfig
+from src.simulation_configs.replenishment import ReplenishmentConfig
+from src.simulation_configs.sensors import SensorsConfig
+from src.simulation_configs.world import SimulationConfig, WorldConfig
 
 
 class AppConfig(BaseModel):
@@ -35,3 +43,13 @@ class Settings(BaseSettings):
     app: AppConfig = Field(default_factory=AppConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+
+    world: WorldConfig
+    simulation: SimulationConfig
+    catalog: CatalogConfig
+    infrastructure: InfrastructureConfig
+    layout: LayoutConfig
+    logistics: LogisticsConfig
+    outbound: OutboundConfig
+    replenishment: ReplenishmentConfig
+    sensors: SensorsConfig

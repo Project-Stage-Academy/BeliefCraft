@@ -20,4 +20,4 @@ COPY services/environment-api/config /app/services/environment-api/config
 
 EXPOSE 8000
 
-CMD ["/app/.venv/bin/uvicorn", "environment_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "main:app",  "--host", "0.0.0.0", "--port", "8000"]

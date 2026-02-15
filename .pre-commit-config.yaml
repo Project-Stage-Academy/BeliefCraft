@@ -53,3 +53,5 @@ repos:
           - types-PyYAML
           - python-dotenv
           - uvicorn
+          - numpy
+          - faker
