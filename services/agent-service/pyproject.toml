@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "beliefcraft-agent-service"
 version = "0.1.0"
@@ -14,12 +18,18 @@ dependencies = [
   "beliefcraft-common",
   "python-dotenv>=1.0",
   "anthropic>=0.18.0",
+  "tenacity>=8.2.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+  "pytest-mock>=3.12.0",
 ]
 
 [tool.uv.sources]
 beliefcraft-common = { workspace = true }
 
-[dependency-groups]
-dev = [
-  "pytest>=8.0",
-]
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
