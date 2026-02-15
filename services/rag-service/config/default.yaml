@@ -1,6 +1,5 @@
-app:
-  host: 0.0.0.0
-  port: 8001
 logging:
-  level: INFO
-features: {}
+  level: "INFO"
+  fakeredis_level: "WARNING"
+  docket_level: "WARNING"
+  sse_level: "WARNING"
