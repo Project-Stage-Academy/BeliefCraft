@@ -1,5 +1,7 @@
 """Initial warehouse schema for environment simulation."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 from alembic import op
@@ -16,8 +18,7 @@ def upgrade() -> None:
     op.execute("SET LOCAL statement_timeout = '0'")
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
 
-    op.execute(
-        """
+    op.execute("""
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quality_status') THEN
@@ -61,22 +62,18 @@ def upgrade() -> None:
             END IF;
         END
         $$;
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS warehouses (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             name TEXT NOT NULL UNIQUE,
             region TEXT NOT NULL,
             tz TEXT NOT NULL
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS suppliers (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             name TEXT NOT NULL UNIQUE,
@@ -84,11 +81,9 @@ def upgrade() -> None:
             region TEXT NOT NULL,
             CONSTRAINT suppliers_reliability_score_range CHECK (reliability_score >= 0 AND reliability_score <= 1)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS leadtime_models (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             scope leadtime_scope NOT NULL,
@@ -101,11 +96,9 @@ def upgrade() -> None:
             CONSTRAINT leadtime_models_p_rare_delay_range CHECK (p_rare_delay >= 0 AND p_rare_delay <= 1),
             CONSTRAINT leadtime_models_rare_delay_non_negative CHECK (rare_delay_add_days >= 0)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS products (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             sku TEXT NOT NULL UNIQUE,
@@ -114,11 +107,9 @@ def upgrade() -> None:
             shelf_life_days INTEGER,
             CONSTRAINT products_shelf_life_non_negative CHECK (shelf_life_days IS NULL OR shelf_life_days >= 0)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS locations (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             warehouse_id UUID NOT NULL REFERENCES warehouses(id),
@@ -129,11 +120,9 @@ def upgrade() -> None:
             CONSTRAINT locations_capacity_units_non_negative CHECK (capacity_units >= 0),
             CONSTRAINT uq_locations_warehouse_code UNIQUE (warehouse_id, code)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS routes (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             origin_warehouse_id UUID NOT NULL REFERENCES warehouses(id),
@@ -145,11 +134,9 @@ def upgrade() -> None:
             CONSTRAINT routes_distinct_warehouses CHECK (origin_warehouse_id <> destination_warehouse_id),
             CONSTRAINT uq_routes_origin_destination_mode UNIQUE (origin_warehouse_id, destination_warehouse_id, mode)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS inventory_balances (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             product_id UUID NOT NULL REFERENCES products(id),
@@ -162,11 +149,9 @@ def upgrade() -> None:
             CONSTRAINT check_reserved_positive CHECK (reserved >= 0),
             CONSTRAINT uq_inventory_balances_product_location UNIQUE (product_id, location_id)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             customer_name TEXT NOT NULL,
@@ -177,11 +162,9 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT orders_sla_priority_range CHECK (sla_priority >= 0 AND sla_priority <= 1)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS order_lines (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -196,11 +179,9 @@ def upgrade() -> None:
             CONSTRAINT check_penalty_pos CHECK (service_level_penalty >= 0),
             CONSTRAINT uq_order_lines_order_product UNIQUE (order_id, product_id)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS purchase_orders (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             supplier_id UUID NOT NULL REFERENCES suppliers(id),
@@ -210,11 +191,9 @@ def upgrade() -> None:
             leadtime_model_id UUID REFERENCES leadtime_models(id),
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS po_lines (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             purchase_order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
@@ -225,11 +204,9 @@ def upgrade() -> None:
             CONSTRAINT check_po_qty_received_pos CHECK (qty_received >= 0),
             CONSTRAINT uq_po_lines_po_product UNIQUE (purchase_order_id, product_id)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS shipments (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             direction shipment_direction NOT NULL,
@@ -242,11 +219,9 @@ def upgrade() -> None:
             shipped_at TIMESTAMPTZ,
             arrived_at TIMESTAMPTZ
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS inventory_moves (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             product_id UUID NOT NULL REFERENCES products(id),
@@ -262,11 +237,9 @@ def upgrade() -> None:
             CONSTRAINT check_reported_qty_positive CHECK (reported_qty IS NULL OR reported_qty >= 0),
             CONSTRAINT check_actual_qty_positive CHECK (actual_qty IS NULL OR actual_qty >= 0)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS sensor_devices (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             warehouse_id UUID NOT NULL REFERENCES warehouses(id),
@@ -278,11 +251,9 @@ def upgrade() -> None:
             CONSTRAINT check_noise_positive CHECK (noise_sigma >= 0),
             CONSTRAINT check_missing_rate_valid CHECK (missing_rate >= 0 AND missing_rate <= 1)
         )
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS observations (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             observed_at TIMESTAMPTZ NOT NULL,
@@ -300,8 +271,7 @@ def upgrade() -> None:
             CONSTRAINT check_confidence_valid CHECK (confidence >= 0 AND confidence <= 1),
             CONSTRAINT check_noise_sigma_pos CHECK (reported_noise_sigma IS NULL OR reported_noise_sigma >= 0)
         )
-        """
-    )
+        """)
 
     index_statements = [
         "CREATE INDEX IF NOT EXISTS idx_locations_warehouse_id ON locations (warehouse_id)",

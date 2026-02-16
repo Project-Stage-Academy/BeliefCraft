@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import sys
 from logging.config import fileConfig
 from pathlib import Path
-import sys
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -12,8 +12,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from packages.database.src.db_config import get_connect_args, get_database_url
-from packages.database.src.models import Base
+
+def _load_db_dependencies():
+    from packages.database.src.db_config import get_connect_args, get_database_url
+    from packages.database.src.models import Base
+
+    return get_connect_args, get_database_url, Base
+
 
 config = context.config
 
@@ -29,6 +34,8 @@ def _resolve_database_url() -> str:
     except Exception:
         return default_url
 
+
+get_connect_args, get_database_url, Base = _load_db_dependencies()
 
 config.set_main_option("sqlalchemy.url", _resolve_database_url())
 
