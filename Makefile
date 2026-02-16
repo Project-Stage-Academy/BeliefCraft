@@ -1,4 +1,4 @@
-.PHONY: setup dev up down build logs ps restart test lint format clean
+.PHONY: setup dev up down build logs ps restart test lint format lint-format clean
 
 setup:
 	uv sync --all-packages
@@ -28,12 +28,15 @@ test:
 	uv run pytest
 
 lint:
-	uv run ruff check .
+	uv run ruff check . --fix
 	npm --prefix services/ui run lint
 
 format:
 	uv run ruff format .
 	uv run isort .
+
+lint-format:
+	format lint
 
 clean:
 	docker compose down -v --remove-orphans

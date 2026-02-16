@@ -66,6 +66,7 @@ Service health endpoints (host ports):
 - `make test` - run test suite
 - `make lint` - run linters
 - `make format` - auto-format code
+- `make lint-format` - run formatter and linters in one command
 - `make clean` - remove containers, networks, and volumes
 
 **Database Startup Flow**
