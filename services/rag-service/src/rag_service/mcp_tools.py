@@ -1,6 +1,7 @@
 from enum import StrEnum
 from typing import Annotated, Literal
 
+from common.logging import get_logger
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
@@ -42,6 +43,8 @@ C Computational Complexity 575
 D Neural Representations 581
 E Search Algorithms 599
 F Problems 609"""
+
+logger = get_logger(__name__)
 
 
 class EntityType(StrEnum):
@@ -93,19 +96,33 @@ class RagTools:
         Performs semantic search of k documents and optionally
         retrieves linked objects based on traverse_types.
         """
+        logger.info(
+            "rag tool call",
+            tool="search_knowledge_base",
+            query_len=len(query),
+            k=k,
+            traverse_types=[t.value for t in traverse_types] if traverse_types else [],
+            filters=filters.model_dump() if filters else None,
+        )
         return []
 
     async def expand_graph_by_ids(
         self,
         document_ids: Annotated[list[str], "List of document IDs to expand from."],
         traverse_types: Annotated[
-            list[EntityType] | None,
+            list[EntityType],
             "Types of linked objects to retrieve.",
-        ] = None,
+        ],
     ) -> list[Document]:
         """
         Retrieve linked objects for specific document IDs.
         """
+        logger.info(
+            "rag tool call",
+            tool="expand_graph_by_ids",
+            document_ids=document_ids,
+            traverse_types=[t.value for t in traverse_types] if traverse_types else [],
+        )
         return []
 
     async def get_entity_by_number(
@@ -116,6 +133,12 @@ class RagTools:
         """
         Precise retrieval of a unique object by its number.
         """
+        logger.info(
+            "rag tool call",
+            tool="get_entity_by_number",
+            entity_type=entity_type.value,
+            number=number,
+        )
         return Document(id="mock", content="mock", metadata={}, cosine_similarity=1.0)
 
 

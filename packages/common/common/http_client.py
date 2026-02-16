@@ -15,6 +15,7 @@ Usage:
         data = response.json()
 """
 
+import time
 from types import TracebackType
 from typing import Any, TypedDict
 
@@ -41,6 +42,7 @@ class RequestLogger:
         trace_id = ctx.get("trace_id", "internal-request")
 
         request.headers["X-Request-ID"] = trace_id
+        request.extensions["start_time"] = time.perf_counter()
 
         logger.info(
             "http_request_started", method=request.method, url=str(request.url), trace_id=trace_id
@@ -48,7 +50,15 @@ class RequestLogger:
 
     async def log_response(self, response: httpx.Response) -> None:
         """Log response details. Only reads body for errors to prevent OOM."""
-        duration_ms = response.elapsed.total_seconds() * 1000 if response.elapsed else 0
+        start_time = response.request.extensions.get("start_time")
+        if start_time is not None:
+            duration_ms = (time.perf_counter() - start_time) * 1000
+        else:
+            # Fallback to httpx elapsed if start_time extension is missing
+            try:
+                duration_ms = response.elapsed.total_seconds() * 1000
+            except RuntimeError:
+                duration_ms = 0
 
         if response.status_code >= 400:
             await response.aread()
