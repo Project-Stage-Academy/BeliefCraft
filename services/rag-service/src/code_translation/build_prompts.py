@@ -1,167 +1,10 @@
-import re
-import sys
 from typing import List, Optional, Iterable, Tuple
 
-print("\n".join(sys.path))
+from code_translation.python_github_code import process
 
 from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms
 
-# def extract_entities_from_algorithm(code):
-#     struct_pattern = re.compile(r'\b(?:mutable\s+)?struct\s+(\w+)')
-#     func_pattern = re.compile(
-#         r"""
-#         ^\s*function\s+([A-Za-z_]\w*!?)     # full function
-#         |^\s*([A-Za-z_]\w*!?)\s*\(          # short form fname(...) =
-#         """, re.MULTILINE | re.VERBOSE
-#     )
-#
-#     structs = []
-#     functions = []
-#
-#     structs += struct_pattern.findall(code)
-#
-#     for f1, f2 in func_pattern.findall(code):
-#         functions.append(f1 or f2)
-#
-#     return structs, functions
-
-# def extract_entities_from_algorithm(code: str):
-#     IDENT = r"[A-Za-z_\u0080-\uFFFF]\w*"
-#     FUNC_NAME = rf"{IDENT}[!?]?"
-#
-#     # Визначення (однорядкові)
-#     oneliner_func_re = re.compile(rf"^\s*({FUNC_NAME})\s*\([^=\n]*\)\s*=")
-#
-#     # Block function: function name(...)
-#     block_func_re = re.compile(rf"^\s*function\s+({FUNC_NAME})\b")
-#
-#     # Structs
-#     struct_re = re.compile(rf"^\s*(?:mutable\s+)?struct\s+({IDENT})\b")
-#
-#     # Блоки, які відкривають ... end (спрощено, але практично працює)
-#     block_open_re = re.compile(
-#         r"^\s*(function|(?:mutable\s+)?struct|if|for|while|begin|let|try|quote|macro|module)\b"
-#     )
-#     block_end_re = re.compile(r"^\s*end\b")
-#
-#     STOPWORDS = {
-#         "if", "for", "while", "begin", "let",
-#         "try", "catch", "finally", "end", "do"
-#     }
-#
-#     structs = []
-#     functions = []
-#     seen_structs = set()
-#     seen_funcs = set()
-#
-#     depth = 0
-#
-#     # Приберемо коментарі (дуже грубо, але ок для ваших фрагментів)
-#     # Якщо у вас є строки з '#' всередині лапок — скажи, дам безпечніший варіант.
-#     lines = code.splitlines()
-#
-#     for raw in lines:
-#         line = raw.split("#", 1)[0].rstrip()
-#         if not line.strip():
-#             continue
-#
-#         # 1) Якщо це "end" — зменшуємо depth ПЕРШЕ
-#         # (бо "end" завершує блок, і наступні рядки можуть бути top-level)
-#         if block_end_re.match(line):
-#             depth = max(0, depth - 1)
-#             continue
-#
-#         # 2) На depth==0 збираємо визначення
-#         if depth == 0:
-#             m = struct_re.match(line)
-#             if m:
-#                 name = m.group(1)
-#                 if name not in seen_structs:
-#                     seen_structs.add(name)
-#                     structs.append(name)
-#
-#             m = block_func_re.match(line)
-#             if m:
-#                 name = m.group(1)
-#                 if name not in STOPWORDS and name not in seen_funcs:
-#                     seen_funcs.add(name)
-#                     functions.append(name)
-#
-#             m = oneliner_func_re.match(line)
-#             if m:
-#                 name = m.group(1)
-#                 if name not in STOPWORDS and name not in seen_funcs:
-#                     seen_funcs.add(name)
-#                     functions.append(name)
-#
-#         # 3) Якщо рядок відкриває блок — збільшуємо depth ПІСЛЯ обробки
-#         if block_open_re.match(line):
-#             depth += 1
-#
-#     return structs, functions
-
 import re
-
-# def extract_entities_from_algorithm(code: str):
-#     IDENT = r"[A-Za-z_\u0080-\uFFFF]\w*"
-#     FUNC_NAME = rf"{IDENT}[!?]?"
-#
-#     oneliner_func_re = re.compile(rf"^\s*({FUNC_NAME})\s*\([^=\n]*\)\s*=")
-#     block_func_re     = re.compile(rf"^\s*function\s+({FUNC_NAME})\b")
-#     struct_re         = re.compile(rf"^\s*(?:mutable\s+)?struct\s+({IDENT})\b")
-#
-#     # які конструкції відкривають блок, що закривається end
-#     block_open_re = re.compile(
-#         r"^\s*(function|(?:mutable\s+)?struct|if|for|while|begin|let|try|quote|macro|module)\b"
-#     )
-#     end_token_re = re.compile(r"\bend\b")
-#
-#     STOPWORDS = {
-#         "if", "for", "while", "begin", "let",
-#         "try", "catch", "finally", "end", "do"
-#     }
-#
-#     structs, functions = [], []
-#     seen_structs, seen_funcs = set(), set()
-#
-#     depth = 0
-#
-#     for raw in code.splitlines():
-#         # грубо прибираємо коментарі
-#         line = raw.split("#", 1)[0].rstrip()
-#         if not line.strip():
-#             continue
-#
-#         opens = 1 if block_open_re.match(line) else 0
-#         ends = len(end_token_re.findall(line))
-#
-#         # збираємо тільки на top-level
-#         if depth == 0:
-#             m = struct_re.match(line)
-#             if m:
-#                 name = m.group(1)
-#                 if name not in seen_structs:
-#                     seen_structs.add(name)
-#                     structs.append(name)
-#
-#             m = block_func_re.match(line)
-#             if m:
-#                 name = m.group(1)
-#                 if name not in STOPWORDS and name not in seen_funcs:
-#                     seen_funcs.add(name)
-#                     functions.append(name)
-#
-#             m = oneliner_func_re.match(line)
-#             if m:
-#                 name = m.group(1)
-#                 if name not in STOPWORDS and name not in seen_funcs:
-#                     seen_funcs.add(name)
-#                     functions.append(name)
-#
-#         # оновлюємо depth з урахуванням end у цьому ж рядку
-#         depth = max(0, depth + opens - ends)
-#
-#     return structs, functions
 
 def extract_used_entities_from_algorithm(
     code: str,
@@ -182,7 +25,7 @@ def extract_used_entities_from_algorithm(
     defined_functions = set(defined_functions or [])
 
     IDENT = r"[A-Za-z_\u0080-\uFFFF]\w*"
-    # дозволимо ! і ? в кінці та dotted names типу Base.show
+
     NAME = rf"(?:{IDENT}\.)*{IDENT}[!?]?"
 
     STOPWORDS = {
@@ -455,15 +298,32 @@ def extract_algorithm_number_from_caption(caption):
 
 def extract_chapter_from_algorithm_caption(caption):
     algorithm_number = caption.split(" ")[1]
-    return int(algorithm_number.split(".")[0])
+    return algorithm_number.split(".")[0]
 
 def get_algorithms_with_chapter(algorithms, chapter_number):
     chapter_algorithms = []
 
     for algorithm in algorithms:
         if extract_chapter_from_algorithm_caption(algorithm["caption"]) == chapter_number:
-            algorithms.append(algorithm)
+            chapter_algorithms.append(algorithm)
     return chapter_algorithms
+
+def find_related_definitions(algorithm_number, algorithms):
+    related = []
+    for algorithm in algorithms:
+        if algorithm["name"] == algorithm_number:
+            continue
+        for item, used_list in algorithm["functions"].items():
+            if algorithm_number in used_list:
+                related.append((item, algorithm["name"]))
+    return related
+
+def find_related_definitions_for_chapter(chapter_algorithms, all_algorithms):
+    related = {}
+    for algorithm in chapter_algorithms:
+        alg_number = algorithm["name"]
+        related[alg_number] = find_related_definitions(alg_number, all_algorithms)
+    return related
 
 
 julia_code = extract_algorithms(extract_algorithms_and_examples("dm.pdf"))
@@ -520,3 +380,14 @@ for algorithm in julia_code:
 for f_name, f_count in funcs.items():
     if f_count > 1:
         print(f"{f_name}: {f_count}         called {called_funcs.get(f_name, 0)} times")
+
+julia_chapter_code = get_algorithms_with_chapter(julia_code, "6")
+print(find_related_definitions_for_chapter(julia_chapter_code, julia_code))
+python_chapter_code = process("https://github.com/griffinbholt/decisionmaking-code-py/blob/main/src/ch06.py", None)
+
+# print(
+#     translated_prompt.format(
+#         "\n".join(f"{chapter['caption']} \n\n {chapter['text']} \n\n" for chapter in julia_chapter_code),
+#         python_chapter_code,
+#     )
+# )
