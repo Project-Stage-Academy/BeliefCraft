@@ -36,6 +36,11 @@ from app.clients.environment_client import (
     EnvironmentAPIClient,
     EnvironmentClientProtocol,
 )
+from app.core.constants import (
+    CACHE_TTL_ANALYTICS,
+    CACHE_TTL_HISTORY,
+    CACHE_TTL_SHIPMENTS,
+)
 from app.tools.base import APIClientTool, ToolMetadata
 
 
@@ -95,6 +100,7 @@ class GetCurrentObservationsTool(APIClientTool):
                 "required": [],
             },
             category="environment",
+            skip_cache=True,  # Real-time sensor data - must be fresh
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -167,6 +173,7 @@ class GetOrderBacklogTool(APIClientTool):
                 "required": [],
             },
             category="environment",
+            skip_cache=True,  # Real-time order status - must be fresh
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -232,6 +239,7 @@ class GetShipmentsInTransitTool(APIClientTool):
                 "required": [],
             },
             category="environment",
+            cache_ttl=CACHE_TTL_SHIPMENTS,  # 5 minutes - shipments change slowly
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -295,6 +303,7 @@ class CalculateStockoutProbabilityTool(APIClientTool):
                 "required": ["product_id"],
             },
             category="environment",
+            cache_ttl=CACHE_TTL_ANALYTICS,  # 10 minutes - analytics don't change rapidly
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -369,6 +378,7 @@ class CalculateLeadTimeRiskTool(APIClientTool):
                 "required": [],
             },
             category="environment",
+            cache_ttl=CACHE_TTL_ANALYTICS,  # 10 minutes - risk metrics are semi-stable
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -442,6 +452,7 @@ class GetInventoryHistoryTool(APIClientTool):
                 "required": ["product_id"],
             },
             category="environment",
+            cache_ttl=CACHE_TTL_HISTORY,  # 1 hour - historical data doesn't change
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
