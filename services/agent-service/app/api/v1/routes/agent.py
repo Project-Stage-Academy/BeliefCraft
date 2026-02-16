@@ -1,13 +1,13 @@
 from datetime import UTC, datetime
-from typing import Any
 
-import structlog
 from app.models.requests import AgentQueryRequest
 from app.models.responses import AgentQueryResponse
 from app.services.react_agent import ReActAgent
+from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
+from common.logging import get_logger
 from fastapi import APIRouter, HTTPException
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 router = APIRouter()
 
 
@@ -36,22 +36,8 @@ async def analyze_query(request: AgentQueryRequest) -> AgentQueryResponse:
 
         duration = (datetime.now(UTC) - start_time).total_seconds()
 
-        reasoning_trace = []
-        thoughts = final_state["thoughts"]
-        tool_calls_list = final_state["tool_calls"]
-        for i, thought in enumerate(thoughts):
-            entry: dict[str, Any] = {
-                "iteration": i + 1,
-                "thought": thought.thought,
-            }
-            if i < len(tool_calls_list):
-                tool_call = tool_calls_list[i]
-                entry["action"] = {
-                    "tool": tool_call.tool_name,
-                    "arguments": tool_call.arguments,
-                    "result": tool_call.result,
-                }
-            reasoning_trace.append(entry)
+        formatter = ReasoningTraceFormatter()
+        reasoning_trace = formatter.format(final_state)
 
         response = AgentQueryResponse(
             request_id=final_state["request_id"],

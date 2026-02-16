@@ -2,23 +2,23 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-import structlog
 from app.core.exceptions import AgentExecutionError
 from app.models.agent_state import AgentState, ThoughtStep, ToolCall, create_initial_state
 from app.prompts.system_prompts import WAREHOUSE_ADVISOR_SYSTEM_PROMPT, format_react_prompt
 from app.services.llm_service import LLMService
+from common.logging import get_logger
 from langgraph.graph import END, StateGraph  # type: ignore[import-not-found]
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class ReActAgent:
     """ReAct loop implementation using LangGraph for AWS Bedrock/Claude."""
 
     def __init__(self) -> None:
-        self.llm = LLMService()
+        self.llm: LLMService = LLMService()
         self.graph = self._build_graph()
 
     def _build_graph(self) -> StateGraph:
@@ -47,11 +47,8 @@ class ReActAgent:
     async def _think_node(self, state: AgentState) -> dict[str, Any]:
         """Reasoning step: Claude analyzes the situation and decides next action.
 
-        Builds the LLM prompt from system instructions and the formatted ReAct
-        history, calls the model, and records the resulting thought. If the LLM
-        returns tool calls, they are stored on the assistant message for the act
-        node to extract. If it returns a final answer, the state is marked
-        completed.
+        Orchestrates the thinking process by building messages, calling the LLM,
+        and parsing the response into state updates.
         """
         logger.info(
             "react_think",
@@ -59,67 +56,10 @@ class ReActAgent:
             iteration=state["iteration"],
         )
 
-        # Build message list for LLM.
-        # The formatted ReAct prompt encodes iteration info, user query, and
-        # XML history of prior thoughts/actions. Raw conversation messages
-        # are NOT appended separately to avoid duplicating context.
-        llm_messages: list[dict[str, Any]] = [
-            {"role": "system", "content": WAREHOUSE_ADVISOR_SYSTEM_PROMPT},
-            {"role": "user", "content": format_react_prompt(state)},  # type: ignore[arg-type]
-        ]
-
-        tools = self._get_tool_definitions()
-
         try:
-            response = await self.llm.chat_completion(
-                messages=llm_messages,
-                tools=tools if tools else None,
-                tool_choice="auto",
-            )
-
-            message_content = response["message"]["content"]
-
-            # Store tool_calls on the assistant message so the act node
-            # (and LLMService._convert_messages_to_langchain) can reconstruct
-            # the full AIMessage with tool invocations.
-            assistant_msg: dict[str, Any] = {
-                "role": "assistant",
-                "content": message_content,
-            }
-            if response["tool_calls"]:
-                assistant_msg["tool_calls"] = response["tool_calls"]
-
-            next_action = "tool_use" if response["tool_calls"] else "answer"
-            thought = ThoughtStep(
-                thought=message_content,
-                next_action=next_action,
-            )
-
-            updates: dict[str, Any] = {
-                "messages": state["messages"] + [assistant_msg],
-                "thoughts": state["thoughts"] + [thought],
-                "total_tokens": state["total_tokens"] + response["tokens"]["total"],
-            }
-
-            # Detect final answer: LLM stopped without requesting tools
-            if response["finish_reason"] == "stop" and not response["tool_calls"]:
-                if "FINAL ANSWER:" in message_content:
-                    updates["final_answer"] = message_content.split("FINAL ANSWER:", 1)[1].strip()
-                else:
-                    # Bare stop without tools treated as implicit final answer
-                    updates["final_answer"] = message_content
-                updates["status"] = "completed"
-
-            logger.info(
-                "react_think_complete",
-                request_id=state["request_id"],
-                iteration=state["iteration"],
-                has_tool_calls=bool(response["tool_calls"]),
-                has_final_answer="final_answer" in updates,
-                tokens_used=response["tokens"]["total"],
-            )
-
-            return updates
+            messages = self._build_llm_messages(state)
+            response = await self._call_llm(messages)
+            return self._parse_and_update(state, response)
 
         except Exception as e:
             logger.error(
@@ -128,19 +68,111 @@ class ReActAgent:
                 iteration=state["iteration"],
                 error=str(e),
                 error_type=type(e).__name__,
+                exc_info=True,
             )
             return {
                 "status": "failed",
                 "error": str(e),
             }
 
+    def _build_llm_messages(self, state: AgentState) -> list[dict[str, Any]]:
+        """Build the message list for LLM input.
+
+        The formatted ReAct prompt encodes iteration info, user query, and
+        XML history of prior thoughts/actions. Raw conversation messages
+        are NOT appended separately to avoid duplicating context.
+
+        Args:
+            state: Current agent state.
+
+        Returns:
+            List of messages for LLM consumption.
+        """
+        return [
+            {"role": "system", "content": WAREHOUSE_ADVISOR_SYSTEM_PROMPT},
+            {"role": "user", "content": format_react_prompt(state)},  # type: ignore[arg-type]
+        ]
+
+    async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Make the LLM API call with messages and tool definitions.
+
+        Args:
+            messages: List of messages to send to the LLM.
+
+        Returns:
+            LLM response dictionary containing message, tool_calls, tokens, etc.
+        """
+        tools = self._get_tool_definitions()
+        result = await self.llm.chat_completion(
+            messages=messages,
+            tools=tools if tools else None,
+            tool_choice="auto",
+        )
+        return cast(dict[str, Any], result)
+
+    def _parse_and_update(self, state: AgentState, response: dict[str, Any]) -> dict[str, Any]:
+        """Parse LLM response and build state updates.
+
+        Extracts the assistant message, creates a thought step, and prepares
+        state updates. Detects final answers when the LLM stops without
+        requesting tools.
+
+        Args:
+            state: Current agent state.
+            response: LLM response from chat_completion.
+
+        Returns:
+            Dictionary of state updates to merge into current state.
+        """
+        message_content = response["message"]["content"]
+
+        # Store tool_calls on the assistant message so the act node
+        # (and LLMService._convert_messages_to_langchain) can reconstruct
+        # the full AIMessage with tool invocations.
+        assistant_msg: dict[str, Any] = {
+            "role": "assistant",
+            "content": message_content,
+        }
+        if response["tool_calls"]:
+            assistant_msg["tool_calls"] = response["tool_calls"]
+
+        next_action = "tool_use" if response["tool_calls"] else "answer"
+        thought = ThoughtStep(
+            thought=message_content,
+            next_action=next_action,
+        )
+
+        updates: dict[str, Any] = {
+            "messages": state["messages"] + [assistant_msg],
+            "thoughts": state["thoughts"] + [thought],
+            "total_tokens": state["total_tokens"] + response["tokens"]["total"],
+        }
+
+        # Detect final answer: LLM stopped without requesting tools
+        if response["finish_reason"] == "stop" and not response["tool_calls"]:
+            if "FINAL ANSWER:" in message_content:
+                updates["final_answer"] = message_content.split("FINAL ANSWER:", 1)[1].strip()
+            else:
+                # Bare stop without tools treated as implicit final answer
+                updates["final_answer"] = message_content
+            updates["status"] = "completed"
+
+        logger.info(
+            "react_think_complete",
+            request_id=state["request_id"],
+            iteration=state["iteration"],
+            has_tool_calls=bool(response["tool_calls"]),
+            has_final_answer="final_answer" in updates,
+            tokens_used=response["tokens"]["total"],
+        )
+
+        return updates
+
     def _act_node(self, state: AgentState) -> dict[str, Any]:
         """Action step: execute tool calls from the last assistant message.
 
-        Extracts pending tool calls from the most recent assistant message,
-        parses their JSON arguments with safety checks, executes each tool,
-        and appends results back to the message history for the next think
-        iteration.
+        Orchestrates tool execution by extracting pending calls, executing them,
+        and building the updated state.
         """
         logger.info(
             "react_act",
@@ -148,22 +180,43 @@ class ReActAgent:
             iteration=state["iteration"],
         )
 
-        # Extract tool calls from the last assistant message
-        last_message = state["messages"][-1] if state["messages"] else {}
-        pending_calls = last_message.get("tool_calls", [])
+        pending_calls = self._extract_pending_tool_calls(state)
+        results = self._execute_all_tools(pending_calls, state["request_id"])
+        return self._build_act_result(state, results)
 
+    def _extract_pending_tool_calls(self, state: AgentState) -> list[dict[str, Any]]:
+        """Extract tool calls from the last assistant message.
+
+        Returns:
+            List of tool call dictionaries with id, function name, and arguments.
+        """
+        last_message = state["messages"][-1] if state["messages"] else {}
+        return cast(list[dict[str, Any]], last_message.get("tool_calls", []))
+
+    def _execute_all_tools(
+        self, pending_calls: list[dict[str, Any]], request_id: str
+    ) -> tuple[list[dict[str, Any]], list[ToolCall]]:
+        """Execute all pending tool calls and collect results.
+
+        Args:
+            pending_calls: List of tool call dictionaries from the assistant message.
+            request_id: Request ID for logging.
+
+        Returns:
+            Tuple of (new_messages, new_tool_calls) containing tool response messages
+            and ToolCall objects.
+        """
         new_messages: list[dict[str, Any]] = []
         new_tool_calls: list[ToolCall] = []
 
         for tool_call in pending_calls:
             func_name = tool_call["function"]["name"]
             tool_call_id = tool_call["id"]
-
             func_args = self._parse_tool_arguments(tool_call["function"]["arguments"])
 
             logger.info(
                 "executing_tool",
-                request_id=state["request_id"],
+                request_id=request_id,
                 tool=func_name,
                 tool_call_id=tool_call_id,
             )
@@ -189,7 +242,7 @@ class ReActAgent:
 
                 logger.info(
                     "tool_execution_success",
-                    request_id=state["request_id"],
+                    request_id=request_id,
                     tool=func_name,
                     tool_call_id=tool_call_id,
                 )
@@ -197,11 +250,12 @@ class ReActAgent:
             except Exception as e:
                 logger.error(
                     "tool_execution_error",
-                    request_id=state["request_id"],
+                    request_id=request_id,
                     tool=func_name,
                     tool_call_id=tool_call_id,
                     error=str(e),
                     error_type=type(e).__name__,
+                    exc_info=True,
                 )
                 error_msg = f"Tool execution failed: {e}"
                 new_tool_calls.append(
@@ -221,6 +275,23 @@ class ReActAgent:
                     }
                 )
 
+        return new_messages, new_tool_calls
+
+    def _build_act_result(
+        self,
+        state: AgentState,
+        results: tuple[list[dict[str, Any]], list[ToolCall]],
+    ) -> dict[str, Any]:
+        """Build the state update from tool execution results.
+
+        Args:
+            state: Current agent state.
+            results: Tuple of (new_messages, new_tool_calls) from tool execution.
+
+        Returns:
+            State update dictionary with merged messages, tool calls, and incremented iteration.
+        """
+        new_messages, new_tool_calls = results
         return {
             "messages": state["messages"] + new_messages,
             "tool_calls": state["tool_calls"] + new_tool_calls,
@@ -342,6 +413,7 @@ class ReActAgent:
                 request_id=initial_state["request_id"],
                 error=str(e),
                 error_type=type(e).__name__,
+                exc_info=True,
             )
             raise AgentExecutionError(f"ReAct agent execution failed: {e}") from e
 

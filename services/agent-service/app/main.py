@@ -3,7 +3,6 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-import httpx
 import redis
 import structlog
 from app.api.v1.routes import agent, health
@@ -11,6 +10,7 @@ from app.config import get_settings
 from app.core.constants import HEALTH_CHECK_TIMEOUT
 from app.core.exceptions import AgentServiceError
 from app.core.logging import configure_logging
+from common.http_client import TracedHttpClient
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -27,14 +27,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager"""
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
-    app.state.http_client = httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT)
-    app.state.redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
-    app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
-    yield
-    # Shutdown
-    await app.state.http_client.aclose()
-    app.state.redis_client.close()
-    app.state.redis_pool.disconnect()
+    async with TracedHttpClient("", timeout=HEALTH_CHECK_TIMEOUT) as http_client:
+        app.state.http_client = http_client
+        app.state.redis_pool = redis.ConnectionPool.from_url(
+            settings.REDIS_URL, decode_responses=True
+        )
+        app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
+        yield
+        # Shutdown
+        app.state.redis_client.close()
+        app.state.redis_pool.disconnect()
     logger.info("agent_service_stopping")
 
 
@@ -117,6 +119,7 @@ async def agent_exception_handler(request: Request, exc: AgentServiceError) -> J
         error_type=type(exc).__name__,
         error_message=str(exc),
         request_id=request.state.request_id,
+        exc_info=True,
     )
     return JSONResponse(
         status_code=exc.status_code,

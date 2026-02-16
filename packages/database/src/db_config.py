@@ -2,7 +2,11 @@ import logging
 import os
 from urllib.parse import quote_plus
 
+from common.utils.env_loader import load_service_env
+
 logger = logging.getLogger(__name__)
+
+load_service_env(__file__)
 
 
 def get_env_variable(var_name: str) -> str:

@@ -4,9 +4,9 @@ import json
 from typing import Any
 
 import boto3  # type: ignore[import-not-found]
-import structlog
 from app.config import get_settings
 from app.core.exceptions import LLMServiceError
+from common.logging import get_logger
 from langchain_aws import ChatBedrock  # type: ignore[import-not-found]
 from langchain_core.messages import (  # type: ignore[import-not-found]
     AIMessage,
@@ -22,23 +22,43 @@ from tenacity import (  # type: ignore[import-not-found]
     wait_exponential,
 )
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class LLMService:
     """Wrapper for AWS Bedrock (Claude) with retry logic and unified response format."""
 
-    def __init__(self) -> None:
-        self.settings = get_settings()
+    def __init__(self, boto_client: Any = None, llm: Any = None) -> None:
+        """Initialize LLM service with optional dependency injection.
 
-        self.boto_client = boto3.client(
+        Args:
+            boto_client: Pre-configured boto3 Bedrock client. If None, creates default.
+            llm: Pre-configured ChatBedrock instance. If None, creates default.
+        """
+        self.settings = get_settings()
+        self.boto_client = boto_client or self._create_boto_client()
+        self.llm = llm or self._create_llm()
+
+    def _create_boto_client(self) -> Any:
+        """Create and configure boto3 Bedrock client.
+
+        Returns:
+            Configured boto3 bedrock-runtime client.
+        """
+        return boto3.client(
             "bedrock-runtime",
             region_name=self.settings.AWS_DEFAULT_REGION,
             aws_access_key_id=self.settings.AWS_ACCESS_KEY_ID,
             aws_secret_access_key=self.settings.AWS_SECRET_ACCESS_KEY,
         )
 
-        self.llm = ChatBedrock(
+    def _create_llm(self) -> ChatBedrock:
+        """Create and configure ChatBedrock LLM instance.
+
+        Returns:
+            Configured ChatBedrock instance.
+        """
+        return ChatBedrock(
             client=self.boto_client,
             model_id=self.settings.BEDROCK_MODEL_ID,
             model_kwargs={
@@ -70,6 +90,29 @@ class LLMService:
                     )
                 )
         return lc_messages
+
+    def _extract_text_from_blocks(self, blocks: list[Any]) -> str:
+        """Extract text content from list of content blocks."""
+        return "".join(
+            block.get("text", "")
+            for block in blocks
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+
+    def _extract_message_content(self, response: AIMessage) -> str:
+        """Extract message content from LLM response.
+
+        Args:
+            response: AIMessage from LLM.
+
+        Returns:
+            Extracted text content as string.
+        """
+        if isinstance(response.content, str):
+            return response.content
+        if isinstance(response.content, list):
+            return self._extract_text_from_blocks(response.content)
+        return ""
 
     @retry(  # type: ignore[misc]
         stop=stop_after_attempt(3),
@@ -119,18 +162,7 @@ class LLMService:
             if response.tool_calls and finish_reason != "tool_calls":
                 finish_reason = "tool_calls"
 
-            # Extract text content — response.content may be a string or a
-            # list of content blocks (e.g. [{"type": "text", "text": "..."}]).
-            if isinstance(response.content, str):
-                message_content = response.content
-            elif isinstance(response.content, list):
-                message_content = "".join(
-                    block.get("text", "")
-                    for block in response.content
-                    if isinstance(block, dict) and block.get("type") == "text"
-                )
-            else:
-                message_content = ""
+            message_content = self._extract_message_content(response)
 
             result: dict[str, Any] = {
                 "message": {
@@ -179,6 +211,7 @@ class LLMService:
                 "llm_error",
                 error_type=type(e).__name__,
                 error_message=str(e),
+                exc_info=True,
             )
             raise LLMServiceError(f"Bedrock LLM call failed: {e}") from e
 

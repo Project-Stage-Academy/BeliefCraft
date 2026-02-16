@@ -46,9 +46,12 @@ repos:
           - python-dotenv
           - anthropic
           - pytest
+          - tenacity
           - pydantic-settings
           - redis
           - pyyaml
           - types-PyYAML
           - python-dotenv
           - uvicorn
+          - numpy
+          - faker
