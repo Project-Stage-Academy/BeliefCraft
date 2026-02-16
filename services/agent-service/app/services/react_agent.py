@@ -108,7 +108,7 @@ class ReActAgent:
             tools=tools if tools else None,
             tool_choice="auto",
         )
-        return cast(dict[str, Any], result)
+        return result
 
     def _parse_and_update(self, state: AgentState, response: dict[str, Any]) -> dict[str, Any]:
         """Parse LLM response and build state updates.

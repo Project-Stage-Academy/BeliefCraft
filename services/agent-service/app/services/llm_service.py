@@ -15,7 +15,7 @@ from langchain_core.messages import (  # type: ignore[import-not-found]
     SystemMessage,
     ToolMessage,
 )
-from tenacity import (  # type: ignore[import-not-found]
+from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -114,7 +114,7 @@ class LLMService:
             return self._extract_text_from_blocks(response.content)
         return ""
 
-    @retry(  # type: ignore[misc]
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type(LLMServiceError),
