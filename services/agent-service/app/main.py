@@ -144,7 +144,7 @@ async def root() -> dict[str, str]:
 # Include routers
 app.include_router(
     health.router,
-    prefix=settings.API_V1_PREFIX,
+    prefix="",
     tags=["health"],
 )
 
