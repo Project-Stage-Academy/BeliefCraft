@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "0001_initial_schema"
@@ -12,80 +13,72 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
+ID_COLUMN_SQL = "id UUID PRIMARY KEY DEFAULT gen_random_uuid()"
+CREATED_AT_COLUMN_SQL = "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+
+
+def _create_enum_type(enum_name: str, enum_values: tuple[str, ...]) -> None:
+    enum_type = postgresql.ENUM(*enum_values, name=enum_name)
+    enum_type.create(op.get_bind(), checkfirst=True)
+
+
+def _create_table(create_table_sql: str) -> None:
+    normalized_sql = create_table_sql.replace("__ID_COLUMN__", ID_COLUMN_SQL).replace(
+        "__CREATED_AT_COLUMN__", CREATED_AT_COLUMN_SQL
+    )
+    op.execute(normalized_sql)
+
 
 def upgrade() -> None:
     # Keep each DDL step small to avoid provider statement timeout on giant SQL blobs.
     op.execute("SET LOCAL statement_timeout = '0'")
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
 
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quality_status') THEN
-                CREATE TYPE quality_status AS ENUM ('ok', 'damaged', 'expired', 'quarantine');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'move_type') THEN
-                CREATE TYPE move_type AS ENUM ('inbound', 'outbound', 'transfer', 'adjustment');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'location_type') THEN
-                CREATE TYPE location_type AS ENUM ('shelf', 'bin', 'pallet_pos', 'dock', 'virtual');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
-                CREATE TYPE order_status AS ENUM ('new', 'allocated', 'picked', 'shipped', 'cancelled');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'po_status') THEN
-                CREATE TYPE po_status AS ENUM ('draft', 'submitted', 'partial', 'received', 'closed');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'device_type') THEN
-                CREATE TYPE device_type AS ENUM ('camera', 'rfid_reader', 'weight_sensor', 'scanner');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'device_status') THEN
-                CREATE TYPE device_status AS ENUM ('active', 'offline', 'maintenance');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shipment_status') THEN
-                CREATE TYPE shipment_status AS ENUM ('planned', 'in_transit', 'delivered', 'exception');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shipment_direction') THEN
-                CREATE TYPE shipment_direction AS ENUM ('inbound', 'outbound', 'transfer');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'route_mode') THEN
-                CREATE TYPE route_mode AS ENUM ('truck', 'air', 'rail', 'sea');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'leadtime_scope') THEN
-                CREATE TYPE leadtime_scope AS ENUM ('supplier', 'route', 'global');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dist_family') THEN
-                CREATE TYPE dist_family AS ENUM ('normal', 'lognormal', 'poisson');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'obs_type') THEN
-                CREATE TYPE obs_type AS ENUM ('scan', 'image_recog', 'manual_count');
-            END IF;
-        END
-        $$;
-        """)
+    enum_definitions: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("quality_status", ("ok", "damaged", "expired", "quarantine")),
+        ("move_type", ("inbound", "outbound", "transfer", "adjustment")),
+        ("location_type", ("shelf", "bin", "pallet_pos", "dock", "virtual")),
+        ("order_status", ("new", "allocated", "picked", "shipped", "cancelled")),
+        ("po_status", ("draft", "submitted", "partial", "received", "closed")),
+        ("device_type", ("camera", "rfid_reader", "weight_sensor", "scanner")),
+        ("device_status", ("active", "offline", "maintenance")),
+        ("shipment_status", ("planned", "in_transit", "delivered", "exception")),
+        ("shipment_direction", ("inbound", "outbound", "transfer")),
+        ("route_mode", ("truck", "air", "rail", "sea")),
+        ("leadtime_scope", ("supplier", "route", "global")),
+        ("dist_family", ("normal", "lognormal", "poisson")),
+        ("obs_type", ("scan", "image_recog", "manual_count")),
+    )
+    for enum_name, enum_values in enum_definitions:
+        _create_enum_type(enum_name, enum_values)
 
-    op.execute("""
+    _create_table(
+        """
         CREATE TABLE IF NOT EXISTS warehouses (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             name TEXT NOT NULL UNIQUE,
             region TEXT NOT NULL,
             tz TEXT NOT NULL
         )
-        """)
+        """,
+    )
 
-    op.execute("""
+    _create_table(
+        """
         CREATE TABLE IF NOT EXISTS suppliers (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             name TEXT NOT NULL UNIQUE,
             reliability_score DOUBLE PRECISION NOT NULL DEFAULT 0.5,
             region TEXT NOT NULL,
             CONSTRAINT suppliers_reliability_score_range CHECK (reliability_score >= 0 AND reliability_score <= 1)
         )
-        """)
+        """,
+    )
 
-    op.execute("""
+    _create_table(
+        """
         CREATE TABLE IF NOT EXISTS leadtime_models (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             scope leadtime_scope NOT NULL,
             dist_family dist_family NOT NULL,
             p1 DOUBLE PRECISION,
@@ -96,11 +89,12 @@ def upgrade() -> None:
             CONSTRAINT leadtime_models_p_rare_delay_range CHECK (p_rare_delay >= 0 AND p_rare_delay <= 1),
             CONSTRAINT leadtime_models_rare_delay_non_negative CHECK (rare_delay_add_days >= 0)
         )
-        """)
+        """,
+    )
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS products (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             sku TEXT NOT NULL UNIQUE,
             name TEXT NOT NULL,
             category TEXT NOT NULL,
@@ -109,9 +103,9 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS locations (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             warehouse_id UUID NOT NULL REFERENCES warehouses(id),
             parent_location_id UUID REFERENCES locations(id),
             code TEXT NOT NULL,
@@ -122,9 +116,9 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS routes (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             origin_warehouse_id UUID NOT NULL REFERENCES warehouses(id),
             destination_warehouse_id UUID NOT NULL REFERENCES warehouses(id),
             mode route_mode NOT NULL,
@@ -136,9 +130,9 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS inventory_balances (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             product_id UUID NOT NULL REFERENCES products(id),
             location_id UUID NOT NULL REFERENCES locations(id),
             on_hand DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -151,22 +145,22 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS orders (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             customer_name TEXT NOT NULL,
             status order_status NOT NULL DEFAULT 'new',
             promised_at TIMESTAMPTZ,
             sla_priority DOUBLE PRECISION NOT NULL DEFAULT 0.5,
             requested_ship_from_region TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            __CREATED_AT_COLUMN__,
             CONSTRAINT orders_sla_priority_range CHECK (sla_priority >= 0 AND sla_priority <= 1)
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS order_lines (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
             product_id UUID NOT NULL REFERENCES products(id),
             qty_ordered DOUBLE PRECISION NOT NULL,
@@ -181,21 +175,21 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS purchase_orders (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             supplier_id UUID NOT NULL REFERENCES suppliers(id),
             destination_warehouse_id UUID NOT NULL REFERENCES warehouses(id),
             status po_status NOT NULL DEFAULT 'draft',
             expected_at TIMESTAMPTZ,
             leadtime_model_id UUID REFERENCES leadtime_models(id),
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            __CREATED_AT_COLUMN__
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS po_lines (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             purchase_order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
             product_id UUID NOT NULL REFERENCES products(id),
             qty_ordered DOUBLE PRECISION NOT NULL,
@@ -206,9 +200,9 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS shipments (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             direction shipment_direction NOT NULL,
             origin_warehouse_id UUID REFERENCES warehouses(id),
             destination_warehouse_id UUID REFERENCES warehouses(id),
@@ -221,9 +215,9 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS inventory_moves (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             product_id UUID NOT NULL REFERENCES products(id),
             from_location_id UUID REFERENCES locations(id),
             to_location_id UUID REFERENCES locations(id),
@@ -239,9 +233,9 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS sensor_devices (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             warehouse_id UUID NOT NULL REFERENCES warehouses(id),
             device_type device_type NOT NULL,
             noise_sigma DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -253,9 +247,9 @@ def upgrade() -> None:
         )
         """)
 
-    op.execute("""
+    _create_table("""
         CREATE TABLE IF NOT EXISTS observations (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            __ID_COLUMN__,
             observed_at TIMESTAMPTZ NOT NULL,
             device_id UUID NOT NULL REFERENCES sensor_devices(id),
             product_id UUID NOT NULL REFERENCES products(id),
