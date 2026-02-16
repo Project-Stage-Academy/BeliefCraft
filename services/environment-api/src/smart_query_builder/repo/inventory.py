@@ -3,21 +3,22 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from schemas.inventory import GetCurrentInventoryRequest
-from sqlalchemy import MetaData, Table, literal, select
+from sqlalchemy import literal, select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.selectable import FromClause
+
+from packages.database.src.inventory import InventoryBalance, Location, Product
 
 
-def _load_tables(session: Session) -> dict[str, Table]:
-    bind = session.get_bind()
-    if bind is None:
+def _load_tables(session: Session) -> dict[str, FromClause]:
+    if session.get_bind() is None:
         raise RuntimeError("Database session is not bound.")
 
-    metadata = MetaData()
     return {
-        "inventory_balances": Table("inventory_balances", metadata, autoload_with=bind),
-        "products": Table("products", metadata, autoload_with=bind),
-        "locations": Table("locations", metadata, autoload_with=bind),
+        "inventory_balances": InventoryBalance.__table__,
+        "products": Product.__table__,
+        "locations": Location.__table__,
     }
 
 

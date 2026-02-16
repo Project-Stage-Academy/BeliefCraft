@@ -21,6 +21,7 @@ def get_at_risk_orders(
     horizon_hours: int = 48,
     min_sla_priority: float = 0.7,
     status: str | None = None,
+    top_missing_skus_limit: int = 5,
     limit: int = 50,
     offset: int = 0,
 ) -> ToolResult[list[AtRiskOrderRow]]:
@@ -35,6 +36,7 @@ def get_at_risk_orders(
             horizon_hours=horizon_hours,
             min_sla_priority=min_sla_priority,
             status=status,
+            top_missing_skus_limit=top_missing_skus_limit,
             limit=limit,
             offset=offset,
         )
@@ -52,6 +54,7 @@ def get_at_risk_orders(
                         "horizon_hours": horizon_hours,
                         "min_sla_priority": min_sla_priority,
                         "status": status,
+                        "top_missing_skus_limit": top_missing_skus_limit,
                     },
                     "pagination": {"limit": limit, "offset": offset},
                 },
@@ -59,7 +62,9 @@ def get_at_risk_orders(
 
         data: list[AtRiskOrderRow] = []
         for row in rows:
-            top_missing_skus = [str(sku) for sku in (row["top_missing_skus"] or [])][:5]
+            top_missing_skus = [str(sku) for sku in (row["top_missing_skus"] or [])][
+                : request.top_missing_skus_limit
+            ]
             data.append(
                 AtRiskOrderRow(
                     order_id=_to_str(row["order_id"]),
@@ -82,9 +87,10 @@ def get_at_risk_orders(
                     "horizon_hours": horizon_hours,
                     "min_sla_priority": min_sla_priority,
                     "status": status,
+                    "top_missing_skus_limit": top_missing_skus_limit,
                 },
                 "pagination": {"limit": limit, "offset": offset},
             },
         )
-    except Exception:
-        raise RuntimeError("Unable to fetch at-risk orders.") from None
+    except Exception as exc:
+        raise RuntimeError("Unable to fetch at-risk orders.") from exc

@@ -9,8 +9,13 @@ from ..db.session import get_session
 from ..repo.inventory import fetch_current_inventory_rows
 
 
-def _to_float(value: Any) -> float:
-    return float(value) if value is not None else 0.0
+def _to_float(value: Any, field_name: str) -> float:
+    if value is None:
+        raise ValueError(f"Unexpected null value for {field_name}.")
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid numeric value for {field_name}: {value!r}") from exc
 
 
 def _to_str(value: Any) -> str:
@@ -71,9 +76,9 @@ def get_current_inventory(
                 location_code=_to_str(row["location_code"]),
                 product_id=_to_str(row["product_id"]),
                 sku=_to_str(row["sku"]),
-                on_hand=_to_float(row["on_hand"]),
-                reserved=_to_float(row["reserved"]),
-                available=_to_float(row["available"]),
+                on_hand=_to_float(row["on_hand"], "on_hand"),
+                reserved=_to_float(row["reserved"], "reserved"),
+                available=_to_float(row["available"], "available"),
                 quality_status=(
                     str(row["quality_status"]) if row["quality_status"] is not None else None
                 ),
@@ -97,5 +102,5 @@ def get_current_inventory(
                 "pagination": {"limit": limit, "offset": offset},
             },
         )
-    except Exception:
-        raise RuntimeError("Unable to fetch current inventory.") from None
+    except Exception as exc:
+        raise RuntimeError("Unable to fetch current inventory.") from exc

@@ -95,5 +95,5 @@ def get_shipments_delay_summary(
                 "delayed_list_count": len(delayed_shipments),
             },
         )
-    except Exception:
-        raise RuntimeError("Unable to fetch shipment delay summary.") from None
+    except Exception as exc:
+        raise RuntimeError("Unable to fetch shipment delay summary.") from exc

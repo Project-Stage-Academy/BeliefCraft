@@ -15,6 +15,7 @@ class GetAtRiskOrdersRequest(Pagination):
     horizon_hours: int = Field(default=48, ge=1, le=24 * 30)
     min_sla_priority: float = Field(default=0.7, ge=0.0, le=1.0)
     status: str | None = None
+    top_missing_skus_limit: int = Field(default=5, ge=1, le=50)
 
     model_config = ConfigDict(extra="forbid")
 

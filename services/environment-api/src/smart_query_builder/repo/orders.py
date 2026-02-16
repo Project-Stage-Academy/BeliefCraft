@@ -9,6 +9,8 @@ from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
+URGENT_PROMISE_WINDOW_HOURS = 24
+
 
 def _load_tables(session: Session) -> dict[str, Table]:
     bind = session.get_bind()
@@ -34,7 +36,7 @@ def fetch_at_risk_order_rows(
 
     now_utc = datetime.now(UTC)
     horizon_cutoff = now_utc + timedelta(hours=request.horizon_hours)
-    urgent_cutoff = now_utc + timedelta(hours=24)
+    urgent_cutoff = now_utc + timedelta(hours=URGENT_PROMISE_WINDOW_HOURS)
 
     open_qty_expr = func.greatest(order_lines.c.qty_ordered - order_lines.c.qty_allocated, 0)
     risk_line_expr = or_(
@@ -117,7 +119,7 @@ def fetch_at_risk_order_rows(
                 aggregate_order_by(ranked_missing.c.sku, ranked_missing.c.rn.asc())
             ).label("top_missing_skus"),
         )
-        .where(ranked_missing.c.rn <= 5)
+        .where(ranked_missing.c.rn <= request.top_missing_skus_limit)
         .group_by(ranked_missing.c.order_id)
         .subquery("top_missing")
     )

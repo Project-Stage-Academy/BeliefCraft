@@ -105,5 +105,5 @@ def compare_observations_to_balances(
                 "pagination": {"limit": limit, "offset": offset},
             },
         )
-    except Exception:
-        raise RuntimeError("Unable to compare observations to balances.") from None
+    except Exception as exc:
+        raise RuntimeError("Unable to compare observations to balances.") from exc

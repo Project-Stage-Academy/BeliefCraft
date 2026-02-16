@@ -8,6 +8,12 @@ from sqlalchemy import MetaData, Table, and_, case, func, literal, or_, select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
+DELAY_THRESHOLD_HOURS = 48
+DELAYED_SHIPMENTS_LIMIT = 20
+IN_TRANSIT_OVER_THRESHOLD_REASON = f"In transit over {DELAY_THRESHOLD_HOURS} hours"
+TRANSIT_EXCEEDED_THRESHOLD_REASON = f"Transit exceeded {DELAY_THRESHOLD_HOURS} hours"
+NOT_DELAYED_REASON = "Not delayed"
+
 
 def _load_shipments_table(session: Session) -> Table:
     bind = session.get_bind()
@@ -23,7 +29,7 @@ def fetch_shipments_delay_summary(
     request: GetShipmentsDelaySummaryRequest,
 ) -> tuple[RowMapping, Sequence[RowMapping]]:
     shipments = _load_shipments_table(session)
-    delayed_cutoff = datetime.now(UTC) - timedelta(hours=48)
+    delayed_cutoff = datetime.now(UTC) - timedelta(hours=DELAY_THRESHOLD_HOURS)
 
     transit_hours_expr = case(
         (
@@ -35,19 +41,19 @@ def fetch_shipments_delay_summary(
 
     delayed_flag_expr = or_(
         and_(shipments.c.arrived_at.is_(None), shipments.c.shipped_at < delayed_cutoff),
-        transit_hours_expr > 48,
+        transit_hours_expr > DELAY_THRESHOLD_HOURS,
     )
 
     delayed_reason_expr = case(
         (
             and_(shipments.c.arrived_at.is_(None), shipments.c.shipped_at < delayed_cutoff),
-            literal("In transit over 48 hours"),
+            literal(IN_TRANSIT_OVER_THRESHOLD_REASON),
         ),
         (
-            and_(shipments.c.arrived_at.is_not(None), transit_hours_expr > 48),
-            literal("Transit exceeded 48 hours"),
+            and_(shipments.c.arrived_at.is_not(None), transit_hours_expr > DELAY_THRESHOLD_HOURS),
+            literal(TRANSIT_EXCEEDED_THRESHOLD_REASON),
         ),
-        else_=literal("Not delayed"),
+        else_=literal(NOT_DELAYED_REASON),
     )
 
     base_stmt = select(
@@ -111,7 +117,7 @@ def fetch_shipments_delay_summary(
         )
         .where(base.c.is_delayed.is_(True))
         .order_by(base.c.shipped_at.asc())
-        .limit(20)
+        .limit(DELAYED_SHIPMENTS_LIMIT)
     )
 
     summary_row = session.execute(summary_stmt).mappings().one()
