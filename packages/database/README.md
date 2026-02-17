@@ -35,8 +35,8 @@ Optional:
 ```python
 from sqlalchemy.orm import Session
 
-from packages.database.src.connection import get_engine
-from packages.database.src.models import Product
+from database.connection import get_engine
+from database.models import Product
 
 engine = get_engine()
 

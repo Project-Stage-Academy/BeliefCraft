@@ -39,7 +39,7 @@ pip install -e packages/common
 import os
 from fastapi import FastAPI
 from common.logging import configure_logging, get_logger
-from common.middleware import setup_logging_middleware
+from common import setup_logging_middleware
 
 # Configure logging (once at startup)
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -54,10 +54,11 @@ setup_logging_middleware(app)
 # Get logger for this module
 logger = get_logger(__name__)
 
+
 @app.get("/")
 async def root():
-    logger.info("root_endpoint_accessed", user_id=123)
-    return {"message": "Hello"}
+  logger.info("root_endpoint_accessed", user_id=123)
+  return {"message": "Hello"}
 ```
 
 ### 2. Environment Variables
@@ -80,30 +81,30 @@ logger = get_logger(__name__)
 
 # Info logging with metadata
 logger.info(
-    "user_login",
-    user_id=123,
-    username="john_doe",
-    login_method="oauth"
+  "user_login",
+  user_id=123,
+  username="john_doe",
+  login_method="oauth"
 )
 
 # Warning for unusual situations
 logger.warning(
-    "high_latency_detected",
-    duration_ms=5000,
-    threshold_ms=1000,
-    endpoint="/api/v1/query"
+  "high_latency_detected",
+  duration_ms=5000,
+  threshold_ms=1000,
+  endpoint="/api/v1/query"
 )
 
 # Error logging with exception
 try:
-    result = risky_operation()
+  result = risky_operation()
 except Exception as e:
-    logger.error(
-        "operation_failed",
-        operation="risky_operation",
-        error=str(e),
-        exc_info=True  # ✅ Include stack trace
-    )
+  logger.error(
+    "operation_failed",
+    operation="risky_operation",
+    error=str(e),
+    exc_info=True  # ✅ Include stack trace
+  )
 ```
 
 ### Output Example
@@ -141,14 +142,15 @@ Use `TracedHttpClient` for all HTTP calls between services to automatically prop
 ```python
 from common.http_client import TracedHttpClient
 
+
 async def call_rag_service(query: str):
-    """Call RAG service with automatic trace_id propagation."""
-    async with TracedHttpClient("http://rag-service:8000") as client:
-        response = await client.post(
-            "/api/search",
-            json={"query": query, "top_k": 5}
-        )
-        return response.json()
+  """Call RAG service with automatic trace_id propagation."""
+  async with TracedHttpClient("http://rag-service:8000") as client:
+    response = await client.post(
+      "/api/search",
+      json={"query": query, "top_k": 5}
+    )
+    return response.json()
 ```
 
 #### Features
@@ -167,23 +169,24 @@ from common.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 @router.post("/agent/action")
 async def execute_action(request: ActionRequest):
-    """Agent endpoint that calls RAG service."""
+  """Agent endpoint that calls RAG service."""
 
-    # Current trace_id is already in context (set by middleware)
-    logger.info("executing_agent_action", action_type=request.action)
+  # Current trace_id is already in context (set by middleware)
+  logger.info("executing_agent_action", action_type=request.action)
 
-    # HTTP client automatically reads trace_id from context and adds X-Request-ID header
-    async with TracedHttpClient("http://rag-service:8000", timeout=15.0) as client:
-        rag_response = await client.post(
-            "/api/documents/search",
-            json={"query": request.query}
-        )
-        documents = rag_response.json()
+  # HTTP client automatically reads trace_id from context and adds X-Request-ID header
+  async with TracedHttpClient("http://rag-service:8000", timeout=15.0) as client:
+    rag_response = await client.post(
+      "/api/documents/search",
+      json={"query": request.query}
+    )
+    documents = rag_response.json()
 
-    logger.info("rag_search_completed", doc_count=len(documents))
-    return {"documents": documents}
+  logger.info("rag_search_completed", doc_count=len(documents))
+  return {"documents": documents}
 ```
 
 **All logs will contain same `trace_id`:**
@@ -434,8 +437,10 @@ configure_logging("my-service", "INFO")
 ### Trace ID not propagating?
 
 Ensure middleware is setup:
+
 ```python
-from common.middleware import setup_logging_middleware
+from common import setup_logging_middleware
+
 setup_logging_middleware(app)
 ```
 
