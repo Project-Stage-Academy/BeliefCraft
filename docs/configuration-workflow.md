@@ -41,25 +41,25 @@ import os
 from pathlib import Path
 from pydantic import BaseModel
 from common.utils.config_loader import ConfigLoader
-from common.utils import BaseSettings
+from common import BaseSettings
 
 
 class AppConfig(BaseModel):
-    name: str
-    env: str
+  name: str
+  env: str
 
 
 class Settings(BaseSettings):
-    app: AppConfig
+  app: AppConfig
 
 
 settings = ConfigLoader(
-    service_root=Path(__file__).resolve().parents[2],
+  service_root=Path(__file__).resolve().parents[2],
 ).load(
-    schema=Settings,
-    env=os.getenv("ENV"),  # e.g. "dev", "prod"
-    cli_config_path=None,  # pass from --config if present
-    config_env_var="ENVIRONMENT_API_CONFIG",
+  schema=Settings,
+  env=os.getenv("ENV"),  # e.g. "dev", "prod"
+  cli_config_path=None,  # pass from --config if present
+  config_env_var="ENVIRONMENT_API_CONFIG",
 )
 
 print(settings.app.name)

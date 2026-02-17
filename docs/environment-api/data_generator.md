@@ -102,4 +102,4 @@ Execute the seeding script to reset the database and simulate history:
 ```bash
 
 # Execute the module
-uv run python -m src.data_generator.generate_seed_data
+uv run python -m environment_api.data_generator.generate_seed_data
