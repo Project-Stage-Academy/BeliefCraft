@@ -22,6 +22,30 @@ logger = configure_logging()
 settings = get_settings()
 
 
+async def _load_mcp_tools() -> None:
+    """
+    Load tools from MCP server if available.
+
+    This function attempts to discover and register tools from connected
+    MCP servers. If MCP is not available, it logs a warning and continues
+    with hardcoded tools only.
+
+    SOLID: Single Responsibility - only handles MCP tool loading
+    """
+    try:
+        # TODO: Initialize MCP client when available
+        # For now, MCP server is optional - use hardcoded tools as fallback
+        logger.debug(
+            "mcp_tools_optional", message="MCP loader will be enabled when MCP client is available"
+        )
+    except Exception as e:
+        logger.warning(
+            "failed_to_load_mcp_tools",
+            error=str(e),
+            message="Continuing with hardcoded tools only",
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager"""
@@ -30,6 +54,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.http_client = httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT)
     app.state.redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
     app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
+
+    # Load MCP tools if available
+    await _load_mcp_tools()
+
     yield
     # Shutdown
     await app.state.http_client.aclose()
@@ -144,7 +172,7 @@ async def root() -> dict[str, str]:
 # Include routers
 app.include_router(
     health.router,
-    prefix=settings.API_V1_PREFIX,
+    prefix="",
     tags=["health"],
 )
 
