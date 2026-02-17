@@ -12,13 +12,50 @@ Example:
     ```
 """
 
-from typing import Any
+from typing import Any, Protocol
 
 from app.clients.base_client import BaseAPIClient
 from app.config import get_settings
 from common.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class EnvironmentClientProtocol(Protocol):
+    """
+    Protocol defining the interface for Environment API clients.
+
+    This protocol ensures type safety when using EnvironmentAPIClient
+    in tools and avoids type: ignore comments.
+    """
+
+    async def __aenter__(self) -> "EnvironmentClientProtocol": ...
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None: ...
+
+    async def get_current_observations(
+        self,
+        product_id: str | None = None,
+        location_id: str | None = None,
+        warehouse_id: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def get_inventory_history(
+        self, product_id: str, days: int = 30, timeout: float | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_order_backlog(
+        self, status: str | None = None, priority: str | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_shipments_in_transit(self, warehouse_id: str | None = None) -> dict[str, Any]: ...
+
+    async def calculate_stockout_probability(self, product_id: str) -> dict[str, Any]: ...
+
+    async def calculate_lead_time_risk(
+        self, supplier_id: str | None = None, route_id: str | None = None
+    ) -> dict[str, Any]: ...
 
 
 class EnvironmentAPIClient(BaseAPIClient):

@@ -17,9 +17,9 @@ class Settings(BaseSettings):
 
     # External services
     ENVIRONMENT_API_URL: str = Field(
-        default="http://localhost:8000/api/v1", description="Environment API base URL"
+        default="http://localhost:8000", description="Environment API base URL"
     )
-    RAG_API_URL: str = Field(default="http://localhost:8001/api/v1", description="RAG API base URL")
+    RAG_API_URL: str = Field(default="http://localhost:8001", description="RAG API base URL")
 
     # AWS Bedrock (Claude) config
     AWS_DEFAULT_REGION: str = Field(default="us-east-1", description="AWS Region")

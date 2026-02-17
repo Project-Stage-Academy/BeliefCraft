@@ -219,3 +219,66 @@ class BaseTool(ABC):
                 "parameters": self.metadata.parameters,
             },
         }
+
+    def _validate_required_params(self, required: list[str], kwargs: dict[str, Any]) -> None:
+        """
+        Validate that all required parameters are present.
+
+        Args:
+            required: List of required parameter names
+            kwargs: Parameters passed to execute()
+
+        Raises:
+            ValueError: If any required parameter is missing
+        """
+        missing = [param for param in required if param not in kwargs]
+        if missing:
+            raise ValueError(
+                f"Missing required parameter(s) for {self.metadata.name}: {', '.join(missing)}"
+            )
+
+
+class APIClientTool(BaseTool):
+    """
+    Base class for tools that use external API clients.
+
+    This class provides common functionality for tools that interact with
+    external services through HTTP clients (Environment API, RAG API, etc.).
+
+    Features:
+    - Dependency injection for client reuse (avoids connection overhead)
+    - Automatic client lifecycle management
+    - Type-safe client operations through Protocol
+
+    Example:
+        ```python
+        from app.clients.environment_client import (
+            EnvironmentAPIClient,
+            EnvironmentClientProtocol,
+        )
+
+        class MyTool(APIClientTool):
+            def __init__(self, client: EnvironmentClientProtocol | None = None):
+                self._client = client
+                super().__init__()
+
+            def get_client(self) -> EnvironmentClientProtocol:
+                return self._client or EnvironmentAPIClient()
+
+            async def execute(self, **kwargs: Any) -> dict[str, Any]:
+                async with self.get_client() as client:
+                    return await client.some_method(**kwargs)
+        ```
+    """
+
+    def get_client(self) -> Any:
+        """
+        Get client instance for this tool.
+
+        Override this method to return the appropriate client
+        (either injected or newly created).
+
+        Returns:
+            Client instance (EnvironmentAPIClient, RAGAPIClient, etc.)
+        """
+        raise NotImplementedError("Subclasses must implement get_client()")
