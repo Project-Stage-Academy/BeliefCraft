@@ -65,5 +65,9 @@ CACHE_TTL_HISTORY = 3600  # 1 hour - historical data doesn't change
 CACHE_TTL_ANALYTICS = 600  # 10 minutes - analytics/risk calculations
 CACHE_TTL_SHIPMENTS = 300  # 5 minutes - shipments change slowly
 
+# Redis connection pool configuration
+REDIS_MAX_CONNECTIONS = 10
+REDIS_SOCKET_CONNECT_TIMEOUT = 5  # seconds
+
 # Error messages
 ERROR_PREFIX = "error: "

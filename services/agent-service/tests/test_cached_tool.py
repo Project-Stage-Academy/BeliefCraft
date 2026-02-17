@@ -10,6 +10,7 @@ Tests caching functionality:
 """
 
 import json
+from collections.abc import Generator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -68,54 +69,45 @@ def mock_settings() -> MagicMock:
     return settings
 
 
+@pytest.fixture(autouse=True)
+def mock_redis_infrastructure(mock_redis: AsyncMock) -> Generator[None, None, None]:
+    """Automatically mock Redis infrastructure for all tests."""
+    with (
+        patch("app.tools.cached_tool.redis.ConnectionPool.from_url"),
+        patch("app.tools.cached_tool.redis.Redis") as mock_redis_cls,
+    ):
+        mock_redis_cls.return_value = mock_redis
+        yield
+
+
+@pytest.fixture(autouse=True)
+def mock_get_settings_fixture(mock_settings: MagicMock) -> Generator[None, None, None]:
+    """Automatically mock get_settings for all tests."""
+    with patch("app.tools.cached_tool.get_settings") as mock_get_settings:
+        mock_get_settings.return_value = mock_settings
+        yield
+
+
 class TestCachedToolBasics:
     """Basic CachedTool functionality tests."""
 
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    def test_init_with_default_ttl(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock
-    ) -> None:
+    def test_init_with_default_ttl(self) -> None:
         """Test initialization with default TTL from settings."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-
         tool = MockTool()
         cached_tool = CachedTool(tool)
 
         assert cached_tool.tool == tool
         assert cached_tool.ttl_seconds == 3600
-        mock_from_url.assert_called_once()
 
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    def test_init_with_tool_metadata_ttl(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock
-    ) -> None:
+    def test_init_with_tool_metadata_ttl(self) -> None:
         """Test TTL priority: tool metadata over global default."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-
         tool = MockTool(cache_ttl=600)  # Tool wants 10 minutes
         cached_tool = CachedTool(tool)
 
         assert cached_tool.ttl_seconds == 600
 
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    def test_init_with_constructor_ttl(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock
-    ) -> None:
+    def test_init_with_constructor_ttl(self) -> None:
         """Test TTL priority: constructor arg over everything."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-
         tool = MockTool(cache_ttl=600)
         cached_tool = CachedTool(tool, ttl_seconds=300)  # Constructor override
 
@@ -123,30 +115,19 @@ class TestCachedToolBasics:
 
     def test_get_metadata(self) -> None:
         """Test metadata passthrough."""
-        with (
-            patch("app.tools.cached_tool.redis.from_url"),
-            patch("app.tools.cached_tool.get_settings"),
-        ):
-            tool = MockTool()
-            cached_tool = CachedTool(tool)
+        tool = MockTool()
+        cached_tool = CachedTool(tool)
 
-            metadata = cached_tool.get_metadata()
-            assert metadata.name == "mock_tool"
-            assert metadata.category == "utility"
+        metadata = cached_tool.get_metadata()
+        assert metadata.name == "mock_tool"
+        assert metadata.category == "utility"
 
 
 class TestCacheKeyGeneration:
     """Test cache key generation logic."""
 
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    def test_cache_key_format(self, mock_get_settings: MagicMock, mock_from_url: MagicMock) -> None:
+    def test_cache_key_format(self) -> None:
         """Test cache key format is correct."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-
         tool = MockTool()
         cached_tool = CachedTool(tool)
 
@@ -155,17 +136,8 @@ class TestCacheKeyGeneration:
         assert key.startswith("tool_cache:mock_tool:")
         assert len(key.split(":")) == 3  # tool_cache:tool_name:hash
 
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    def test_cache_key_parameter_order_independence(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock
-    ) -> None:
+    def test_cache_key_parameter_order_independence(self) -> None:
         """Test that parameter order doesn't affect cache key."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-
         tool = MockTool()
         cached_tool = CachedTool(tool)
 
@@ -175,17 +147,8 @@ class TestCacheKeyGeneration:
 
         assert key1 == key2 == key3
 
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    def test_cache_key_different_params_different_keys(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock
-    ) -> None:
+    def test_cache_key_different_params_different_keys(self) -> None:
         """Test that different parameters generate different keys."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-
         tool = MockTool()
         cached_tool = CachedTool(tool)
 
@@ -199,18 +162,8 @@ class TestCacheHitMiss:
     """Test cache hit and miss scenarios."""
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_cache_miss_executes_tool(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_cache_miss_executes_tool(self, mock_redis: AsyncMock) -> None:
         """Test cache miss executes original tool."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         mock_redis.get.return_value = None  # Cache miss
 
         tool = MockTool()
@@ -224,18 +177,8 @@ class TestCacheHitMiss:
         mock_redis.setex.assert_called_once()  # Should store result
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_cache_hit_skips_tool(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_cache_hit_skips_tool(self, mock_redis: AsyncMock) -> None:
         """Test cache hit doesn't execute original tool."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         cached_result = {"result": "cached_value", "count": 999}
         mock_redis.get.return_value = json.dumps(cached_result)  # Cache hit
 
@@ -250,18 +193,8 @@ class TestCacheHitMiss:
         mock_redis.setex.assert_not_called()  # No write on hit
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_cache_stores_with_correct_ttl(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_cache_stores_with_correct_ttl(self, mock_redis: AsyncMock) -> None:
         """Test cache stores result with correct TTL."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         mock_redis.get.return_value = None  # Cache miss
 
         tool = MockTool(cache_ttl=600)
@@ -278,18 +211,8 @@ class TestSkipCache:
     """Test skip_cache functionality."""
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_skip_cache_never_reads_cache(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_skip_cache_never_reads_cache(self, mock_redis: AsyncMock) -> None:
         """Test skip_cache=True never reads from cache."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         tool = MockTool(skip_cache=True)
         cached_tool = CachedTool(tool)
 
@@ -301,18 +224,8 @@ class TestSkipCache:
         mock_redis.setex.assert_not_called()  # Should not write cache
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_skip_cache_always_executes_tool(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_skip_cache_always_executes_tool(self, mock_redis: AsyncMock) -> None:
         """Test skip_cache=True always executes fresh."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         tool = MockTool(skip_cache=True)
         cached_tool = CachedTool(tool)
 
@@ -329,18 +242,8 @@ class TestErrorHandling:
     """Test graceful error handling."""
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_cache_read_error_falls_through(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_cache_read_error_falls_through(self, mock_redis: AsyncMock) -> None:
         """Test cache read errors don't break execution."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         mock_redis.get.side_effect = Exception("Redis connection failed")
 
         tool = MockTool()
@@ -353,18 +256,8 @@ class TestErrorHandling:
         assert tool.execute_count == 1
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_cache_write_error_returns_result(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_cache_write_error_returns_result(self, mock_redis: AsyncMock) -> None:
         """Test cache write errors don't break execution."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         mock_redis.get.return_value = None
         mock_redis.setex.side_effect = Exception("Redis write failed")
 
@@ -378,18 +271,8 @@ class TestErrorHandling:
         assert tool.execute_count == 1
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_close_error_handled_gracefully(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_close_error_handled_gracefully(self, mock_redis: AsyncMock) -> None:
         """Test close errors are handled gracefully."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         mock_redis.aclose.side_effect = Exception("Close failed")
 
         tool = MockTool()
@@ -404,18 +287,8 @@ class TestRunMethod:
     """Test run() method with cached flag."""
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_run_sets_cached_flag_on_hit(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_run_sets_cached_flag_on_hit(self, mock_redis: AsyncMock) -> None:
         """Test run() sets cached=True when result from cache."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         # Simulate cache hit - get() returns cached data
         mock_redis.get.return_value = json.dumps({"result": "cached"})
 
@@ -429,18 +302,8 @@ class TestRunMethod:
         assert tool.execute_count == 0  # Tool not executed (cache hit)
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_run_sets_cached_flag_on_miss(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_run_sets_cached_flag_on_miss(self, mock_redis: AsyncMock) -> None:
         """Test run() sets cached=False when executing fresh."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         # Simulate cache miss - get() returns None
         mock_redis.get.return_value = None
 
@@ -454,18 +317,8 @@ class TestRunMethod:
         assert tool.execute_count == 1  # Tool executed (cache miss)
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_run_with_corrupted_cache_data(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_run_with_corrupted_cache_data(self, mock_redis: AsyncMock) -> None:
         """Test run() handles corrupted cache data gracefully."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         # Simulate corrupted JSON in cache
         mock_redis.get.return_value = "invalid json {"
 
@@ -484,18 +337,8 @@ class TestIntegration:
     """Integration tests with real-like scenarios."""
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_multiple_calls_with_same_params(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_multiple_calls_with_same_params(self, mock_redis: AsyncMock) -> None:
         """Test multiple calls with same params use cache."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         # First call: cache miss
         # Second call: cache hit
         mock_redis.get.side_effect = [None, json.dumps({"result": "processed_test", "count": 1})]
@@ -510,18 +353,8 @@ class TestIntegration:
         assert result1 == result2
 
     @pytest.mark.asyncio
-    @patch("app.tools.cached_tool.redis.from_url")
-    @patch("app.tools.cached_tool.get_settings")
-    async def test_different_params_execute_separately(
-        self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
-    ) -> None:
+    async def test_different_params_execute_separately(self, mock_redis: AsyncMock) -> None:
         """Test different parameters execute separately."""
-        mock_settings = MagicMock()
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.CACHE_TTL_SECONDS = 3600
-        mock_get_settings.return_value = mock_settings
-        mock_from_url.return_value = mock_redis
-
         mock_redis.get.return_value = None  # Always miss
 
         tool = MockTool()

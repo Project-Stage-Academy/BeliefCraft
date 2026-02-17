@@ -31,6 +31,7 @@ from typing import Any
 
 import redis.asyncio as redis
 from app.config import get_settings
+from app.core.constants import REDIS_MAX_CONNECTIONS, REDIS_SOCKET_CONNECT_TIMEOUT
 from app.tools.base import BaseTool, ToolMetadata, ToolResult
 from common.logging import get_logger
 
@@ -74,15 +75,16 @@ class CachedTool(BaseTool):
         tool_metadata = self.tool.get_metadata()
         self.ttl_seconds = ttl_seconds or tool_metadata.cache_ttl or self.settings.CACHE_TTL_SECONDS
 
-        # Configure Redis with connection pooling
-        self.redis_client: redis.Redis = redis.from_url(  # type: ignore[no-untyped-call]
+        # Configure Redis connection pool explicitly for better type safety
+        pool = redis.ConnectionPool.from_url(
             self.settings.REDIS_URL,
             decode_responses=True,
-            max_connections=10,  # Connection pool size
+            max_connections=REDIS_MAX_CONNECTIONS,
             socket_keepalive=True,
-            socket_connect_timeout=5,
+            socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
             retry_on_timeout=True,
         )
+        self.redis_client = redis.Redis(connection_pool=pool)
 
         # Internal flag to track cache hits (thread-safe per execution)
         self._last_was_cached = False
