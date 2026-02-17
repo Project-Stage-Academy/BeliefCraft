@@ -1,4 +1,6 @@
-translated_prompt = '''
+from idlelib.config_key import translate_key
+
+update_descriptions_prompt = '''
 There is a book containing Julia code with accompanying explanatory text. The code has already been translated into Python. Your task is to:
 1. Replace the Julia code with the corresponding Python code.
 2. Update the description so that it naturally matches the Python code, as if it had originally been written for Python.
@@ -50,10 +52,7 @@ In the "declarations" field:
 - For methods, use the format: "ClassName.method_name".
 '''
 
-
-
-
-translate_prompt = '''
+translate_python_code_prompt = '''
 You are working on a book that contains code blocks with explanatory text. Some earlier blocks have already been rewritten into Python and the book text was updated accordingly. Now you must do the same for the new blocks provided below.
 
 Your task is to:
@@ -201,7 +200,7 @@ Return only the JSON array in the required format.
 '''
 
 
-example_prompt = '''
+translate_example_prompt = '''
 You are working on a book that contains examples combining explanatory text and code. Earlier parts of the book have already been rewritten so that all code is in Python and the surrounding text has been updated accordingly.
 
 Your task is to:
