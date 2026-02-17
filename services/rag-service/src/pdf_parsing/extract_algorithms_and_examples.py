@@ -174,6 +174,7 @@ def extract_algorithms(pymu_clocks):
         algorith = {
             "caption": get_algorithm_caption_from_jsons(algorithm_number),
             "text": block["text"],
+            "block_type": BlockType.ALGORITHM.value,
         }
         algorithms.append(algorith)
         print(algorith)
@@ -234,40 +235,20 @@ def extract_example_from_jsons(example):
     if idx != -1:
         return {
             "caption": result_text[idx:],
-            "text": result_text[:idx]
+            "text": result_text[:idx],
+            "block_type": BlockType.EXAMPLE.value,
         }
     else:
         return {
             "caption": get_example_caption(page, example_number),
-            "text": result_text[:idx]
+            "text": result_text[:idx],
+            "block_type": BlockType.EXAMPLE.value,
         }
-    return result_text#[idx:]
 
-# res = extract_algorithms(extract_algorithms_and_examples("dm.pdf"))
-# print(res)
-pymu_clocks = extract_algorithms_and_examples("dm.pdf")
-# example = get_example_by_number("Example 17.2.", pymu_clocks)
-# example = get_example_by_number("Example 17.2.", pymu_clocks)
-# print(extract_example_from_jsons(example))
-
-example_with_code_numbers = [
-    "Example 15.2.",
-    "Example 17.2.",
-    "Example 17.3.",
-    "Example 17.4.",
-    "Example 21.1.",
-    "Example 22.1.",
-    "Example 22.3.",
-    "Example 22.6.",
-    "Example 2.3.",
-    "Example 2.5.",
-    "Example 4.1.",
-    "Example 4.2.",
-    "Example 9.10.",
-    "Example 10.1.",
-    "Example 11.2.",
-]
-
-for example_number in example_with_code_numbers:
-    example = get_example_by_number(example_number, pymu_clocks)
-    print(extract_example_from_jsons(example))
+def extract_examples(example_numbers, pymu_clocks):
+    examples = []
+    for example_number in example_numbers:
+        example = get_example_by_number(example_number, pymu_clocks)
+        if example:
+            examples.append(extract_example_from_jsons(example))
+    return examples

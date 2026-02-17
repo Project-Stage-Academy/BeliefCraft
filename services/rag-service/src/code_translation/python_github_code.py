@@ -9,12 +9,6 @@ imported from chXX modules (transitively). Edit the CONFIG block below and run.
 # CONFIG — edit these two values and run
 # ==============================================================================
 
-GITHUB_URL = "https://github.com/griffinbholt/decisionmaking-code-py/blob/main/src/ch06.py"
-
-# Specific symbols to extract (and their transitive chXX deps).
-# Set to None or [] to grab the full file + all its chXX deps.
-SYMBOLS = []  # e.g. ["MDP", "MDPSolutionMethod", "rollout"]
-
 # ==============================================================================
 
 import sys
@@ -261,17 +255,17 @@ class Collector:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def process(github_url: str, requested_symbols: list[str] | None = None) -> str:
+def process(chapter: str, requested_symbols: list[str] | None = None) -> str:
     """
     Main function.
 
-    github_url        – GitHub blob URL of the starting file
+    chapter        – Chapter number as a string, e.g. "02" (no "ch" prefix)
     requested_symbols – optional list of specific symbols to extract;
                         if None/empty the full file is used
 
     Returns a single string with all the code.
     """
-    raw_url = github_blob_to_raw(github_url)
+    raw_url = github_blob_to_raw(f"https://github.com/griffinbholt/decisionmaking-code-py/blob/main/src/ch{chapter}.py")
     print(f"Fetching: {raw_url}", file=sys.stderr)
     main_source = fetch_source(raw_url)
 
@@ -304,6 +298,5 @@ def process(github_url: str, requested_symbols: list[str] | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    symbols = SYMBOLS if SYMBOLS else None
-    result = process(GITHUB_URL, symbols)
+    result = process("02", None)
     print(result)
