@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from code_translation.prompts import update_descriptions_prompt, translate_python_code_prompt, translate_example_prompt
-from code_translation.python_github_code import process
+from code_translation.python_github_code import get_translated_python_code_from_github
 from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms, BlockType
 import re
 
@@ -14,6 +14,7 @@ PROMPTS_DIR = Path("prompts")
 
 
 def extract_entities_from_julia_code(code: str):
+    """Return top-level structs and function names defined in a Julia code block."""
     IDENT = r"[A-Za-z_\u0080-\uFFFF]\w*"
     FUNC_NAME = rf"{IDENT}[!?]?"
 
@@ -46,6 +47,7 @@ def extract_entities_from_julia_code(code: str):
 
         ends = len(block_end_re.findall(line))
 
+        # Only capture top-level declarations to avoid nested helpers.
         if depth == 0:
             m = struct_re.match(line)
             if m:
@@ -74,6 +76,7 @@ def extract_entities_from_julia_code(code: str):
 
 
 def extract_block_number_from_caption(caption: str) -> str:
+    """Normalize a caption into its stable key, e.g. 'Algorithm 2.1.'"""
     parts = caption.split()
     if len(parts) < 2:
         return caption
@@ -81,11 +84,13 @@ def extract_block_number_from_caption(caption: str) -> str:
 
 
 def extract_chapter_from_block_caption(caption: str) -> str:
+    """Extract the chapter component from a block caption string."""
     block_number = caption.split(" ")[1]
     return block_number.split(".")[0]
 
 
 def get_blocks_with_chapter(blocks, chapter_number: str):
+    """Filter blocks to those belonging to a given chapter number."""
     chapter_blocks = []
 
     for block in blocks:
@@ -95,6 +100,7 @@ def get_blocks_with_chapter(blocks, chapter_number: str):
 
 
 def find_related_definitions(block_number, blocks):
+    """Find (entity, block_number) pairs that reference the given block."""
     related = []
     for block in blocks:
         if block["number"] == block_number:
@@ -111,6 +117,7 @@ def find_related_definitions(block_number, blocks):
 
 
 def find_related_definitions_for_chapter(chapter_blocks, all_blocks):
+    """Build a per-block map of related definitions for a chapter."""
     related = {}
     for block in chapter_blocks:
         block_number = block["number"]
@@ -119,6 +126,7 @@ def find_related_definitions_for_chapter(chapter_blocks, all_blocks):
 
 
 def extract_block_structs_and_functions(blocks) -> None:
+    """Annotate blocks with declared structs/functions and their usage lists."""
     for block in blocks:
         block["number"] = extract_block_number_from_caption(block["caption"])
         structs, functions = extract_entities_from_julia_code(block["text"])
@@ -127,6 +135,7 @@ def extract_block_structs_and_functions(blocks) -> None:
 
 
 def extract_entities_usage(blocks, blocks_type: BlockType = BlockType.ALGORITHM) -> None:
+    """Populate per-block usage lists for structs/functions across blocks."""
     for block in blocks:
         if block["block_type"] != blocks_type.value:
             continue
@@ -159,12 +168,14 @@ def extract_entities_usage(blocks, blocks_type: BlockType = BlockType.ALGORITHM)
 
 @lru_cache(maxsize=1)
 def _load_translated_algorithms() -> list:
+    """Load translated algorithms JSON once per run."""
     json_path = Path("translated_algorithms.json")
     with json_path.open("r", encoding="utf-8") as fh:
         return json.load(fh)
 
 
 def get_translated_algorithm(algorithm_number: str) -> Optional[str]:
+    """Return translated code for a given algorithm number."""
     json_data = _load_translated_algorithms()
 
     for item in json_data:
@@ -174,6 +185,7 @@ def get_translated_algorithm(algorithm_number: str) -> Optional[str]:
 
 
 def _normalize_chapter(chapter) -> int:
+    """Convert a chapter identifier to a numeric value (A-H mapped after 28)."""
     chapter_str = str(chapter)
     if chapter_str in APPENDIX_LETTERS:
         return APPENDIX_START_CHAPTER + ord(chapter_str) - ord("A")
@@ -181,12 +193,14 @@ def _normalize_chapter(chapter) -> int:
 
 
 def extract_block_chapter(block_number: str) -> int:
+    """Extract and normalize chapter number from a block key."""
     number = block_number.split(" ")[1]
     chapter = number.split(".")[0]
     return _normalize_chapter(chapter)
 
 
 def get_translated_algorithms(algorithm_numbers: Iterable[str]):
+    """Hydrate a list of algorithm numbers with translated code entries."""
     return [
         {
             "algorithm_number": algorithm_number,
@@ -196,6 +210,7 @@ def get_translated_algorithms(algorithm_numbers: Iterable[str]):
 
 
 def filter_out_older_chapters(block_numbers, current_chapter):
+    """Filter block numbers to those at or before the given chapter."""
     current_chapter = _normalize_chapter(current_chapter)
     filtered = []
     for block_number in block_numbers:
@@ -206,10 +221,12 @@ def filter_out_older_chapters(block_numbers, current_chapter):
 
 
 def _format_blocks_text(blocks) -> str:
+    """Render blocks as prompt-ready caption + code text."""
     return "\n".join(f"{block['caption']} \n\n {block['text']} \n\n" for block in blocks)
 
 
 def _format_translated_blocks(translated_blocks) -> str:
+    """Render translated algorithms as prompt-ready text."""
     return "\n".join(
         f"{translated['algorithm_number']} \n\n {translated['translated']} \n\n"
         for translated in translated_blocks
@@ -217,9 +234,10 @@ def _format_translated_blocks(translated_blocks) -> str:
 
 
 def build_update_descriptions_prompt(chapter, julia_code):
+    """Build a prompt to update algorithm descriptions for a chapter."""
     julia_chapter_code = get_blocks_with_chapter(julia_code, str(int(chapter)))
     extract_block_structs_and_functions(julia_chapter_code)
-    python_chapter_code = process(chapter, None)
+    python_chapter_code = get_translated_python_code_from_github(chapter, None)
 
     return update_descriptions_prompt.format(
         _format_blocks_text(julia_chapter_code),
@@ -228,6 +246,7 @@ def build_update_descriptions_prompt(chapter, julia_code):
 
 
 def build_translate_python_code_prompt(chapter, julia_code):
+    """Build a prompt to translate Julia algorithms in a chapter to Python."""
     extract_block_structs_and_functions(julia_code)
     extract_entities_usage(julia_code)
 
@@ -253,6 +272,7 @@ def build_translate_python_code_prompt(chapter, julia_code):
 
 
 def build_translate_example_prompt(example_number, blocks):
+    """Build a prompt to translate a single example block to Python."""
     extract_block_structs_and_functions(blocks)
     extract_entities_usage(blocks)
 
