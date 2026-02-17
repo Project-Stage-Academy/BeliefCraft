@@ -6,13 +6,14 @@ import httpx
 import redis
 from app.config import Settings
 from app.core.constants import ERROR_PREFIX, HTTP_OK_STATUS, HealthStatus
+from common.http_client import TracedHttpClient
 
 
 class HealthChecker:
     """Service for checking health of external dependencies"""
 
     def __init__(
-        self, settings: Settings, redis_client: redis.Redis, http_client: httpx.AsyncClient
+        self, settings: Settings, redis_client: redis.Redis, http_client: TracedHttpClient
     ):
         self.settings = settings
         self._redis_client = redis_client

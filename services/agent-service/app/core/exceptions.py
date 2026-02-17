@@ -45,4 +45,8 @@ class ValidationError(AgentServiceError):
         super().__init__(message, status_code=400, error_code="VALIDATION_ERROR")
 
 
-AgentServiceException = AgentServiceError
+class LLMServiceError(AgentServiceError):
+    """Raised when LLM service call fails"""
+
+    def __init__(self, message: str):
+        super().__init__(message, status_code=502, error_code="LLM_SERVICE_ERROR")

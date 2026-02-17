@@ -32,6 +32,10 @@ class Settings(BaseSettings):
         default=4000, ge=1, le=100000, description="Maximum tokens for completion"
     )
 
+    AWS_PROFILE: str | None = Field(
+        default=None,
+        description="AWS CLI profile name (e.g. from 'aws configure --profile <name>')",
+    )
     AWS_ACCESS_KEY_ID: str | None = Field(default=None)
     AWS_SECRET_ACCESS_KEY: str | None = Field(default=None)
 
@@ -50,6 +54,11 @@ class Settings(BaseSettings):
     MAX_ITERATIONS: int = Field(default=10, ge=1, le=50, description="Maximum agent iterations")
     TOOL_TIMEOUT_SECONDS: int = Field(
         default=30, ge=1, le=300, description="Tool execution timeout in seconds"
+    )
+
+    # CORS
+    CORS_ORIGINS: list[str] = Field(
+        default=["*"], description="Allowed CORS origins (comma-separated in env)"
     )
 
     # Logging

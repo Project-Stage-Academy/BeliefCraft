@@ -3,7 +3,7 @@
 from .constants import DependencyName, HealthStatus
 from .exceptions import (
     AgentExecutionError,
-    AgentServiceException,
+    AgentServiceError,
     ConfigurationError,
     ExternalServiceError,
     ToolExecutionError,
@@ -11,7 +11,7 @@ from .exceptions import (
 )
 
 __all__ = [
-    "AgentServiceException",
+    "AgentServiceError",
     "ConfigurationError",
     "ExternalServiceError",
     "AgentExecutionError",
