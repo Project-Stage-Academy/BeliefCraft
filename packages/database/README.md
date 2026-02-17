@@ -45,6 +45,41 @@ with Session(engine) as session:
     print(products)
 ```
 
+## Alembic Migrations
+
+### Migration layout
+
+- Config: `packages/database/alembic.ini`
+- Environment: `packages/database/alembic/env.py`
+- Revisions: `packages/database/alembic/versions/*.py`
+
+### Apply locally
+
+```bash
+# from repo root
+uv run --project packages/database alembic -c packages/database/alembic.ini upgrade head
+```
+
+### Create a new migration
+
+```bash
+uv run --project packages/database alembic -c packages/database/alembic.ini revision -m "add_new_table"
+```
+
+If schema can be auto-diffed from ORM metadata, use:
+
+```bash
+uv run --project packages/database alembic -c packages/database/alembic.ini revision --autogenerate -m "sync_models"
+```
+
+### CI/CD usage
+
+Run migrations after DB provisioning and before service startup:
+
+```bash
+uv run --project packages/database alembic -c packages/database/alembic.ini upgrade head
+```
+
 ## Schema Conformance Tests
 
 Read-only tests that compare ORM metadata to a local Postgres schema.
