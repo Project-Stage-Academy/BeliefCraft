@@ -50,15 +50,12 @@ class RequestLogger:
 
     async def log_response(self, response: httpx.Response) -> None:
         """Log response details. Only reads body for errors to prevent OOM."""
-        start_time = response.request.extensions.get("start_time")
-        if start_time is not None:
-            duration_ms = (time.perf_counter() - start_time) * 1000
+        streaming = not hasattr(response, "_content")
+        if not streaming:
+            duration_ms = response.elapsed.total_seconds() * 1000 if response.elapsed else 0
         else:
-            # Fallback to httpx elapsed if start_time extension is missing
-            try:
-                duration_ms = response.elapsed.total_seconds() * 1000
-            except RuntimeError:
-                duration_ms = 0
+            start_time = response.request.extensions["start_time"]
+            duration_ms = (time.perf_counter() - start_time) * 1000
 
         if response.status_code >= 400:
             await response.aread()
@@ -68,6 +65,7 @@ class RequestLogger:
                 method=response.request.method,
                 url=str(response.request.url),
                 duration_ms=duration_ms,
+                streaming=streaming,
                 response_body=response.text[:500],
             )
         else:
@@ -77,6 +75,7 @@ class RequestLogger:
                 url=str(response.request.url),
                 status_code=response.status_code,
                 duration_ms=duration_ms,
+                streaming=streaming,
             )
 
 
@@ -137,6 +136,10 @@ class TracedHttpClient:
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
         return self._client
+
+    def get_httpx_client(self) -> httpx.AsyncClient:
+        """Expose the underlying httpx.AsyncClient."""
+        return self._ensure_initialized()
 
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
         """Send GET request with automatic trace_id propagation."""
