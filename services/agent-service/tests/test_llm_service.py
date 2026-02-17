@@ -18,6 +18,7 @@ from langchain_core.messages import (  # type: ignore[import-not-found]
 def mock_settings() -> MagicMock:
     settings = MagicMock()
     settings.AWS_DEFAULT_REGION = "us-east-1"
+    settings.AWS_PROFILE = None
     settings.AWS_ACCESS_KEY_ID = "test-key"
     settings.AWS_SECRET_ACCESS_KEY = "test-secret"  # noqa: S105
     settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
@@ -327,7 +328,7 @@ class TestLLMServiceInit:
             LLMService()
 
             mock_boto3.client.assert_called_once_with(
-                "bedrock-runtime",
+                service_name="bedrock-runtime",
                 region_name="us-east-1",
                 aws_access_key_id="test-key",
                 aws_secret_access_key="test-secret",  # noqa: S106

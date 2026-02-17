@@ -42,15 +42,36 @@ class LLMService:
     def _create_boto_client(self) -> Any:
         """Create and configure boto3 Bedrock client.
 
+        Supports three authentication strategies (checked in order):
+        1. Named AWS CLI profile (AWS_PROFILE setting)
+        2. Explicit access key credentials (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)
+        3. Default boto3 credential chain (~/.aws/credentials, env vars, IAM roles)
+
         Returns:
             Configured boto3 bedrock-runtime client.
         """
-        return boto3.client(
-            "bedrock-runtime",
-            region_name=self.settings.AWS_DEFAULT_REGION,
-            aws_access_key_id=self.settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=self.settings.AWS_SECRET_ACCESS_KEY,
-        )
+        region = self.settings.AWS_DEFAULT_REGION
+
+        if getattr(self.settings, "AWS_PROFILE", None):
+            logger.info("Using AWS profile '%s' for Bedrock client", self.settings.AWS_PROFILE)
+            session = boto3.Session(
+                profile_name=self.settings.AWS_PROFILE,
+                region_name=region,
+            )
+            return session.client("bedrock-runtime")
+
+        client_kwargs: dict[str, Any] = {
+            "service_name": "bedrock-runtime",
+            "region_name": region,
+        }
+
+        if self.settings.AWS_ACCESS_KEY_ID and self.settings.AWS_SECRET_ACCESS_KEY:
+            client_kwargs["aws_access_key_id"] = self.settings.AWS_ACCESS_KEY_ID
+            client_kwargs["aws_secret_access_key"] = self.settings.AWS_SECRET_ACCESS_KEY
+        else:
+            logger.info("No explicit AWS credentials; using default boto3 credential chain")
+
+        return boto3.client(**client_kwargs)
 
     def _create_llm(self) -> ChatBedrock:
         """Create and configure ChatBedrock LLM instance.
