@@ -129,9 +129,9 @@ class RagTools:
         self,
         entity_type: Annotated[EntityType, "Type of entity."],
         number: Annotated[str, "Unique number of the object, e.g., '1.2.4'."],
-    ) -> Document:
+    ) -> Document | None:
         """
-        Precise retrieval of a unique object by its number.
+        Precise retrieval of a unique object by its number. Returns None if not found.
         """
         logger.info(
             "rag tool call",

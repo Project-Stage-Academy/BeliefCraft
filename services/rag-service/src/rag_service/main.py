@@ -30,11 +30,13 @@ logger = get_logger(__name__)
 mcp = create_mcp_server()
 mcp.add_middleware(
     ErrorHandlingMiddleware(
-        include_traceback=True, transform_errors=True, logger=logger  # noqa typing
+        include_traceback=True,
+        transform_errors=True,
+        logger=logger,  # type: ignore
     )
 )
-mcp.add_middleware(TimingMiddleware(logger=logger))  # noqa typing
-mcp.add_middleware(StructuredLoggingMiddleware(logger=logger))  # noqa typing
+mcp.add_middleware(TimingMiddleware(logger=logger))  # type: ignore
+mcp.add_middleware(StructuredLoggingMiddleware(logger=logger))  # type: ignore
 mcp_app = mcp.http_app(path="/mcp")
 app = FastAPI(title="RAG API", lifespan=mcp_app.lifespan)
 app.mount("/", mcp_app)
