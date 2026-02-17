@@ -54,7 +54,7 @@ def mock_redis() -> AsyncMock:
     redis_mock = AsyncMock()
     redis_mock.get = AsyncMock(return_value=None)
     redis_mock.setex = AsyncMock(return_value=True)
-    redis_mock.exists = AsyncMock(return_value=0)
+    redis_mock.delete = AsyncMock(return_value=True)
     redis_mock.aclose = AsyncMock()
     return redis_mock
 
@@ -416,7 +416,7 @@ class TestRunMethod:
         mock_get_settings.return_value = mock_settings
         mock_from_url.return_value = mock_redis
 
-        mock_redis.exists.return_value = 1  # Key exists
+        # Simulate cache hit - get() returns cached data
         mock_redis.get.return_value = json.dumps({"result": "cached"})
 
         tool = MockTool()
@@ -426,6 +426,7 @@ class TestRunMethod:
 
         assert result.success is True
         assert result.cached is True
+        assert tool.execute_count == 0  # Tool not executed (cache hit)
 
     @pytest.mark.asyncio
     @patch("app.tools.cached_tool.redis.from_url")
@@ -440,7 +441,7 @@ class TestRunMethod:
         mock_get_settings.return_value = mock_settings
         mock_from_url.return_value = mock_redis
 
-        mock_redis.exists.return_value = 0  # Key doesn't exist
+        # Simulate cache miss - get() returns None
         mock_redis.get.return_value = None
 
         tool = MockTool()
@@ -450,22 +451,23 @@ class TestRunMethod:
 
         assert result.success is True
         assert result.cached is False
+        assert tool.execute_count == 1  # Tool executed (cache miss)
 
     @pytest.mark.asyncio
     @patch("app.tools.cached_tool.redis.from_url")
     @patch("app.tools.cached_tool.get_settings")
-    async def test_run_handles_redis_exists_error(
+    async def test_run_with_corrupted_cache_data(
         self, mock_get_settings: MagicMock, mock_from_url: MagicMock, mock_redis: AsyncMock
     ) -> None:
-        """Test run() handles Redis exists() errors gracefully."""
+        """Test run() handles corrupted cache data gracefully."""
         mock_settings = MagicMock()
         mock_settings.REDIS_URL = "redis://localhost:6379"
         mock_settings.CACHE_TTL_SECONDS = 3600
         mock_get_settings.return_value = mock_settings
         mock_from_url.return_value = mock_redis
 
-        mock_redis.exists.side_effect = Exception("Redis error")
-        mock_redis.get.return_value = None
+        # Simulate corrupted JSON in cache
+        mock_redis.get.return_value = "invalid json {"
 
         tool = MockTool()
         cached_tool = CachedTool(tool)
@@ -473,7 +475,9 @@ class TestRunMethod:
         result = await cached_tool.run(input="test")
 
         assert result.success is True
-        assert result.cached is False  # Default to False on error
+        assert result.cached is False  # Corrupted cache = fresh execution
+        assert tool.execute_count == 1  # Tool executed
+        mock_redis.delete.assert_called_once()  # Corrupted key deleted
 
 
 class TestIntegration:

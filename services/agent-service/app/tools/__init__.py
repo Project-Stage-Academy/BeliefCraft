@@ -83,7 +83,7 @@ def register_all_tools() -> None:
     - ExpandGraphByIdsTool: 24 hours
     - GetEntityByNumberTool: 24 hours
     """
-    logger.info("registering_all_tools", tool_count=9)
+    logger.info("registering_all_tools_started")
 
     # Environment Tools (6 tools)
     # Real-time sensors - skip_cache=True in metadata
@@ -101,12 +101,18 @@ def register_all_tools() -> None:
     tool_registry.register(CachedTool(ExpandGraphByIdsTool()))
     tool_registry.register(CachedTool(GetEntityByNumberTool()))
 
+    # Count tools by category dynamically
+    env_count = sum(
+        1 for t in tool_registry.tools.values() if t.get_metadata().category == "environment"
+    )
+    rag_count = sum(1 for t in tool_registry.tools.values() if t.get_metadata().category == "rag")
+
     logger.info(
         "tools_registered_successfully",
         total_tools=len(tool_registry.tools),
         categories={
-            "environment": 6,
-            "rag": 3,
+            "environment": env_count,
+            "rag": rag_count,
         },
     )
 
