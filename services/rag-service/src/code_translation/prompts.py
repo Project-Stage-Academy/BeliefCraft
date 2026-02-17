@@ -1,5 +1,3 @@
-from idlelib.config_key import translate_key
-
 update_descriptions_prompt = '''
 There is a book containing Julia code with accompanying explanatory text. The code has already been translated into Python. Your task is to:
 1. Replace the Julia code with the corresponding Python code.

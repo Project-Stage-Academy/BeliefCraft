@@ -255,7 +255,7 @@ class Collector:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def process(chapter: str, requested_symbols: list[str] | None = None) -> str:
+def get_translated_python_code_from_github(chapter: str, requested_symbols: list[str] | None = None) -> str:
     """
     Main function.
 
@@ -298,5 +298,4 @@ def process(chapter: str, requested_symbols: list[str] | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    result = process("02", None)
-    print(result)
+    result = get_translated_python_code_from_github("02", None)
