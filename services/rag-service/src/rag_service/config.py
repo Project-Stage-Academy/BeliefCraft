@@ -21,4 +21,4 @@ class Settings(BaseSettings):
     model_config = ConfigDict(extra="forbid")
 
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    repository: Literal[*REPOSITORY_REGISTRY.keys()] = Field(default="FakeDataRepository")
+    repository: Literal[*REPOSITORY_REGISTRY.keys()] = Field(default="FakeDataRepository")  # type: ignore[valid-type]

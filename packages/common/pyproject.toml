@@ -23,5 +23,10 @@ dev = [
     "respx"
 ]
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
+
 [tool.hatch.build.targets.wheel]
-packages = ["common"]
+packages = ["src/common", "schemas"]

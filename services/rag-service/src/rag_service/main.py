@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import logging
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 from common.logging import configure_logging, get_logger
@@ -7,9 +10,9 @@ from common.middleware import setup_logging_middleware
 from common.utils.config_loader import ConfigLoader
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
-from fastmcp.server.middleware.logging import StructuredLoggingMiddleware
-from fastmcp.server.middleware.timing import TimingMiddleware
+from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware  # type: ignore
+from fastmcp.server.middleware.logging import StructuredLoggingMiddleware  # type: ignore
+from fastmcp.server.middleware.timing import TimingMiddleware  # type: ignore
 
 from .config import Settings
 from .mcp_tools import create_mcp_server
@@ -34,17 +37,21 @@ mcp.add_middleware(
     ErrorHandlingMiddleware(
         include_traceback=True,
         transform_errors=True,
-        logger=logger,  # type: ignore
+        logger=logger,
     )
 )
-mcp.add_middleware(TimingMiddleware(logger=logger))  # type: ignore
-mcp.add_middleware(StructuredLoggingMiddleware(logger=logger))  # type: ignore
+mcp.add_middleware(TimingMiddleware(logger=logger))
+mcp.add_middleware(StructuredLoggingMiddleware(logger=logger))
 mcp_app = mcp.http_app(path="/mcp")
-app = FastAPI(title="RAG API", lifespan=mcp_app.lifespan)
+app = FastAPI(title="BeliefCraft RAG Service", version="0.1.0", lifespan=mcp_app.lifespan)
 app.mount("/", mcp_app)
 setup_logging_middleware(app)
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "service": "rag-service",
+        "timestamp": datetime.now(UTC).isoformat(),
+    }

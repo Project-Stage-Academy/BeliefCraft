@@ -6,7 +6,7 @@ the MCP tools layer and the repository layer.
 """
 
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -41,7 +41,7 @@ class Document(BaseModel):
     id: str
     content: str
     cosine_similarity: float
-    metadata: dict
+    metadata: dict[str, Any]
 
 
 class MetadataFilter(BaseModel):

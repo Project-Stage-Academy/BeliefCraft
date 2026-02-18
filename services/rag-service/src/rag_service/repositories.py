@@ -98,7 +98,7 @@ class AbstractVectorStoreRepository(ABC):
 
         for doc in docs:
             for field in traverse_types:
-                refs = doc.metadata.get(TRAVERSE_TYPE_TO_REFERENCE_FIELD[field])
+                refs: list[str] = doc.metadata.get(TRAVERSE_TYPE_TO_REFERENCE_FIELD[field])  # type: ignore[assignment]
                 chunk_type_value = ENTITY_TYPE_TO_CHUNK_TYPE.get(field, field)
                 filters = MetadataFilters(
                     filters=[

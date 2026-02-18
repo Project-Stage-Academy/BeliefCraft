@@ -1,0 +1,188 @@
+"""
+Layout Builders Module.
+
+This module contains specialized builder classes responsible for generating
+the physical and logical layout of a warehouse. It separates the construction
+of shipping/receiving areas (Docks) from storage areas (Zones/Aisles).
+
+Classes:
+    DockBuilder: Handles creation of entry/exit points.
+    ZoneBuilder: Handles creation of the internal storage hierarchy and sensor assets.
+"""
+
+import random
+
+from database.models import (
+    DeviceStatus,
+    DeviceType,
+    Location,
+    LocationType,
+    SensorDevice,
+    Warehouse,
+)
+from environment_api.config_load import settings
+from sqlalchemy.orm import Session
+
+
+class DockBuilder:
+    """
+    Specialist builder for shipping and receiving infrastructure.
+    """
+
+    def __init__(self, session: Session):
+        """
+        Args:
+            session (Session): The active SQLAlchemy database session.
+        """
+        self.session = session
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
+
+    def build(self, warehouse: Warehouse) -> Location:
+        """
+        Creates a single 'DOCK' location for the given warehouse.
+
+        The Dock is a high-capacity location used as the staging area for
+        inbound shipments (receiving) and outbound orders (shipping).
+
+        Args:
+            warehouse (Warehouse): The parent warehouse entity.
+
+        Returns:
+            Location: The created Dock location entity.
+        """
+        dock = Location(
+            warehouse_id=warehouse.id,
+            code=f"{warehouse.name}-DOCK",
+            type=LocationType.DOCK,
+            capacity_units=self.rng.randint(
+                settings.layout.dock.capacity_min, settings.layout.dock.capacity_max
+            ),
+        )
+        self.session.add(dock)
+        return dock
+
+
+class ZoneBuilder:
+    """
+    Specialist builder for the internal storage hierarchy and IoT assets.
+    Responsible for creating Zones, Aisles (Shelves), and generating Sensors.
+    """
+
+    def __init__(self, session: Session):
+        """
+        Args:
+            session (Session): The active SQLAlchemy database session.
+        """
+        self.session = session
+        self.rng = random.Random(settings.simulation.random_seed)  # noqa: S311
+
+    def build_zones(self, warehouse: Warehouse) -> list[Location]:
+        """
+        Generates a randomized layout of storage zones for the warehouse.
+
+        Creates virtual 'ZONE' locations (e.g., ZONE-A, ZONE-B).
+        Each zone acts as a parent container for physical aisles.
+
+        Args:
+            warehouse (Warehouse): The parent warehouse entity.
+
+        Returns:
+            List[Location]: A list of created Zone location entities.
+        """
+        created_zones = []
+        zone_count = self.rng.randint(2, 5)
+
+        zone_letters = [chr(65 + i) for i in range(zone_count)]
+
+        for letter in zone_letters:
+            zone_name = f"ZONE-{letter}"
+
+            zone = Location(
+                warehouse_id=warehouse.id,
+                code=f"{warehouse.name}-{zone_name}",
+                type=LocationType.VIRTUAL,
+                capacity_units=self.rng.randint(
+                    settings.layout.zone.capacity_min, settings.layout.zone.capacity_max
+                ),
+            )
+            self.session.add(zone)
+            self.session.flush()
+
+            self._build_aisles(warehouse, zone, zone_name)
+            created_zones.append(zone)
+
+        return created_zones
+
+    def _build_aisles(self, warehouse: Warehouse, zone: Location, zone_name: str) -> None:
+        """
+        Helper method to create physical shelves (Aisles) within a specific zone.
+
+        Creates 'SHELF' locations per zone. Also triggers the probability
+        check to add a sensor for each created aisle.
+
+        Args:
+            warehouse (Warehouse): The parent warehouse (for sensor linking).
+            zone (Location): The parent zone location.
+            zone_name (str): The code prefix for the zone (e.g., "ZONE-A").
+        """
+        aisle_count = self.rng.randint(
+            settings.layout.aisle.count_min, settings.layout.aisle.count_max
+        )
+        for aisle_num in range(1, aisle_count + 1):
+            aisle = Location(
+                warehouse_id=warehouse.id,
+                parent_location_id=zone.id,
+                code=f"{zone_name}-AISLE-{aisle_num:02d}",
+                type=LocationType.SHELF,
+                capacity_units=self.rng.randint(
+                    settings.layout.aisle.capacity_min, settings.layout.aisle.capacity_max
+                ),
+            )
+            self.session.add(aisle)
+            self.session.flush()
+
+            self._attach_sensor(warehouse)
+
+    def _attach_sensor(self, warehouse: Warehouse) -> None:
+        """
+        Probabilistically adds a sensor device to the warehouse inventory.
+
+        There is an 80% chance this method does nothing (no sensor).
+        If a sensor is created, it is linked to the Warehouse ID (not the specific aisle).
+
+        Args:
+            warehouse (Warehouse): The warehouse that owns the device.
+        """
+
+        if self.rng.random() > settings.layout.sensor.attach_probability:
+            return
+
+        device_type = self.rng.choices(
+            [DeviceType.CAMERA, DeviceType.RFID_READER],
+            weights=[settings.layout.sensor.camera.weight, settings.layout.sensor.rfid.weight],
+            k=1,
+        )[0]
+
+        if device_type == DeviceType.CAMERA:
+            noise = self.rng.uniform(
+                settings.layout.sensor.camera.noise_min, settings.layout.sensor.camera.noise_max
+            )
+            missing = self.rng.uniform(
+                settings.layout.sensor.camera.missing_min, settings.layout.sensor.camera.missing_max
+            )
+        else:
+            noise = self.rng.uniform(
+                settings.layout.sensor.rfid.noise_min, settings.layout.sensor.rfid.noise_max
+            )
+            missing = self.rng.uniform(
+                settings.layout.sensor.rfid.missing_min, settings.layout.sensor.rfid.missing_max
+            )
+
+        device = SensorDevice(
+            warehouse_id=warehouse.id,
+            device_type=device_type,
+            status=DeviceStatus.ACTIVE,
+            noise_sigma=noise,
+            missing_rate=missing,
+        )
+        self.session.add(device)

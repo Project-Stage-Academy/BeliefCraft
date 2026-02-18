@@ -3,14 +3,14 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-import httpx
 import redis
 import structlog
-from app.api.v1.routes import health
+from app.api.v1.routes import agent, health
 from app.config import get_settings
 from app.core.constants import HEALTH_CHECK_TIMEOUT
-from app.core.exceptions import AgentServiceException
+from app.core.exceptions import AgentServiceError
 from app.core.logging import configure_logging
+from common.http_client import TracedHttpClient
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,19 +22,49 @@ logger = configure_logging()
 settings = get_settings()
 
 
+async def _load_mcp_tools() -> None:
+    """
+    Load tools from MCP server if available.
+
+    This function attempts to discover and register tools from connected
+    MCP servers. If MCP is not available, it logs a warning and continues
+    with hardcoded tools only.
+
+    SOLID: Single Responsibility - only handles MCP tool loading
+    """
+    try:
+        # TODO: Initialize MCP client when available
+        # For now, MCP server is optional - use hardcoded tools as fallback
+        logger.debug(
+            "mcp_tools_optional", message="MCP loader will be enabled when MCP client is available"
+        )
+    except Exception as e:
+        logger.warning(
+            "failed_to_load_mcp_tools",
+            error=str(e),
+            message="Continuing with hardcoded tools only",
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager"""
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
-    app.state.http_client = httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT)
-    app.state.redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
-    app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
-    yield
-    # Shutdown
-    await app.state.http_client.aclose()
-    app.state.redis_client.close()
-    app.state.redis_pool.disconnect()
+    async with TracedHttpClient("", timeout=HEALTH_CHECK_TIMEOUT) as http_client:
+        app.state.http_client = http_client
+        app.state.redis_pool = redis.ConnectionPool.from_url(
+            settings.REDIS_URL, decode_responses=True
+        )
+        app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
+
+        # Load MCP tools if available
+        await _load_mcp_tools()
+
+        yield
+        # Shutdown
+        app.state.redis_client.close()
+        app.state.redis_pool.disconnect()
     logger.info("agent_service_stopping")
 
 
@@ -50,7 +80,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly for production
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,14 +139,15 @@ async def add_request_id(
 
 
 # Exception handler
-@app.exception_handler(AgentServiceException)
-async def agent_exception_handler(request: Request, exc: AgentServiceException) -> JSONResponse:
+@app.exception_handler(AgentServiceError)
+async def agent_exception_handler(request: Request, exc: AgentServiceError) -> JSONResponse:
     """Handle custom agent service exceptions"""
     logger.error(
         "agent_error",
         error_type=type(exc).__name__,
         error_message=str(exc),
         request_id=request.state.request_id,
+        exc_info=True,
     )
     return JSONResponse(
         status_code=exc.status_code,
@@ -146,6 +177,12 @@ app.include_router(
     health.router,
     prefix=settings.API_V1_PREFIX,
     tags=["health"],
+)
+
+app.include_router(
+    agent.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["agent"],
 )
 
 
