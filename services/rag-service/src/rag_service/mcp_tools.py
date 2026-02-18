@@ -1,9 +1,10 @@
-from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated
 
 from common.logging import get_logger
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
+
+from .models import Document, EntityType, MetadataFilter, MetadataFilters, SearchFilters
+from .repositories import AbstractVectorStoreRepository
 
 BOOK_CONTENTS = """part i probabilistic reasoning
 2 Representation 19
@@ -46,38 +47,40 @@ F Problems 609"""
 
 logger = get_logger(__name__)
 
-
-class EntityType(StrEnum):
-    FORMULA = "formula"
-    TABLE = "table"
-    ALGORITHM = "algorithm"
-    IMAGE = "image"
-    EXERCISE = "exercise"
-    EXAMPLE = "example"
-
-
-Part = Literal["I", "II", "III", "IV", "V", "Appendices"]
-
-
-class SearchFilters(BaseModel):
-    part: Part | None = None
-    chapter: Annotated[str | None, Field(description="Chapter number e.g. 2")] = None
-    subsection: Annotated[str | None, Field(description="Subsection number e.g. 2.3")] = None
-    subsubsection: Annotated[str | None, Field(description="Subsubsection number e.g. 2.3.1")] = (
-        None
-    )
-    page_number: int | None = None
-
-
-class Document(BaseModel):
-    id: str
-    content: str
-    cosine_similarity: float
-    metadata: dict
+SEARCH_FILTER_FIELD_TO_METADATA_FIELD = {
+    "part": "part_number",
+    "section": "section_number",
+    "subsection": "subsection_number",
+    "subsubsection": "subsubsection_number",
+    "page_number": "page",
+}
 
 
 class RagTools:
     tools = ["search_knowledge_base", "expand_graph_by_ids", "get_entity_by_number"]
+
+    def __init__(self, repository: AbstractVectorStoreRepository) -> None:
+        self._repository = repository
+
+    @staticmethod
+    def _convert_search_filters(filters: SearchFilters | None) -> MetadataFilters | None:
+        """Convert tool-level SearchFilters to repository-level MetadataFilters."""
+        if filters is None:
+            return None
+
+        metadata_filters: list[MetadataFilter] = []
+
+        for filter_field, metadata_field in SEARCH_FILTER_FIELD_TO_METADATA_FIELD.items():
+            value = getattr(filters, filter_field)
+            if value is not None:
+                metadata_filters.append(
+                    MetadataFilter(field=metadata_field, operator="eq", value=value)
+                )
+
+        if not metadata_filters:
+            return None
+
+        return MetadataFilters(filters=metadata_filters, condition="and")
 
     async def search_knowledge_base(
         self,
@@ -104,7 +107,16 @@ class RagTools:
             traverse_types=[t.value for t in traverse_types] if traverse_types else [],
             filters=filters.model_dump() if filters else None,
         )
-        return []
+        metadata_filters = self._convert_search_filters(filters)
+        documents = await self._repository.search_with_expansion(
+            query, k, metadata_filters, traverse_types
+        )
+        logger.info(
+            "rag tool result",
+            tool="search_knowledge_base",
+            num_documents=len(documents),
+        )
+        return documents
 
     async def expand_graph_by_ids(
         self,
@@ -123,12 +135,18 @@ class RagTools:
             document_ids=document_ids,
             traverse_types=[t.value for t in traverse_types] if traverse_types else [],
         )
-        return []
+        documents = await self._repository.expand_graph_by_ids(document_ids, traverse_types)
+        logger.info(
+            "rag tool result",
+            tool="expand_graph_by_ids",
+            num_documents=len(documents),
+        )
+        return documents
 
     async def get_entity_by_number(
         self,
         entity_type: Annotated[EntityType, "Type of entity."],
-        number: Annotated[str, "Unique number of the object, e.g., '1.2.4'."],
+        number: Annotated[str, "Unique number of the object, e.g. '1.2.4'."],
     ) -> Document | None:
         """
         Precise retrieval of a unique object by its number. Returns None if not found.
@@ -139,10 +157,30 @@ class RagTools:
             entity_type=entity_type.value,
             number=number,
         )
-        return Document(id="mock", content="mock", metadata={}, cosine_similarity=1.0)
+        filters = MetadataFilters(
+            filters=[
+                MetadataFilter(field="chunk_type", operator="eq", value=entity_type),
+                MetadataFilter(field="entity_id", operator="eq", value=number),
+            ],
+            condition="and",
+        )
+        results = await self._repository.vector_search("", k=1, filters=filters)
+        if results:
+            logger.info(
+                "rag tool result",
+                tool="get_entity_by_number",
+                found=True,
+            )
+            return results[0]
+        logger.info(
+            "rag tool result",
+            tool="get_entity_by_number",
+            found=False,
+        )
+        return None
 
 
-def create_mcp_server():
+def create_mcp_server(repository: AbstractVectorStoreRepository) -> FastMCP:
     """Create MCP server and register tools."""
     mcp = FastMCP(
         "'Algorithms for Decision Making' book RAG",
@@ -152,7 +190,7 @@ part number title
 section_number title page
 """ + BOOK_CONTENTS,
     )
-    rag_tools = RagTools()
+    rag_tools = RagTools(repository)
     for tool_name in RagTools.tools:
         mcp.tool(getattr(rag_tools, tool_name))
     return mcp

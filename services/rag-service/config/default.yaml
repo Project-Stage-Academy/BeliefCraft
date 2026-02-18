@@ -3,3 +3,5 @@ logging:
   fakeredis_level: "WARNING"
   docket_level: "WARNING"
   sse_level: "WARNING"
+
+repository: "FakeDataRepository"

@@ -13,6 +13,7 @@ from fastmcp.server.middleware.timing import TimingMiddleware
 
 from .config import Settings
 from .mcp_tools import create_mcp_server
+from .repositories import create_repository
 
 load_dotenv()
 settings = ConfigLoader(
@@ -27,7 +28,8 @@ logging.getLogger("docket").setLevel(settings.logging.docket_level)
 logging.getLogger("sse_starlette").setLevel(settings.logging.sse_level)
 logger = get_logger(__name__)
 
-mcp = create_mcp_server()
+repository = create_repository(settings)
+mcp = create_mcp_server(repository)
 mcp.add_middleware(
     ErrorHandlingMiddleware(
         include_traceback=True,
