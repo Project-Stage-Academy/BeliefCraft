@@ -2,6 +2,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Optional
+import argparse
 
 from code_translation.prompts import update_descriptions_prompt, translate_python_code_prompt, translate_example_prompt
 from code_translation.python_github_code import get_translated_python_code_from_github
@@ -11,6 +12,30 @@ import re
 APPENDIX_START_CHAPTER = 28
 APPENDIX_LETTERS = set("ABCDEFGH")
 PROMPTS_DIR = Path("prompts")
+
+EXAMPLE_WITH_CODE_NUMBERS = [
+    "Example 2.3.",
+    "Example 2.5.",
+    "Example 4.1.",
+    "Example 4.2.",
+    "Example 9.10.",
+    "Example 10.1.",
+    "Example 11.2.",
+    "Example 15.2.",
+    "Example 17.2.",
+    "Example 17.3.",
+    "Example 17.4.",
+    "Example 21.1.",
+    "Example 22.1.",
+    "Example 22.3.",
+    "Example 22.6.",
+]
+
+TRANSLATED_CHAPTERS = [
+    "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "14", "15", "16", "17", "20", "24",
+]
+
+CHAPTERS_TO_TRANSLATE = ["13", "18", "19", "21", "22", "23", "25", "26", "27", "E"]
 
 
 def extract_entities_from_julia_code(code: str):
@@ -85,7 +110,10 @@ def extract_block_number_from_caption(caption: str) -> str:
 
 def extract_chapter_from_block_caption(caption: str) -> str:
     """Extract the chapter component from a block caption string."""
-    block_number = caption.split(" ")[1]
+    parts = caption.split()
+    if len(parts) < 2:
+        return ""
+    block_number = parts[1]
     return block_number.split(".")[0]
 
 
@@ -134,42 +162,106 @@ def extract_block_structs_and_functions(blocks) -> None:
         block["functions"] = {func: [] for func in functions}
 
 
+def _build_usage_index(blocks) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """Build inverted indices of struct and function usage across blocks.
+
+    The index maps each entity name to block numbers where it is used (not defined).
+    """
+    all_structs = set()
+    all_functions = set()
+    for block in blocks:
+        all_structs.update(block.get("structs", {}).keys())
+        all_functions.update(block.get("functions", {}).keys())
+
+    struct_usage: dict[str, set[str]] = {name: set() for name in all_structs}
+    function_usage: dict[str, set[str]] = {name: set() for name in all_functions}
+
+    if not all_structs and not all_functions:
+        return struct_usage, function_usage
+
+    # Single-pass regex matches keep scanning per block fast even with many entities.
+    struct_pattern = None
+    if all_structs:
+        struct_names = "|".join(re.escape(name) for name in sorted(all_structs, key=len, reverse=True))
+        struct_pattern = re.compile(rf"(?:(?:::)({struct_names})\b)|(?:\b({struct_names})\s*\()")
+
+    func_pattern = None
+    if all_functions:
+        func_names = "|".join(re.escape(name) for name in sorted(all_functions, key=len, reverse=True))
+        func_pattern = re.compile(rf"\b({func_names})\s*\(")
+        func_def_pattern = re.compile(rf"^\s*function\s+({func_names})\s*\(")
+        func_oneliner_def_pattern = re.compile(rf"^\s*({func_names})\s*\([^=\n]*\)\s*=")
+
+    for block in blocks:
+        text = block.get("text", "")
+        block_number = block.get("number")
+        if not text or not block_number:
+            continue
+
+        if struct_pattern:
+            for match in struct_pattern.finditer(text):
+                name = match.group(1) or match.group(2)
+                if name:
+                    struct_usage[name].add(block_number)
+
+        if func_pattern:
+            defined = set()
+            for line in text.splitlines():
+                def_match = func_def_pattern.match(line) if func_def_pattern else None
+                if def_match:
+                    defined.add(def_match.group(1))
+                    continue
+                def_match = func_oneliner_def_pattern.match(line) if func_oneliner_def_pattern else None
+                if def_match:
+                    defined.add(def_match.group(1))
+
+            for match in func_pattern.finditer(text):
+                name = match.group(1)
+                if name not in defined:
+                    function_usage[name].add(block_number)
+
+    return struct_usage, function_usage
+
+
 def extract_entities_usage(blocks, blocks_type: BlockType = BlockType.ALGORITHM) -> None:
     """Populate per-block usage lists for structs/functions across blocks."""
+    struct_usage, function_usage = _build_usage_index(blocks)
+
+    # Pre-sort usage lists once to avoid per-block sorting.
+    struct_usage_sorted = {name: sorted(nums) for name, nums in struct_usage.items() if nums}
+    function_usage_sorted = {name: sorted(nums) for name, nums in function_usage.items() if nums}
+
     for block in blocks:
         if block["block_type"] != blocks_type.value:
             continue
 
+        block_number = block.get("number")
+        if not block_number:
+            continue
+
         for struct_name, used_list in block["structs"].items():
-            for second_block in blocks:
-                if second_block is block:
-                    continue
-                struct_as_typing = f"::{struct_name}"
-                called_structure = f"{struct_name}("
-                if struct_as_typing in second_block["text"] or called_structure in second_block["text"]:
-                    used_list.append(second_block["number"])
+            usage = struct_usage_sorted.get(struct_name)
+            if not usage:
+                continue
+            if block_number in struct_usage.get(struct_name, set()):
+                used_list.extend(num for num in usage if num != block_number)
+            else:
+                used_list.extend(usage)
 
         for function_name, used_list in block["functions"].items():
-            for second_block in blocks:
-                if second_block is block:
-                    continue
-                function_as_definition = f"function {function_name}("
-                function_as_short_definition_pattern = rf"\b{re.escape(function_name)}\s*\([^)]*\)\s*="
-                if (
-                    f"{function_name}(" in second_block["text"]
-                    and not (
-                        function_as_definition in second_block["text"]
-                        or re.search(function_as_short_definition_pattern, second_block["text"])
-                    )
-                ):
-                    used_list.append(second_block["number"])
-
+            usage = function_usage_sorted.get(function_name)
+            if not usage:
+                continue
+            if block_number in function_usage.get(function_name, set()):
+                used_list.extend(num for num in usage if num != block_number)
+            else:
+                used_list.extend(usage)
 
 
 @lru_cache(maxsize=1)
 def _load_translated_algorithms() -> list:
     """Load translated algorithms JSON once per run."""
-    json_path = Path("translated_algorithms.json")
+    json_path: Path = TRANSLATED_ALGOS_PATH
     with json_path.open("r", encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -222,7 +314,7 @@ def filter_out_older_chapters(block_numbers, current_chapter):
 
 def _format_blocks_text(blocks) -> str:
     """Render blocks as prompt-ready caption + code text."""
-    return "\n".join(f"{block['caption']} \n\n {block['text']} \n\n" for block in blocks)
+    return "\n".join(f"{block['caption']} \n\n {block['text']} \n\n" for block in blocks) or ""
 
 
 def _format_translated_blocks(translated_blocks) -> str:
@@ -230,7 +322,7 @@ def _format_translated_blocks(translated_blocks) -> str:
     return "\n".join(
         f"{translated['algorithm_number']} \n\n {translated['translated']} \n\n"
         for translated in translated_blocks
-    )
+    ) or ""
 
 
 def build_update_descriptions_prompt(chapter, julia_code):
@@ -298,51 +390,43 @@ def build_translate_example_prompt(example_number, blocks):
 
     return translate_example_prompt.format(
         f"{example['caption']} \n\n {example['text']} \n\n",
-        "\n".join(f"{translated['translated']} \n\n" for translated in translated_examples),
+        "\n".join(f"{translated['translated']} \n\n" for translated in translated_examples) or "",
     )
 
 
 if __name__ == "__main__":
-    example_with_code_numbers = [
-        "Example 2.3.",
-        "Example 2.5.",
-        "Example 4.1.",
-        "Example 4.2.",
-        "Example 9.10.",
-        "Example 10.1.",
-        "Example 11.2.",
-        "Example 15.2.",
-        "Example 17.2.",
-        "Example 17.3.",
-        "Example 17.4.",
-        "Example 21.1.",
-        "Example 22.1.",
-        "Example 22.3.",
-        "Example 22.6.",
-    ]
+    # Configurable defaults for paths/output locations.
+    parser = argparse.ArgumentParser(description="Build translation prompts from the Decision Making PDF.")
+    parser.add_argument("--pdf-path", default="dm.pdf", help="Path to the source PDF (default: dm.pdf)")
+    parser.add_argument("--prompts-dir", default="prompts", help="Output directory for prompts (default: prompts)")
+    parser.add_argument(
+        "--translated-algorithms-json",
+        default="translated_algorithms.json",
+        help="Path to translated algorithms JSON (default: translated_algorithms.json)",
+    )
+    args = parser.parse_args()
 
-    translated_chapters = [
-        "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "14", "15", "16", "17", "20", "24",
-    ]
+    pdf_path = args.pdf_path
+    prompts_dir = Path(args.prompts_dir)
+    TRANSLATED_ALGOS_PATH = Path(args.translated_algorithms_json)
 
-    chapters_to_translate = ["13", "18", "19", "21", "22", "23", "25", "26", "27", "E"]
 
-    blocks = extract_algorithms_and_examples("dm.pdf")
+    blocks = extract_algorithms_and_examples(pdf_path)
 
     julia_code = extract_algorithms(blocks)
 
-    for chapter in translated_chapters:
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    for chapter in TRANSLATED_CHAPTERS:
         prompt = build_update_descriptions_prompt(chapter, julia_code)
-        PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
-        with open(f"prompts/chapter_{chapter}_code_translation.txt", "w", encoding="utf-8") as f:
+        with open(prompts_dir / f"chapter_{chapter}_code_translation.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
 
-    for chapter in chapters_to_translate:
+    for chapter in CHAPTERS_TO_TRANSLATE:
         prompt = build_translate_python_code_prompt(chapter, julia_code)
-        with open(f"prompts/chapter_{chapter}_translation.txt", "w", encoding="utf-8") as f:
+        with open(prompts_dir / f"chapter_{chapter}_translation.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
 
-    for example in example_with_code_numbers:
+    for example in EXAMPLE_WITH_CODE_NUMBERS:
         prompt = build_translate_example_prompt(example, blocks)
-        with open(f"prompts/{example.replace(' ', '_')}_translation.txt", "w", encoding="utf-8") as f:
+        with open(prompts_dir / f"{example.replace(' ', '_')}_translation.txt", "w", encoding="utf-8") as f:
             f.write(prompt)

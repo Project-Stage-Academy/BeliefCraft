@@ -9,7 +9,7 @@ COLUMNS_DIVIDER_X = 300  # adjust this value based on the actual layout of the P
 DISTANCE_BETWEEN_NOTES = 20  # distance in pixels to consider a new note or caption
 DISTANCE_BETWEEN_POINT_IN_GRAY_BLOCK_AND_CAPTION = 100  # distance in pixels to associate a gray block with a caption
 GRAY_FILL_THRESHOLD = 0.9  # fill value to consider block as gray
-PADLE_PAGE_SIZE = (1094, 1235)  # width and height of the page in pixels for normalization in padle OCR JSONs
+PADDLE_PAGE_SIZE = (1094, 1235)  # width and height of the page in pixels for normalization in Paddle OCR JSONs
 PY_MU_PAGE_SIZE = (576, 648) # width and height of the page in pixels for normalization in muPDF parsed files
 
 
@@ -209,12 +209,13 @@ def _normalize_bbox(bbox, page_size):
 def is_inside_bbox(big, small):
     """Check whether a smaller bbox is inside a larger one using normalized coordinates."""
     x1b, y1b, x2b, y2b = _normalize_bbox(big, PY_MU_PAGE_SIZE)
-    x1s, y1s, x2s, y2s = _normalize_bbox(small, PADLE_PAGE_SIZE)
+    x1s, y1s, x2s, y2s = _normalize_bbox(small, PADDLE_PAGE_SIZE)
 
+    error = 0.05
     return (
         x1b <= x1s and
         y1b <= y2s and
-        x2b + 0.05 >= x2s and
+        x2b + error >= x2s and
         y2b >= y1s
     )
 

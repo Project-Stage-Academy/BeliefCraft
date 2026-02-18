@@ -17,6 +17,7 @@ import ast
 import urllib.request
 from urllib.parse import urlparse
 from pathlib import PurePosixPath
+from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -91,11 +92,11 @@ def extract_node_source(source: str, node: ast.AST) -> str:
     lines = source.splitlines(keepends=True)
     # ast gives 1-based line numbers
     start = node.lineno - 1
-    end = node.end_lineno          # inclusive, 1-based → exclusive 0-based
+    end = node.end_lineno          # end_lineno is inclusive and 1-based; using it as the slice end is correct because slicing is end-exclusive
     return "".join(lines[start:end])
 
 
-def find_symbol(source: str, name: str) -> str | None:
+def find_symbol(source: str, name: str) -> Optional[str]:
     """
     Return the source text of the top-level class or function named `name`.
     Returns None if not found.
@@ -137,7 +138,7 @@ class Collector:
         self._collected: dict[str, str] = {}       # "module.Symbol" -> code snippet
         self._visited_modules: set[str] = set()
 
-    def get_source(self, module: str) -> str | None:
+    def get_source(self, module: str) -> Optional[str]:
         if module in self._source_cache:
             return self._source_cache[module]
         url = make_ch_raw_url(self.base_raw_url, module)
@@ -208,10 +209,10 @@ class Collector:
         for dep_mod, dep_syms in chxx_imports.items():
             self.collect_symbols(dep_mod, dep_syms)
 
-    def build_result(self, main_source: str, requested_symbols: list[str] | None) -> str:
+    def build_result(self, main_source: str, requested_symbols: Optional[list[str]]) -> str:
         """
         Assemble the final string.
-        Order: dependencies first (deepest first), then the main file / symbols.
+        Order: dependency symbols first (sorted by module number), then the main file / symbols.
         """
         sections = []
 
@@ -220,12 +221,17 @@ class Collector:
         sym_items  = {k: v for k, v in self._collected.items() if not k.endswith(".__full__")}
 
         # Output dependency symbols grouped by their module
-        # We want a stable order: process deeper deps first.
-        # Simple approach: sort by module number ascending (ch07 before ch09, etc.)
+        # We want a stable order: sort by module number ascending (ch07 before ch09, etc.)
         def mod_number(key):
             mod = key.split(".")[0]
             m = re.search(r"\d+", mod)
             return int(m.group()) if m else 0
+
+        for key in sorted(sym_items.keys(), key=mod_number):
+            mod, sym = key.split(".", 1)
+            sections.append(f"# --- {mod}.py :: {sym} ---")
+            sections.append(sym_items[key].rstrip())
+            sections.append("")
 
         # Finally the main file / requested symbols
         if requested_symbols:
@@ -241,13 +247,6 @@ class Collector:
             sections.append(main_source.rstrip())
             sections.append("")
 
-        for key in sorted(sym_items.keys(), key=mod_number):
-            mod, sym = key.split(".", 1)
-            sections.append(f"# --- {mod}.py :: {sym} ---")
-            sections.append(sym_items[key].rstrip())
-            sections.append("")
-
-
         return "\n".join(sections)
 
 
@@ -255,17 +254,22 @@ class Collector:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def get_translated_python_code_from_github(chapter: str, requested_symbols: list[str] | None = None) -> str:
+def get_translated_python_code_from_github(
+    chapter: str,
+    requested_symbols: Optional[list[str]] = None,
+    repo_url: str = "https://github.com/griffinbholt/decisionmaking-code-py",
+) -> str:
     """
     Main function.
 
     chapter        – Chapter number as a string, e.g. "02" (no "ch" prefix)
     requested_symbols – optional list of specific symbols to extract;
                         if None/empty the full file is used
+    repo_url       – GitHub repo base URL, e.g. "https://github.com/user/repo"
 
     Returns a single string with all the code.
     """
-    raw_url = github_blob_to_raw(f"https://github.com/griffinbholt/decisionmaking-code-py/blob/main/src/ch{chapter}.py")
+    raw_url = github_blob_to_raw(f"{repo_url}/blob/main/src/ch{chapter}.py")
     print(f"Fetching: {raw_url}", file=sys.stderr)
     main_source = fetch_source(raw_url)
 

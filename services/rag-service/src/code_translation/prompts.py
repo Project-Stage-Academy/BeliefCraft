@@ -32,7 +32,7 @@ Available Python code to use:
 Output format (JSON array):
 [
     {{
-        "algorithm_number": "Algorithm X.X."
+        "algorithm_number": "Algorithm X.X.",
         "description": "...",
         "code": "...",
         "declarations": {{
