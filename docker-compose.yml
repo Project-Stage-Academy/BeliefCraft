@@ -84,7 +84,7 @@ services:
       - ./services/rag-service/.env
     command: ["/app/.venv/bin/uvicorn", "rag_service.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
     volumes:
-      - ./services/rag-service/src:/app/src
+      - ./services/rag-service/src:/app/services/rag-service/src
       - ./packages/common:/app/packages/common
     depends_on:
       postgres:
@@ -107,10 +107,11 @@ services:
       - "8003:8003"
     env_file:
       - ./services/agent-service/.env
-    command: ["/app/services/agent-service/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
+    command: ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
     volumes:
       - ./services/agent-service/app:/app/services/agent-service/app
       - ./packages/common:/app/packages/common
+      - ~/.aws:/home/agent/.aws:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -119,7 +120,7 @@ services:
       rag-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/health').status == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/api/v1/health').status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
