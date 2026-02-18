@@ -225,7 +225,10 @@ class TestThinkNode:
 
 
 class TestActNode:
-    def test_act_executes_tool_calls(self, agent: ReActAgent, initial_state: AgentState) -> None:
+    @pytest.mark.asyncio()
+    async def test_act_executes_tool_calls(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
         initial_state["messages"] = [
             {
                 "role": "assistant",
@@ -243,7 +246,7 @@ class TestActNode:
             }
         ]
 
-        result = agent._act_node(initial_state)
+        result = await agent._act_node(initial_state)
 
         assert len(result["tool_calls"]) == 1
         assert result["tool_calls"][0].tool_name == "get_inventory"
@@ -251,7 +254,8 @@ class TestActNode:
         assert result["tool_calls"][0].result is not None
         assert result["iteration"] == 1
 
-    def test_act_adds_tool_result_message(
+    @pytest.mark.asyncio()
+    async def test_act_adds_tool_result_message(
         self, agent: ReActAgent, initial_state: AgentState
     ) -> None:
         initial_state["messages"] = [
@@ -268,15 +272,18 @@ class TestActNode:
             }
         ]
 
-        result = agent._act_node(initial_state)
+        result = await agent._act_node(initial_state)
 
         tool_msgs = [m for m in result["messages"] if m["role"] == "tool"]
         assert len(tool_msgs) == 1
         assert tool_msgs[0]["tool_call_id"] == "tc_1"
         assert tool_msgs[0]["name"] == "get_inventory"
 
-    def test_act_handles_tool_error(self, agent: ReActAgent, initial_state: AgentState) -> None:
-        agent._execute_tool = MagicMock(side_effect=Exception("Connection refused"))  # type: ignore[method-assign]
+    @pytest.mark.asyncio()
+    async def test_act_handles_tool_error(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
+        agent._execute_tool = AsyncMock(side_effect=Exception("Connection refused"))  # type: ignore[method-assign]
 
         initial_state["messages"] = [
             {
@@ -292,7 +299,7 @@ class TestActNode:
             }
         ]
 
-        result = agent._act_node(initial_state)
+        result = await agent._act_node(initial_state)
 
         assert result["tool_calls"][0].error is not None
         assert "Connection refused" in result["tool_calls"][0].error
@@ -302,7 +309,8 @@ class TestActNode:
         assert len(tool_msgs) == 1
         assert "error" in json.loads(tool_msgs[0]["content"])
 
-    def test_act_handles_multiple_tool_calls(
+    @pytest.mark.asyncio()
+    async def test_act_handles_multiple_tool_calls(
         self, agent: ReActAgent, initial_state: AgentState
     ) -> None:
         initial_state["messages"] = [
@@ -327,32 +335,37 @@ class TestActNode:
             }
         ]
 
-        result = agent._act_node(initial_state)
+        result = await agent._act_node(initial_state)
 
         assert len(result["tool_calls"]) == 2
         tool_msgs = [m for m in result["messages"] if m["role"] == "tool"]
         assert len(tool_msgs) == 2
 
-    def test_act_no_tool_calls_in_message(
+    @pytest.mark.asyncio()
+    async def test_act_no_tool_calls_in_message(
         self, agent: ReActAgent, initial_state: AgentState
     ) -> None:
         """Act node handles messages without tool_calls gracefully."""
         initial_state["messages"] = [{"role": "assistant", "content": "No tools needed."}]
 
-        result = agent._act_node(initial_state)
+        result = await agent._act_node(initial_state)
 
         assert len(result["tool_calls"]) == 0
         assert result["iteration"] == 1
 
-    def test_act_increments_iteration(self, agent: ReActAgent, initial_state: AgentState) -> None:
+    @pytest.mark.asyncio()
+    async def test_act_increments_iteration(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
         initial_state["iteration"] = 3
         initial_state["messages"] = [{"role": "assistant", "content": "done"}]
 
-        result = agent._act_node(initial_state)
+        result = await agent._act_node(initial_state)
 
         assert result["iteration"] == 4
 
-    def test_act_preserves_existing_messages(
+    @pytest.mark.asyncio()
+    async def test_act_preserves_existing_messages(
         self, agent: ReActAgent, initial_state: AgentState
     ) -> None:
         initial_state["messages"] = [
@@ -370,7 +383,7 @@ class TestActNode:
             },
         ]
 
-        result = agent._act_node(initial_state)
+        result = await agent._act_node(initial_state)
 
         # Original 2 messages + 1 new tool result
         assert len(result["messages"]) == 3
@@ -515,18 +528,66 @@ class TestFinalizeNode:
 
 
 # ---------------------------------------------------------------------------
-# Tool stubs
+# Tool registry integration
 # ---------------------------------------------------------------------------
 
 
-class TestToolStubs:
-    def test_execute_tool_returns_stub(self, agent: ReActAgent) -> None:
-        result = agent._execute_tool("any_tool", {"key": "value"})
-        assert result["status"] == "stub"
-        assert "any_tool" in result["message"]
+class TestToolRegistryIntegration:
+    @pytest.mark.asyncio()
+    async def test_execute_tool_with_registry_success(self, agent: ReActAgent) -> None:
+        """Test successful tool execution via registry."""
+        with patch("app.services.react_agent.tool_registry") as mock_registry:
+            mock_result = MagicMock()
+            mock_result.success = True
+            mock_result.data = {"result": "success", "value": 42}
+            mock_registry.execute_tool = AsyncMock(return_value=mock_result)
 
-    def test_get_tool_definitions_returns_empty(self, agent: ReActAgent) -> None:
-        assert agent._get_tool_definitions() == []
+            result = await agent._execute_tool("test_tool", {"param": "value"})
+
+            assert result == {"result": "success", "value": 42}
+            mock_registry.execute_tool.assert_called_once_with("test_tool", {"param": "value"})
+
+    @pytest.mark.asyncio()
+    async def test_execute_tool_with_registry_failure(self, agent: ReActAgent) -> None:
+        """Test tool execution failure via registry."""
+        with patch("app.services.react_agent.tool_registry") as mock_registry:
+            mock_result = MagicMock()
+            mock_result.success = False
+            mock_result.error = "Tool not found"
+            mock_registry.execute_tool = AsyncMock(return_value=mock_result)
+
+            result = await agent._execute_tool("missing_tool", {})
+
+            assert "error" in result
+            assert result["error"] == "Tool not found"
+            assert "Tool execution failed" in result["message"]
+
+    @pytest.mark.asyncio()
+    async def test_execute_tool_with_exception(self, agent: ReActAgent) -> None:
+        """Test tool execution with unexpected exception."""
+        with patch("app.services.react_agent.tool_registry") as mock_registry:
+            mock_registry.execute_tool = AsyncMock(side_effect=Exception("Connection error"))
+
+            result = await agent._execute_tool("failing_tool", {})
+
+            assert "error" in result
+            assert result["error"] == "Connection error"
+            assert "Unexpected tool error" in result["message"]
+
+    def test_get_tool_definitions_from_registry(self, agent: ReActAgent) -> None:
+        """Test getting tool definitions from registry."""
+        with patch("app.services.react_agent.tool_registry") as mock_registry:
+            mock_registry.get_openai_functions.return_value = [
+                {"name": "tool1", "description": "Test tool 1"},
+                {"name": "tool2", "description": "Test tool 2"},
+            ]
+
+            result = agent._get_tool_definitions()
+
+            assert len(result) == 2
+            assert result[0]["name"] == "tool1"
+            assert result[1]["name"] == "tool2"
+            mock_registry.get_openai_functions.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

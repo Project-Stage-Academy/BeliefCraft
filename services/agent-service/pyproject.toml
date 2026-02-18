@@ -37,3 +37,10 @@ dev = [
   "pytest-asyncio>=0.23",
   "pre-commit>=3.0",
 ]
+[tool.pytest.ini_options]
+markers = [
+  "integration: integration tests that require external services",
+  "slow: slow tests (e.g., integration tests)",
+  "asyncio: async tests",
+]
+asyncio_mode = "auto"
