@@ -229,6 +229,9 @@ class TestActNode:
     async def test_act_executes_tool_calls(
         self, agent: ReActAgent, initial_state: AgentState
     ) -> None:
+        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
+            return_value={"status": "success", "data": {"items": [], "warehouse": "WH-001"}}
+        )
         initial_state["messages"] = [
             {
                 "role": "assistant",
@@ -283,7 +286,13 @@ class TestActNode:
     async def test_act_handles_tool_error(
         self, agent: ReActAgent, initial_state: AgentState
     ) -> None:
-        agent._execute_tool = AsyncMock(side_effect=Exception("Connection refused"))  # type: ignore[method-assign]
+        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
+            return_value={
+                "status": "error",
+                "error": "Connection refused",
+                "message": "Tool execution failed: Connection refused",
+            }
+        )
 
         initial_state["messages"] = [
             {
@@ -544,7 +553,7 @@ class TestToolRegistryIntegration:
 
             result = await agent._execute_tool("test_tool", {"param": "value"})
 
-            assert result == {"result": "success", "value": 42}
+            assert result == {"status": "success", "data": {"result": "success", "value": 42}}
             mock_registry.execute_tool.assert_called_once_with("test_tool", {"param": "value"})
 
     @pytest.mark.asyncio()

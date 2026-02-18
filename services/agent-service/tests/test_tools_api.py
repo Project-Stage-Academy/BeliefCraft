@@ -146,3 +146,26 @@ def test_list_tools_multiple_categories() -> None:
         # Verify all categories are present
         categories = {tool["category"] for tool in data["tools"]}
         assert categories == {"environment", "rag", "planning", "utility"}
+
+
+def test_list_tools_invalid_category() -> None:
+    """Invalid category value must return 422 Unprocessable Entity."""
+    response = client.get("/api/v1/tools?category=invalid_category")
+
+    assert response.status_code == 422
+    data = response.json()
+    # FastAPI returns 'detail' with validation errors
+    assert "detail" in data
+
+
+def test_list_tools_registry_failure() -> None:
+    """Registry failure must return 500 with a descriptive error message."""
+    with patch("app.api.v1.routes.tools.tool_registry") as mock_registry:
+        mock_registry.list_tools.side_effect = RuntimeError("Registry unavailable")
+
+        response = client.get("/api/v1/tools")
+
+        assert response.status_code == 500
+        data = response.json()
+        assert "detail" in data
+        assert "registry" in data["detail"].lower()

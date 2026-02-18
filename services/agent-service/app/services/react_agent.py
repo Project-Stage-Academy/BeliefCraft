@@ -222,43 +222,17 @@ class ReActAgent:
                 tool_call_id=tool_call_id,
             )
 
-            try:
-                result = await self._execute_tool(func_name, func_args)
+            result = await self._execute_tool(func_name, func_args)
 
-                new_tool_calls.append(
-                    ToolCall(
-                        tool_name=func_name,
-                        arguments=func_args,
-                        result=result,
-                    )
-                )
-                new_messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call_id,
-                        "name": func_name,
-                        "content": json.dumps(result),
-                    }
-                )
-
-                logger.info(
-                    "tool_execution_success",
-                    request_id=request_id,
-                    tool=func_name,
-                    tool_call_id=tool_call_id,
-                )
-
-            except Exception as e:
+            if result.get("status") == "error":
+                error_msg = result.get("error", "Unknown tool error")
                 logger.error(
                     "tool_execution_error",
                     request_id=request_id,
                     tool=func_name,
                     tool_call_id=tool_call_id,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    exc_info=True,
+                    error=error_msg,
                 )
-                error_msg = f"Tool execution failed: {e}"
                 new_tool_calls.append(
                     ToolCall(
                         tool_name=func_name,
@@ -273,6 +247,29 @@ class ReActAgent:
                         "tool_call_id": tool_call_id,
                         "name": func_name,
                         "content": json.dumps({"error": error_msg}),
+                    }
+                )
+            else:
+                tool_data = result.get("data", {})
+                logger.info(
+                    "tool_execution_success",
+                    request_id=request_id,
+                    tool=func_name,
+                    tool_call_id=tool_call_id,
+                )
+                new_tool_calls.append(
+                    ToolCall(
+                        tool_name=func_name,
+                        arguments=func_args,
+                        result=tool_data,
+                    )
+                )
+                new_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": func_name,
+                        "content": json.dumps(tool_data),
                     }
                 )
 
@@ -360,26 +357,35 @@ class ReActAgent:
     async def _execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool call using the registry.
 
+        Always returns a uniform dict with a ``status`` key so callers can
+        branch on success/error without inspecting arbitrary key presence.
+
         Args:
             tool_name: Name of the tool to invoke.
             arguments: Parsed arguments to pass to the tool.
 
         Returns:
-            Dictionary with tool execution results or error information.
+            ``{"status": "success", "data": ...}`` on success, or
+            ``{"status": "error", "error": ..., "message": ...}`` on failure.
+            Never raises — all exceptions are captured and returned as error dicts.
         """
         try:
             result = await tool_registry.execute_tool(tool_name, arguments)
 
             if result.success:
-                return cast(dict[str, Any], result.data)
-            else:
-                return {
-                    "error": result.error,
-                    "message": f"Tool execution failed: {result.error}",
-                }
-        except Exception as e:
-            logger.error("tool_execution_failed", tool=tool_name, error=str(e))
+                return {"status": "success", "data": cast(dict[str, Any], result.data)}
+
+            error_msg = result.error or "Tool reported failure without a message"
+            logger.warning("tool_execution_failed", tool=tool_name, error=error_msg)
             return {
+                "status": "error",
+                "error": error_msg,
+                "message": f"Tool execution failed: {error_msg}",
+            }
+        except Exception as e:
+            logger.error("tool_execution_unexpected_error", tool=tool_name, error=str(e))
+            return {
+                "status": "error",
                 "error": str(e),
                 "message": f"Unexpected tool error: {str(e)}",
             }

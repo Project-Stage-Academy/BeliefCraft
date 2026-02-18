@@ -3,8 +3,11 @@
 from typing import Any
 
 from app.tools.registry import tool_registry
-from fastapi import APIRouter, Query
+from common.logging import get_logger
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -30,6 +33,7 @@ async def list_tools(
     category: str | None = Query(
         None,
         description="Filter by category (environment, rag, planning, utility)",
+        pattern="^(environment|rag|planning|utility)$",
     )
 ) -> ToolListResponse:
     """
@@ -40,12 +44,16 @@ async def list_tools(
     with OpenAI function calling and AWS Bedrock Claude function calling.
 
     Query parameters:
-    - category: Optional filter by tool category
+    - category: Optional filter by tool category (environment, rag, planning, utility)
 
     Returns:
     - List of tools with their metadata and parameter schemas
     """
-    tools = tool_registry.list_tools(category=category)
+    try:
+        tools = tool_registry.list_tools(category=category)
+    except Exception as e:
+        logger.error("tool_registry_list_failed", category=category, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve tools from registry") from e
 
     tool_infos = [
         ToolInfo(
