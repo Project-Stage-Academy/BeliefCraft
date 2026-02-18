@@ -52,6 +52,8 @@ class ToolMetadata(BaseModel):
         description: Clear description of what the tool does
         category: Tool category for filtering (environment/rag/planning/utility)
         parameters: JSON Schema object describing tool parameters (defaults to empty schema)
+        cache_ttl: Optional custom TTL for this tool in seconds (None = use global default)
+        skip_cache: If True, this tool will never be cached (useful for real-time sensors)
     """
 
     model_config = ConfigDict(frozen=True)
@@ -62,6 +64,14 @@ class ToolMetadata(BaseModel):
     parameters: dict[str, Any] = Field(
         default_factory=lambda: {"type": "object", "properties": {}, "required": []},
         description="JSON Schema for parameters",
+    )
+    cache_ttl: int | None = Field(
+        default=None,
+        description="Custom TTL for this tool in seconds. If None, uses global default.",
+    )
+    skip_cache: bool = Field(
+        default=False,
+        description="If True, this tool will never be cached (useful for real-time sensors).",
     )
 
 

@@ -29,9 +29,19 @@ All tools follow OpenAI function calling schema and are compatible with Claude, 
          │                                        │
          ▼                                        ▼
 ┌──────────────────────┐              ┌──────────────────────┐
-│  Environment Tools    │              │    RAG Tools         │
-│  (6 tools)           │              │    (3 tools)         │
+│   CachedTool (6)     │              │   CachedTool (3)     │
+│  Environment Tools   │              │     RAG Tools        │
+│  • Redis caching     │              │   • Redis caching    │
+│  • TTL: 5m-1h        │              │   • TTL: 24h         │
+│  • skip_cache: 2     │              │   • Static content   │
 └──────────┬───────────┘              └──────────┬───────────┘
+           │                                     │
+           ├──────────┬──────────────────────────┤
+           │          ▼                          │
+           │   ┌─────────────┐                  │
+           │   │    Redis    │                  │
+           │   │  Cache Store│                  │
+           │   └─────────────┘                  │
            │                                     │
            ▼                                     ▼
 ┌──────────────────────┐              ┌──────────────────────┐
@@ -46,6 +56,12 @@ All tools follow OpenAI function calling schema and are compatible with Claude, 
 │  (Port 8000)         │              │    (Port 8001)       │
 └──────────────────────┘              └──────────────────────┘
 ```
+
+**Key Components:**
+- **CachedTool**: Transparent wrapper for Redis caching
+- **Redis**: Cache backend for tool results
+- **skip_cache: 2**: Real-time tools (observations, orders) always fresh
+- **TTL Strategy**: 5min → 1h → 24h based on data volatility
 
 ---
 
@@ -474,93 +490,417 @@ Retrieve a specific numbered entity from the book by its exact number (e.g., Alg
 
 ## Tool Execution Flow
 
-### 1. Tool Registration
+### 1. Tool Registration (Automatic on Import)
 
 ```python
-from app.tools.registry import tool_registry
-from app.tools.environment_tools import GetCurrentObservationsTool
+# app/tools/__init__.py - auto-executes on import
+from app.tools import tool_registry
 
-# Register tool
-tool = GetCurrentObservationsTool()
-tool_registry.register(tool)
+# All 9 tools are already registered with caching!
+# No manual registration needed
 
-# Get OpenAI function schema
+# Tools are wrapped with CachedTool automatically:
+# tool_registry.register(CachedTool(GetCurrentObservationsTool()))
+# tool_registry.register(CachedTool(SearchKnowledgeBaseTool()))
+# etc.
+
+# Get OpenAI function schemas
 functions = tool_registry.get_openai_functions(categories=["environment"])
 ```
 
-### 2. Tool Execution
+### 2. Tool Execution (With Caching)
 
 ```python
 # Execute via registry
 result = await tool_registry.execute_tool(
-    "get_current_observations",
-    {"product_id": "P-123"}
+    "search_knowledge_base",
+    {"query": "POMDP algorithms", "k": 5}
 )
 
 # Result contains:
-# - success: bool
-# - data: tool-specific response
-# - error: error message if failed
-# - execution_time_ms: performance metric
+# - success: bool - execution status
+# - data: dict - tool-specific response
+# - error: str | None - error message if failed
+# - execution_time_ms: float - performance metric
+# - cached: bool - True if result from cache
+# - timestamp: datetime - execution timestamp
 ```
 
-### 3. Error Handling
+### 3. Caching Flow
+
+```
+Request → Tool Registry → CachedTool
+                            │
+                            ├─ Check Redis Cache
+                            │   │
+                            │   ├─ Cache HIT ✅
+                            │   │   └─ Return cached result (instant)
+                            │   │
+                            │   └─ Cache MISS ❌
+                            │       │
+                            │       ├─ Execute original tool
+                            │       ├─ Store result in Redis (TTL)
+                            │       └─ Return fresh result
+                            │
+                            └─ skip_cache=True (real-time)
+                                └─ Execute directly (no cache)
+```
+
+### 4. Error Handling
 
 All tools automatically handle:
 - ✅ Network errors (retry with exponential backoff)
 - ✅ Timeout errors (configurable timeout)
 - ✅ API errors (proper error messages)
 - ✅ Validation errors (parameter validation)
+- ✅ **Cache errors** (graceful degradation - execution continues)
+
+**Cache Error Example:**
+```python
+# Redis is down - tool still works!
+result = await tool_registry.execute_tool("search_knowledge_base", {...})
+# Logs warning: "cache_read_error"
+# Executes tool normally
+# Returns result (without caching)
+```
 
 ---
 
 ## Caching Strategy
 
 ### Current Implementation
-❌ **Not yet implemented** - Planned for future optimization
+✅ **Fully implemented** - Redis-based caching with `CachedTool` wrapper
 
-### Planned Caching (Redis)
+All tools are automatically wrapped with `CachedTool` on registration, providing transparent Redis caching with:
+- ✅ Automatic cache key generation from parameters
+- ✅ Configurable TTL per tool category
+- ✅ Selective caching with `skip_cache` flag
+- ✅ Graceful degradation (cache errors don't break execution)
+- ✅ Cache hit/miss logging for monitoring
 
-**Environment Tools:**
-- TTL: `1-10 minutes` (dynamic data)
-- Cache key: `tool:{tool_name}:{hash(params)}`
-- Invalidation: Time-based expiration
+---
 
-**RAG Tools:**
-- TTL: `1-2 hours` (static content)
-- Cache key: `rag:{tool_name}:{hash(params)}`
-- Invalidation: Manual + time-based
+### Cache Configuration
 
-**Example:**
+**TTL Constants** (defined in `app.core.constants`):
+
+| Constant | Value | Use Case |
+|----------|-------|----------|
+| `CACHE_TTL_RAG_TOOLS` | 86400s (24h) | Static knowledge from books |
+| `CACHE_TTL_HISTORY` | 3600s (1h) | Historical data doesn't change |
+| `CACHE_TTL_ANALYTICS` | 600s (10min) | Analytics/risk calculations |
+| `CACHE_TTL_SHIPMENTS` | 300s (5min) | Shipments change slowly |
+
+---
+
+### Tool-Specific Caching
+
+#### **Real-Time Tools** (Skip Cache)
+These tools always fetch fresh data to avoid stale sensor readings:
+
+- ✅ `get_current_observations` - Real-time warehouse sensors
+- ✅ `get_order_backlog` - Live order status
+
+**Configuration:**
 ```python
-# Cache key generation
-cache_key = f"tool:get_current_observations:{hash_params(product_id='P-123')}"
-
-# Check cache
-cached = await redis.get(cache_key)
-if cached:
-    return cached
-
-# Execute and cache
-result = await client.get_current_observations(...)
-await redis.setex(cache_key, ttl=300, value=result)
+# In tool metadata
+ToolMetadata(
+    name="get_current_observations",
+    skip_cache=True,  # Never cache
+    ...
+)
 ```
+
+#### **Short TTL Tools** (5-10 minutes)
+Semi-dynamic data with moderate change frequency:
+
+- ✅ `get_shipments_in_transit` - **5 minutes** (shipments update slowly)
+- ✅ `calculate_stockout_probability` - **10 minutes** (analytics are semi-stable)
+- ✅ `calculate_lead_time_risk` - **10 minutes** (supplier stats change slowly)
+
+**Configuration:**
+```python
+# In tool metadata
+ToolMetadata(
+    name="calculate_lead_time_risk",
+    cache_ttl=CACHE_TTL_ANALYTICS,  # 600 seconds
+    ...
+)
+```
+
+#### **Long TTL Tools** (1-24 hours)
+Historical or static data:
+
+- ✅ `get_inventory_history` - **1 hour** (past data is immutable)
+- ✅ `search_knowledge_base` - **24 hours** (book content doesn't change)
+- ✅ `expand_graph_by_ids` - **24 hours** (static knowledge graph)
+- ✅ `get_entity_by_number` - **24 hours** (book entities are static)
+
+**Configuration:**
+```python
+# In tool metadata
+ToolMetadata(
+    name="search_knowledge_base",
+    cache_ttl=CACHE_TTL_RAG_TOOLS,  # 86400 seconds
+    ...
+)
+```
+
+---
+
+### Implementation Details
+
+#### **Cache Key Generation**
+
+Cache keys are generated using MD5 hash of sorted parameters:
+
+```python
+# Format: tool_cache:{tool_name}:{md5_hash_of_params}
+cache_key = f"tool_cache:search_knowledge_base:a3d5f8b2..."
+
+# Parameters are sorted for consistency
+params = {"query": "POMDP", "k": 5}
+# Same as {"k": 5, "query": "POMDP"} - generates identical key
+```
+
+#### **CachedTool Wrapper**
+
+All tools are wrapped on registration:
+
+```python
+from app.tools import tool_registry, CachedTool
+from app.tools.rag_tools import SearchKnowledgeBaseTool
+
+# Automatic wrapping (done in app/tools/__init__.py)
+tool_registry.register(CachedTool(SearchKnowledgeBaseTool()))
+
+# TTL comes from tool metadata (cache_ttl field)
+# Or falls back to global CACHE_TTL_SECONDS from settings
+```
+
+#### **Graceful Degradation**
+
+Cache errors never break tool execution:
+
+```python
+# If Redis read fails → execute tool normally
+# If Redis write fails → return result anyway
+# Errors are logged but don't raise exceptions
+
+logger.warning("cache_read_error", error=str(e))
+# Continue to execute tool...
+```
+
+---
+
+### Usage Examples
+
+#### **Check if Result was Cached**
+
+```python
+result = await tool_registry.execute_tool(
+    "search_knowledge_base",
+    {"query": "inventory control", "k": 5}
+)
+
+if result.cached:
+    print(f"✅ Cache hit! (saved {result.execution_time_ms}ms)")
+else:
+    print(f"❌ Cache miss (executed in {result.execution_time_ms}ms)")
+```
+
+#### **Force Cache Bypass** (For Testing)
+
+Real-time tools automatically skip cache. For cached tools, use skip_cache:
+
+```python
+# Tools with skip_cache=True always execute fresh
+tool = GetCurrentObservationsTool()  # Has skip_cache=True
+result = await tool.run(product_id="P-123")  # Always fresh
+```
+
+#### **Custom TTL Override**
+
+```python
+# Override TTL at wrapper creation (for special cases)
+custom_cached_tool = CachedTool(
+    SearchKnowledgeBaseTool(),
+    ttl_seconds=1800  # 30 minutes instead of 24 hours
+)
+```
+
+---
+
+### Monitoring Cache Performance
+
+#### **Logs**
+
+Cache operations are automatically logged:
+
+```json
+{
+  "event": "tool_cache_hit",
+  "tool": "search_knowledge_base",
+  "cache_key": "tool_cache:search_knowledge_base:a3d5f8b2...",
+  "level": "info"
+}
+
+{
+  "event": "tool_cache_miss",
+  "tool": "calculate_lead_time_risk",
+  "level": "info"
+}
+
+{
+  "event": "cache_write_error",
+  "tool": "get_inventory_history",
+  "error": "Redis connection timeout",
+  "level": "warning"
+}
+```
+
+#### **View Cache Hits in Logs**
+
+```bash
+# Filter cache hits
+docker-compose logs agent-service | grep "tool_cache_hit"
+
+# Count cache hit rate
+docker-compose logs agent-service | jq 'select(.event | contains("cache"))' | wc -l
+```
+
+---
+
+### Redis Configuration
+
+#### **Environment Variables**
+
+```bash
+# .env or docker-compose.yml
+REDIS_URL=redis://localhost:6379
+CACHE_TTL_SECONDS=3600  # Global default (1 hour)
+```
+
+#### **Redis Memory Management**
+
+Redis uses TTL-based expiration - keys auto-delete after TTL:
+
+```bash
+# Check cache keys
+redis-cli KEYS "tool_cache:*"
+
+# Check TTL for specific key
+redis-cli TTL "tool_cache:search_knowledge_base:a3d5f8b2..."
+
+# Manual cache flush (debugging)
+redis-cli FLUSHDB
+```
+
+---
+
+### Testing Caching
+
+#### **Unit Tests**
+
+```bash
+# Test caching logic
+uv run pytest tests/test_cached_tool.py -v
+
+# Test registration with caching
+uv run pytest tests/test_tool_registration.py -v
+```
+
+#### **Integration Tests**
+
+```python
+# Test cache hit scenario
+result1 = await tool_registry.execute_tool("search_knowledge_base", {"query": "POMDP"})
+assert not result1.cached  # First call - cache miss
+
+result2 = await tool_registry.execute_tool("search_knowledge_base", {"query": "POMDP"})
+assert result2.cached  # Second call - cache hit
+assert result2.data == result1.data  # Same data
+```
+
+---
+
+### Benefits
+
+✅ **Performance**: 10-100x faster for cached results (no API call)
+✅ **Reliability**: Reduces load on external services
+✅ **Cost**: Fewer API calls to Environment/RAG services
+✅ **Consistency**: Same parameters return same results within TTL
+✅ **Transparency**: Zero code changes needed in tools or agent
+
+---
+
+### Troubleshooting
+
+#### **Cache Not Working**
+
+**Check Redis connection:**
+```bash
+docker-compose ps redis
+redis-cli PING  # Should return PONG
+```
+
+**Check cache configuration:**
+```python
+from app.tools import tool_registry
+
+tool = tool_registry.get_tool("search_knowledge_base")
+metadata = tool.get_metadata()
+print(f"TTL: {metadata.cache_ttl}")
+print(f"Skip cache: {metadata.skip_cache}")
+```
+
+#### **High Cache Miss Rate**
+
+- ✅ Check if parameters are consistent (order matters in some cases)
+- ✅ Verify TTL isn't too short
+- ✅ Check Redis memory isn't full (keys being evicted)
+
+#### **Stale Data Issues**
+
+- ✅ Reduce TTL for affected tool
+- ✅ Consider adding `skip_cache=True` for real-time data
+- ✅ Implement manual cache invalidation (future feature)
 
 ---
 
 ## Performance Metrics
 
-| Tool | Avg Response Time | p95 | Retry Rate |
-|------|------------------|-----|------------|
-| `get_current_observations` | 150ms | 300ms | 2% |
-| `get_order_backlog` | 180ms | 350ms | 2% |
-| `get_shipments_in_transit` | 120ms | 250ms | 1% |
-| `calculate_stockout_probability` | 500ms | 1000ms | 3% |
-| `calculate_lead_time_risk` | 450ms | 900ms | 3% |
-| `get_inventory_history` | 300ms | 600ms | 2% |
-| `search_knowledge_base` | 800ms | 1500ms | 5% |
-| `expand_graph_by_ids` | 400ms | 800ms | 4% |
-| `get_entity_by_number` | 200ms | 400ms | 2% |
+### Without Cache (Cold Execution)
+
+| Tool | Avg Response Time | p95 | Retry Rate | Cache Strategy |
+|------|------------------|-----|------------|----------------|
+| `get_current_observations` | 150ms | 300ms | 2% | ⚡ No cache (real-time) |
+| `get_order_backlog` | 180ms | 350ms | 2% | ⚡ No cache (real-time) |
+| `get_shipments_in_transit` | 120ms | 250ms | 1% | 🟢 5 min TTL |
+| `calculate_stockout_probability` | 500ms | 1000ms | 3% | 🟢 10 min TTL |
+| `calculate_lead_time_risk` | 450ms | 900ms | 3% | 🟢 10 min TTL |
+| `get_inventory_history` | 300ms | 600ms | 2% | 🟡 1 hour TTL |
+| `search_knowledge_base` | 800ms | 1500ms | 5% | 🔵 24 hour TTL |
+| `expand_graph_by_ids` | 400ms | 800ms | 4% | 🔵 24 hour TTL |
+| `get_entity_by_number` | 200ms | 400ms | 2% | 🔵 24 hour TTL |
+
+### With Cache (Hot Execution)
+
+| Tool | Cache Hit Time | Speedup | Expected Hit Rate |
+|------|----------------|---------|-------------------|
+| `get_shipments_in_transit` | ~2ms | **60x faster** | 70-80% |
+| `calculate_stockout_probability` | ~2ms | **250x faster** | 60-70% |
+| `calculate_lead_time_risk` | ~2ms | **225x faster** | 60-70% |
+| `get_inventory_history` | ~2ms | **150x faster** | 80-90% |
+| `search_knowledge_base` | ~2ms | **400x faster** | 90-95% |
+| `expand_graph_by_ids` | ~2ms | **200x faster** | 85-90% |
+| `get_entity_by_number` | ~2ms | **100x faster** | 95-98% |
+
+**Cache Hit Performance:**
+- ✅ Redis lookup: ~1-3ms
+- ✅ No network calls to external services
+- ✅ No API processing time
+- ✅ Instant JSON deserialization
 
 *Note: Metrics are estimates and will be collected after deployment*
 
@@ -652,6 +992,51 @@ print(f"By category: {stats['by_category']}")
 
 ---
 
+### Cache Debugging
+
+**Problem:** Unexpected cache behavior
+
+**Check cache status:**
+```bash
+# Connect to Redis
+docker exec -it <redis-container> redis-cli
+
+# List all tool cache keys
+KEYS "tool_cache:*"
+
+# Check TTL for specific key
+TTL "tool_cache:search_knowledge_base:a3d5f8b2..."
+
+# Get cached value
+GET "tool_cache:search_knowledge_base:a3d5f8b2..."
+
+# Flush cache (testing only!)
+FLUSHDB
+```
+
+**Check cache logs:**
+```bash
+# Filter cache-related logs
+docker-compose logs agent-service | grep cache
+
+# Count cache hits vs misses
+docker-compose logs agent-service | grep "tool_cache_hit" | wc -l
+docker-compose logs agent-service | grep "tool_cache_miss" | wc -l
+```
+
+**Verify tool cache configuration:**
+```python
+from app.tools import tool_registry
+
+tool = tool_registry.get_tool("search_knowledge_base")
+metadata = tool.get_metadata()
+print(f"Tool: {metadata.name}")
+print(f"TTL: {metadata.cache_ttl}s")
+print(f"Skip cache: {metadata.skip_cache}")
+```
+
+---
+
 ## Testing Tools
 
 ### Unit Tests
@@ -686,6 +1071,17 @@ result = await tool.run(product_id="P-123")
 print(f"Success: {result.success}")
 print(f"Data: {result.data}")
 print(f"Time: {result.execution_time_ms}ms")
+print(f"Cached: {result.cached}")
+```
+
+### Cache Tests
+
+```bash
+# Test caching logic
+uv run pytest tests/test_cached_tool.py -v
+
+# Test tool registration with caching
+uv run pytest tests/test_tool_registration.py -v
 ```
 
 ---
@@ -696,9 +1092,11 @@ print(f"Time: {result.execution_time_ms}ms")
 - [API Documentation](./API.md) - Agent service API endpoints
 - [Configuration](./CONFIGURATION.md) - Tool configuration options
 - [Logging Best Practices](../logging-best-practices.md) - Structured logging
+- `app/tools/cached_tool.py` - Caching implementation
+- `app/tools/__init__.py` - Tool registration
 
 ---
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-16
 **Version:** 0.1.0
-**Status:** ✅ Implemented (9/9 tools)
+**Status:** ✅ Implemented (9/9 tools + Redis caching)

@@ -59,5 +59,15 @@ RAG_SEARCH_MAX_K = 20
 HTTP_OK_STATUS = 200
 HEALTH_CHECK_TIMEOUT = 5.0
 
+# Cache TTL constants (in seconds)
+CACHE_TTL_RAG_TOOLS = 86400  # 24 hours - static knowledge from books
+CACHE_TTL_HISTORY = 3600  # 1 hour - historical data doesn't change
+CACHE_TTL_ANALYTICS = 600  # 10 minutes - analytics/risk calculations
+CACHE_TTL_SHIPMENTS = 300  # 5 minutes - shipments change slowly
+
+# Redis connection pool configuration
+REDIS_MAX_CONNECTIONS = 10
+REDIS_SOCKET_CONNECT_TIMEOUT = 5  # seconds
+
 # Error messages
 ERROR_PREFIX = "error: "

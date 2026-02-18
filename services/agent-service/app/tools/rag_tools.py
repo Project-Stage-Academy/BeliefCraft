@@ -30,6 +30,7 @@ from typing import Any, cast
 
 from app.clients.rag_client import RAGAPIClient, RAGClientProtocol
 from app.core.constants import (
+    CACHE_TTL_RAG_TOOLS,
     DEFAULT_TRAVERSE_TYPES,
     KNOWLEDGE_BASE_BOOK_NAME,
     RAG_SEARCH_DEFAULT_K,
@@ -137,6 +138,7 @@ class SearchKnowledgeBaseTool(APIClientTool):
                 "required": ["query"],
             },
             category="rag",
+            cache_ttl=CACHE_TTL_RAG_TOOLS,  # 24 hours - static knowledge doesn't change
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -262,6 +264,7 @@ class ExpandGraphByIdsTool(APIClientTool):
                 "required": ["document_ids"],
             },
             category="rag",
+            cache_ttl=CACHE_TTL_RAG_TOOLS,  # 24 hours - static knowledge doesn't change
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -364,6 +367,7 @@ class GetEntityByNumberTool(APIClientTool):
                 "required": ["entity_type", "number"],
             },
             category="rag",
+            cache_ttl=CACHE_TTL_RAG_TOOLS,  # 24 hours - static knowledge doesn't change
         )
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
