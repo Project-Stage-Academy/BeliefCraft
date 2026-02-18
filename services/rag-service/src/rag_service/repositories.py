@@ -13,7 +13,16 @@ from .models import Document, EntityType, MetadataFilter, MetadataFilters
 if TYPE_CHECKING:
     from .config import Settings
 
-TRAVERSE_TYPE_TO_REFERENCE_FIELD: dict[str, str] = {
+ENTITY_TYPE_TO_CHUNK_TYPE: dict[EntityType, str] = {
+    EntityType.FORMULA: "numbered_formula",
+    EntityType.TABLE: "numbered_table",
+    EntityType.ALGORITHM: "algorythm",
+    EntityType.IMAGE: "captioned_image",
+    EntityType.EXERCISE: "exercise",
+    EntityType.EXAMPLE: "example",
+}
+
+TRAVERSE_TYPE_TO_REFERENCE_FIELD: dict[EntityType, str] = {
     EntityType.FORMULA: "referenced_formulas",
     EntityType.TABLE: "referenced_tables",
     EntityType.ALGORITHM: "referenced_algorithms",
@@ -89,10 +98,11 @@ class AbstractVectorStoreRepository(ABC):
 
         for doc in docs:
             for field in traverse_types:
-                refs = doc.metadata.get(field, [])
+                refs = doc.metadata.get(TRAVERSE_TYPE_TO_REFERENCE_FIELD[field])
+                chunk_type_value = ENTITY_TYPE_TO_CHUNK_TYPE.get(field, field)
                 filters = MetadataFilters(
                     filters=[
-                        MetadataFilter(field="chunk_type", operator="eq", value=field),
+                        MetadataFilter(field="chunk_type", operator="eq", value=chunk_type_value),
                         MetadataFilter(field="entity_id", operator="in", value=refs),
                     ],
                     condition="and",

@@ -4,7 +4,7 @@ from common.logging import get_logger
 from fastmcp import FastMCP
 
 from .models import Document, EntityType, MetadataFilter, MetadataFilters, SearchFilters
-from .repositories import AbstractVectorStoreRepository
+from .repositories import ENTITY_TYPE_TO_CHUNK_TYPE, AbstractVectorStoreRepository
 
 BOOK_CONTENTS = """part i probabilistic reasoning
 2 Representation 19
@@ -157,9 +157,10 @@ class RagTools:
             entity_type=entity_type.value,
             number=number,
         )
+        chunk_type_value = ENTITY_TYPE_TO_CHUNK_TYPE.get(entity_type, entity_type.value)
         filters = MetadataFilters(
             filters=[
-                MetadataFilter(field="chunk_type", operator="eq", value=entity_type),
+                MetadataFilter(field="chunk_type", operator="eq", value=chunk_type_value),
                 MetadataFilter(field="entity_id", operator="eq", value=number),
             ],
             condition="and",

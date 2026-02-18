@@ -640,7 +640,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$P(x_1, \\dots, x_n) = \\prod_{i=1}^n P(x_i \\mid x_1, \\dots, x_{i-1})$$",
         "page": 16,
-        "link_id": "3.1",
+        "entity_id": "3.1",
         "defined_in_chunk": "chunk_0021",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -656,7 +656,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$P(x) = \\sum_{y \\in \\mathcal{Y}} P(x, y)$$",
         "page": 18,
-        "link_id": "3.2",
+        "entity_id": "3.2",
         "defined_in_chunk": "chunk_0022",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -672,7 +672,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$P(x \\mid y) = \\frac{P(y \\mid x) P(x)}{P(y)}$$",
         "page": 19,
-        "link_id": "3.3",
+        "entity_id": "3.3",
         "defined_in_chunk": "chunk_0023",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -688,7 +688,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$EU(a) = \\sum_{s'} P(s' \\mid a) U(s')$$ ",
         "page": 44,
-        "link_id": "3.4",
+        "entity_id": "3.4",
         "defined_in_chunk": "chunk_0024",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -704,7 +704,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$V^\\pi(s) = R(s, \\pi(s)) + \\gamma \\sum_{s'} T(s' \\mid s, \\pi(s)) V^\\pi(s')$$ ",
         "page": 123,
-        "link_id": "3.5",
+        "entity_id": "3.5",
         "defined_in_chunk": "chunk_0025",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -720,7 +720,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$V^*(s) = \\max_a \\left( R(s, a) + \\gamma \\sum_{s'} T(s' \\mid s, a) V^*(s') \\right)$$",
         "page": 141,
-        "link_id": "3.6",
+        "entity_id": "3.6",
         "defined_in_chunk": "chunk_0026",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -736,7 +736,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$Q(s, a) \\leftarrow Q(s, a) + \\alpha \\left( r + \\gamma \\max_{a'} Q(s', a') - Q(s, a) \\right)$$",
         "page": 315,
-        "link_id": "3.7",
+        "entity_id": "3.7",
         "defined_in_chunk": "chunk_0027",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -752,7 +752,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$V_\\theta(s) = \\theta^\\top \\phi(s) = \\sum_{i=1}^k \\theta_i \\phi_i(s)$$",
         "page": 350,
-        "link_id": "3.8",
+        "entity_id": "3.8",
         "defined_in_chunk": "chunk_0028",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -768,7 +768,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$b'(s') = \\alpha O(o \\mid s', a) \\sum_{s} T(s' \\mid s, a) b(s)$$",
         "page": 402,
-        "link_id": "3.9",
+        "entity_id": "3.9",
         "defined_in_chunk": "chunk_0029",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
@@ -784,7 +784,7 @@
         "chunk_type": "numbered_formula",
         "content": "$$\\mu_{t+1} = A \\mu_t + B u_t + K_{t+1} (z_{t+1} - C(A \\mu_t + B u_t))$$",
         "page": 434,
-        "link_id": "3.10",
+        "entity_id": "3.10",
         "defined_in_chunk": "chunk_0030",
         "part": "I",
         "part_title": "Part I — Probabilistic Reasoning"
