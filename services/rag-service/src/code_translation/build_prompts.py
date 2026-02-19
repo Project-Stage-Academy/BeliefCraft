@@ -2,8 +2,9 @@ import argparse
 from pathlib import Path
 
 from code_translation.github_code_fetcher import GitHubCodeFetcher
-from code_translation.process_book_code import BookCodeProcessor
+from code_translation.process_book_code import BookCodeProcessor, Block
 from code_translation.prompts import PromptTemplates
+from packages.common.src.common.logging import get_logger
 from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms, \
     extract_examples
 
@@ -35,8 +36,12 @@ CHAPTERS_TO_TRANSLATE = ["13", "18", "19", "21", "22", "23", "25", "26", "27", "
 
 TRANSLATED_ALGOS_PATH = Path("translated_algorithms.json")
 
+logger = get_logger(__name__)
+
 
 class PromptBuilder:
+    """Builds prompt strings for translation workflows."""
+
     def __init__(
         self,
         book_processor: BookCodeProcessor | None = None,
@@ -47,18 +52,20 @@ class PromptBuilder:
             "https://github.com/griffinbholt/decisionmaking-code-py"
         )
 
-    def build_update_descriptions_prompt(self, chapter, julia_code):
+    def build_update_descriptions_prompt(self, chapter: str, julia_code: list[Block]) -> str:
         """Build a prompt to update algorithm descriptions for a chapter."""
         julia_chapter_code = self._book_processor.get_blocks_with_chapter(julia_code, str(int(chapter)))
         self._book_processor.extract_block_structs_and_functions(julia_chapter_code)
         python_chapter_code = self._github_fetcher.get_translated_python_code(chapter, None)
 
-        return PromptTemplates.update_descriptions_prompt.format(
+        prompt = PromptTemplates.update_descriptions_prompt.format(
             self._book_processor.format_blocks_text(julia_chapter_code),
             python_chapter_code,
         )
+        logger.info("prompt_built", kind="update_descriptions", chapter=chapter, prompt_chars=len(prompt))
+        return prompt
 
-    def build_translate_python_code_prompt(self, chapter, julia_code):
+    def build_translate_python_code_prompt(self, chapter: str, julia_code: list[Block]) -> str:
         """Build a prompt to translate Julia algorithms in a chapter to Python."""
         self._book_processor.extract_block_structs_and_functions(julia_code)
         self._book_processor.extract_entities_usage(julia_code)
@@ -78,12 +85,14 @@ class PromptBuilder:
         filtered_related_algorithms = self._book_processor.filter_out_older_chapters(related_algorithms, chapter)
         translated_algorithms = self._book_processor.get_translated_algorithms(filtered_related_algorithms)
 
-        return PromptTemplates.translate_julia_code_prompt.format(
+        prompt = PromptTemplates.translate_julia_code_prompt.format(
             self._book_processor.format_blocks_text(julia_chapter_code),
             self._book_processor.format_translated_blocks(translated_algorithms),
         )
+        logger.info("prompt_built", kind="translate_algorithms", chapter=chapter, prompt_chars=len(prompt))
+        return prompt
 
-    def build_translate_example_prompt(self, example_number, blocks):
+    def build_translate_example_prompt(self, example_number: str, blocks: list[Block]) -> str:
         """Build a prompt to translate a single example block to Python."""
         self._book_processor.extract_block_structs_and_functions(blocks)
         self._book_processor.extract_entities_usage(blocks)
@@ -91,6 +100,7 @@ class PromptBuilder:
         example = extract_examples([example_number], blocks)[0]
 
         if not example:
+            logger.warning("example_not_found", example_number=example_number)
             raise ValueError(f"Example with number {example_number} not found")
 
         related_entities = self._book_processor.find_related_definitions(example_number, blocks)
@@ -104,11 +114,12 @@ class PromptBuilder:
         )
         translated_examples = self._book_processor.get_translated_algorithms(filtered_related_algorithms, True)
 
-        return PromptTemplates.translate_example_prompt.format(
+        prompt = PromptTemplates.translate_example_prompt.format(
             f"{example['caption']} \n\n {example['text']} \n\n",
             "\n".join(f"{translated['translated']} \n\n" for translated in translated_examples) or "",
         )
-
+        logger.info("prompt_built", kind="translate_example", example_number=example_number, prompt_chars=len(prompt))
+        return prompt
 
 
 if __name__ == "__main__":

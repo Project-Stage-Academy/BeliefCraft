@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Any
 
 from code_translation.build_prompts import TRANSLATED_ALGOS_PATH
 from code_translation.signature_stripper import strip_to_signatures
@@ -10,12 +10,14 @@ from pdf_parsing.extract_algorithms_and_examples import BlockType
 APPENDIX_START_CHAPTER = 28
 APPENDIX_LETTERS = set("ABCDEFGH")
 
+Block = dict[str, Any]
+
 
 class BookCodeProcessor:
     def __init__(self, translated_algos_path: Path = TRANSLATED_ALGOS_PATH) -> None:
         self._translated_algos_path = translated_algos_path
 
-    def extract_entities_from_julia_code(self, code: str):
+    def extract_entities_from_julia_code(self, code: str) -> tuple[list[str], list[str]]:
         """Return top-level structs and function names defined in a Julia code block."""
         ident = r"[A-Za-z_\u0080-\uFFFF]\w*"
         func_name = rf"{ident}[!?]?"
@@ -91,7 +93,7 @@ class BookCodeProcessor:
         block_number = parts[1]
         return block_number.split(".")[0]
 
-    def get_blocks_with_chapter(self, blocks, chapter_number: str):
+    def get_blocks_with_chapter(self, blocks: list[Block], chapter_number: str) -> list[Block]:
         """Filter blocks to those belonging to a given chapter number."""
         chapter_blocks = []
 
@@ -100,7 +102,7 @@ class BookCodeProcessor:
                 chapter_blocks.append(block)
         return chapter_blocks
 
-    def find_related_definitions(self, block_number, blocks):
+    def find_related_definitions(self, block_number: str, blocks: list[Block]) -> list[tuple[str, str]]:
         """Find (entity, block_number) pairs that reference the given block."""
         related = []
         for block in blocks:
@@ -116,7 +118,11 @@ class BookCodeProcessor:
                     related.append((item, block["number"]))
         return related
 
-    def find_related_definitions_for_chapter(self, chapter_blocks, all_blocks):
+    def find_related_definitions_for_chapter(
+        self,
+        chapter_blocks: list[Block],
+        all_blocks: list[Block],
+    ) -> dict[str, list[tuple[str, str]]]:
         """Build a per-block map of related definitions for a chapter."""
         related = {}
         for block in chapter_blocks:
@@ -124,7 +130,7 @@ class BookCodeProcessor:
             related[block_number] = self.find_related_definitions(block_number, all_blocks)
         return related
 
-    def extract_block_structs_and_functions(self, blocks) -> None:
+    def extract_block_structs_and_functions(self, blocks: list[Block]) -> None:
         """Annotate blocks with declared structs/functions and their usage lists."""
         for block in blocks:
             block["number"] = self.extract_block_number_from_caption(block["caption"])
@@ -132,7 +138,7 @@ class BookCodeProcessor:
             block["structs"] = {struct: [] for struct in structs}
             block["functions"] = {func: [] for func in functions}
 
-    def _build_usage_index(self, blocks) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    def _build_usage_index(self, blocks: list[Block]) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
         """Build inverted indices of struct and function usage across blocks.
 
         The index maps each entity name to block numbers where it is used (not defined).
@@ -192,7 +198,7 @@ class BookCodeProcessor:
 
         return struct_usage, function_usage
 
-    def extract_entities_usage(self, blocks, blocks_type: BlockType = BlockType.ALGORITHM) -> None:
+    def extract_entities_usage(self, blocks: list[Block], blocks_type: BlockType = BlockType.ALGORITHM) -> None:
         """Populate per-block usage lists for structs/functions across blocks."""
         struct_usage, function_usage = self._build_usage_index(blocks)
 
@@ -226,7 +232,7 @@ class BookCodeProcessor:
                 else:
                     used_list.extend(usage)
 
-    def _load_translated_algorithms(self) -> list:
+    def _load_translated_algorithms(self) -> list[dict[str, Any]]:
         """Load translated algorithms JSON once per run."""
         json_path: Path = self._translated_algos_path
         with json_path.open("r", encoding="utf-8") as fh:
@@ -241,7 +247,7 @@ class BookCodeProcessor:
                 return item["code"]
         return None
 
-    def _normalize_chapter(self, chapter) -> int:
+    def _normalize_chapter(self, chapter: str | int) -> int:
         """Convert a chapter identifier to a numeric value (A-H mapped after 28)."""
         chapter_str = str(chapter)
         if chapter_str in APPENDIX_LETTERS:
@@ -254,34 +260,38 @@ class BookCodeProcessor:
         chapter = number.split(".")[0]
         return self._normalize_chapter(chapter)
 
-    def get_translated_algorithms(self, algorithm_numbers: Iterable[str], signatures_only: bool = False) -> list[dict[str, str]]:
+    def get_translated_algorithms(
+        self,
+        algorithm_numbers: Iterable[str],
+        signatures_only: bool = False,
+    ) -> list[dict[str, str]]:
         """Hydrate a list of algorithm numbers with translated code entries."""
-        translated_algorithms = []
+        translated_algorithms: list[dict[str, str]] = []
         for algorithm_number in algorithm_numbers:
-            translated_algorithm = self.get_translated_algorithm(algorithm_number)
-            translated_algorithms.append([
+            translated_algorithm = self.get_translated_algorithm(algorithm_number) or ""
+            translated_algorithms.append(
                 {
                     "algorithm_number": algorithm_number,
                     "translated": strip_to_signatures(translated_algorithm) if signatures_only else translated_algorithm,
                 }
-            ])
+            )
         return translated_algorithms
 
-    def filter_out_older_chapters(self, block_numbers, current_chapter):
+    def filter_out_older_chapters(self, block_numbers: Iterable[str], current_chapter: str | int) -> list[str]:
         """Filter block numbers to those at or before the given chapter."""
         current_chapter = self._normalize_chapter(current_chapter)
-        filtered = []
+        filtered: list[str] = []
         for block_number in block_numbers:
             chapter = self.extract_block_chapter(block_number)
             if chapter < current_chapter:
                 filtered.append(block_number)
         return filtered
 
-    def format_blocks_text(self, blocks) -> str:
+    def format_blocks_text(self, blocks: list[Block]) -> str:
         """Render blocks as prompt-ready caption + code text."""
         return "\n".join(f"{block['caption']} \n\n {block['text']} \n\n" for block in blocks) or ""
 
-    def format_translated_blocks(self, translated_blocks) -> str:
+    def format_translated_blocks(self, translated_blocks: Iterable[dict[str, str]]) -> str:
         """Render translated algorithms as prompt-ready text."""
         return "\n".join(
             f"{translated['algorithm_number']} \n\n {translated['translated']} \n\n"
