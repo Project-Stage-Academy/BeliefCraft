@@ -24,6 +24,8 @@ logger = get_logger(__name__)
 
 
 class GitHubUrlHelper:
+    """Utilities for GitHub URL conversions."""
+
     @staticmethod
     def blob_to_raw(url: str) -> str:
         """Convert a GitHub blob URL to a raw content URL."""
@@ -48,6 +50,8 @@ class GitHubUrlHelper:
 
 
 class GitHubSourceFetcher:
+    """Fetches and caches source files from GitHub raw URLs."""
+
     def __init__(self, base_raw_url: str) -> None:
         self.base_raw_url = base_raw_url
         self._source_cache: dict[str, str] = {}
@@ -59,6 +63,7 @@ class GitHubSourceFetcher:
             return resp.read().decode("utf-8")
 
     def get_source(self, module: str) -> Optional[str]:
+        """Return cached source for a module, fetching on demand."""
         if module in self._source_cache:
             return self._source_cache[module]
         url = GitHubUrlHelper.make_ch_raw_url(self.base_raw_url, module)
@@ -72,6 +77,8 @@ class GitHubSourceFetcher:
 
 
 class AstImportParser:
+    """Parse and extract symbols from Python source using AST."""
+
     @staticmethod
     def parse_chxx_imports(source: str) -> dict[str, list[str]]:
         """
@@ -105,7 +112,6 @@ class AstImportParser:
         end = node.end_lineno          # end_lineno is inclusive and 1-based; using it as the slice end is correct because slicing is end-exclusive
         return "".join(lines[start:end])
 
-
     @staticmethod
     def find_symbol(source: str, name: str) -> Optional[str]:
         """
@@ -138,14 +144,16 @@ class AstImportParser:
         return used
 
 
-class Collector:
-    def __init__(self, base_raw_url: str):
+class DependencyCollector:
+    """Collect and assemble translated Python source with dependencies."""
+
+    def __init__(self, base_raw_url: str) -> None:
         self.base_raw_url = base_raw_url          # URL of the starting file
         self._collected: dict[str, str] = {}       # "module.Symbol" -> code snippet
         self._visited_modules: set[str] = set()
         self._fetcher = GitHubSourceFetcher(base_raw_url)
 
-    def collect_symbols(self, module: str, symbols: list[str]):
+    def collect_symbols(self, module: str, symbols: list[str]) -> None:
         """
         For each symbol in `symbols` from `module`, extract its source and
         recursively collect any chXX symbols it needs.
@@ -183,10 +191,13 @@ class Collector:
                 dep_mod = available_dep_symbols[dep_sym]
                 deps_by_mod.setdefault(dep_mod, []).append(dep_sym)
 
+            if deps_by_mod:
+                logger.info("github_deps_collected", module=module, symbol=sym, deps=len(used_dep_syms))
+
             for dep_mod, dep_syms in deps_by_mod.items():
                 self.collect_symbols(dep_mod, dep_syms)
 
-    def collect_full_file(self, module: str):
+    def collect_full_file(self, module: str) -> None:
         """Collect the full source of a chXX module and recurse into its imports."""
         if module in self._visited_modules:
             return
@@ -242,11 +253,14 @@ class Collector:
             sections.append(main_source.rstrip())
             sections.append("")
 
+        logger.info("github_assembly_complete", sections=len(sections), requested_symbols=bool(requested_symbols))
         return "\n".join(sections)
 
 
 class GitHubCodeFetcher:
-    def __init__(self, repo_url: str):
+    """Facade for fetching translated Python code from GitHub."""
+
+    def __init__(self, repo_url: str) -> None:
         self._repo_url = repo_url
 
     def get_translated_python_code(self, chapter: str, requested_symbols: Optional[list[str]] = None) -> str:
@@ -264,7 +278,7 @@ class GitHubCodeFetcher:
         logger.info("github_fetching_source", url=raw_url)
         main_source = GitHubSourceFetcher(raw_url).fetch_source(raw_url)
 
-        collector = Collector(raw_url)
+        collector = DependencyCollector(raw_url)
 
         if requested_symbols:
             # Collect only the requested symbols and their transitive deps
@@ -311,7 +325,7 @@ def get_translated_python_code_from_github(
     logger.info("github_fetching_source", url=raw_url)
     main_source = GitHubSourceFetcher(raw_url).fetch_source(raw_url)
 
-    collector = Collector(raw_url)
+    collector = DependencyCollector(raw_url)
 
     if requested_symbols:
         # Collect only the requested symbols and their transitive deps

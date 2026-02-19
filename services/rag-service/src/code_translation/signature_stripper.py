@@ -1,8 +1,14 @@
 import ast
 
+from packages.common.src.common.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class ClassMethodStripper(ast.NodeTransformer):
-    def visit_ClassDef(self, node: ast.ClassDef):
+    """Strip class methods to signature-only bodies for prompt context."""
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         new_body = []
 
         for item in node.body:
@@ -20,7 +26,7 @@ class ClassMethodStripper(ast.NodeTransformer):
         node.body = new_body
         return node
 
-    def _extract_top_level_returns(self, func_node):
+    def _extract_top_level_returns(self, func_node: ast.FunctionDef) -> list[ast.stmt]:
         returns = [
             stmt for stmt in func_node.body
             if isinstance(stmt, ast.Return)
@@ -33,6 +39,7 @@ class ClassMethodStripper(ast.NodeTransformer):
 
 
 def strip_to_signatures(code: str) -> str:
+    """Return a version of code with class method bodies reduced to signatures only."""
     if not code:
         return code
     tree = ast.parse(code)

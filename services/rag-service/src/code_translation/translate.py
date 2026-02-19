@@ -4,6 +4,7 @@ import boto3
 import json
 from pathlib import Path
 import argparse
+from typing import Any, Iterable
 
 from botocore.config import Config
 
@@ -17,14 +18,22 @@ logger = get_logger(__name__)
 
 
 class Translator:
-    def __init__(self, client, prompts_dir: Path, translated_algorithms_json: str, prompts_builder: PromptBuilder) -> None:
+    """Coordinates prompt creation, model calls, and persistence of translations."""
+
+    def __init__(
+        self,
+        client: Any,
+        prompts_dir: Path,
+        translated_algorithms_json: str | Path,
+        prompts_builder: PromptBuilder,
+    ) -> None:
         self._client = client
         self._prompts_dir = prompts_dir
         self._translated_algorithms_json = translated_algorithms_json
         self._prompts_builder = prompts_builder
 
     @staticmethod
-    def extract_json_from_text(text: str):
+    def extract_json_from_text(text: str) -> list[dict[str, Any]]:
         """
         Extract JSON between the first ``` and the last ```.
         Raises ValueError if JSON is missing or invalid.
@@ -44,12 +53,13 @@ class Translator:
         return json.loads(json_str)
 
     @staticmethod
-    def add_dict_to_json_list(file_path: str | Path, new_items: dict) -> None:
+    def add_dict_to_json_list(file_path: str | Path, new_items: Iterable[dict[str, Any]]) -> None:
         """
         Load a JSON list of dicts, append new dicts,
         and write the file back.
         """
         file_path = Path(file_path)
+        items_list = list(new_items)
         # 1. Read the file
         if file_path.exists():
             with file_path.open("r", encoding="utf-8") as f:
@@ -60,13 +70,16 @@ class Translator:
         if not isinstance(data, list):
             raise ValueError("JSON must be a list of dicts")
         # 3. Append new dicts
-        for new_item in new_items:
+        for new_item in items_list:
             data.append(new_item)
         # 4. Write back
         with file_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info("json_list_updated", path=str(file_path), added=len(items_list), total=len(data))
 
     def send_prompt(self, prompt: str) -> str:
+        """Send a prompt to Bedrock and return the model text response."""
+        logger.info("sending_prompt", prompt_chars=len(prompt))
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 10000,
@@ -90,30 +103,35 @@ class Translator:
         return response_body["content"][0]["text"]
 
     def _persist_prompt(self, directory: Path, filename: str, prompt: str) -> None:
+        """Persist a prompt to disk for inspection/replay."""
         directory.mkdir(parents=True, exist_ok=True)
         with open(directory / filename, "w", encoding="utf-8") as f:
             f.write(prompt)
+        logger.info("prompt_saved", path=str(directory / filename), prompt_chars=len(prompt))
 
-    def process_update_descriptions(self, julia_code):
-        prompts_queue = []
+    def process_update_descriptions(self, julia_code: list[dict[str, Any]]) -> None:
+        """Update descriptions for already-translated chapters."""
+        prompts_queue: list[str] = []
         for chapter in TRANSLATED_CHAPTERS:
             prompt = self._prompts_builder.build_update_descriptions_prompt(chapter, julia_code)
             update_description_dir = self._prompts_dir / "update_description"
             self._persist_prompt(update_description_dir, f"chapter_{chapter}_code_translation.txt", prompt)
             prompts_queue.append(prompt)
 
+        logger.info("update_description_queue_built", total=len(prompts_queue))
         i = 0
         while prompts_queue:
             logger.info("processing_prompt", index=i)
             prompt = prompts_queue.pop(0)
 
             response_text = self.send_prompt(prompt)
-            logger.info("translation_response_received", response_text=response_text)
+            logger.info("translation_response_received", response_chars=len(response_text))
             self.add_dict_to_json_list(self._translated_algorithms_json, self.extract_json_from_text(response_text))
             logger.info("prompt_processed", index=i)
             i += 1
 
-    def process_translate_algorithms(self, julia_code):
+    def process_translate_algorithms(self, julia_code: list[dict[str, Any]]) -> None:
+        """Translate new algorithm chapters from Julia to Python."""
         for chapter in CHAPTERS_TO_TRANSLATE:
             logger.info("translating_chapter", chapter=chapter)
             prompt = self._prompts_builder.build_translate_python_code_prompt(chapter, julia_code)
@@ -122,18 +140,20 @@ class Translator:
 
             response_text = self.send_prompt(prompt)
 
-            logger.info("translation_response_received", response_text=response_text)
+            logger.info("translation_response_received", response_chars=len(response_text))
             self.add_dict_to_json_list(self._translated_algorithms_json, self.extract_json_from_text(response_text))
             logger.info("prompt_processed", chapter=chapter)
 
-    def process_translate_examples(self, blocks):
-        prompts_queue = []
+    def process_translate_examples(self, blocks: list[dict[str, Any]]) -> None:
+        """Translate example blocks from Julia to Python."""
+        prompts_queue: list[str] = []
         for example in EXAMPLE_WITH_CODE_NUMBERS:
             prompt = self._prompts_builder.build_translate_example_prompt(example, blocks)
             translate_examples_dir = self._prompts_dir / "translate_examples"
             self._persist_prompt(translate_examples_dir, f"{example.replace(' ', '_')}_translation.txt", prompt)
             prompts_queue.append(prompt)
 
+        logger.info("translate_examples_queue_built", total=len(prompts_queue))
         i = 0
         while prompts_queue:
             logger.info("processing_prompt", index=i)
@@ -141,7 +161,7 @@ class Translator:
 
             response_text = self.send_prompt(prompt)
 
-            logger.info("translation_response_received", response_text=response_text)
+            logger.info("translation_response_received", response_chars=len(response_text))
             self.add_dict_to_json_list("translated_examples.json", self.extract_json_from_text(response_text))
             logger.info("prompt_processed", index=i)
             i += 1
@@ -182,9 +202,11 @@ def main() -> None:
         translated_algorithms_json=args.translated_algorithms_json,
         prompts_builder=prompts_builder
     )
+    logger.info("translation_started", prompts_dir=str(prompts_dir))
     translator.process_update_descriptions(julia_code)
     translator.process_translate_algorithms(julia_code)
     translator.process_translate_examples(blocks)
+    logger.info("translation_completed")
 
 
 if __name__ == "__main__":
