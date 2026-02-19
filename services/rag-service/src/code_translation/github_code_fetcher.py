@@ -11,13 +11,16 @@ imported from chXX modules (transitively). Edit the CONFIG block below and run.
 
 # ==============================================================================
 
-import sys
 import re
 import ast
 import urllib.request
 from urllib.parse import urlparse
 from pathlib import PurePosixPath
 from typing import Optional
+
+from packages.common.src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +150,7 @@ class Collector:
             self._source_cache[module] = src
             return src
         except Exception as e:
-            print(f"  [WARNING] Could not fetch {module}: {e}", file=sys.stderr)
+            logger.warning("github_fetch_failed", module=module, url=url, error=str(e), exc_info=True)
             return None
 
     def collect_symbols(self, module: str, symbols: list[str]):
@@ -174,7 +177,7 @@ class Collector:
 
             code = find_symbol(src, sym)
             if code is None:
-                print(f"  [WARNING] Symbol '{sym}' not found in {module}", file=sys.stderr)
+                logger.warning("symbol_not_found", symbol=sym, module=module)
                 continue
 
             self._collected[key] = code
@@ -270,7 +273,7 @@ def get_translated_python_code_from_github(
     Returns a single string with all the code.
     """
     raw_url = github_blob_to_raw(f"{repo_url}/blob/main/src/ch{chapter}.py")
-    print(f"Fetching: {raw_url}", file=sys.stderr)
+    logger.info("github_fetching_source", url=raw_url)
     main_source = fetch_source(raw_url)
 
     collector = Collector(raw_url)
