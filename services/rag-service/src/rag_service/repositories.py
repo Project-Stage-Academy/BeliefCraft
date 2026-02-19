@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 ENTITY_TYPE_TO_CHUNK_TYPE: dict[EntityType, str] = {
     EntityType.FORMULA: "numbered_formula",
     EntityType.TABLE: "numbered_table",
-    EntityType.ALGORITHM: "algorythm",
+    EntityType.ALGORITHM: "algorithm",
     EntityType.IMAGE: "captioned_image",
     EntityType.EXERCISE: "exercise",
     EntityType.EXAMPLE: "example",

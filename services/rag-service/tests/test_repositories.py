@@ -32,7 +32,7 @@ async def test_expand_graph_by_ids(repo):
 
     # Verify types
     for doc in expanded_docs:
-        assert doc.metadata["chunk_type"] in ["numbered_formula", "algorythm"]
+        assert doc.metadata["chunk_type"] in ["numbered_formula", "algorithm"]
 
 
 @pytest.mark.asyncio
