@@ -27,6 +27,12 @@ The repository pattern allows for easy swapping of the underlying data store wit
 - `src/rag_service/models.py`: Pydantic models for documents, entities, and filters.
 - `src/rag_service/config.py`: Configuration settings and schema.
 
+## Command to run the service
+
+```bash
+uv run --project services/rag-service uvicorn rag_service.main:app --app-dir services/rag-service/src --host 0.0.0.0 --port 8001 --reload
+```
+
 ## MCP Tools
 
 The service exposes the following tools via MCP:
