@@ -17,13 +17,13 @@ All tools follow OpenAI function calling schema (compatible with Claude, GPT-4, 
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│                   ReAct Agent                         │
+│                   ReAct Agent                        │
 │         (_think_node, _act_node via tool registry)   │
 └────────────────────┬─────────────────────────────────┘
                      │
                      ▼
 ┌──────────────────────────────────────────────────────┐
-│              Tool Registry                            │
+│              Tool Registry                           │
 │  • Registers & discovers tools                       │
 │  • Converts to OpenAI function schemas               │
 │  • Executes with error handling & logging            │

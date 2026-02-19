@@ -9,7 +9,7 @@ from .config_schema import Settings
 load_service_env(__file__)
 
 env = os.getenv("ENV")
-service_root = Path(__file__).resolve().parents[1]
+service_root = Path(__file__).resolve().parents[2]
 
 settings = ConfigLoader(service_root=service_root).load(
     schema=Settings,
