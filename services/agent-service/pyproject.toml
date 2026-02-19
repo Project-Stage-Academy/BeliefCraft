@@ -38,9 +38,15 @@ dev = [
   "pre-commit>=3.0",
 ]
 [tool.pytest.ini_options]
+pythonpath = [
+  ".",
+  "../../packages/common/src",
+  "../../packages/database/src",
+]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
 markers = [
   "integration: integration tests that require external services",
   "slow: slow tests (e.g., integration tests)",
   "asyncio: async tests",
 ]
-asyncio_mode = "auto"
