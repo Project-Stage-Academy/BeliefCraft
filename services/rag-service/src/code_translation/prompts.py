@@ -234,3 +234,10 @@ Available Python code to use (signatures only; already defined elsewhere in the 
 
 Return only the JSON array in the required format.
 '''
+
+
+class PromptTemplates:
+    update_descriptions_prompt = update_descriptions_prompt
+    translate_julia_code_prompt = translate_julia_code_prompt
+    translate_example_prompt = translate_example_prompt
+

@@ -23,147 +23,139 @@ from packages.common.src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# GitHub URL helpers
-# ---------------------------------------------------------------------------
+class GitHubUrlHelper:
+    @staticmethod
+    def blob_to_raw(url: str) -> str:
+        """Convert a GitHub blob URL to a raw content URL."""
+        url = url.rstrip("/")
+        parsed = urlparse(url)
+        parts = parsed.path.lstrip("/").split("/")
+        # parts: [user, repo, "blob", branch, *file_path]
+        if len(parts) < 5 or parts[2] != "blob":
+            raise ValueError(f"Not a GitHub blob URL: {url}")
+        user, repo, _, branch, *file_parts = parts
+        raw_path = "/".join(file_parts)
+        return f"https://raw.githubusercontent.com/{user}/{repo}/{branch}/{raw_path}"
 
-def github_blob_to_raw(url: str) -> str:
-    """Convert a GitHub blob URL to a raw content URL."""
-    # https://github.com/user/repo/blob/branch/path/to/file.py
-    # -> https://raw.githubusercontent.com/user/repo/branch/path/to/file.py
-    url = url.rstrip("/")
-    parsed = urlparse(url)
-    parts = parsed.path.lstrip("/").split("/")
-    # parts: [user, repo, "blob", branch, *file_path]
-    if len(parts) < 5 or parts[2] != "blob":
-        raise ValueError(f"Not a GitHub blob URL: {url}")
-    user, repo, _, branch, *file_parts = parts
-    raw_path = "/".join(file_parts)
-    return f"https://raw.githubusercontent.com/{user}/{repo}/{branch}/{raw_path}"
-
-
-def make_ch_raw_url(base_raw_url: str, ch_module: str) -> str:
-    """Given the raw URL of any file in the repo, build the raw URL for chXX.py."""
-    # base_raw_url: https://raw.githubusercontent.com/user/repo/branch/src/chXX.py
-    # ch_module:    ch07  (no .py)
-    parts = base_raw_url.split("/")
-    parts[-1] = ch_module + ".py"          # replace filename
-    return "/".join(parts)
+    @staticmethod
+    def make_ch_raw_url(base_raw_url: str, ch_module: str) -> str:
+        """Given the raw URL of any file in the repo, build the raw URL for chXX.py."""
+        # base_raw_url: https://raw.githubusercontent.com/user/repo/branch/src/chXX.py
+        # ch_module:    ch07  (no .py)
+        parts = base_raw_url.split("/")
+        parts[-1] = ch_module + ".py"          # replace filename
+        return "/".join(parts)
 
 
-# ---------------------------------------------------------------------------
-# Fetching source
-# ---------------------------------------------------------------------------
+class GitHubSourceFetcher:
+    def __init__(self, base_raw_url: str) -> None:
+        self.base_raw_url = base_raw_url
+        self._source_cache: dict[str, str] = {}
 
-def fetch_source(raw_url: str) -> str:
-    """Download source code from a raw URL."""
-    req = urllib.request.Request(raw_url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req) as resp:
-        return resp.read().decode("utf-8")
-
-
-# ---------------------------------------------------------------------------
-# AST helpers
-# ---------------------------------------------------------------------------
-
-def parse_chxx_imports(source: str) -> dict[str, list[str]]:
-    """
-    Return {module_name: [symbol, ...]} for all `from chXX import ...` lines.
-    """
-    result: dict[str, list[str]] = {}
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        # Fallback: regex
-        for m in re.finditer(r"from\s+(ch\d+)\s+import\s+(.+)", source):
-            mod = m.group(1)
-            names = [n.strip() for n in m.group(2).split(",")]
-            result.setdefault(mod, []).extend(names)
-        return result
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            mod = node.module or ""
-            if re.fullmatch(r"ch\d+", mod):
-                names = [alias.asname or alias.name for alias in node.names]
-                result.setdefault(mod, []).extend(names)
-    return result
-
-
-def extract_node_source(source: str, node: ast.AST) -> str:
-    """Extract source lines for an AST node (class or function)."""
-    lines = source.splitlines(keepends=True)
-    # ast gives 1-based line numbers
-    start = node.lineno - 1
-    end = node.end_lineno          # end_lineno is inclusive and 1-based; using it as the slice end is correct because slicing is end-exclusive
-    return "".join(lines[start:end])
-
-
-def find_symbol(source: str, name: str) -> Optional[str]:
-    """
-    Return the source text of the top-level class or function named `name`.
-    Returns None if not found.
-    """
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return None
-    for node in ast.iter_child_nodes(tree):
-        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            if node.name == name:
-                return extract_node_source(source, node)
-        # Also handle module-level assignments (e.g. NamedTuple aliases)
-        if isinstance(node, ast.Assign):
-            for t in node.targets:
-                if isinstance(t, ast.Name) and t.id == name:
-                    return extract_node_source(source, node)
-    return None
-
-
-def symbols_used_in_code(code: str, candidates: set[str]) -> set[str]:
-    """Return which names from `candidates` appear in `code`."""
-    used = set()
-    for name in candidates:
-        # Use word-boundary search to avoid false positives
-        if re.search(r"\b" + re.escape(name) + r"\b", code):
-            used.add(name)
-    return used
-
-
-# ---------------------------------------------------------------------------
-# Core recursive logic
-# ---------------------------------------------------------------------------
-
-class Collector:
-    def __init__(self, base_raw_url: str):
-        self.base_raw_url = base_raw_url          # URL of the starting file
-        self._source_cache: dict[str, str] = {}   # module -> source
-        self._collected: dict[str, str] = {}       # "module.Symbol" -> code snippet
-        self._visited_modules: set[str] = set()
+    def fetch_source(self, raw_url: str) -> str:
+        """Download source code from a raw URL."""
+        req = urllib.request.Request(raw_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as resp:
+            return resp.read().decode("utf-8")
 
     def get_source(self, module: str) -> Optional[str]:
         if module in self._source_cache:
             return self._source_cache[module]
-        url = make_ch_raw_url(self.base_raw_url, module)
+        url = GitHubUrlHelper.make_ch_raw_url(self.base_raw_url, module)
         try:
-            src = fetch_source(url)
+            src = self.fetch_source(url)
             self._source_cache[module] = src
             return src
         except Exception as e:
             logger.warning("github_fetch_failed", module=module, url=url, error=str(e), exc_info=True)
             return None
 
+
+class AstImportParser:
+    @staticmethod
+    def parse_chxx_imports(source: str) -> dict[str, list[str]]:
+        """
+        Return {module_name: [symbol, ...]} for all `from chXX import ...` lines.
+        """
+        result: dict[str, list[str]] = {}
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            # Fallback: regex
+            for m in re.finditer(r"from\s+(ch\d+)\s+import\s+(.+)", source):
+                mod = m.group(1)
+                names = [n.strip() for n in m.group(2).split(",")]
+                result.setdefault(mod, []).extend(names)
+            return result
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                if re.fullmatch(r"ch\d+", mod):
+                    names = [alias.asname or alias.name for alias in node.names]
+                    result.setdefault(mod, []).extend(names)
+        return result
+
+    @staticmethod
+    def extract_node_source(source: str, node: ast.AST) -> str:
+        """Extract source lines for an AST node (class or function)."""
+        lines = source.splitlines(keepends=True)
+        # ast gives 1-based line numbers
+        start = node.lineno - 1
+        end = node.end_lineno          # end_lineno is inclusive and 1-based; using it as the slice end is correct because slicing is end-exclusive
+        return "".join(lines[start:end])
+
+
+    @staticmethod
+    def find_symbol(source: str, name: str) -> Optional[str]:
+        """
+        Return the source text of the top-level class or function named `name`.
+        Returns None if not found.
+        """
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return None
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.name == name:
+                    return AstImportParser.extract_node_source(source, node)
+            # Also handle module-level assignments (e.g. NamedTuple aliases)
+            if isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name) and t.id == name:
+                        return AstImportParser.extract_node_source(source, node)
+        return None
+
+    @staticmethod
+    def symbols_used_in_code(code: str, candidates: set[str]) -> set[str]:
+        """Return which names from `candidates` appear in `code`."""
+        used = set()
+        for name in candidates:
+            # Use word-boundary search to avoid false positives
+            if re.search(r"\b" + re.escape(name) + r"\b", code):
+                used.add(name)
+        return used
+
+
+class Collector:
+    def __init__(self, base_raw_url: str):
+        self.base_raw_url = base_raw_url          # URL of the starting file
+        self._collected: dict[str, str] = {}       # "module.Symbol" -> code snippet
+        self._visited_modules: set[str] = set()
+        self._fetcher = GitHubSourceFetcher(base_raw_url)
+
     def collect_symbols(self, module: str, symbols: list[str]):
         """
         For each symbol in `symbols` from `module`, extract its source and
         recursively collect any chXX symbols it needs.
         """
-        src = self.get_source(module)
+        src = self._fetcher.get_source(module)
         if src is None:
             return
 
         # Parse what chXX imports are available in this module
-        chxx_imports = parse_chxx_imports(src)   # {dep_module: [sym, ...]}
+        chxx_imports = AstImportParser.parse_chxx_imports(src)   # {dep_module: [sym, ...]}
         # Flat map: symbol_name -> dep_module
         available_dep_symbols: dict[str, str] = {}
         for dep_mod, dep_syms in chxx_imports.items():
@@ -175,7 +167,7 @@ class Collector:
             if key in self._collected:
                 continue  # already done
 
-            code = find_symbol(src, sym)
+            code = AstImportParser.find_symbol(src, sym)
             if code is None:
                 logger.warning("symbol_not_found", symbol=sym, module=module)
                 continue
@@ -183,7 +175,7 @@ class Collector:
             self._collected[key] = code
 
             # Find which dep symbols are actually used inside this code
-            used_dep_syms = symbols_used_in_code(code, set(available_dep_symbols.keys()))
+            used_dep_syms = AstImportParser.symbols_used_in_code(code, set(available_dep_symbols.keys()))
 
             # Group by their source module and recurse
             deps_by_mod: dict[str, list[str]] = {}
@@ -200,7 +192,7 @@ class Collector:
             return
         self._visited_modules.add(module)
 
-        src = self.get_source(module)
+        src = self._fetcher.get_source(module)
         if src is None:
             return
 
@@ -208,7 +200,7 @@ class Collector:
         self._collected[key] = src
 
         # Recurse into all chXX imports of this file
-        chxx_imports = parse_chxx_imports(src)
+        chxx_imports = AstImportParser.parse_chxx_imports(src)
         for dep_mod, dep_syms in chxx_imports.items():
             self.collect_symbols(dep_mod, dep_syms)
 
@@ -240,7 +232,7 @@ class Collector:
         if requested_symbols:
             main_module = PurePosixPath(urlparse(self.base_raw_url).path).stem
             for sym in requested_symbols:
-                code = find_symbol(main_source, sym)
+                code = AstImportParser.find_symbol(main_source, sym)
                 if code:
                     sections.append(f"# --- {main_module}.py :: {sym} ---")
                     sections.append(code.rstrip())
@@ -251,6 +243,49 @@ class Collector:
             sections.append("")
 
         return "\n".join(sections)
+
+
+class GitHubCodeFetcher:
+    def __init__(self, repo_url: str):
+        self._repo_url = repo_url
+
+    def get_translated_python_code(self, chapter: str, requested_symbols: Optional[list[str]] = None) -> str:
+        """
+        Main function.
+
+        chapter        – Chapter number as a string, e.g. "02" (no "ch" prefix)
+        requested_symbols – optional list of specific symbols to extract;
+                            if None/empty the full file is used
+        repo_url       – GitHub repo base URL, e.g. "https://github.com/user/repo"
+
+        Returns a single string with all the code.
+        """
+        raw_url = GitHubUrlHelper.blob_to_raw(f"{self._repo_url}/blob/main/src/ch{chapter}.py")
+        logger.info("github_fetching_source", url=raw_url)
+        main_source = GitHubSourceFetcher(raw_url).fetch_source(raw_url)
+
+        collector = Collector(raw_url)
+
+        if requested_symbols:
+            # Collect only the requested symbols and their transitive deps
+            main_module = PurePosixPath(urlparse(raw_url).path).stem
+            # First collect the requested symbols from the main module's chXX imports
+            chxx_imports = AstImportParser.parse_chxx_imports(main_source)
+            # Also parse which chXX symbols requested_symbols themselves use
+            collector._fetcher._source_cache[main_module] = main_source
+            collector.collect_symbols(main_module, requested_symbols)
+            # Also check direct imports for the requested symbols
+            for sym in requested_symbols:
+                for dep_mod, dep_syms in chxx_imports.items():
+                    if sym in dep_syms:
+                        collector.collect_symbols(dep_mod, [sym])
+        else:
+            # Full file mode: collect all chXX imports recursively
+            chxx_imports = AstImportParser.parse_chxx_imports(main_source)
+            for dep_mod, dep_syms in chxx_imports.items():
+                collector.collect_symbols(dep_mod, dep_syms)
+
+        return collector.build_result(main_source, requested_symbols)
 
 
 # ---------------------------------------------------------------------------
@@ -272,9 +307,9 @@ def get_translated_python_code_from_github(
 
     Returns a single string with all the code.
     """
-    raw_url = github_blob_to_raw(f"{repo_url}/blob/main/src/ch{chapter}.py")
+    raw_url = GitHubUrlHelper.blob_to_raw(f"{repo_url}/blob/main/src/ch{chapter}.py")
     logger.info("github_fetching_source", url=raw_url)
-    main_source = fetch_source(raw_url)
+    main_source = GitHubSourceFetcher(raw_url).fetch_source(raw_url)
 
     collector = Collector(raw_url)
 
@@ -282,9 +317,9 @@ def get_translated_python_code_from_github(
         # Collect only the requested symbols and their transitive deps
         main_module = PurePosixPath(urlparse(raw_url).path).stem
         # First collect the requested symbols from the main module's chXX imports
-        chxx_imports = parse_chxx_imports(main_source)
+        chxx_imports = AstImportParser.parse_chxx_imports(main_source)
         # Also parse which chXX symbols requested_symbols themselves use
-        collector._source_cache[main_module] = main_source
+        collector._fetcher._source_cache[main_module] = main_source
         collector.collect_symbols(main_module, requested_symbols)
         # Also check direct imports for the requested symbols
         for sym in requested_symbols:
@@ -293,7 +328,7 @@ def get_translated_python_code_from_github(
                     collector.collect_symbols(dep_mod, [sym])
     else:
         # Full file mode: collect all chXX imports recursively
-        chxx_imports = parse_chxx_imports(main_source)
+        chxx_imports = AstImportParser.parse_chxx_imports(main_source)
         for dep_mod, dep_syms in chxx_imports.items():
             collector.collect_symbols(dep_mod, dep_syms)
 
