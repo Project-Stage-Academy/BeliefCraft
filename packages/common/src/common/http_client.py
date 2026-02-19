@@ -54,11 +54,19 @@ class RequestLogger:
         if not streaming:
             duration_ms = response.elapsed.total_seconds() * 1000 if response.elapsed else 0
         else:
-            start_time = response.request.extensions["start_time"]
-            duration_ms = (time.perf_counter() - start_time) * 1000
+            try:
+                start_time = response.request.extensions["start_time"]
+                duration_ms = (time.perf_counter() - start_time) * 1000
+            except KeyError:
+                duration_ms = None
 
         if response.status_code >= 400:
-            await response.aread()
+            if streaming:
+                prefix = await response.aiter_bytes().__anext__()
+                body_preview = prefix.decode(errors="replace")[:500]
+            else:
+                await response.aread()
+                body_preview = response.text[:500]
             logger.warning(
                 "http_request_failed",
                 status_code=response.status_code,
@@ -66,7 +74,7 @@ class RequestLogger:
                 url=str(response.request.url),
                 duration_ms=duration_ms,
                 streaming=streaming,
-                response_body=response.text[:500],
+                response_body=body_preview,
             )
         else:
             logger.info(

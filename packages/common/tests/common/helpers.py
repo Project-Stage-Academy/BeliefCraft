@@ -18,7 +18,8 @@ class Stream(httpx.AsyncByteStream):
 
 class ErrorStream(httpx.AsyncByteStream):
     async def __aiter__(self) -> AsyncIterator[bytes]:
-        yield b'{"error": "Service Unavailable"}'
+        yield b'{"error": "chunk1'
+        yield b'chunk2"}'
 
     async def aclose(self) -> None:
         pass

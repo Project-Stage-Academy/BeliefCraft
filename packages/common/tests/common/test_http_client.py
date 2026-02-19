@@ -144,7 +144,8 @@ async def test_response_logging_error(caplog):
     with patch("common.http_client.httpx.AsyncClient") as mock_class:
         mock_client = AsyncMock()
         mock_class.return_value = mock_client
-        mock_response = AsyncMock(spec=httpx.Response)
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response._content = b'{"error": "Internal Server Error"}'
         mock_response.status_code = 500
         mock_response.text = '{"error": "Internal Server Error"}'
         mock_response.elapsed.total_seconds.return_value = 0.123
@@ -255,7 +256,8 @@ async def test_streaming_response_logging_error(caplog):
 
     assert "http_request_failed" in caplog.text
     assert "503" in caplog.text
-    assert "Service Unavailable" in caplog.text
+    assert "chunk1" in caplog.text
+    assert "chunk2" not in caplog.text  # Read only first chunk for error preview
 
 
 @pytest.mark.asyncio
