@@ -1,19 +1,21 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
+    PYTHONPATH=/app:/app/services/environment-api \
     PORT=8000
 
-COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv
 
-RUN pip install --no-cache-dir uv \
-  && uv sync --frozen --system
+COPY pyproject.toml uv.lock /app/
+COPY packages/common /app/packages/common
+COPY packages/database /app/packages/database
+COPY services/environment-api /app/services/environment-api
 
-COPY src ./src
+RUN uv sync --frozen --project services/environment-api
 
 EXPOSE 8000
 
-CMD ["uvicorn", "environment_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "--frozen", "--project", "services/environment-api", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

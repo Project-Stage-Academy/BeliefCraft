@@ -1,0 +1,22 @@
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class AgentQueryRequest(BaseModel):
+    """Request model for agent query"""
+
+    query: str = Field(..., description="User query for the agent", min_length=10, max_length=1000)
+    context: dict[str, Any] = Field(
+        default_factory=dict, description="Additional context for the query"
+    )
+    max_iterations: int = Field(
+        default=10, description="Maximum number of ReAct iterations", ge=1, le=20
+    )
+
+
+class ToolExecutionRequest(BaseModel):
+    """Request model for tool execution"""
+
+    tool_name: str = Field(..., description="Name of the tool to execute")
+    parameters: dict[str, Any] = Field(..., description="Tool parameters")

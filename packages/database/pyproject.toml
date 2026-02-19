@@ -1,0 +1,16 @@
+[project]
+name = "beliefcraft-database"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.13.3",
+    "psycopg2-binary>=2.9.11",
+    "sqlalchemy>=2.0.46",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

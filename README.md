@@ -40,18 +40,42 @@ graph TD
 - `packages/database/`: shared database models and connection helpers
 - `infrastructure/`: Docker and scripts
 - `docs/`: design docs
+  - `docs/configuration-workflow.md`: YAML config loading, validation, and env placeholder expansion
 - `tests/`: test suites
 
 **Quick Start**
-1. Copy each service env example to a local `.env` file.
-2. Build and start all services with `docker compose up --build`.
-3. Verify health checks.
+1. Copy env templates:
+  - `cp .env.example .env`
+  - `cp services/environment-api/.env.example services/environment-api/.env`
+  - `cp services/rag-service/.env.example services/rag-service/.env`
+  - `cp services/agent-service/.env.example services/agent-service/.env`
+  - `cp services/ui/.env.example services/ui/.env`
+2. Install local dependencies for all services with `make setup`.
+3. Start development mode with hot reload using `make dev`.
+4. Verify stack health with `powershell -ExecutionPolicy Bypass -File infrastructure/scripts/health/check-services.ps1`.
 
-Service endpoints (host ports):
-- Environment API: `http://localhost:8000/healthz`
-- RAG Service: `http://localhost:8001/healthz`
-- Agent Service: `http://localhost:8002/healthz`
-- UI: `http://localhost:3000/`
+Service health endpoints (host ports):
+- Environment API: `http://localhost:8000/health`
+- RAG Service: `http://localhost:8001/health`
+- Agent Service: `http://localhost:8003/health`
+- UI: `http://localhost:3000/health`
+
+**Make Commands**
+- `make setup` - install all Python and UI dependencies
+- `make dev` - run full Docker Compose stack in development mode
+- `make test` - run test suite
+- `make lint` - run linters
+- `make format` - auto-format code
+- `make lint-format` - run formatter and linters in one command
+- `make clean` - remove containers, networks, and volumes
+
+**Database Startup Flow**
+- PostgreSQL starts with initialization script at `infrastructure/scripts/postgres/init-databases.sh`.
+- Databases are created automatically (`environment_api`, `rag_service`).
+- Migration container `db-migrate` applies SQL files from `infrastructure/scripts/postgres/migrations` before API services start.
+
+**Troubleshooting**
+- Common issues and fixes are documented in `docs/troubleshooting.md`.
 
 **Development Notes**
 - Python services use `uv` for dependency management with `pyproject.toml`.
