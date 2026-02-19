@@ -50,7 +50,7 @@ In the "declarations" field:
 - For methods, use the format: "ClassName.method_name".
 '''
 
-translate_python_code_prompt = '''
+translate_julia_code_prompt = '''
 You are working on a book that contains code blocks with explanatory text. Some earlier blocks have already been rewritten into Python and the book text was updated accordingly. Now you must do the same for the new blocks provided below.
 
 Your task is to:

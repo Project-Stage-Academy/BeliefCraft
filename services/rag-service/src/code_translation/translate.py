@@ -9,7 +9,10 @@ from botocore.config import Config
 
 from code_translation.build_prompts import TRANSLATED_CHAPTERS, build_update_descriptions_prompt, CHAPTERS_TO_TRANSLATE, \
     build_translate_python_code_prompt, EXAMPLE_WITH_CODE_NUMBERS, build_translate_example_prompt
+from packages.common.src.common.logging import get_logger
 from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms
+
+logger = get_logger(__name__)
 
 
 def extract_json_from_text(text: str):
@@ -124,17 +127,17 @@ def main() -> None:
 
     i = 0
     while prompts_queue:
-        print("Processing prompt: ", i)
+        logger.info("processing_prompt", index=i)
         prompt = prompts_queue.pop(0)
 
         response_text = send_prompt(client, prompt)
-        print(response_text)
+        logger.info("translation_response_received", response_text=response_text)
         add_dict_to_json_list("translated_algorithms.json", extract_json_from_text(response_text))
-        print("Successfully processed prompt")
+        logger.info("prompt_processed", index=i)
         i += 1
 
     for chapter in CHAPTERS_TO_TRANSLATE:
-        print(f"Translating {chapter}")
+        logger.info("translating_chapter", chapter=chapter)
         prompt = build_translate_python_code_prompt(chapter, julia_code)
         update_description_dir = prompts_dir / "translate_algorithms"
         update_description_dir.mkdir(parents=True, exist_ok=True)
@@ -143,9 +146,9 @@ def main() -> None:
 
         response_text = send_prompt(client, prompt)
 
-        print(response_text)
+        logger.info("translation_response_received", response_text=response_text)
         add_dict_to_json_list("translated_algorithms.json", extract_json_from_text(response_text))
-        print("Successfully processed prompt")
+        logger.info("prompt_processed", chapter=chapter)
 
 
     for example in EXAMPLE_WITH_CODE_NUMBERS:
@@ -158,14 +161,14 @@ def main() -> None:
 
     i = 0
     while prompts_queue:
-        print("Processing prompt: ", i)
+        logger.info("processing_prompt", index=i)
         prompt = prompts_queue.pop(0)
 
         response_text = send_prompt(client, prompt)
 
-        print(response_text)
+        logger.info("translation_response_received", response_text=response_text)
         add_dict_to_json_list("translated_examples.json", extract_json_from_text(response_text))
-        print("Successfully processed prompt")
+        logger.info("prompt_processed", index=i)
         i += 1
 
 
