@@ -229,7 +229,7 @@ Input:
 Examples with text and Julia code:
 {}
 
-Available Python code to use (already defined elsewhere in the book):
+Available Python code to use (signatures only; already defined elsewhere in the book):
 {}
 
 Return only the JSON array in the required format.

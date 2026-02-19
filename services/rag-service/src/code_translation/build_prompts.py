@@ -6,7 +6,9 @@ import argparse
 
 from code_translation.prompts import update_descriptions_prompt, translate_python_code_prompt, translate_example_prompt
 from code_translation.python_github_code import get_translated_python_code_from_github
-from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms, BlockType
+from code_translation.strip_to_signatures import strip_to_signatures
+from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms, BlockType, \
+    extract_examples
 import re
 
 APPENDIX_START_CHAPTER = 28
@@ -35,7 +37,12 @@ TRANSLATED_CHAPTERS = [
     "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "14", "15", "16", "17", "20", "24",
 ]
 
-CHAPTERS_TO_TRANSLATE = ["13", "18", "19", "21", "22", "23", "25", "26", "27", "E"]
+CHAPTERS_TO_TRANSLATE = [
+    # "13", "18", "19",
+    "21",
+    "22", "23", "25", "26", "27", "E"]
+
+TRANSLATED_ALGOS_PATH = Path("translated_algorithms.json")
 
 
 def extract_entities_from_julia_code(code: str):
@@ -296,7 +303,7 @@ def get_translated_algorithms(algorithm_numbers: Iterable[str]):
     return [
         {
             "algorithm_number": algorithm_number,
-            "translated": get_translated_algorithm(algorithm_number)
+            "translated": strip_to_signatures(get_translated_algorithm(algorithm_number))
         } for algorithm_number in algorithm_numbers
     ]
 
@@ -307,7 +314,7 @@ def filter_out_older_chapters(block_numbers, current_chapter):
     filtered = []
     for block_number in block_numbers:
         chapter = extract_block_chapter(block_number)
-        if chapter <= current_chapter:
+        if chapter < current_chapter:
             filtered.append(block_number)
     return filtered
 
@@ -368,11 +375,7 @@ def build_translate_example_prompt(example_number, blocks):
     extract_block_structs_and_functions(blocks)
     extract_entities_usage(blocks)
 
-    example = None
-    for block in blocks:
-        if block["number"] == example_number:
-            example = block
-            break
+    example = extract_examples([example_number], blocks)[0]
 
     if not example:
         raise ValueError(f"Example with number {example_number} not found")
@@ -418,15 +421,15 @@ if __name__ == "__main__":
     prompts_dir.mkdir(parents=True, exist_ok=True)
     for chapter in TRANSLATED_CHAPTERS:
         prompt = build_update_descriptions_prompt(chapter, julia_code)
-        with open(prompts_dir / f"chapter_{chapter}_code_translation.txt", "w", encoding="utf-8") as f:
+        with open(prompts_dir / "update_description" / f"chapter_{chapter}_code_translation.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
 
     for chapter in CHAPTERS_TO_TRANSLATE:
         prompt = build_translate_python_code_prompt(chapter, julia_code)
-        with open(prompts_dir / f"chapter_{chapter}_translation.txt", "w", encoding="utf-8") as f:
+        with open(prompts_dir / "translate_algorithms" / f"chapter_{chapter}_translation.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
 
     for example in EXAMPLE_WITH_CODE_NUMBERS:
         prompt = build_translate_example_prompt(example, blocks)
-        with open(prompts_dir / f"{example.replace(' ', '_')}_translation.txt", "w", encoding="utf-8") as f:
+        with open(prompts_dir / "translate_examples" / f"{example.replace(' ', '_')}_translation.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
