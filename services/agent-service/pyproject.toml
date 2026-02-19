@@ -28,6 +28,15 @@ dependencies = [
 [tool.uv.sources]
 beliefcraft-common = { workspace = true }
 
+[tool.pytest.ini_options]
+pythonpath = [
+    ".",
+    "../../packages/common/src",
+    "../../packages/database/src",
+]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
+
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 

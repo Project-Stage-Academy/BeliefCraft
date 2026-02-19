@@ -1,7 +1,7 @@
 .PHONY: setup dev up down build logs ps restart test lint format lint-format clean
 
 setup:
-	uv sync --all-packages
+	uv sync --all-packages --all-groups --all-extras
 	npm --prefix services/ui install
 
 dev:
@@ -36,7 +36,8 @@ format:
 	uv run isort .
 
 lint-format:
-	format lint
+	make format
+	make lint
 
 clean:
 	docker compose down -v --remove-orphans
