@@ -225,7 +225,6 @@ async def test_streaming_response_logging_success(caplog):
     with respx.mock(base_url="http://test") as respx_mock:
         respx_mock.get("/stream").respond(
             status_code=200,
-            headers={"content-type": "text/event-stream"},
             stream=Stream(),
         )
 
@@ -246,7 +245,6 @@ async def test_streaming_response_logging_error(caplog):
     with respx.mock(base_url="http://test") as respx_mock:
         respx_mock.post("/stream").respond(
             status_code=503,
-            headers={"content-type": "text/event-stream"},
             stream=ErrorStream(),
         )
 
