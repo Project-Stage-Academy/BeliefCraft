@@ -53,6 +53,16 @@ select = ["E", "F", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101"]
 
+[tool.pytest.ini_options]
+pythonpath = [
+    "packages/common/src",
+    "packages/database/src",
+    "services/environment-api/src",
+    "services/agent-service",
+]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
+
 [tool.mypy]
 #mypy type checker: turned on strict mode for tighter type safety.
 strict = true
