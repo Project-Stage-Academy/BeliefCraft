@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import Iterable, Optional, Any
 
-from code_translation.build_prompts import TRANSLATED_ALGOS_PATH
+from code_translation.constants import TRANSLATED_ALGOS_PATH
 from code_translation.signature_stripper import strip_to_signatures
 from pdf_parsing.extract_algorithms_and_examples import BlockType
 
