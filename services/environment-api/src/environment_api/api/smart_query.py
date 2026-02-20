@@ -19,7 +19,8 @@ router = APIRouter(prefix="/smart-query", tags=["smart-query"])
 def _execute_tool(tool_call: Callable[[], ToolResult[Any]]) -> dict[str, Any]:
     try:
         result = tool_call()
-        return result.model_dump(mode="json")
+        output: dict[str, Any] = result.model_dump(mode="json")
+        return output
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

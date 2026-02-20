@@ -3,12 +3,12 @@
 import json
 from typing import Any
 
-import boto3  # type: ignore[import-not-found]
+import boto3
 from app.config import get_settings
 from app.core.exceptions import LLMServiceError
 from common.logging import get_logger
-from langchain_aws import ChatBedrock  # type: ignore[import-not-found]
-from langchain_core.messages import (  # type: ignore[import-not-found]
+from langchain_aws import ChatBedrock
+from langchain_core.messages import (
     AIMessage,
     BaseMessage,
     HumanMessage,
@@ -81,7 +81,7 @@ class LLMService:
         """
         return ChatBedrock(
             client=self.boto_client,
-            model_id=self.settings.BEDROCK_MODEL_ID,
+            model=self.settings.BEDROCK_MODEL_ID,
             model_kwargs={
                 "temperature": self.settings.BEDROCK_TEMPERATURE,
                 "max_tokens": self.settings.BEDROCK_MAX_TOKENS,

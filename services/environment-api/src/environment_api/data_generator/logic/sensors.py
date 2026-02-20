@@ -108,12 +108,14 @@ class SensorManager:
         """
         Retrieves all inventory records with non-zero quantity.
         """
-        return (
+        output: list[InventoryBalance] = (
             self.session.query(InventoryBalance)
             .join(Location)
             .filter(Location.warehouse_id == warehouse.id, InventoryBalance.on_hand > 0)
             .all()
         )
+
+        return output
 
     def _should_scan_item(self, balance: InventoryBalance) -> bool:
         """
@@ -125,7 +127,9 @@ class SensorManager:
         else:
             scan_probability = settings.sensors.scan_probabilities.default
 
-        return self.rng.random() <= scan_probability
+        output: bool = self.rng.random() <= scan_probability
+
+        return output
 
     def _create_observation(
         self, sensor: SensorDevice, balance: InventoryBalance, date: datetime
