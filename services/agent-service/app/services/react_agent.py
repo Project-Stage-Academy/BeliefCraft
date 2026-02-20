@@ -10,8 +10,7 @@ from app.prompts.system_prompts import WAREHOUSE_ADVISOR_SYSTEM_PROMPT, format_r
 from app.services.llm_service import LLMService
 from app.tools.registry import tool_registry
 from common.logging import get_logger
-from langgraph.graph import END, StateGraph
-from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph import END, StateGraph  # type: ignore[import-not-found]
 
 logger = get_logger(__name__)
 
@@ -23,7 +22,7 @@ class ReActAgent:
         self.llm: LLMService = LLMService()
         self.graph = self._build_graph()
 
-    def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:
+    def _build_graph(self) -> StateGraph:
         """Build the ReAct state machine with think/act/finalize nodes."""
         workflow = StateGraph(AgentState)
 
@@ -428,7 +427,7 @@ class ReActAgent:
         )
 
         try:
-            final_state = cast(AgentState, await self.graph.ainvoke(initial_state))
+            final_state: AgentState = await self.graph.ainvoke(initial_state)
         except Exception as e:
             logger.error(
                 "react_agent_error",

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from app.core.exceptions import LLMServiceError
 from app.services.llm_service import LLMService
-from langchain_core.messages import (
+from langchain_core.messages import (  # type: ignore[import-not-found]
     AIMessage,
     HumanMessage,
     SystemMessage,

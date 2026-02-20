@@ -27,12 +27,33 @@ repos:
     hooks:
       - id: isort
 
-
   #mypy
-  - repo: local
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
     hooks:
       - id: mypy
-        name: mypy
-        entry: uv run mypy packages services
-        language: system
         pass_filenames: false
+        args: ["--config-file=pyproject.toml"]
+        additional_dependencies:
+          - sqlalchemy
+          - types-psycopg2
+          - fastapi
+          - httpx
+          - structlog
+          - pydantic-settings
+          - redis
+          - uvicorn
+          - python-dotenv
+          - anthropic
+          - pytest
+          - tenacity
+          - pydantic-settings
+          - redis
+          - pyyaml
+          - types-PyYAML
+          - python-dotenv
+          - uvicorn
+          - numpy
+          - faker
+          - dotenv
+          - uliweb-alembic

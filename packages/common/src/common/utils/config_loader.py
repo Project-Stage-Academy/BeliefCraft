@@ -61,7 +61,7 @@ class ConfigLoader:
         dotenv_mode: str = (
             "config_dir_then_service_root"
         ),  # "config_dir_then_service_root" | "service_root_only" | "none"
-    ) -> Any:
+    ) -> T:
         config_dir = self.config_dir
         if not config_dir.exists():
             raise ConfigFileNotFoundError(f"Config directory not found: {config_dir}")

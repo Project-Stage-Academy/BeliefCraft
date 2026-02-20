@@ -18,8 +18,7 @@ def get_engine() -> Engine:
     """
     Return SQLAlchemy engine from the shared database package.
     """
-    engine: Engine = get_database_engine()
-    return engine
+    return get_database_engine()
 
 
 @contextmanager
