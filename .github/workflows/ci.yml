@@ -1,19 +1,26 @@
 #GitHub Actions workflow
 
-name: ci
+name: CI
 
 on:
   push:
     branches: [main, develop]
   pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  quality:
+  quality-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -21,9 +28,23 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --group dev
 
-      - name: Run pre-commit (format/lint/typecheck)
+      - name: Run pre-commit (lint/format/typecheck)
         run: uv run pre-commit run --all-files
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest \
+            --cov --cov-report=xml:coverage.xml --cov-report=term-missing \
+            --junitxml=pytest.xml  # optional: for test stats if needed
+
+      - name: Coverage comment on PR
+        if: always()
+        uses: MishaKav/pytest-coverage-comment@v1
+        with:
+          pytest-coverage-path: ./coverage.xml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
