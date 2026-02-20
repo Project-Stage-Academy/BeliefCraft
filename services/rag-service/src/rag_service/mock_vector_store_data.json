@@ -1,0 +1,1852 @@
+[
+    {
+        "chunk_id": "chunk_0001",
+        "section_title": "Representation",
+        "section_number": "1",
+        "subsection_title": "Joint Distributions",
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "The joint distribution over a set of variables $X_1, \\dots, X_n$ assigns a probability to every possible assignment of these variables. If the variables are discrete, the joint distribution can be represented by a table. As the number of variables increases, the size of this table grows exponentially, a phenomenon known as the curse of dimensionality. For example, with $n$ binary variables, the table requires $2^n - 1$ independent parameters.",
+        "page": 15,
+        "referenced_formulas": [
+            "3.1"
+        ],
+        "referenced_algorithms": [
+            "2.1"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.1"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0002",
+        "section_title": "Inference",
+        "section_number": "1",
+        "subsection_title": "Marginalization",
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "Marginalization is the process of computing the probability distribution of a subset of variables by summing out the other variables from the joint distribution. Given a joint distribution $P(X, Y)$, the marginal distribution of $X$ is given by $P(x) = \\sum_y P(x, y)$. This operation is fundamental for probabilistic inference when we are interested in the state of specific variables while ignoring others.",
+        "page": 18,
+        "referenced_formulas": [
+            "3.2"
+        ],
+        "referenced_algorithms": [
+            "2.2"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.2"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0003",
+        "section_title": "Utility Theory",
+        "section_number": "1",
+        "subsection_title": "Constraints on Rational Preferences",
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "Utility theory provides a mathematical framework for reasoning about preferences under uncertainty. The Von Neumann-Morgenstern utility theorem states that if an agent's preferences satisfy the axioms of completeness, transitivity, continuity, and independence, then there exists a real-valued function $U$ such that the agent prefers outcome $A$ to $B$ if and only if the expected utility of $A$ is greater than that of $B$.",
+        "page": 45,
+        "referenced_formulas": [
+            "3.3"
+        ],
+        "referenced_algorithms": [
+            "2.3"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.3"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0004",
+        "section_title": "Definition",
+        "section_number": "1",
+        "subsection_title": null,
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "A Markov Decision Process (MDP) is a mathematical model for sequential decision making under uncertainty. It is defined by the tuple $(S, A, T, R, \\gamma)$, where $S$ is the state space, $A$ is the action space, $T$ is the transition function defining $P(s' \\mid s, a)$, $R$ is the reward function $R(s, a)$, and $\\gamma$ is the discount factor. The goal is to find a policy $\\pi(s)$ that maximizes the expected cumulative discounted reward.",
+        "page": 123,
+        "referenced_formulas": [
+            "3.4"
+        ],
+        "referenced_algorithms": [
+            "2.4"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.4"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0005",
+        "section_title": "Value Iteration",
+        "section_number": "1",
+        "subsection_title": null,
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "Value iteration is a dynamic programming algorithm used to find the optimal value function $V^*$ for an MDP. It iteratively updates the value estimate for each state using the Bellman optimality equation. The update rule is $V_{k+1}(s) = \\max_a (R(s, a) + \\gamma \\sum_{s'} T(s' \\mid s, a) V_k(s'))$. The algorithm converges to the unique optimal value function as $k \to \\infty$.",
+        "page": 141,
+        "referenced_formulas": [
+            "3.5"
+        ],
+        "referenced_algorithms": [
+            "2.5"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.5"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0006",
+        "section_title": "Q-Learning",
+        "section_number": "1",
+        "subsection_title": null,
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "Q-learning is an off-policy temporal difference control algorithm. It learns the action-value function $Q(s, a)$ directly from experience without requiring a model of the environment's dynamics. The update rule incorporates the maximum Q-value of the next state, allowing the algorithm to approximate the optimal policy even if the actions taken during training are exploratory.",
+        "page": 315,
+        "referenced_formulas": [
+            "3.6"
+        ],
+        "referenced_algorithms": [
+            "2.6"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.6"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0007",
+        "section_title": "Belief State",
+        "section_number": "1",
+        "subsection_title": "Belief Update",
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "In a POMDP, the agent cannot directly observe the state. Instead, it maintains a belief state $b$, which is a probability distribution over $S$. Upon taking action $a$ and observing $o$, the belief is updated using Bayes' rule. This updated belief $b'$ serves as a sufficient statistic for the history of actions and observations.",
+        "page": 402,
+        "referenced_formulas": [
+            "3.7"
+        ],
+        "referenced_algorithms": [
+            "2.7"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.7"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0008",
+        "section_title": "Monte Carlo Tree Search",
+        "section_number": "1",
+        "subsection_title": "UCB1",
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "Monte Carlo Tree Search (MCTS) builds a search tree by running simulations. To balance exploration and exploitation during the selection phase, algorithms like UCT use the UCB1 heuristic. This heuristic adds an exploration bonus proportional to $\\sqrt{\\ln N(s) / N(s, a)}$, where $N(s)$ is the visit count of the parent node and $N(s, a)$ is the visit count of the child node.",
+        "page": 205,
+        "referenced_formulas": [
+            "3.8"
+        ],
+        "referenced_algorithms": [
+            "2.8"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.8"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0009",
+        "section_title": "Linear Function Approximation",
+        "section_number": "1",
+        "subsection_title": null,
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "Linear function approximation represents the value function as a weighted sum of features: $V(s) = \theta^\top \\phi(s)$. Here, $\\phi(s)$ is a vector of features describing the state, and $\theta$ is a vector of learnable weights. This approach reduces the dimensionality of the learning problem and allows for generalization across similar states.",
+        "page": 350,
+        "referenced_formulas": [
+            "3.9"
+        ],
+        "referenced_algorithms": [
+            "2.9"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.9"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0010",
+        "section_title": "History",
+        "section_number": "1",
+        "subsection_title": null,
+        "subsection_number": "1.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "text",
+        "content": "The field of decision making under uncertainty has roots in mathematics, economics, and computer science. Early work by Bernoulli on utility theory laid the groundwork. Later, Bellman introduced dynamic programming, and Howard developed policy iteration. Modern advancements in reinforcement learning combine these foundational ideas with deep learning to solve complex, high-dimensional problems.",
+        "page": 5,
+        "referenced_formulas": [
+            "3.10"
+        ],
+        "referenced_algorithms": [
+            "2.10"
+        ],
+        "referenced_tables": [],
+        "referenced_figures": [
+            "7.10"
+        ],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "1"
+        ],
+        "entity_id": null,
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0011",
+        "section_title": "Representation",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function JOINT_PROBABILITY(P, assignment)\n    prob = 1.0\n    for variable in P.variables:\n        parents = GET_PARENTS(P, variable)\n        val = assignment[variable]\n        parent_vals = [assignment[p] for p in parents]\n        prob *= GET_CONDITIONAL_PROB(P, variable, val, parent_vals)\n    return prob",
+        "page": 17,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.1",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0012",
+        "section_title": "Value Iteration",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function VALUE_ITERATION(S, A, T, R, gamma, epsilon)\n    V = {s: 0 for s in S}\n    while true:\n        delta = 0\n        V_prime = COPY(V)\n        for s in S:\n            max_val = -infinity\n            for a in A:\n                val = R(s, a) + gamma * sum(T(s'|s,a) * V[s'] for s' in S)\n                max_val = max(max_val, val)\n            V_prime[s] = max_val\n            delta = max(delta, abs(V_prime[s] - V[s]))\n        V = V_prime\n        if delta < epsilon:\n            return V",
+        "page": 142,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.2",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0013",
+        "section_title": "Policy Iteration",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function POLICY_ITERATION(S, A, T, R, gamma)\n    pi = INITIALIZE_POLICY(S, A)\n    while true:\n        V = POLICY_EVALUATION(pi, S, T, R, gamma)\n        pi_prime, changed = POLICY_IMPROVEMENT(V, S, A, T, R, gamma)\n        if not changed:\n            return pi\n        pi = pi_prime",
+        "page": 146,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.3",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0014",
+        "section_title": "Q-Learning",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function Q_LEARNING(S, A, gamma, alpha, epsilon)\n    Q = INITIALIZE_Q(S, A)\n    s = INITIAL_STATE()\n    while s is not TERMINAL:\n        a = EPSILON_GREEDY(Q, s, epsilon)\n        r, s_prime = EXECUTE(s, a)\n        delta = r + gamma * max(Q[s_prime, a'] for a' in A) - Q[s, a]\n        Q[s, a] = Q[s, a] + alpha * delta\n        s = s_prime\n    return Q",
+        "page": 316,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.4",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0015",
+        "section_title": "SARSA",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function SARSA(S, A, gamma, alpha, epsilon)\n    Q = INITIALIZE_Q(S, A)\n    s = INITIAL_STATE()\n    a = EPSILON_GREEDY(Q, s, epsilon)\n    while s is not TERMINAL:\n        r, s_prime = EXECUTE(s, a)\n        a_prime = EPSILON_GREEDY(Q, s_prime, epsilon)\n        delta = r + gamma * Q[s_prime, a_prime] - Q[s, a]\n        Q[s, a] = Q[s, a] + alpha * delta\n        s = s_prime\n        a = a_prime\n    return Q",
+        "page": 314,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.5",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0016",
+        "section_title": "MCTS",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function MONTE_CARLO_TREE_SEARCH(s, depth, gamma)\n    tree = INITIALIZE_TREE(s)\n    for i in 1:NUM_SIMULATIONS:\n        SIMULATE(tree, s, depth, gamma)\n    return BEST_ACTION(tree, s)",
+        "page": 204,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.6",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0017",
+        "section_title": "Belief Update",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function UPDATE_BELIEF(b, a, o, S, T, O)\n    b_prime = {s: 0 for s in S}\n    total_prob = 0\n    for s_prime in S:\n        sum_prob = sum(T(s_prime|s, a) * b[s] for s in S)\n        prob = O(o | a, s_prime) * sum_prob\n        b_prime[s_prime] = prob\n        total_prob += prob\n    for s_prime in S:\n        b_prime[s_prime] /= total_prob\n    return b_prime",
+        "page": 403,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.7",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0018",
+        "section_title": "Kalman Filter",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function KALMAN_FILTER(mu, Sigma, u, z, A, B, C, Q, R)\n    # Prediction\n    mu_pred = A @ mu + B @ u\n    Sigma_pred = A @ Sigma @ A.T + Q\n    # Update\n    K = Sigma_pred @ C.T @ INV(C @ Sigma_pred @ C.T + R)\n    mu_new = mu_pred + K @ (z - C @ mu_pred)\n    Sigma_new = (I - K @ C) @ Sigma_pred\n    return mu_new, Sigma_new",
+        "page": 435,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.8",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0019",
+        "section_title": "Cross Entropy Method",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function CROSS_ENTROPY_METHOD(f, P, num_samples, num_elite)\n    parameters = INITIALIZE_PARAMS()\n    for i in 1:MAX_ITERS:\n        samples = [SAMPLE(P, parameters) for _ in 1:num_samples]\n        scores = [f(x) for x in samples]\n        elite_indices = ARGSORT(scores)[-num_elite:]\n        elite_samples = samples[elite_indices]\n        parameters = FIT_DISTRIBUTION(elite_samples)\n    return parameters",
+        "page": 98,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.9",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0020",
+        "section_title": "Particle Filter Update",
+        "section_number": "2",
+        "subsection_title": null,
+        "subsection_number": "2.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "algorithm",
+        "content": "function PARTICLE_FILTER(particles, u, z, f, g)\n    new_particles = []\n    weights = []\n    for s in particles:\n        s_prime = SAMPLE_TRANSITION(f, s, u)\n        w = PROB_OBSERVATION(g, z, s_prime)\n        new_particles.append(s_prime)\n        weights.append(w)\n    return RESAMPLE(new_particles, weights)",
+        "page": 450,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "2"
+        ],
+        "entity_id": "2.10",
+        "uses_variables_from_algorithms": [],
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0021",
+        "section_title": "Representation",
+        "section_number": "3",
+        "subsection_title": null,
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$P(x_1, \\dots, x_n) = \\prod_{i=1}^n P(x_i \\mid x_1, \\dots, x_{i-1})$$",
+        "page": 16,
+        "entity_id": "3.1",
+        "defined_in_chunk": "chunk_0021",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0022",
+        "section_title": "Inference",
+        "section_number": "3",
+        "subsection_title": "Marginalization",
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$P(x) = \\sum_{y \\in \\mathcal{Y}} P(x, y)$$",
+        "page": 18,
+        "entity_id": "3.2",
+        "defined_in_chunk": "chunk_0022",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0023",
+        "section_title": "Inference",
+        "section_number": "3",
+        "subsection_title": "Bayes Rule",
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$P(x \\mid y) = \\frac{P(y \\mid x) P(x)}{P(y)}$$",
+        "page": 19,
+        "entity_id": "3.3",
+        "defined_in_chunk": "chunk_0023",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0024",
+        "section_title": "Utility Theory",
+        "section_number": "3",
+        "subsection_title": null,
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$EU(a) = \\sum_{s'} P(s' \\mid a) U(s')$$ ",
+        "page": 44,
+        "entity_id": "3.4",
+        "defined_in_chunk": "chunk_0024",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0025",
+        "section_title": "Definition",
+        "section_number": "3",
+        "subsection_title": null,
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$V^\\pi(s) = R(s, \\pi(s)) + \\gamma \\sum_{s'} T(s' \\mid s, \\pi(s)) V^\\pi(s')$$ ",
+        "page": 123,
+        "entity_id": "3.5",
+        "defined_in_chunk": "chunk_0025",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0026",
+        "section_title": "Value Iteration",
+        "section_number": "3",
+        "subsection_title": null,
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$V^*(s) = \\max_a \\left( R(s, a) + \\gamma \\sum_{s'} T(s' \\mid s, a) V^*(s') \\right)$$",
+        "page": 141,
+        "entity_id": "3.6",
+        "defined_in_chunk": "chunk_0026",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0027",
+        "section_title": "Q-Learning",
+        "section_number": "3",
+        "subsection_title": null,
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$Q(s, a) \\leftarrow Q(s, a) + \\alpha \\left( r + \\gamma \\max_{a'} Q(s', a') - Q(s, a) \\right)$$",
+        "page": 315,
+        "entity_id": "3.7",
+        "defined_in_chunk": "chunk_0027",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0028",
+        "section_title": "Linear Approximation",
+        "section_number": "3",
+        "subsection_title": null,
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$V_\\theta(s) = \\theta^\\top \\phi(s) = \\sum_{i=1}^k \\theta_i \\phi_i(s)$$",
+        "page": 350,
+        "entity_id": "3.8",
+        "defined_in_chunk": "chunk_0028",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0029",
+        "section_title": "Belief Update",
+        "section_number": "3",
+        "subsection_title": null,
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$b'(s') = \\alpha O(o \\mid s', a) \\sum_{s} T(s' \\mid s, a) b(s)$$",
+        "page": 402,
+        "entity_id": "3.9",
+        "defined_in_chunk": "chunk_0029",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0030",
+        "section_title": "Kalman Filter",
+        "section_number": "3",
+        "subsection_title": null,
+        "subsection_number": "3.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_formula",
+        "content": "$$\\mu_{t+1} = A \\mu_t + B u_t + K_{t+1} (z_{t+1} - C(A \\mu_t + B u_t))$$",
+        "page": 434,
+        "entity_id": "3.10",
+        "defined_in_chunk": "chunk_0030",
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0031",
+        "section_title": "Representation",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| x | y | P(x, y) |\n|---|---|---|\n| 0 | 0 | 0.1 |\n| 0 | 1 | 0.2 |\n| 1 | 0 | 0.3 |\n| 1 | 1 | 0.4 |",
+        "page": 16,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.1",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0032",
+        "section_title": "Utility Theory",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "Payoff Matrix for Prisoner's Dilemma:\n\n| | Cooperate | Defect |\n|---|---|---|\n| **Cooperate** | (-1, -1) | (-3, 0) |\n| **Defect** | (0, -3) | (-2, -2) |",
+        "page": 55,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.2",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0033",
+        "section_title": "Comparison",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| Algorithm | Model-Free | On/Off Policy | Bootstraps |\n|---|---|---|---|\n| Monte Carlo | Yes | On | No |\n| SARSA | Yes | On | Yes |\n| Q-Learning | Yes | Off | Yes |\n| Value Iteration | No | Off | Yes |",
+        "page": 320,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.3",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0034",
+        "section_title": "Notation",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| Symbol | Meaning |\n|---|---|\n| $S$ | State space |\n| $A$ | Action space |\n| $T$ | Transition function |\n| $R$ | Reward function |\n| $\\gamma$ | Discount factor |",
+        "page": 8,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.4",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0035",
+        "section_title": "Features",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| Feature Type | Definition | Local/Global |\n|---|---|---|\n| Polynomial | $x^i y^j$ | Global |\n| Radial Basis | $\\exp(-\\|s - c\\|^2 / 2\\sigma^2)$ | Local |\n| Tile Coding | Binary indicators | Local |",
+        "page": 355,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.5",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0036",
+        "section_title": "Discrete Distributions",
+        "section_number": "B",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| Distribution | PMF $P(x)$ | Mean | Variance |\n|---|---|---|---|\n| Bernoulli | $p^x (1-p)^{1-x}$ | $p$ | $p(1-p)$ |\n| Binomial | $\\binom{n}{x} p^x (1-p)^{n-x}$ | $np$ | $np(1-p)$ |\n| Geometric | $(1-p)^{x-1} p$ | $1/p$ | $(1-p)/p^2$ |",
+        "page": 580,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "Appendices"
+        ],
+        "referenced_sections": [
+            "B"
+        ],
+        "entity_id": "4.6",
+        "image_links": [],
+        "part": "Appendices",
+        "part_title": "Appendices"
+    },
+    {
+        "chunk_id": "chunk_0037",
+        "section_title": "Complexity",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| Method | Iteration Complexity | Convergence |\n|---|---|---|\n| Value Iteration | $O(|S|^2 |A|)$ | Linear |\n| Policy Iteration | $O(|S|^3 + |S|^2 |A|)$ | Finite (Exact) |\n| Linear Programming | Polynomial in $|S|, |A|$ | Exact |",
+        "page": 150,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.7",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0038",
+        "section_title": "Horizons",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| Horizon Depth $d$ | Nodes Expanded ($b=4$) | Time (ms) |\n|---|---|---|\n| 1 | 4 | 0.01 |\n| 5 | 1024 | 2.5 |\n| 10 | ~1,000,000 | 2500 |",
+        "page": 220,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.8",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0039",
+        "section_title": "Observation Models",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| State | Sensor Output 0 | Sensor Output 1 |\n|---|---|---|\n| Safe | 0.9 | 0.1 |\n| Unsafe | 0.2 | 0.8 |",
+        "page": 398,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.9",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0040",
+        "section_title": "Filters",
+        "section_number": "4",
+        "subsection_title": null,
+        "subsection_number": "4.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "numbered_table",
+        "content": "| Filter | Distribution Type | Dynamics |\n|---|---|---|\n| Kalman Filter | Gaussian | Linear |\n| EKF | Gaussian | Non-linear (Linearized) |\n| Particle Filter | Sample-based | Non-linear |",
+        "page": 430,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "4"
+        ],
+        "entity_id": "4.10",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0041",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Medical Diagnosis",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "Consider a simple medical diagnosis problem where we want to determine if a patient has the flu based on whether they have a fever. Let $F$ be the binary variable for flu and $T$ be the binary variable for testing positive for fever. We know $P(F=1) = 0.1$, $P(T=1|F=1) = 0.9$, and $P(T=1|F=0) = 0.2$. Using Bayes' rule, we can calculate the probability of having the flu given a high temperature.",
+        "page": 20,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.1",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0042",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Grid World",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "A simple $3 \\times 4$ Grid World. The agent starts at $(1,1)$ and wants to reach the goal at $(4,3)$ which gives a reward of $+1$. There is a pit at $(4,2)$ with reward $-1$. All other steps have a small penalty. Transitions are noisy: when the agent tries to move North, it moves North with probability $0.8$, and slips East or West with probability $0.1$ each.",
+        "page": 125,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.2",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0043",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "ACAS X",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "The Airborne Collision Avoidance System X (ACAS X) uses a POMDP formulation to prevent mid-air collisions. The state space includes the relative altitude, range, and bearing of the intruder aircraft. The system issues vertical rate advisories (e.g., Climb, Descend) to the pilot. The logic table is optimized using dynamic programming to minimize collision risk while reducing unnecessary alerts.",
+        "page": 510,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.3",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0044",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Crying Baby",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "A baby is crying. The parent must decide whether to feed the baby. The baby might be hungry or just tired. Feeding costs effort but stops the crying if the baby is hungry. If the baby is tired, feeding doesn't help. We assign utilities to the outcomes (Quiet, Crying) and costs to the actions.",
+        "page": 50,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.4",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0045",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Tiger Problem",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "An agent faces two doors. Behind one is a tiger, behind the other is a reward. The agent can listen (observation) to hear where the tiger is, or open a door. Listening costs a small amount but gives a noisy signal about the tiger's location. Opening the wrong door leads to a large negative reward.",
+        "page": 395,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.5",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0046",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Mountain Car",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "An underpowered car must drive up a steep hill. The car cannot simply accelerate up the slope; it must rock back and forth to build enough momentum. The state space is continuous (position, velocity), and the action space is discrete (accelerate left, right, or coast). This is a classic benchmark for RL algorithms.",
+        "page": 310,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.6",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0047",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Tic-Tac-Toe",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "Tic-Tac-Toe is a zero-sum game with perfect information. We can use Minimax search to find the optimal strategy. Since the state space is small, the entire game tree can be expanded to determine that the game will always end in a draw if both players play optimally.",
+        "page": 200,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.7",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0048",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Coin Flips",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "Suppose we flip a biased coin $n$ times and observe $k$ heads. We want to estimate the probability $p$ of heads. Using Maximum Likelihood Estimation (MLE), we find $\\hat{p} = k/n$. Using Bayesian estimation with a Beta prior, we update our distribution over $p$.",
+        "page": 75,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.8",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0049",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Ad Placement",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "A website wants to choose which ad to show to a user to maximize the click-through rate (CTR). Each ad is a 'arm' in a multi-armed bandit problem. The system must balance exploring new ads to estimate their CTR and exploiting the current best ad to maximize revenue.",
+        "page": 330,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.9",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0050",
+        "section_title": "Examples",
+        "section_number": "5",
+        "subsection_title": "Robot Localization",
+        "subsection_number": "5.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "example",
+        "content": "A robot moves in a 1D corridor. It has a sensor that detects doors. The movement is noisy, and the sensor occasionally misses a door or hallucinates one. We use a Particle Filter to maintain a set of hypotheses about the robot's location. As the robot moves and senses, particles inconsistent with the data die out.",
+        "page": 445,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "5"
+        ],
+        "entity_id": "5.10",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0051",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Prove that if $X$ and $Y$ are independent, then $P(x, y) = P(x)P(y)$.",
+        "page": 30,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.1",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0052",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Perform one step of Value Iteration manually for the Grid World example introduced in Section 7.1. Assume $\\gamma=0.9$ and initial $V(s)=0$ for all states.",
+        "page": 160,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.2",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0053",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Derive the update rule for Q-learning. Show that it minimizes the squared error between the current Q-value and the target value $r + \\gamma \\max_{a'} Q(s', a')$.",
+        "page": 325,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.3",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0054",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Consider a utility function $U(x) = \\sqrt{x}$. Is this agent risk-averse, risk-neutral, or risk-seeking? Justify your answer using Jensen's inequality.",
+        "page": 60,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.4",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0055",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Implement a Monte Carlo Tree Search agent for the game of Tic-Tac-Toe. Compare its performance against a random player and a Minimax player.",
+        "page": 215,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.5",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0056",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Show that the Kalman Filter is the optimal estimator for linear Gaussian systems in the sense that it minimizes the mean squared error.",
+        "page": 460,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.6",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0057",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Construct a set of radial basis functions to approximate the function $f(x) = \\sin(x)$ on the interval $[0, 2\\pi]$. Plot the approximation for different numbers of basis functions.",
+        "page": 365,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.7",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0058",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Calculate the belief update for the Tiger Problem (Example 19.1) after the sequence of actions/observations: [Listen, Hear-Tiger-Left, Listen, Hear-Tiger-Right]. Assume initial uniform belief.",
+        "page": 410,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.8",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0059",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Classify the following problems as supervised learning, unsupervised learning, or reinforcement learning: (a) Predicting housing prices, (b) Grouping customers by purchasing behavior, (c) Learning to walk.",
+        "page": 12,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.9",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0060",
+        "section_title": "Exercises",
+        "section_number": "6",
+        "subsection_title": null,
+        "subsection_number": "6.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "exercise",
+        "content": "Implement the Cross Entropy Method to minimize the Rosenbrock function. Experiment with different sample sizes and elite fractions.",
+        "page": 105,
+        "referenced_formulas": [],
+        "referenced_algorithms": [],
+        "referenced_tables": [],
+        "referenced_figures": [],
+        "referenced_examples": [],
+        "referenced_exercises": [],
+        "referenced_parts": [
+            "I"
+        ],
+        "referenced_sections": [
+            "6"
+        ],
+        "entity_id": "6.10",
+        "image_links": [],
+        "part": "I",
+        "part_title": "Part I — Probabilistic Reasoning"
+    },
+    {
+        "chunk_id": "chunk_0061",
+        "section_title": "Representation",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.1: A Bayesian network representing the dependencies between variables in the medical diagnosis example. Nodes represent variables (Flu, Fever, Cough) and edges represent conditional dependencies.",
+        "page": 17,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.1",
+        "image_link": "url://images/bayes_net_example.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0062",
+        "section_title": "Value Iteration",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.2: Visualization of the value function for the Mountain Car problem. The vertical axis represents the negative expected cost to reach the goal. The surface shows the value for each combination of position and velocity.",
+        "page": 145,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.2",
+        "image_link": "url://images/value_function_surface.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0063",
+        "section_title": "Utility Theory",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.3: Utility functions for risk-averse (concave), risk-neutral (linear), and risk-seeking (convex) agents. The x-axis represents wealth, and the y-axis represents utility.",
+        "page": 48,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.3",
+        "image_link": "url://images/utility_curve.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0064",
+        "section_title": "MCTS",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.4: The four steps of Monte Carlo Tree Search: Selection, Expansion, Simulation, and Backpropagation. The tree grows asymmetrically towards more promising regions of the search space.",
+        "page": 206,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.4",
+        "image_link": "url://images/mcts_steps.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0065",
+        "section_title": "Belief Space",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.5: The belief simplex for a 3-state system. Any point in the triangle represents a valid probability distribution over the three states. The corners correspond to certainty in one state.",
+        "page": 405,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.5",
+        "image_link": "url://images/belief_simplex.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0066",
+        "section_title": "Resampling",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.6: The particle filter update cycle. (a) Initial particles. (b) Propagation via motion model. (c) Weighting via observation model. (d) Resampling to focus on high-probability regions.",
+        "page": 452,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.6",
+        "image_link": "url://images/particle_resampling.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0067",
+        "section_title": "Neural Networks",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.7: A Deep Q-Network (DQN) architecture. The input is the raw state (e.g., image pixels), passed through convolutional layers, and the output is the Q-value for each possible action.",
+        "page": 370,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.7",
+        "image_link": "url://images/dqn_arch.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0068",
+        "section_title": "Examples",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.8: Optimal policy for the Grid World example. Arrows indicate the optimal action to take in each cell. Note how the agent avoids the pit by taking a longer, safer route.",
+        "page": 126,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.8",
+        "image_link": "url://images/grid_world_policy.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0069",
+        "section_title": "Bayesian Estimation",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.9: Updating a Beta distribution prior with Bernoulli observations. The distribution becomes more peaked around the true parameter value as more data is observed.",
+        "page": 78,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.9",
+        "image_link": "url://images/beta_updates.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    },
+    {
+        "chunk_id": "chunk_0070",
+        "section_title": "Decision Trees",
+        "section_number": "7",
+        "subsection_title": null,
+        "subsection_number": "7.1",
+        "subsubsection_title": null,
+        "subsubsection_number": null,
+        "chunk_type": "captioned_image",
+        "content": "Figure 7.10: Decision boundaries created by a decision tree classifier. The boundaries are orthogonal to the axes, splitting the feature space into rectangular regions.",
+        "page": 260,
+        "referenced_parts": [
+            "II"
+        ],
+        "referenced_sections": [
+            "7"
+        ],
+        "entity_id": "7.10",
+        "image_link": "url://images/decision_tree_boundary.png",
+        "part": "II",
+        "part_title": "Part II — Sequential Problems"
+    }
+]
