@@ -5,6 +5,7 @@ source =
     services/environment-api/src
     services/rag-service/src
     services/agent-service/app
+relative_files = True
 
 omit =
     */tests/*
