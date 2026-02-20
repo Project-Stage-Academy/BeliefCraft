@@ -34,8 +34,6 @@ TRANSLATED_CHAPTERS = [
 
 CHAPTERS_TO_TRANSLATE = ["13", "18", "19", "21", "22", "23", "25", "26", "27", "E"]
 
-TRANSLATED_ALGOS_PATH = Path("translated_algorithms.json")
-
 logger = get_logger(__name__)
 
 

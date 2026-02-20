@@ -9,7 +9,8 @@ from typing import Any, Iterable
 from botocore.config import Config
 
 from code_translation.build_prompts import TRANSLATED_CHAPTERS, CHAPTERS_TO_TRANSLATE, \
-    EXAMPLE_WITH_CODE_NUMBERS, PromptBuilder, TRANSLATED_ALGOS_PATH
+    EXAMPLE_WITH_CODE_NUMBERS, PromptBuilder
+from code_translation.constants import TRANSLATED_ALGOS_PATH
 from code_translation.process_book_code import BookCodeProcessor
 from packages.common.src.common.logging import get_logger
 from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms
