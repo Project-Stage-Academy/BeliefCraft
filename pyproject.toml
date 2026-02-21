@@ -6,7 +6,20 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.0",
+    "beliefcraft-common",
+    "beliefcraft-database",
+    "beliefcraft-environment-api",
+    "beliefcraft-rag-service",
+    "beliefcraft-agent-service",
 ]
+
+[tool.uv.sources]
+beliefcraft-common = { workspace = true }
+beliefcraft-database = { workspace = true }
+beliefcraft-environment-api = { workspace = true }
+beliefcraft-rag-service = { workspace = true }
+beliefcraft-agent-service = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -16,7 +29,12 @@ dev = [
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.2.0",
+    "pytest-cov>=6.0.0",
+    "testcontainers[postgres]>=4.9.0",
     "ruff>=0.15.0",
+    "types-pyyaml>=6.0.12.20250915",
+    "pydantic-settings>=2.13.0",
+    "sqlalchemy>=2.0.46",
 ]
 
 [tool.uv.workspace]
@@ -27,10 +45,6 @@ members = [
     "services/rag-service",
     "services/agent-service",
 ]
-
-[tool.uv.sources]
-beliefcraft-common = { workspace = true }
-beliefcraft-environment-api = { workspace = true }
 
 [tool.black]
 #black formatter: keeps lines readable and consistent with other tools.
@@ -53,19 +67,47 @@ select = ["E", "F", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101"]
 
+
+
 [tool.pytest.ini_options]
 pythonpath = [
-    "packages/common/src",
-    "packages/database/src",
-    "services/environment-api/src",
-    "services/agent-service",
+  "packages/common/src",
+  "packages/database/src",
+  "services/environment-api/src",
+  "services/rag-service/src",
+  "services/agent-service/app",
 ]
+
 asyncio_mode = "auto"
-addopts = "--import-mode=importlib"
+addopts = """
+  -ra --showlocals --strict-markers -v
+  --cov --cov-config=.coveragerc
+  --cov-report=term-missing --cov-report=html --cov-report=xml
+  --cov-fail-under=80
+  --import-mode=importlib
+"""
+
+testpaths = ["tests", "packages/*/tests", "services/*/tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+markers = [
+  "unit: unit tests (fast, no DB)",
+  "integration: integration tests (use Testcontainers/DB)",
+  "slow: slow or expensive tests",
+]
+
+filterwarnings = ["error"]
+
 
 [tool.mypy]
 #mypy type checker: turned on strict mode for tighter type safety.
 strict = true
+explicit_package_bases = true
+namespace_packages = true
+exclude = [
+    '(^|/)tests/'
+]
 mypy_path = [
     "packages/common/src",
     "packages/database/src",
@@ -73,24 +115,15 @@ mypy_path = [
     "services/rag-service/src",
     "services/agent-service"
 ]
-explicit_package_bases = true
-namespace_packages = true
-files = [
-    "packages/common/src",
-    "packages/database/src",
-    "services/environment-api/src",
-    "services/rag-service/src",
-    "services/agent-service/app",
-    "services/agent-service/tests",
+
+[[tool.mypy.overrides]]
+module = [
+    "boto3.*",
+    "langchain_aws.*",
+    "langchain_core.*",
+    "langgraph.*",
+    "alembic.*"
 ]
-
-[[tool.mypy.overrides]]
-module = ["*.tests.*", "conftest"]
-disallow_untyped_defs = false
-check_untyped_defs = false
-
-[[tool.mypy.overrides]]
-module = "alembic.*"
 ignore_missing_imports = true
 
 [tool.uv]

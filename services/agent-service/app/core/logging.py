@@ -21,7 +21,8 @@ def configure_logging() -> structlog.BoundLogger:
     """
     global _configured
     if _configured:
-        return get_logger(__name__)
+        logger: structlog.BoundLogger = get_logger(__name__)
+        return logger
 
     settings = get_settings()
 
@@ -29,4 +30,6 @@ def configure_logging() -> structlog.BoundLogger:
 
     _configured = True
 
-    return get_logger(__name__)
+    logger = get_logger(__name__)
+
+    return logger
