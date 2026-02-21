@@ -44,6 +44,7 @@ jobs:
 
       - name: Coverage comment on PR
         if: always()
-        uses: coroo/pytest-coverage-commentator@v1
+        uses: MishaKav/pytest-coverage-comment@v1
         with:
           pytest-coverage-path: ./coverage.xml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
