@@ -1,12 +1,12 @@
-import uuid
-import pytest
-import structlog
-from fastapi import FastAPI, Request, Response
-from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
+import pytest
+import structlog
+
 # Assuming the middleware is in a module named 'common.middleware'
-from common.middleware import setup_logging_middleware, get_client_ip
+from common.middleware import get_client_ip, setup_logging_middleware
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
@@ -36,6 +36,7 @@ def client(app):
 
 ### Test Client IP Extraction
 
+
 def test_get_client_ip_x_forwarded_for():
     request = MagicMock(spec=Request)
     request.headers = {"X-Forwarded-For": "192.168.1.1, 10.0.0.1"}
@@ -51,6 +52,7 @@ def test_get_client_ip_direct():
 
 
 ### Test Middleware Logic
+
 
 def test_middleware_adds_request_id_header(client):
     response = client.get("/test")
