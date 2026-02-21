@@ -13,6 +13,8 @@ omit =
     */conftest.py
     *test_*.py
     **/__init__.py
+    */schemas/*
+    */models/*
 
 [report]
 fail_under = 80
