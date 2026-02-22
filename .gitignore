@@ -1,3 +1,6 @@
+# Weaviate
+.weaviate_data/
+
 # JetBrains
 .idea/
 
