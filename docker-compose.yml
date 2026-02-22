@@ -20,12 +20,37 @@ services:
       timeout: 5s
       retries: 8
 
-  qdrant:
-    image: qdrant/qdrant:latest
+  weaviate:
+    command:
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8080'
+    - --scheme
+    - http
+    image: cr.weaviate.io/semitechnologies/weaviate:1.35.9
     ports:
-      - "${QDRANT_PORT}:6333"
+    - 8080:8080
+    - 50051:50051
     volumes:
-      - qdrant-data:/qdrant/storage
+    - ./.weaviate_data:/var/lib/weaviate
+    restart: on-failure:0
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      QUERY_SLOW_LOG_ENABLED: 'true'
+      QUERY_SLOW_LOG_THRESHOLD: '500ms'
+      DEFAULT_VECTORIZER_MODULE: text2vec-aws
+      AWS_ACCESS_KEY: $AWS_ACCESS_KEY
+      AWS_SECRET_KEY: $AWS_SECRET_KEY
+      ENABLE_MODULES: 'text2vec-aws'
+      CLUSTER_HOSTNAME: 'node1'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -87,12 +112,8 @@ services:
       - ./services/rag-service/src:/app/src
       - ./packages/common:/app/packages/common
     depends_on:
-      postgres:
+      weaviate:
         condition: service_healthy
-      qdrant:
-        condition: service_started
-      db-migrate:
-        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status == 200 else 1)"]
       interval: 30s
@@ -147,4 +168,3 @@ services:
 
 volumes:
   postgres-data:
-  qdrant-data:
