@@ -2,14 +2,8 @@
 fetch_github_deps.py
 
 Fetches a Python file from GitHub and recursively collects all classes/functions
-imported from chXX modules (transitively). Edit the CONFIG block below and run.
+imported from chXX modules (transitively).
 """
-
-# ==============================================================================
-# CONFIG — edit these two values and run
-# ==============================================================================
-
-# ==============================================================================
 
 import re
 import ast
