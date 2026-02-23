@@ -24,26 +24,48 @@ settings = get_settings()
 
 async def _load_mcp_tools() -> None:
     """
-    Load tools from MCP server if available.
+    Load RAG tools from MCP server.
 
-    This function attempts to discover and register tools from connected
-    MCP servers. If MCP is not available, it logs a warning and continues
-    with hardcoded tools only.
+    This function:
+    1. Creates MCP client connected to RAG service
+    2. Discovers available tools from MCP server
+    3. Registers tools with caching in tool_registry
+
+    The MCP client uses the RAG_API_URL from settings to connect
+    to the RAG service's MCP endpoint at {RAG_API_URL}/mcp.
+
+    All discovered tools are automatically wrapped with CachedTool
+    for Redis caching (24 hour TTL for RAG tools).
 
     SOLID: Single Responsibility - only handles MCP tool loading
+
+    Raises:
+        Exception: If MCP server is unreachable or tool loading fails
     """
+    from app.clients.rag_mcp_client import create_rag_mcp_client
+    from app.tools import register_mcp_rag_tools
+
+    logger.info(
+        "loading_mcp_rag_tools",
+        rag_mcp_url=f"{settings.RAG_API_URL}/mcp",
+    )
+
     try:
-        # TODO: Initialize MCP client when available
-        # For now, MCP server is optional - use hardcoded tools as fallback
-        logger.debug(
-            "mcp_tools_optional", message="MCP loader will be enabled when MCP client is available"
-        )
+        # Create and connect MCP client
+        async with create_rag_mcp_client(settings.RAG_API_URL) as mcp_client:
+            # Register RAG tools from MCP server
+            await register_mcp_rag_tools(mcp_client)
+
+        logger.info("mcp_rag_tools_loaded_successfully")
+
     except Exception as e:
-        logger.warning(
+        logger.error(
             "failed_to_load_mcp_tools",
             error=str(e),
-            message="Continuing with hardcoded tools only",
+            error_type=type(e).__name__,
         )
+        # Re-raise to fail startup if MCP tools are required
+        raise
 
 
 @asynccontextmanager
