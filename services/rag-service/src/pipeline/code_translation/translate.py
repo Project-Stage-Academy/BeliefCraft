@@ -227,7 +227,7 @@ def main() -> None:
     julia_code = block_processor.extract_algorithms(blocks)
 
     prompts_builder = PromptBuilder(
-        book_processor=BookCodeProcessor(TRANSLATED_ALGOS_PATH),
+        book_processor=BookCodeProcessor(Path(args.translated_algorithms_json)),
         block_processor=block_processor,
     )
 
