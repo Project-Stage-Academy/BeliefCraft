@@ -83,7 +83,8 @@ class Translator:
         for idx, new_item in enumerate(items_list):
             if not isinstance(new_item, dict):
                 raise TypeError(
-                    f"new_items must contain dicts; item at index {idx} is {type(new_item).__name__}"
+                    f"new_items must contain dicts; item "
+                    f"at index {idx} is {type(new_item).__name__}"
                 )
             data.append(new_item)
         # 4. Write back
