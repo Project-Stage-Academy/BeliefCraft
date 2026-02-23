@@ -129,12 +129,12 @@ class PromptBuilder:
         if not self._block_processor:
             raise ValueError("BlockProcessor is required to extract examples")
 
-        example = self._block_processor.extract_examples([example_number], blocks)[0]
-
-        if not example:
+        examples = self._block_processor.extract_examples([example_number], blocks)
+        if not examples or not examples[0]:
             logger.warning("example_not_found", example_number=example_number)
             raise ValueError(f"Example with number {example_number} not found")
 
+        example = examples[0]
         related_entities = self._book_processor.find_related_definitions(example_number, blocks)
         related_algorithms = set()
         for entity in related_entities:
