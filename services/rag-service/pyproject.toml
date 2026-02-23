@@ -12,6 +12,8 @@ dependencies = [
   "python-dotenv",
   "weaviate-client",
   "beliefcraft-common",
+  "tqdm>=4.67.3",
+  "boto3>=1.42.49",
   "fastmcp<3",
 ]
 
