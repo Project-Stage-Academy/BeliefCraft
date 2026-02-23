@@ -178,7 +178,7 @@ Translated and updated version (reference output):
 {{
 "algorithm_number": "Algorithm 2.3.",
 "description": "A method for evaluating the probability of an assignment given a Bayesian network bn. For example, if bn is as defined in example 2.5, then $ a = (b=1, s=1, e=1, d=2, c=1) $ bn.probability(Assignment(a)) returns 0.03422865599999999.",
-"code": "class BayesianNetwork:\n # other methods are defined elsewhere\n def probability(self, assignment: Assignment) -> float:\n def subassignment(phi): return assignment.select(phi.variable_names)\n def prob(phi): return phi.table.get(subassignment(phi), default_val=0.0)\n return np.prod([prob(phi) for phi in self.factors])",
+"code": "class BayesianNetwork:\n # ...\n def probability(self, assignment: Assignment) -> float:\n def subassignment(phi): return assignment.select(phi.variable_names)\n def prob(phi): return phi.table.get(subassignment(phi), default_val=0.0)\n return np.prod([prob(phi) for phi in self.factors])",
 "declarations": {{
 "function probability(bn::BayesianNetwork, assignment)": "BayesianNetwork.probability"
 }}
