@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from code_translation.translate import Translator
+from pipeline.code_translation.translate import Translator
 
 
 def test_extract_json_from_text_parses_json_block():

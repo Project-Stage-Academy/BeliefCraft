@@ -1,5 +1,5 @@
-import code_translation.github_code_fetcher as github_code_fetcher
-from code_translation.github_code_fetcher import GitHubCodeFetcher
+from pipeline import code_translation as github_code_fetcher
+from pipeline.code_translation.github_code_fetcher import GitHubCodeFetcher
 
 
 def test_github_code_fetcher_collects_dependencies(monkeypatch):

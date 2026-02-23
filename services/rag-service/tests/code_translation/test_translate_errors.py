@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from code_translation.translate import Translator
+from pipeline.code_translation.translate import Translator
 
 
 def test_add_dict_to_json_list_raises_for_non_list(tmp_path):
