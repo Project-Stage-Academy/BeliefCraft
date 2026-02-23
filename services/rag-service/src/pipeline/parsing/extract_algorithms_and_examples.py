@@ -234,8 +234,13 @@ class BlockProcessor:
                 continue
 
             algorithm_number = self._caption_key_from_caption(block["caption"])
+            caption = self.get_algorithm_caption_from_jsons(algorithm_number)
+            if caption is None:
+                # Fallback to the original caption from the block or, if unavailable,
+                # to the normalized algorithm number key.
+                caption = block.get("caption") or algorithm_number
             algorithm = {
-                "caption": self.get_algorithm_caption_from_jsons(algorithm_number),
+                "caption": caption,
                 "text": block["text"],
                 "block_type": BlockType.ALGORITHM.value,
             }
