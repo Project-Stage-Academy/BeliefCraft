@@ -1,0 +1,129 @@
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+import weaviate  # type: ignore
+from weaviate.classes.config import Configure, ReferenceProperty  # type: ignore
+from weaviate.collections import Collection  # type: ignore
+from weaviate.collections.classes.config import VectorDistances  # type: ignore
+from weaviate.util import generate_uuid5  # type: ignore
+
+PROPERTIES_TO_EMBED = ["content"]
+COLLECTION_NAME = "unified_collection"
+EMBEDDING_MODEL_REGION = "us-east-1"
+EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
+
+REFERENCE_TYPE_MAP = {
+    "referenced_formulas": "formula",
+    "referenced_algorithms": "algorithm",
+    "referenced_tables": "table",
+    "referenced_figures": "image",
+    "referenced_examples": "example",
+    "referenced_exercises": "exercise",
+}
+
+
+def setup_collection(client: weaviate.WeaviateClient, recreate: bool = False) -> Collection:
+    """Initialize the unified collection schema with Bedrock embedding and cross-references."""
+    if recreate and client.collections.exists(COLLECTION_NAME):
+        print(f"Deleting existing collection: {COLLECTION_NAME}")
+        client.collections.delete(COLLECTION_NAME)
+
+    if not client.collections.exists(COLLECTION_NAME):
+        print(f"Creating collection: {COLLECTION_NAME}")
+        client.collections.create(
+            name=COLLECTION_NAME,
+            vector_config=Configure.Vectors.text2vec_aws_bedrock(
+                source_properties=PROPERTIES_TO_EMBED,
+                region=EMBEDDING_MODEL_REGION,
+                model=EMBEDDING_MODEL,
+                vector_index_config=Configure.VectorIndex.flat(
+                    distance_metric=VectorDistances.COSINE,
+                ),
+            ),
+            references=[
+                ReferenceProperty(name=name, target_collection=COLLECTION_NAME)
+                for name in REFERENCE_TYPE_MAP
+            ],
+        )
+    else:
+        print(f"Using existing collection: {COLLECTION_NAME}")
+    return client.collections.use(COLLECTION_NAME)
+
+
+def generate_deterministic_uuid(chunk: dict[str, Any]) -> str:
+    """Generate a deterministic UUID based on entity_id and chunk_type
+    if available, otherwise use content."""
+    entity_id = chunk.get("entity_id", "")
+    if entity_id:
+        return generate_uuid5(f'{entity_id}:{chunk["chunk_type"]}')  # type: ignore
+    return generate_uuid5(chunk["content"])  # type: ignore
+
+
+ReferenceMap = dict[
+    tuple[str, str], dict[str, Any]
+]  # Mapping of (entity_id, chunk_type) to referencing chunks
+
+
+def insert_chunks(
+    collection: Collection, chunks: list[dict[str, Any]], reference_map: ReferenceMap
+) -> None:
+    """Iterate through chunks and insert them into Weaviate."""
+    for chunk in chunks:
+        chunk.pop("chunk_id", "unknown")
+        uuid = generate_deterministic_uuid(chunk)
+        references = {}
+        for ref_name, chunk_type in REFERENCE_TYPE_MAP.items():
+            chunk_references = chunk.pop(ref_name, [])
+            if not chunk_references:
+                continue
+            referenced_ids = []
+            for entity_id in chunk_references:
+                key = (entity_id, chunk_type)
+                referenced_ids.append(generate_deterministic_uuid(reference_map[key]))
+            references[ref_name] = referenced_ids
+        collection.data.insert(
+            properties=chunk,
+            uuid=uuid,
+            references=references,
+        )
+
+
+def build_reference_map(chunks: list[dict[str, Any]]) -> ReferenceMap:
+    """Build a mapping of (entity_id, chunk_type) to the chunks that reference them."""
+    reference_map = {}
+    for chunk in chunks:
+        for reference_name, entity_type in REFERENCE_TYPE_MAP.items():
+            for entity_id in chunk.get(reference_name, []):
+                key = (entity_id, entity_type)
+                reference_map[key] = chunk
+    return reference_map
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Load and embed document chunks from JSON into Weaviate."
+    )
+    parser.add_argument("file_path", help="Path to the JSON file containing chunks.", type=Path)
+    parser.add_argument(
+        "--recreate", action="store_true", help="Delete and recreate the collection before loading."
+    )
+    args = parser.parse_args()
+
+    try:
+        with args.file_path.open() as f:
+            chunks = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Failed to load JSON file: {e}")
+        return
+
+    with weaviate.connect_to_local() as client:
+        collection = setup_collection(client, recreate=args.recreate)
+        reference_map = build_reference_map(chunks)
+        insert_chunks(collection, chunks, reference_map)
+        print(f"Successfully processed {len(chunks)} chunks.")
+
+
+if __name__ == "__main__":
+    main()
