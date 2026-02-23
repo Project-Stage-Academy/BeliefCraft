@@ -11,6 +11,7 @@ dependencies = [
   "python-dotenv",
   "weaviate-client",
   "beliefcraft-common",
+  "fastmcp<3",
 ]
 
 [tool.uv.sources]

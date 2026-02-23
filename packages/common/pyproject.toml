@@ -20,7 +20,13 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",
+    "respx"
 ]
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
+
 [tool.hatch.build.targets.wheel]
-packages = ["common", "schemas"]
+packages = ["src/common", "schemas"]

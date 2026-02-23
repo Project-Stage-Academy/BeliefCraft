@@ -24,7 +24,7 @@ class LoggingConfig(BaseModel):
     level: str
 
 
-class TestSettings(BaseSettings):
+class SampleSettings(BaseSettings):
     app: AppConfig
     server: ServerConfig
     logging: LoggingConfig
@@ -69,7 +69,7 @@ logging:
 def test_loads_default_config(fake_service: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_KEY", "env-value")
     settings = ConfigLoader(service_root=fake_service).load(
-        schema=TestSettings,
+        schema=SampleSettings,
     )
 
     assert settings.app.name == "sample-service"
@@ -82,7 +82,7 @@ def test_loads_default_config(fake_service: Path, monkeypatch: pytest.MonkeyPatc
 def test_merges_environment_override(fake_service: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_KEY", "env-value")
     settings = ConfigLoader(service_root=fake_service).load(
-        schema=TestSettings,
+        schema=SampleSettings,
         env="dev",
     )
 
@@ -130,13 +130,13 @@ api_key: "${API_KEY}"
 
     loader = ConfigLoader(service_root=fake_service)
     settings_from_env = loader.load(
-        schema=TestSettings,
+        schema=SampleSettings,
         config_env_var="SAMPLE_SERVICE_CONFIG",
     )
     assert settings_from_env.server.port == 6666
 
     settings_from_cli = loader.load(
-        schema=TestSettings,
+        schema=SampleSettings,
         cli_config_path=str(override_file),
         config_env_var="SAMPLE_SERVICE_CONFIG",
     )
@@ -151,7 +151,7 @@ def test_resolves_vars_from_dotenv_before_os_env(
     monkeypatch.setenv("API_KEY", "os-env-value")
 
     settings = ConfigLoader(service_root=fake_service).load(
-        schema=TestSettings,
+        schema=SampleSettings,
     )
 
     assert settings.api_key == "dotenv-value"
@@ -167,7 +167,7 @@ def test_missing_var_raises_helpful_error(
         match="Define it in .env or export it in the environment",
     ):
         ConfigLoader(service_root=fake_service).load(
-            schema=TestSettings,
+            schema=SampleSettings,
             dotenv_mode="none",
         )
 
@@ -191,5 +191,5 @@ api_key: "${API_KEY}"
 
     with pytest.raises(ConfigValidationError, match="Validation failed for config loaded from"):
         ConfigLoader(service_root=fake_service).load(
-            schema=TestSettings,
+            schema=SampleSettings,
         )

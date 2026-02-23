@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 import redis
 import structlog
-from app.api.v1.routes import agent, health
+from app.api.v1.routes import agent, health, tools
 from app.config import get_settings
 from app.core.constants import HEALTH_CHECK_TIMEOUT
 from app.core.exceptions import AgentServiceError
@@ -183,6 +183,12 @@ app.include_router(
     agent.router,
     prefix=settings.API_V1_PREFIX,
     tags=["agent"],
+)
+
+app.include_router(
+    tools.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["tools"],
 )
 
 
