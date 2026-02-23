@@ -14,7 +14,6 @@ from pipeline.code_translation.build_prompts import (
     TRANSLATED_CHAPTERS,
     PromptBuilder,
 )
-from pipeline.code_translation.constants import TRANSLATED_ALGOS_PATH
 from pipeline.code_translation.process_book_code import BookCodeProcessor
 from pipeline.parsing.extract_algorithms_and_examples import BlockProcessor
 
