@@ -73,8 +73,18 @@ class Translator:
         # 2. Validate list type
         if not isinstance(data, list):
             raise ValueError("JSON must be a list of dicts")
-        # 3. Append new dicts
-        for new_item in items_list:
+        # 2a. Validate that existing items are dicts
+        for idx, item in enumerate(data):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"JSON list items must be dicts; item at index {idx} is {type(item).__name__}"
+                )
+        # 3. Validate and append new dicts
+        for idx, new_item in enumerate(items_list):
+            if not isinstance(new_item, dict):
+                raise TypeError(
+                    f"new_items must contain dicts; item at index {idx} is {type(new_item).__name__}"
+                )
             data.append(new_item)
         # 4. Write back
         with file_path.open("w", encoding="utf-8") as f:
