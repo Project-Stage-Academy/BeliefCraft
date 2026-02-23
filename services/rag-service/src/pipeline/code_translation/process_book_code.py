@@ -298,7 +298,7 @@ class BookCodeProcessor:
     def filter_out_older_chapters(
         self, block_numbers: Iterable[str], current_chapter: str | int
     ) -> list[str]:
-        """Filter block numbers to those at or before the given chapter."""
+        """Filter block numbers to those from chapters before the given chapter."""
         current_chapter = self._normalize_chapter(current_chapter)
         filtered: list[str] = []
         for block_number in block_numbers:

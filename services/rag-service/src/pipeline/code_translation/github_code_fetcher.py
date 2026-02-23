@@ -335,32 +335,8 @@ def get_translated_python_code_from_github(
 
     Returns a single string with all the code.
     """
-    raw_url = GitHubUrlHelper.blob_to_raw(f"{repo_url}/blob/main/src/ch{chapter}.py")
-    logger.info("github_fetching_source", url=raw_url)
-    main_source = GitHubSourceFetcher(raw_url).fetch_source(raw_url)
-
-    collector = DependencyCollector(raw_url)
-
-    if requested_symbols:
-        # Collect only the requested symbols and their transitive deps
-        main_module = PurePosixPath(urlparse(raw_url).path).stem
-        # First collect the requested symbols from the main module's chXX imports
-        chxx_imports = AstImportParser.parse_chxx_imports(main_source)
-        # Also parse which chXX symbols requested_symbols themselves use
-        collector._fetcher._source_cache[main_module] = main_source
-        collector.collect_symbols(main_module, requested_symbols)
-        # Also check direct imports for the requested symbols
-        for sym in requested_symbols:
-            for dep_mod, dep_syms in chxx_imports.items():
-                if sym in dep_syms:
-                    collector.collect_symbols(dep_mod, [sym])
-    else:
-        # Full file mode: collect all chXX imports recursively
-        chxx_imports = AstImportParser.parse_chxx_imports(main_source)
-        for dep_mod, dep_syms in chxx_imports.items():
-            collector.collect_symbols(dep_mod, dep_syms)
-
-    return collector.build_result(main_source, requested_symbols)
+    # Delegate to the class implementation to avoid drift.
+    return GitHubCodeFetcher(repo_url).get_translated_python_code(chapter, requested_symbols)
 
 
 # ---------------------------------------------------------------------------

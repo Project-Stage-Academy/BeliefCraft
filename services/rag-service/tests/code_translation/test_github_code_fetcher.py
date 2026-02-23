@@ -1,4 +1,4 @@
-from pipeline import code_translation as github_code_fetcher
+from pipeline.code_translation import github_code_fetcher
 from pipeline.code_translation.github_code_fetcher import GitHubCodeFetcher
 
 
