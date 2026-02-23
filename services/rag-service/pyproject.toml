@@ -11,6 +11,8 @@ dependencies = [
   "pyyaml",
   "python-dotenv",
   "beliefcraft-common",
+  "tqdm>=4.67.3",
+  "boto3>=1.42.49",
 ]
 
 [tool.uv.sources]
