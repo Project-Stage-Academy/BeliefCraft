@@ -10,6 +10,7 @@ dependencies = [
   "pyyaml",
   "python-dotenv",
   "beliefcraft-common",
+  "fastmcp<3",
 ]
 
 [tool.uv.sources]
