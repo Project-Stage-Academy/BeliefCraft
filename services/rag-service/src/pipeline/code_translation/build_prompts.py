@@ -1,10 +1,10 @@
 import argparse
 from pathlib import Path
 
+from common.logging import get_logger
 from pipeline.code_translation.github_code_fetcher import GitHubCodeFetcher
-from pipeline.code_translation.process_book_code import BookCodeProcessor, Block
+from pipeline.code_translation.process_book_code import Block, BookCodeProcessor
 from pipeline.code_translation.prompts import PromptTemplates
-from packages.common.src.common.logging import get_logger
 from pipeline.parsing.extract_algorithms_and_examples import BlockProcessor
 
 PROMPTS_DIR = Path("prompts")
@@ -28,7 +28,23 @@ EXAMPLE_WITH_CODE_NUMBERS = [
 ]
 
 TRANSLATED_CHAPTERS = [
-    "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "14", "15", "16", "17", "20", "24",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12",
+    "14",
+    "15",
+    "16",
+    "17",
+    "20",
+    "24",
 ]
 
 CHAPTERS_TO_TRANSLATE = ["13", "18", "19", "21", "22", "23", "25", "26", "27", "E"]
@@ -53,7 +69,9 @@ class PromptBuilder:
 
     def build_update_descriptions_prompt(self, chapter: str, julia_code: list[Block]) -> str:
         """Build a prompt to update algorithm descriptions for a chapter."""
-        julia_chapter_code = self._book_processor.get_blocks_with_chapter(julia_code, str(int(chapter)))
+        julia_chapter_code = self._book_processor.get_blocks_with_chapter(
+            julia_code, str(int(chapter))
+        )
         self._book_processor.extract_block_structs_and_functions(julia_chapter_code)
         python_chapter_code = self._github_fetcher.get_translated_python_code(chapter, None)
 
@@ -61,7 +79,9 @@ class PromptBuilder:
             self._book_processor.format_blocks_text(julia_chapter_code),
             python_chapter_code,
         )
-        logger.info("prompt_built", kind="update_descriptions", chapter=chapter, prompt_chars=len(prompt))
+        logger.info(
+            "prompt_built", kind="update_descriptions", chapter=chapter, prompt_chars=len(prompt)
+        )
         return prompt
 
     def build_translate_python_code_prompt(self, chapter: str, julia_code: list[Block]) -> str:
@@ -74,21 +94,31 @@ class PromptBuilder:
         except ValueError:
             chapter_number = chapter
 
-        julia_chapter_code = self._book_processor.get_blocks_with_chapter(julia_code, chapter_number)
-        related_entities = self._book_processor.find_related_definitions_for_chapter(julia_chapter_code, julia_code)
+        julia_chapter_code = self._book_processor.get_blocks_with_chapter(
+            julia_code, chapter_number
+        )
+        related_entities = self._book_processor.find_related_definitions_for_chapter(
+            julia_chapter_code, julia_code
+        )
 
         related_algorithms = set()
         for entities in related_entities.values():
             for entity in entities:
                 related_algorithms.add(entity[1])
-        filtered_related_algorithms = self._book_processor.filter_out_older_chapters(related_algorithms, chapter)
-        translated_algorithms = self._book_processor.get_translated_algorithms(filtered_related_algorithms)
+        filtered_related_algorithms = self._book_processor.filter_out_older_chapters(
+            related_algorithms, chapter
+        )
+        translated_algorithms = self._book_processor.get_translated_algorithms(
+            filtered_related_algorithms
+        )
 
         prompt = PromptTemplates.translate_julia_code_prompt.format(
             self._book_processor.format_blocks_text(julia_chapter_code),
             self._book_processor.format_translated_blocks(translated_algorithms),
         )
-        logger.info("prompt_built", kind="translate_algorithms", chapter=chapter, prompt_chars=len(prompt))
+        logger.info(
+            "prompt_built", kind="translate_algorithms", chapter=chapter, prompt_chars=len(prompt)
+        )
         return prompt
 
     def build_translate_example_prompt(self, example_number: str, blocks: list[Block]) -> str:
@@ -114,21 +144,35 @@ class PromptBuilder:
             related_algorithms,
             self._book_processor.extract_block_chapter(example_number),
         )
-        translated_examples = self._book_processor.get_translated_algorithms(filtered_related_algorithms, True)
+        translated_examples = self._book_processor.get_translated_algorithms(
+            filtered_related_algorithms, True
+        )
 
         prompt = PromptTemplates.translate_example_prompt.format(
             f"{example['caption']} \n\n {example['text']} \n\n",
-            "\n".join(f"{translated['translated']} \n\n" for translated in translated_examples) or "",
+            "\n".join(f"{translated['translated']} \n\n" for translated in translated_examples)
+            or "",
         )
-        logger.info("prompt_built", kind="translate_example", example_number=example_number, prompt_chars=len(prompt))
+        logger.info(
+            "prompt_built",
+            kind="translate_example",
+            example_number=example_number,
+            prompt_chars=len(prompt),
+        )
         return prompt
 
 
 if __name__ == "__main__":
     # Configurable defaults for paths/output locations.
-    parser = argparse.ArgumentParser(description="Build translation prompts from the Decision Making PDF.")
-    parser.add_argument("--pdf-path", default="dm.pdf", help="Path to the source PDF (default: dm.pdf)")
-    parser.add_argument("--prompts-dir", default="prompts", help="Output directory for prompts (default: prompts)")
+    parser = argparse.ArgumentParser(
+        description="Build translation prompts from the Decision Making PDF."
+    )
+    parser.add_argument(
+        "--pdf-path", default="dm.pdf", help="Path to the source PDF (default: dm.pdf)"
+    )
+    parser.add_argument(
+        "--prompts-dir", default="prompts", help="Output directory for prompts (default: prompts)"
+    )
     parser.add_argument(
         "--translated-algorithms-json",
         default="translated_algorithms.json",
@@ -153,16 +197,22 @@ if __name__ == "__main__":
     prompts_dir.mkdir(parents=True, exist_ok=True)
     for chapter in TRANSLATED_CHAPTERS:
         prompt = builder.build_update_descriptions_prompt(chapter, julia_code)
-        with open(prompts_dir / "update_description" / f"chapter_{chapter}_code_translation.txt", "w", encoding="utf-8") as f:
+        with (prompts_dir / "update_description" / f"chapter_{chapter}_code_translation.txt").open(
+            "w", encoding="utf-8"
+        ) as f:
             f.write(prompt)
 
     for chapter in CHAPTERS_TO_TRANSLATE:
         prompt = builder.build_translate_python_code_prompt(chapter, julia_code)
-        with open(prompts_dir / "translate_algorithms" / f"chapter_{chapter}_translation.txt", "w", encoding="utf-8") as f:
+        with (prompts_dir / "translate_algorithms" / f"chapter_{chapter}_translation.txt").open(
+            "w", encoding="utf-8"
+        ) as f:
             f.write(prompt)
 
     for example in EXAMPLE_WITH_CODE_NUMBERS:
         prompt = builder.build_translate_example_prompt(example, blocks)
-        with open(prompts_dir / "translate_examples" / f"{example.replace(' ', '_')}_translation.txt", "w", encoding="utf-8") as f:
+        with (
+            prompts_dir / "translate_examples" / f"{example.replace(' ', '_')}_translation.txt"
+        ).open("w", encoding="utf-8") as f:
             f.write(prompt)
     block_processor.doc.close()

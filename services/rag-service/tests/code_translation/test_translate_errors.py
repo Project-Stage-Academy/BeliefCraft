@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from pipeline.code_translation.translate import Translator
 
 
@@ -11,4 +10,3 @@ def test_add_dict_to_json_list_raises_for_non_list(tmp_path):
 
     with pytest.raises(ValueError, match="JSON must be a list"):
         Translator.add_dict_to_json_list(target, [{"a": 2}])
-

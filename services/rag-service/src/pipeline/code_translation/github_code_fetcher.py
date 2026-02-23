@@ -5,14 +5,14 @@ Fetches a Python file from GitHub and recursively collects all classes/functions
 imported from chXX modules (transitively).
 """
 
-import re
 import ast
+import re
 import urllib.request
-from urllib.parse import urlparse
 from pathlib import PurePosixPath
-from typing import Optional
+from typing import cast
+from urllib.parse import urlparse
 
-from packages.common.src.common.logging import get_logger
+from common.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -39,7 +39,7 @@ class GitHubUrlHelper:
         # base_raw_url: https://raw.githubusercontent.com/user/repo/branch/src/chXX.py
         # ch_module:    ch07  (no .py)
         parts = base_raw_url.split("/")
-        parts[-1] = ch_module + ".py"          # replace filename
+        parts[-1] = ch_module + ".py"  # replace filename
         return "/".join(parts)
 
 
@@ -52,11 +52,16 @@ class GitHubSourceFetcher:
 
     def fetch_source(self, raw_url: str) -> str:
         """Download source code from a raw URL."""
-        req = urllib.request.Request(raw_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req) as resp:
-            return resp.read().decode("utf-8")
+        parsed = urlparse(raw_url)
+        if parsed.scheme not in {"https", "http"}:
+            raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
+        # Scheme is validated above; this is limited to http/https.
+        req = urllib.request.Request(raw_url, headers={"User-Agent": "Mozilla/5.0"})  # noqa: S310
+        with urllib.request.urlopen(req) as resp:  # noqa: S310
+            data = cast(bytes, resp.read())
+        return data.decode("utf-8")
 
-    def get_source(self, module: str) -> Optional[str]:
+    def get_source(self, module: str) -> str | None:
         """Return cached source for a module, fetching on demand."""
         if module in self._source_cache:
             return self._source_cache[module]
@@ -66,7 +71,9 @@ class GitHubSourceFetcher:
             self._source_cache[module] = src
             return src
         except Exception as e:
-            logger.warning("github_fetch_failed", module=module, url=url, error=str(e), exc_info=True)
+            logger.warning(
+                "github_fetch_failed", module=module, url=url, error=str(e), exc_info=True
+            )
             return None
 
 
@@ -102,12 +109,14 @@ class AstImportParser:
         """Extract source lines for an AST node (class or function)."""
         lines = source.splitlines(keepends=True)
         # ast gives 1-based line numbers
-        start = node.lineno - 1
-        end = node.end_lineno          # end_lineno is inclusive and 1-based; using it as the slice end is correct because slicing is end-exclusive
+        stmt = cast(ast.stmt, node)
+        start = stmt.lineno - 1
+        end = stmt.end_lineno or stmt.lineno  # end_lineno is inclusive and 1-based.
+        # Slicing end is exclusive, so this is correct.
         return "".join(lines[start:end])
 
     @staticmethod
-    def find_symbol(source: str, name: str) -> Optional[str]:
+    def find_symbol(source: str, name: str) -> str | None:
         """
         Return the source text of the top-level class or function named `name`.
         Returns None if not found.
@@ -117,9 +126,10 @@ class AstImportParser:
         except SyntaxError:
             return None
         for node in ast.iter_child_nodes(tree):
-            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                if node.name == name:
-                    return AstImportParser.extract_node_source(source, node)
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and (
+                node.name == name
+            ):
+                return AstImportParser.extract_node_source(source, node)
             # Also handle module-level assignments (e.g. NamedTuple aliases)
             if isinstance(node, ast.Assign):
                 for t in node.targets:
@@ -142,8 +152,8 @@ class DependencyCollector:
     """Collect and assemble translated Python source with dependencies."""
 
     def __init__(self, base_raw_url: str) -> None:
-        self.base_raw_url = base_raw_url          # URL of the starting file
-        self._collected: dict[str, str] = {}       # "module.Symbol" -> code snippet
+        self.base_raw_url = base_raw_url  # URL of the starting file
+        self._collected: dict[str, str] = {}  # "module.Symbol" -> code snippet
         self._visited_modules: set[str] = set()
         self._fetcher = GitHubSourceFetcher(base_raw_url)
 
@@ -157,7 +167,7 @@ class DependencyCollector:
             return
 
         # Parse what chXX imports are available in this module
-        chxx_imports = AstImportParser.parse_chxx_imports(src)   # {dep_module: [sym, ...]}
+        chxx_imports = AstImportParser.parse_chxx_imports(src)  # {dep_module: [sym, ...]}
         # Flat map: symbol_name -> dep_module
         available_dep_symbols: dict[str, str] = {}
         for dep_mod, dep_syms in chxx_imports.items():
@@ -177,7 +187,9 @@ class DependencyCollector:
             self._collected[key] = code
 
             # Find which dep symbols are actually used inside this code
-            used_dep_syms = AstImportParser.symbols_used_in_code(code, set(available_dep_symbols.keys()))
+            used_dep_syms = AstImportParser.symbols_used_in_code(
+                code, set(available_dep_symbols.keys())
+            )
 
             # Group by their source module and recurse
             deps_by_mod: dict[str, list[str]] = {}
@@ -186,7 +198,9 @@ class DependencyCollector:
                 deps_by_mod.setdefault(dep_mod, []).append(dep_sym)
 
             if deps_by_mod:
-                logger.info("github_deps_collected", module=module, symbol=sym, deps=len(used_dep_syms))
+                logger.info(
+                    "github_deps_collected", module=module, symbol=sym, deps=len(used_dep_syms)
+                )
 
             for dep_mod, dep_syms in deps_by_mod.items():
                 self.collect_symbols(dep_mod, dep_syms)
@@ -209,7 +223,7 @@ class DependencyCollector:
         for dep_mod, dep_syms in chxx_imports.items():
             self.collect_symbols(dep_mod, dep_syms)
 
-    def build_result(self, main_source: str, requested_symbols: Optional[list[str]]) -> str:
+    def build_result(self, main_source: str, requested_symbols: list[str] | None) -> str:
         """
         Assemble the final string.
         Order: dependency symbols first (sorted by module number), then the main file / symbols.
@@ -217,12 +231,11 @@ class DependencyCollector:
         sections = []
 
         # Separate collected items: full files vs individual symbols
-        full_files = {k: v for k, v in self._collected.items() if k.endswith(".__full__")}
-        sym_items  = {k: v for k, v in self._collected.items() if not k.endswith(".__full__")}
+        sym_items = {k: v for k, v in self._collected.items() if not k.endswith(".__full__")}
 
         # Output dependency symbols grouped by their module
         # We want a stable order: sort by module number ascending (ch07 before ch09, etc.)
-        def mod_number(key):
+        def mod_number(key: str) -> int:
             mod = key.split(".")[0]
             m = re.search(r"\d+", mod)
             return int(m.group()) if m else 0
@@ -247,7 +260,11 @@ class DependencyCollector:
             sections.append(main_source.rstrip())
             sections.append("")
 
-        logger.info("github_assembly_complete", sections=len(sections), requested_symbols=bool(requested_symbols))
+        logger.info(
+            "github_assembly_complete",
+            sections=len(sections),
+            requested_symbols=bool(requested_symbols),
+        )
         return "\n".join(sections)
 
 
@@ -257,7 +274,9 @@ class GitHubCodeFetcher:
     def __init__(self, repo_url: str) -> None:
         self._repo_url = repo_url
 
-    def get_translated_python_code(self, chapter: str, requested_symbols: Optional[list[str]] = None) -> str:
+    def get_translated_python_code(
+        self, chapter: str, requested_symbols: list[str] | None = None
+    ) -> str:
         """
         Main function.
 
@@ -300,9 +319,10 @@ class GitHubCodeFetcher:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def get_translated_python_code_from_github(
     chapter: str,
-    requested_symbols: Optional[list[str]] = None,
+    requested_symbols: list[str] | None = None,
     repo_url: str = "https://github.com/griffinbholt/decisionmaking-code-py",
 ) -> str:
     """

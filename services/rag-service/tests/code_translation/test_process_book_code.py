@@ -45,4 +45,3 @@ def test_filter_out_older_chapters():
     filtered = processor.filter_out_older_chapters(blocks, "3")
 
     assert filtered == ["Algorithm 2.1."]
-

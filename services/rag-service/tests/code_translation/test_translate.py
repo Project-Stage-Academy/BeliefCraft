@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from pipeline.code_translation.translate import Translator
 
 
@@ -29,4 +28,3 @@ def test_add_dict_to_json_list_appends(tmp_path: Path):
 
     updated = json.loads(target.read_text(encoding="utf-8"))
     assert updated == [{"a": 1}, {"b": 2}]
-

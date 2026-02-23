@@ -1,7 +1,8 @@
 import json
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Optional, Any
+from typing import Any, cast
 
 from pipeline.code_translation.constants import TRANSLATED_ALGOS_PATH
 from pipeline.code_translation.signature_stripper import strip_to_signatures
@@ -32,10 +33,7 @@ class BookCodeProcessor:
 
         block_end_re = re.compile(r"(?<!:)\bend\b")
 
-        stopwords = {
-            "if", "for", "while", "begin", "let",
-            "try", "catch", "finally", "end", "do"
-        }
+        stopwords = {"if", "for", "while", "begin", "let", "try", "catch", "finally", "end", "do"}
 
         structs, functions = [], []
         seen_structs, seen_funcs = set(), set()
@@ -102,7 +100,9 @@ class BookCodeProcessor:
                 chapter_blocks.append(block)
         return chapter_blocks
 
-    def find_related_definitions(self, block_number: str, blocks: list[Block]) -> list[tuple[str, str]]:
+    def find_related_definitions(
+        self, block_number: str, blocks: list[Block]
+    ) -> list[tuple[str, str]]:
         """Find (entity, block_number) pairs that reference the given block."""
         related = []
         for block in blocks:
@@ -138,7 +138,9 @@ class BookCodeProcessor:
             block["structs"] = {struct: [] for struct in structs}
             block["functions"] = {func: [] for func in functions}
 
-    def _build_usage_index(self, blocks: list[Block]) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    def _build_usage_index(
+        self, blocks: list[Block]
+    ) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
         """Build inverted indices of struct and function usage across blocks.
 
         The index maps each entity name to block numbers where it is used (not defined).
@@ -158,12 +160,18 @@ class BookCodeProcessor:
         # Single-pass regex matches keep scanning per block fast even with many entities.
         struct_pattern = None
         if all_structs:
-            struct_names = "|".join(re.escape(name) for name in sorted(all_structs, key=len, reverse=True))
-            struct_pattern = re.compile(rf"(?:(?:::)({struct_names})\b)|(?:\b({struct_names})\s*\()")
+            struct_names = "|".join(
+                re.escape(name) for name in sorted(all_structs, key=len, reverse=True)
+            )
+            struct_pattern = re.compile(
+                rf"(?:(?:::)({struct_names})\b)|(?:\b({struct_names})\s*\()"
+            )
 
         func_pattern = None
         if all_functions:
-            func_names = "|".join(re.escape(name) for name in sorted(all_functions, key=len, reverse=True))
+            func_names = "|".join(
+                re.escape(name) for name in sorted(all_functions, key=len, reverse=True)
+            )
             func_pattern = re.compile(rf"\b({func_names})\s*\(")
             func_def_pattern = re.compile(rf"^\s*function\s+({func_names})\s*\(")
             func_oneliner_def_pattern = re.compile(rf"^\s*({func_names})\s*\([^=\n]*\)\s*=")
@@ -187,7 +195,9 @@ class BookCodeProcessor:
                     if def_match:
                         defined.add(def_match.group(1))
                         continue
-                    def_match = func_oneliner_def_pattern.match(line) if func_oneliner_def_pattern else None
+                    def_match = (
+                        func_oneliner_def_pattern.match(line) if func_oneliner_def_pattern else None
+                    )
                     if def_match:
                         defined.add(def_match.group(1))
 
@@ -198,13 +208,17 @@ class BookCodeProcessor:
 
         return struct_usage, function_usage
 
-    def extract_entities_usage(self, blocks: list[Block], blocks_type: BlockType = BlockType.ALGORITHM) -> None:
+    def extract_entities_usage(
+        self, blocks: list[Block], blocks_type: BlockType = BlockType.ALGORITHM
+    ) -> None:
         """Populate per-block usage lists for structs/functions across blocks."""
         struct_usage, function_usage = self._build_usage_index(blocks)
 
         # Pre-sort usage lists once to avoid per-block sorting.
         struct_usage_sorted = {name: sorted(nums) for name, nums in struct_usage.items() if nums}
-        function_usage_sorted = {name: sorted(nums) for name, nums in function_usage.items() if nums}
+        function_usage_sorted = {
+            name: sorted(nums) for name, nums in function_usage.items() if nums
+        }
 
         for block in blocks:
             if block["block_type"] != blocks_type.value:
@@ -236,15 +250,15 @@ class BookCodeProcessor:
         """Load translated algorithms JSON once per run."""
         json_path: Path = self._translated_algos_path
         with json_path.open("r", encoding="utf-8") as fh:
-            return json.load(fh)
+            return cast(list[dict[str, Any]], json.load(fh))
 
-    def get_translated_algorithm(self, algorithm_number: str) -> Optional[str]:
+    def get_translated_algorithm(self, algorithm_number: str) -> str | None:
         """Return translated code for a given algorithm number."""
         json_data = self._load_translated_algorithms()
 
         for item in json_data:
             if item["algorithm_number"] == algorithm_number:
-                return item["code"]
+                return cast(str, item["code"])
         return None
 
     def _normalize_chapter(self, chapter: str | int) -> int:
@@ -272,12 +286,18 @@ class BookCodeProcessor:
             translated_algorithms.append(
                 {
                     "algorithm_number": algorithm_number,
-                    "translated": strip_to_signatures(translated_algorithm) if signatures_only else translated_algorithm,
+                    "translated": (
+                        strip_to_signatures(translated_algorithm)
+                        if signatures_only
+                        else translated_algorithm
+                    ),
                 }
             )
         return translated_algorithms
 
-    def filter_out_older_chapters(self, block_numbers: Iterable[str], current_chapter: str | int) -> list[str]:
+    def filter_out_older_chapters(
+        self, block_numbers: Iterable[str], current_chapter: str | int
+    ) -> list[str]:
         """Filter block numbers to those at or before the given chapter."""
         current_chapter = self._normalize_chapter(current_chapter)
         filtered: list[str] = []
@@ -293,7 +313,10 @@ class BookCodeProcessor:
 
     def format_translated_blocks(self, translated_blocks: Iterable[dict[str, str]]) -> str:
         """Render translated algorithms as prompt-ready text."""
-        return "\n".join(
-            f"{translated['algorithm_number']} \n\n {translated['translated']} \n\n"
-            for translated in translated_blocks
-        ) or ""
+        return (
+            "\n".join(
+                f"{translated['algorithm_number']} \n\n {translated['translated']} \n\n"
+                for translated in translated_blocks
+            )
+            or ""
+        )

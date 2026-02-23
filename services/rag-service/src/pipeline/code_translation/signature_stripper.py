@@ -1,6 +1,6 @@
 import ast
 
-from packages.common.src.common.logging import get_logger
+from common.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -9,7 +9,7 @@ class ClassMethodStripper(ast.NodeTransformer):
     """Strip class methods to signature-only bodies for prompt context."""
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
-        new_body = []
+        new_body: list[ast.stmt] = []
 
         for item in node.body:
             if isinstance(item, ast.FunctionDef):
@@ -27,10 +27,7 @@ class ClassMethodStripper(ast.NodeTransformer):
         return node
 
     def _extract_top_level_returns(self, func_node: ast.FunctionDef) -> list[ast.stmt]:
-        returns = [
-            stmt for stmt in func_node.body
-            if isinstance(stmt, ast.Return)
-        ]
+        returns: list[ast.stmt] = [stmt for stmt in func_node.body if isinstance(stmt, ast.Return)]
 
         if returns:
             return returns
