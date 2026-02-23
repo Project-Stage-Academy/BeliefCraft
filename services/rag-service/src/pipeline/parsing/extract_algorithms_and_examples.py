@@ -1,17 +1,27 @@
 import json
 import re
+from collections.abc import Iterable, Sequence
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
-import fitz
-from tqdm import tqdm
+import fitz  # type: ignore[import-not-found]
+from tqdm import tqdm  # type: ignore[import-untyped]
 
 COLUMNS_DIVIDER_X = 300  # adjust this value based on the actual layout of the PDF
 DISTANCE_BETWEEN_NOTES = 20  # distance in pixels to consider a new note or caption
-DISTANCE_BETWEEN_POINT_IN_GRAY_BLOCK_AND_CAPTION = 100  # distance in pixels to associate a gray block with a caption
+DISTANCE_BETWEEN_POINT_IN_GRAY_BLOCK_AND_CAPTION = (
+    100  # distance in pixels to associate a gray block with a caption
+)
 GRAY_FILL_THRESHOLD = 0.9  # fill value to consider block as gray
-PADDLE_PAGE_SIZE = (1094, 1235)  # width and height of the page in pixels for normalization in Paddle OCR JSONs
-PY_MU_PAGE_SIZE = (576, 648) # width and height of the page in pixels for normalization in muPDF parsed files
+PADDLE_PAGE_SIZE = (
+    1094,
+    1235,
+)  # width and height of the page in pixels for normalization in Paddle OCR JSONs
+PY_MU_PAGE_SIZE = (
+    576,
+    648,
+)  # width and height of the page in pixels for normalization in muPDF parsed files
 
 
 class BlockType(Enum):
@@ -24,6 +34,11 @@ class BlockType(Enum):
 
 algorithms_pattern = re.compile(r"^Algorithm\s+(?:\d+|[A-G])\.\d+", re.IGNORECASE)
 example_pattern = re.compile(r"^Example\s+(?:\d+|[A-G])\.\d+", re.IGNORECASE)
+
+BlockData = dict[str, Any]
+PyMuPDFBlock = dict[str, Any]
+PyMuPDFPage = Any
+JsonPage = dict[str, Any]
 
 
 class BlockProcessor:
@@ -45,7 +60,7 @@ class BlockProcessor:
             return BlockType.EXAMPLE.value
         return BlockType.OTHER.value
 
-    def _determine_block_type_from_block(self, block) -> str:
+    def _determine_block_type_from_block(self, block: PyMuPDFBlock) -> str:
         """Inspect a PyMuPDF text block dict and classify it as algorithm/example/other."""
         block_text = ""
         for line in block["lines"]:
@@ -60,7 +75,7 @@ class BlockProcessor:
 
         return BlockType.OTHER.value
 
-    def _extract_gray_block_caption(self, block):
+    def _extract_gray_block_caption(self, block: PyMuPDFBlock) -> tuple[str, Any | None]:
         """Collect caption text/rect from the right column of a block until spacing breaks."""
         caption_text = ""
         caption_rect = None
@@ -82,7 +97,7 @@ class BlockProcessor:
 
         return caption_text, caption_rect
 
-    def _extract_captions(self, page):
+    def _extract_captions(self, page: PyMuPDFPage) -> list[BlockData]:
         """Collect caption text and bounding boxes from the right column."""
         page_dict = page.get_text("dict")
         captions = []
@@ -116,38 +131,43 @@ class BlockProcessor:
                     caption_text += " ".join(span["text"] for span in line["spans"]) + " "
 
             if caption_text and caption_rect:
-                captions.append({
-                    "text": caption_text.strip(),
-                    "bbox": caption_rect,
-                    "type": block_type,
-                })
+                captions.append(
+                    {
+                        "text": caption_text.strip(),
+                        "bbox": caption_rect,
+                        "type": block_type,
+                    }
+                )
         return captions
 
-    def _extract_page_algorithms_and_examples_by_caption(self, captions, page):
+    def _extract_page_algorithms_and_examples_by_caption(
+        self, captions: list[BlockData], page: PyMuPDFPage
+    ) -> list[BlockData]:
         """Match caption metadata to gray blocks on a page and annotate a copy of the PDF."""
-        page_algorithms_and_examples = []
+        page_algorithms_and_examples: list[BlockData] = []
         for caption in captions:
             for drawing in page.get_drawings():
                 drawing_rect = drawing["rect"]
                 point = fitz.Point(
                     caption["caption_rect"][0] - DISTANCE_BETWEEN_POINT_IN_GRAY_BLOCK_AND_CAPTION,
-                    caption["caption_rect"][1]
+                    caption["caption_rect"][1],
                 )
-                if drawing_rect.contains(point):
-                    if drawing["fill"] and drawing["fill"][0] > GRAY_FILL_THRESHOLD:
-                        gray_block = caption
-                        gray_block["text"] = page.get_text("text", clip=drawing_rect)
-                        gray_block["bbox"] = tuple(drawing_rect)
-                        gray_block["caption_text"] = page.get_text("text", clip=caption["caption_rect"])
+                if drawing_rect.contains(point) and (
+                    drawing["fill"] and drawing["fill"][0] > GRAY_FILL_THRESHOLD
+                ):
+                    gray_block = caption
+                    gray_block["text"] = page.get_text("text", clip=drawing_rect)
+                    gray_block["bbox"] = tuple(drawing_rect)
+                    gray_block["caption_text"] = page.get_text("text", clip=caption["caption_rect"])
 
-                        gray_block["caption_bbox"] = tuple(caption["caption_rect"])
-                        del gray_block["caption_rect"]
+                    gray_block["caption_bbox"] = tuple(caption["caption_rect"])
+                    del gray_block["caption_rect"]
 
-                        page_algorithms_and_examples.append(gray_block)
-                        break
+                    page_algorithms_and_examples.append(gray_block)
+                    break
         return page_algorithms_and_examples
 
-    def _extract_page_algorithms_and_examples(self, page):
+    def _extract_page_algorithms_and_examples(self, page: PyMuPDFPage) -> list[BlockData]:
         """Build caption metadata for a page and delegate matching block detection."""
         page_gray_block_captions = []
         for block in page.get_text("dict")["blocks"]:
@@ -174,9 +194,9 @@ class BlockProcessor:
 
         return self._extract_page_algorithms_and_examples_by_caption(page_gray_block_captions, page)
 
-    def extract_algorithms_and_examples(self):
+    def extract_algorithms_and_examples(self) -> list[BlockData]:
         """Return algorithm/example blocks for the opened PDF."""
-        algorithms_and_examples = []
+        algorithms_and_examples: list[BlockData] = []
         for page in self.doc:
             algorithms_and_examples.extend(self._extract_page_algorithms_and_examples(page))
         return algorithms_and_examples
@@ -192,7 +212,7 @@ class BlockProcessor:
             return caption
         return f"{parts[0]} {parts[1]}"
 
-    def get_algorithm_caption_from_jsons(self, algorithm_number):
+    def get_algorithm_caption_from_jsons(self, algorithm_number: str) -> str | None:
         """Find the full algorithm caption by scanning OCR JSON pages."""
         for json_path in sorted(self.pdf_jsons_dir.glob("*.json")):
             with json_path.open("r", encoding="utf-8") as fh:
@@ -206,9 +226,9 @@ class BlockProcessor:
                         return clean[idx:]
         return None
 
-    def extract_algorithms(self, pymu_blocks):
+    def extract_algorithms(self, pymu_blocks: list[BlockData]) -> list[BlockData]:
         """Extract algorithm blocks and hydrate captions via OCR JSON metadata."""
-        algorithms = []
+        algorithms: list[BlockData] = []
         for block in pymu_blocks:
             if block["block_type"] != BlockType.ALGORITHM.value:
                 continue
@@ -222,7 +242,9 @@ class BlockProcessor:
             algorithms.append(algorithm)
         return algorithms
 
-    def get_example_by_number(self, example_number, pymu_blocks):
+    def get_example_by_number(
+        self, example_number: str, pymu_blocks: list[BlockData]
+    ) -> BlockData | None:
         """Return the first matching example block by caption number."""
         for block in pymu_blocks:
             if block["block_type"] != BlockType.EXAMPLE.value:
@@ -232,26 +254,23 @@ class BlockProcessor:
                 return block
         return None
 
-    def _normalize_bbox(self, bbox, page_size):
+    def _normalize_bbox(
+        self, bbox: Sequence[float], page_size: Sequence[float]
+    ) -> tuple[float, float, float, float]:
         """Normalize a bbox tuple to 0..1 space using the provided page size."""
         width, height = page_size
         x1, y1, x2, y2 = bbox
         return (x1 / width, y1 / height, x2 / width, y2 / height)
 
-    def is_inside_bbox(self, big, small):
+    def is_inside_bbox(self, big: Sequence[float], small: Sequence[float]) -> bool:
         """Check whether a smaller bbox is inside a larger one using normalized coordinates."""
         x1b, y1b, x2b, y2b = self._normalize_bbox(big, PY_MU_PAGE_SIZE)
         x1s, y1s, x2s, y2s = self._normalize_bbox(small, PADDLE_PAGE_SIZE)
 
         error = 0.05
-        return (
-            x1b <= x1s and
-            y1b <= y2s and
-            x2b + error >= x2s and
-            y2b >= y1s
-        )
+        return x1b <= x1s and y1b <= y2s and x2b + error >= x2s and y2b >= y1s
 
-    def get_example_caption(self, json_page, example_number):
+    def get_example_caption(self, json_page: JsonPage, example_number: str) -> str | None:
         """Extract an example caption from a single OCR JSON page."""
         for element in json_page["prunedResult"]["parsing_res_list"]:
             if example_number in element["block_content"]:
@@ -259,8 +278,9 @@ class BlockProcessor:
                 clean = self._strip_html(text)
                 idx = clean.find(example_number)
                 return clean[idx:]
+        return None
 
-    def extract_example_from_jsons(self, example):
+    def extract_example_from_jsons(self, example: BlockData) -> BlockData:
         """Rebuild a full example block by intersecting OCR JSON text with a PDF bbox."""
         example_number = self._caption_key_from_caption(example["caption"])
         example_bbox = example["bbox"]
@@ -292,16 +312,18 @@ class BlockProcessor:
                 "block_type": BlockType.EXAMPLE.value,
             }
 
-    def extract_examples(self, example_numbers, pymu_blocks):
+    def extract_examples(
+        self, example_numbers: Iterable[str], pymu_blocks: list[BlockData]
+    ) -> list[BlockData]:
         """Extract a list of examples by number using PDF and OCR JSON data."""
-        examples = []
+        examples: list[BlockData] = []
         for example_number in example_numbers:
             example = self.get_example_by_number(example_number, pymu_blocks)
             if example:
                 examples.append(self.extract_example_from_jsons(example))
         return examples
 
-    def run(self, output_path: str = "blocks_metadata.json"):
+    def run(self, output_path: str | Path = "blocks_metadata.json") -> None:
         """Extract blocks and dump their metadata to JSON."""
         all_blocks = []
         for page_num in tqdm(range(len(self.doc)), desc="Extracting gray blocks"):
@@ -316,25 +338,36 @@ class BlockProcessor:
                 )
 
                 for drawing in drawings:
-                    if drawing["fill"] and drawing["fill"][0] > GRAY_FILL_THRESHOLD:
-                        if drawing["rect"].contains(test_point):
-                            block_rect = drawing["rect"]
-                            raw_content = page.get_text("text", clip=block_rect).strip()
+                    if (
+                        drawing["fill"]
+                        and drawing["fill"][0] > GRAY_FILL_THRESHOLD
+                        and drawing["rect"].contains(test_point)
+                    ):
+                        block_rect = drawing["rect"]
+                        raw_content = page.get_text("text", clip=block_rect).strip()
 
-                            match = re.search(r"(\d+\.\d+)", caption["text"])
-                            entity_id = match.group(1) if match else None
+                        match = re.search(r"(\d+\.\d+)", caption["text"])
+                        entity_id = match.group(1) if match else None
 
-                            all_blocks.append({
+                        all_blocks.append(
+                            {
                                 "chunk_type": caption["type"],
                                 "entity_id": entity_id,
                                 "content": raw_content,
                                 "caption": caption["text"],
                                 "page": page_num + 1,
-                                "bbox": [block_rect.x0, block_rect.y0, block_rect.x1, block_rect.y1],
-                            })
-                            break
+                                "bbox": [
+                                    block_rect.x0,
+                                    block_rect.y0,
+                                    block_rect.x1,
+                                    block_rect.y1,
+                                ],
+                            }
+                        )
+                        break
 
-        with open(output_path, "w", encoding="utf-8") as fh:
+        output_path = Path(output_path)
+        with output_path.open("w", encoding="utf-8") as fh:
             json.dump(all_blocks, fh, indent=2, ensure_ascii=False)
         self.doc.close()
 

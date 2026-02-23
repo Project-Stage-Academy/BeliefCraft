@@ -30,4 +30,3 @@ def helper():
     assert "def helper" in result
     assert "# --- main file ---" in result
     assert "def main" in result
-

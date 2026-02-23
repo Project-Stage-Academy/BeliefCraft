@@ -22,4 +22,3 @@ def top_level():
     assert "def b" in stripped
     assert "..." in stripped
     assert "def top_level" in stripped
-

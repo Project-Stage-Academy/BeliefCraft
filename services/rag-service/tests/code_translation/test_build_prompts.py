@@ -1,13 +1,14 @@
 from unittest.mock import MagicMock
 
 import pytest
-
 from pipeline.code_translation.build_prompts import PromptBuilder
 
 
 def test_build_update_descriptions_prompt_includes_sources():
     book_processor = MagicMock()
-    book_processor.get_blocks_with_chapter.return_value = [{"caption": "Algorithm 1.1.", "text": "code"}]
+    book_processor.get_blocks_with_chapter.return_value = [
+        {"caption": "Algorithm 1.1.", "text": "code"}
+    ]
     book_processor.format_blocks_text.return_value = "BLOCKS"
 
     github_fetcher = MagicMock()
