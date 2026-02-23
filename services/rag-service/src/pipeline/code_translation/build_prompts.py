@@ -1,12 +1,11 @@
 import argparse
 from pathlib import Path
 
-from code_translation.github_code_fetcher import GitHubCodeFetcher
-from code_translation.process_book_code import BookCodeProcessor, Block
-from code_translation.prompts import PromptTemplates
+from pipeline.code_translation.github_code_fetcher import GitHubCodeFetcher
+from pipeline.code_translation.process_book_code import BookCodeProcessor, Block
+from pipeline.code_translation.prompts import PromptTemplates
 from packages.common.src.common.logging import get_logger
-from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms, \
-    extract_examples
+from pipeline.parsing.extract_algorithms_and_examples import BlockProcessor
 
 PROMPTS_DIR = Path("prompts")
 
@@ -44,11 +43,13 @@ class PromptBuilder:
         self,
         book_processor: BookCodeProcessor | None = None,
         github_fetcher: GitHubCodeFetcher | None = None,
+        block_processor: BlockProcessor | None = None,
     ) -> None:
         self._book_processor = book_processor or BookCodeProcessor()
         self._github_fetcher = github_fetcher or GitHubCodeFetcher(
             "https://github.com/griffinbholt/decisionmaking-code-py"
         )
+        self._block_processor = block_processor
 
     def build_update_descriptions_prompt(self, chapter: str, julia_code: list[Block]) -> str:
         """Build a prompt to update algorithm descriptions for a chapter."""
@@ -95,7 +96,10 @@ class PromptBuilder:
         self._book_processor.extract_block_structs_and_functions(blocks)
         self._book_processor.extract_entities_usage(blocks)
 
-        example = extract_examples([example_number], blocks)[0]
+        if not self._block_processor:
+            raise ValueError("BlockProcessor is required to extract examples")
+
+        example = self._block_processor.extract_examples([example_number], blocks)[0]
 
         if not example:
             logger.warning("example_not_found", example_number=example_number)
@@ -136,11 +140,15 @@ if __name__ == "__main__":
     prompts_dir = Path(args.prompts_dir)
     TRANSLATED_ALGOS_PATH = Path(args.translated_algorithms_json)
 
-    builder = PromptBuilder(book_processor=BookCodeProcessor(TRANSLATED_ALGOS_PATH))
+    block_processor = BlockProcessor(pdf_path)
+    builder = PromptBuilder(
+        book_processor=BookCodeProcessor(TRANSLATED_ALGOS_PATH),
+        block_processor=block_processor,
+    )
 
-    blocks = extract_algorithms_and_examples(pdf_path)
+    blocks = block_processor.extract_algorithms_and_examples()
 
-    julia_code = extract_algorithms(blocks)
+    julia_code = block_processor.extract_algorithms(blocks)
 
     prompts_dir.mkdir(parents=True, exist_ok=True)
     for chapter in TRANSLATED_CHAPTERS:
@@ -157,3 +165,4 @@ if __name__ == "__main__":
         prompt = builder.build_translate_example_prompt(example, blocks)
         with open(prompts_dir / "translate_examples" / f"{example.replace(' ', '_')}_translation.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
+    block_processor.doc.close()

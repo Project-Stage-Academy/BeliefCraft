@@ -1,6 +1,6 @@
 import json
 
-from code_translation.process_book_code import BookCodeProcessor
+from pipeline.code_translation.process_book_code import BookCodeProcessor
 
 
 def test_extract_entities_from_julia_code_top_level_only():

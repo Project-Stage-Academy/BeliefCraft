@@ -8,12 +8,12 @@ from typing import Any, Iterable
 
 from botocore.config import Config
 
-from code_translation.build_prompts import TRANSLATED_CHAPTERS, CHAPTERS_TO_TRANSLATE, \
+from pipeline.code_translation.build_prompts import TRANSLATED_CHAPTERS, CHAPTERS_TO_TRANSLATE, \
     EXAMPLE_WITH_CODE_NUMBERS, PromptBuilder
-from code_translation.constants import TRANSLATED_ALGOS_PATH
-from code_translation.process_book_code import BookCodeProcessor
+from pipeline.code_translation.constants import TRANSLATED_ALGOS_PATH
+from pipeline.code_translation.process_book_code import BookCodeProcessor
 from packages.common.src.common.logging import get_logger
-from pdf_parsing.extract_algorithms_and_examples import extract_algorithms_and_examples, extract_algorithms
+from pipeline.parsing.extract_algorithms_and_examples import BlockProcessor
 
 logger = get_logger(__name__)
 
@@ -192,10 +192,14 @@ def main() -> None:
 
     prompts_dir = Path(args.prompts_dir)
 
-    blocks = extract_algorithms_and_examples(args.pdf_path)
-    julia_code = extract_algorithms(blocks)
+    block_processor = BlockProcessor(args.pdf_path)
+    blocks = block_processor.extract_algorithms_and_examples()
+    julia_code = block_processor.extract_algorithms(blocks)
 
-    prompts_builder = PromptBuilder(book_processor=BookCodeProcessor(TRANSLATED_ALGOS_PATH))
+    prompts_builder = PromptBuilder(
+        book_processor=BookCodeProcessor(TRANSLATED_ALGOS_PATH),
+        block_processor=block_processor,
+    )
 
     translator = Translator(
         client=client,
@@ -208,6 +212,7 @@ def main() -> None:
     translator.process_translate_algorithms(julia_code)
     translator.process_translate_examples(blocks)
     logger.info("translation_completed")
+    block_processor.doc.close()
 
 
 if __name__ == "__main__":
