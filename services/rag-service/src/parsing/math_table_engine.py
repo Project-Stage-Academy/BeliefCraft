@@ -3,14 +3,20 @@ import re
 import json
 import logging
 
+# Module-level constants for geometric analysis
 SIDE_NOTES_THRESHOLD_X = 600
 MAX_FORMULA_DISTANCE = 600
 FORMULA_Y_OFFSET_BUFFER = 20
+VERTICAL_TOLERANCE = 5  # Added tolerance for better overlap detection
 
 from common.logging import get_logger
 logger = get_logger(__name__)
 
 class MathTableEngine:
+    """
+    Engine for associating mathematical formulas and tables with their 
+    respective numbers and captions based on spatial layout.
+    """
     def __init__(self, side_notes_threshold=SIDE_NOTES_THRESHOLD_X):
         self.SIDE_NOTES_START_X = side_notes_threshold
         self.valid_num_pattern = re.compile(r'^\([A-Z0-9]+\.\d+\)$')
@@ -18,7 +24,10 @@ class MathTableEngine:
         self.entity_id_pattern = re.compile(r"(\d+|[A-G])\.\d+")
 
     def _get_poly_bbox(self, item):
-        """Gets [min_x, min_y, max_x, max_y]."""
+        """
+        Calculates a bounding box [min_x, min_y, max_x, max_y] from 
+        polygon points or a standard bbox.
+        """
         if "block_polygon_points" in item and item["block_polygon_points"]:
             pts = item["block_polygon_points"]
             return [min(p[0] for p in pts), min(p[1] for p in pts), 
@@ -26,20 +35,26 @@ class MathTableEngine:
         return item.get("block_bbox", [0, 0, 0, 0])
 
     def _has_horizontal_overlap(self, item_a, item_b):
+        """Checks if two items overlap horizontally."""
         ax1, _, ax2, _ = self._get_poly_bbox(item_a)
         bx1, _, bx2, _ = self._get_poly_bbox(item_b)
         return max(ax1, bx1) < min(ax2, bx2)
 
     def _join_latex_parts(self, parts):
+        """Combines multiple LaTeX formula parts into a gathered environment."""
         if not parts: return ""
         if len(parts) == 1: return parts[0]
         return "\\begin{gathered}\n" + " \\\\ \n".join(parts) + "\n\\end{gathered}"
 
     def process_formulas(self, page_items):
-        """Links formula numbers (e.g. (1.1)) to LaTeX content."""
+        """
+        Links detected formula numbers (e.g., (1.1)) to their LaTeX content 
+        by analyzing vertical alignment and distance.
+        """
         results = []
         claimed_ids = set()
         
+        # Sort items by Y coordinate to process from top to bottom
         sorted_items = sorted(page_items, key=lambda x: self._get_poly_bbox(x)[1])
         
         numbers = [it for it in sorted_items if it["block_label"] == "formula_number" 
@@ -54,7 +69,9 @@ class MathTableEngine:
             for f in formulas:
                 if id(f) in claimed_ids: continue
                 fbb = self._get_poly_bbox(f)
-                v_overlap = max(fbb[1], nbb[1]) < min(fbb[3], nbb[3])
+                
+                # Fixed: Added VERTICAL_TOLERANCE to handle minor scanning/alignment issues
+                v_overlap = max(fbb[1], nbb[1]) < min(fbb[3], nbb[3]) + VERTICAL_TOLERANCE
                 if v_overlap and fbb[2] <= nbb[2]:
                     candidates.append(f)
 
@@ -98,7 +115,10 @@ class MathTableEngine:
         return results
 
     def process_tables(self, page_items, page_num):
-        """Links tables with their captions in side notes."""
+        """
+        Associates tables with their captions found in side notes using 
+        nearest-neighbor spatial matching.
+        """
         results = []
         tables = []
         captions = []
@@ -127,10 +147,13 @@ class MathTableEngine:
                     min_dist, best_table = dist, tab
             
             if best_table:
+                # Fixed: Removed walrus operator for better readability as requested
                 entity_match = self.entity_id_pattern.search(cap["content"])
+                entity_id = entity_match.group(0) if entity_match else None
+                
                 results.append({
                     "chunk_type": "numbered_table",
-                    "entity_id": entity_id_match.group(0) if (entity_id_match := entity_match) else None,
+                    "entity_id": entity_id,
                     "content": best_table["item"]["block_content"],
                     "caption": cap["content"],
                     "bbox": best_table["bbox"]

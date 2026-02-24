@@ -1,6 +1,11 @@
 import re
 
 class MetadataExtractor:
+    """
+    Class for tracking and extracting hierarchical document metadata and references.
+    Maintains state of current section, subsection, and subsubsection levels.
+    """
+
     def __init__(self):
         self.current_section_title = None
         self.current_section_num = None
@@ -11,8 +16,14 @@ class MetadataExtractor:
 
     def process_content_and_get_meta(self, content):
         """
-        Extracts hierarchical metadata (section, subsection, subsubsection)
-        from raw text content and returns cleaned text with metadata flags.
+        Analyzes raw text to detect headers and update the current hierarchy state.
+        Filters out metadata-only lines (like page numbers) from the clean content.
+
+        Args:
+            content (str): Raw text block from a document page.
+
+        Returns:
+            dict: Current metadata state including cleaned text and a 'force_new_chunk' flag.
         """
         if not content:
             return self._get_current_dict("")
@@ -23,9 +34,10 @@ class MetadataExtractor:
 
         for line in lines:
             stripped = line.strip()
-            if not stripped: continue
+            if not stripped:
+                continue
             
-            # 1. SECTION 
+            # 1. SECTION (e.g., CHAPTER 1 INTRODUCTION)
             sec_match = re.match(r"^(?:##\s+)?(?:CHAPTER\s+)?(\d+)\s+([A-Z\s]{3,})", stripped, re.I)
             if sec_match:
                 self.current_section_num = sec_match.group(1)
@@ -34,7 +46,7 @@ class MetadataExtractor:
                 force_new_chunk = True
                 continue
 
-            # 2. SUBSECTION 
+            # 2. SUBSECTION (e.g., 1.1 Fundamental Concepts)
             subsec_match = re.match(r"^(?:###\s+)?(\d+\.\d+)\.?\s+([A-Z][A-Za-z\s\-\:\,]+)", stripped)
             if subsec_match:
                 self.current_subsection_num = subsec_match.group(1)
@@ -44,7 +56,7 @@ class MetadataExtractor:
                 force_new_chunk = True
                 continue
 
-            # 3. SUBSUBSECTION 
+            # 3. SUBSUBSECTION (e.g., 1.1.1 Definitions or Exercise 1.1)
             subsub_match = re.match(r"^(?:####\s+)?(\d+\.\d+\.\d+|Exercise\s+\d+\.\d+)\s*([A-Z][A-Za-z\s\-\:\,]+)?", stripped, re.I)
             if subsub_match:
                 self.current_subsubsection_num = subsub_match.group(1)
@@ -53,7 +65,9 @@ class MetadataExtractor:
                 force_new_chunk = True
                 continue
 
-            if re.match(r"^\d+$", stripped.replace('#', '').strip()):
+            # Modified: More specific check for standalone numbers (like page numbers in headers)
+            # Only skips if it looks like a markdown header with just a number (e.g. "## 12")
+            if re.match(r"^#+\s*\d+\s*$", stripped):
                 continue
             
             clean_lines.append(line)
@@ -62,14 +76,7 @@ class MetadataExtractor:
 
     def _reset_lower_levels(self):
         """
-        Resets lower-level section state when a higher-level section changes.
-
-        For example:
-            - If a new section appears → reset subsection and subsubsection.
-            - If a new subsection appears → reset subsubsection only.
-
-        Args:
-            level: The hierarchy level that was updated ("section", "subsection").
+        Resets subsection and subsubsection state when a new section is found.
         """
         self.current_subsection_title = None
         self.current_subsection_num = None
@@ -78,15 +85,15 @@ class MetadataExtractor:
 
     def _get_current_dict(self, clean_text, force_new_chunk=False):
         """
-          Returns the current hierarchical metadata state.
+        Constructs a dictionary representing the current metadata state.
 
-          The returned dictionary contains:
-              - current section
-              - current subsection
-              - current subsubsection
-           Returns:
-              A dictionary representing the current document structure context.
-         """
+        Args:
+            clean_text (str): Content text after removing header lines.
+            force_new_chunk (bool): True if a new header was detected in the content.
+
+        Returns:
+            dict: Hierarchical context for the current text block.
+        """
         return {
             "section_title": self.current_section_title,
             "section_number": self.current_section_num,
@@ -100,10 +107,16 @@ class MetadataExtractor:
 
     def get_references(self, text):
         """
-        Extracts references to figures, tables, formulas, algorithms,
-        examples, exercises and sections from text content.
+        Extracts cross-references (Figure 1.1, Table 2.3, etc.) from text.
+
+        Args:
+            text (str): Cleaned text content.
+
+        Returns:
+            dict: Lists of unique entity IDs found for each category.
         """
-        if not text: return {}
+        if not text: 
+            return {}
         lt = text.lower()
         return {
             "referenced_figures": list(set(re.findall(r"figure\s+(\d+\.\d+)", lt))),
