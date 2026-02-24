@@ -1,41 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
 from typing import Any
+from environment_api.api.smart_query_routes import procurement_router
+from environment_api.api.smart_query_routes.common import execute_tool
 
-from common.schemas.common import ToolResult
 from environment_api.smart_query_builder.tools import (
     compare_observations_to_balances,
     get_at_risk_orders,
     get_current_inventory,
     get_shipments_delay_summary,
 )
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query
 
 router = APIRouter(prefix="/smart-query", tags=["smart-query"])
-
-
-def _execute_tool(tool_call: Callable[[], ToolResult[Any]]) -> dict[str, Any]:
-    try:
-        result = tool_call()
-        output: dict[str, Any] = result.model_dump(mode="json")
-        return output
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
-    except RuntimeError as exc:
-        if isinstance(exc.__cause__, ValueError):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=str(exc.__cause__),
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to process smart query request.",
-        ) from exc
+router.include_router(procurement_router)
 
 
 @router.get("/inventory/current")
@@ -48,7 +27,7 @@ def current_inventory(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    return _execute_tool(
+    return execute_tool(
         lambda: get_current_inventory(
             warehouse_id=warehouse_id,
             location_id=location_id,
@@ -69,7 +48,7 @@ def shipments_delay_summary(
     route_id: str | None = None,
     status: str | None = None,
 ) -> dict[str, Any]:
-    return _execute_tool(
+    return execute_tool(
         lambda: get_shipments_delay_summary(
             date_from=date_from,
             date_to=date_to,
@@ -91,7 +70,7 @@ def observations_compare_balances(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    return _execute_tool(
+    return execute_tool(
         lambda: compare_observations_to_balances(
             observed_from=observed_from,
             observed_to=observed_to,
@@ -114,7 +93,7 @@ def at_risk_orders(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    return _execute_tool(
+    return execute_tool(
         lambda: get_at_risk_orders(
             horizon_hours=horizon_hours,
             min_sla_priority=min_sla_priority,
