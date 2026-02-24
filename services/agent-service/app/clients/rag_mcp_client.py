@@ -59,12 +59,12 @@ class RAGMCPClient:
             timeout: HTTP request timeout in seconds
 
         Raises:
-            ValueError: If base_url is empty
+            ValueError: If base_url is empty or whitespace-only
         """
-        if not base_url:
-            raise ValueError("base_url cannot be empty")
+        if not base_url or not base_url.strip():
+            raise ValueError("base_url cannot be empty or whitespace-only")
 
-        self.base_url = base_url.rstrip("/")
+        self.base_url = base_url.strip().rstrip("/")
         self.mcp_path = mcp_path
         self.mcp_url = f"{self.base_url}{self.mcp_path}"
         self.timeout = timeout
@@ -101,9 +101,11 @@ class RAGMCPClient:
         await self.http_client.__aenter__()
 
         # Create FastMCP transport using our HTTP client
+        # Note: FastMCP may pass additional args/kwargs to the factory, we ignore them
+        # as get_httpx_client() doesn't accept parameters
         transport = StreamableHttpTransport(
             self.mcp_url,
-            httpx_client_factory=lambda *args, **kwargs: self.http_client.get_httpx_client(),
+            httpx_client_factory=lambda: self.http_client.get_httpx_client(),
         )
 
         # Create FastMCP client
@@ -204,7 +206,7 @@ class RAGMCPClient:
 
 
 # Type check: RAGMCPClient implements MCPClientProtocol
-def _type_check() -> None:
-    """Type checking function - never called, only for static analysis."""
-    client: MCPClientProtocol = RAGMCPClient("")
-    _ = client
+if False:  # Only for static type checking, never executed at runtime
+    from typing import cast
+
+    _client: MCPClientProtocol = cast(RAGMCPClient, None)

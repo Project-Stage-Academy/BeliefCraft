@@ -81,7 +81,6 @@ def test_health_missing_aws_config(client: TestClient) -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == HealthStatus.DEGRADED
-    # Прибрано коментар про невпевненість
     assert data["dependencies"]["aws_bedrock"] == HealthStatus.MISSING_CONFIG
 
 
