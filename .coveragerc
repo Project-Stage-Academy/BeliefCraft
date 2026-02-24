@@ -1,0 +1,21 @@
+[run]
+source =
+    packages/common/src
+    packages/database/src
+    services/environment-api/src
+    services/rag-service/src
+    services/agent-service/app
+relative_files = True
+
+omit =
+    */tests/*
+    tests/*
+    */conftest.py
+    *test_*.py
+    **/__init__.py
+    */schemas/*
+    */models/*
+
+[report]
+fail_under = 80
+show_missing = true
