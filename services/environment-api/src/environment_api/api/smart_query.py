@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+
 from environment_api.api.smart_query_routes import procurement_router
 from environment_api.api.smart_query_routes.common import execute_tool
-
 from environment_api.smart_query_builder.tools import (
     compare_observations_to_balances,
     get_at_risk_orders,

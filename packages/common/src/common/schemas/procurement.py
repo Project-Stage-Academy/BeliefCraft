@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .common import Pagination
 
 
-class POStatus(str, Enum):
+class POStatus(StrEnum):
     DRAFT = "draft"
     SUBMITTED = "submitted"
     PARTIAL = "partial"
@@ -98,7 +98,11 @@ class ListPurchaseOrdersRequest(ProcurementPagination):
     def validate_date_ranges(self) -> ListPurchaseOrdersRequest:
         if self.created_after and self.created_before and self.created_after > self.created_before:
             raise ValueError("created_after must be less than or equal to created_before")
-        if self.expected_after and self.expected_before and self.expected_after > self.expected_before:
+        if (
+            self.expected_after
+            and self.expected_before
+            and self.expected_after > self.expected_before
+        ):
             raise ValueError("expected_after must be less than or equal to expected_before")
         return self
 
@@ -151,7 +155,7 @@ class ListPoLinesResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class ProcurementGroupBy(str, Enum):
+class ProcurementGroupBy(StrEnum):
     warehouse = "warehouse"
     supplier = "supplier"
     warehouse_supplier = "warehouse_supplier"

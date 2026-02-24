@@ -7,7 +7,9 @@ from common.schemas.procurement import (
     ListPoLinesRequest,
     ListPurchaseOrdersRequest,
     ListSuppliersRequest,
-    POStatus as SchemaPOStatus,
+)
+from common.schemas.procurement import POStatus as SchemaPOStatus
+from common.schemas.procurement import (
     ProcurementGroupBy,
     ProcurementPipelineSummaryRequest,
 )

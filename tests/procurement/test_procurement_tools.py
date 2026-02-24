@@ -5,9 +5,8 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-
 from environment_api.smart_query_builder.tools import procurement_tools
+from pydantic import ValidationError
 
 
 @contextmanager
@@ -64,4 +63,3 @@ def test_list_purchase_orders_serializes_statuses_in_meta(monkeypatch: pytest.Mo
     assert result.meta["filters"]["status_in"] == ["submitted", "partial"]
     assert result.meta["filters"]["include_names"] is True
     assert result.meta["pagination"] == {"limit": 10, "offset": 0}
-
