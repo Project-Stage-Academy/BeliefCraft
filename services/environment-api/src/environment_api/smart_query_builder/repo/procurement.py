@@ -35,7 +35,13 @@ def _load_tables(session: Session) -> dict[str, Table]:
 def _status_values(statuses: Sequence[object] | None) -> list[object] | None:
     if statuses is None:
         return None
-    return [getattr(status, "value", status) for status in statuses]
+    values: list[object] = []
+    for status in statuses:
+        if hasattr(status, "name"):
+            values.append(status.name)  # SUBMITTED
+        else:
+            values.append(str(getattr(status, "value", status)).upper())
+    return values
 
 
 def fetch_supplier_rows(

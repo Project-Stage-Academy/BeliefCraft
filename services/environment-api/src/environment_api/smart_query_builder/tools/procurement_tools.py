@@ -64,7 +64,10 @@ def _to_status(value: Any, field_name: str = "status") -> POStatus:
     raw = _to_optional_str(value)
     if raw is None:
         raise ValueError(f"Unexpected null value for {field_name}.")
-    return POStatus(raw)
+    try:
+        return POStatus(raw)
+    except ValueError:
+        return POStatus(raw.lower())
 
 
 def _serialize_statuses(status_in: list[POStatus] | None) -> list[str] | None:
