@@ -73,7 +73,7 @@ class PromptBuilder:
             julia_code, str(int(chapter))
         )
         self._book_processor.extract_block_structs_and_functions(julia_chapter_code)
-        python_chapter_code = self._github_fetcher.get_translated_python_code(chapter, None)
+        python_chapter_code = self._github_fetcher.get_translated_python_code(chapter)
 
         prompt = PromptTemplates.update_descriptions_prompt.format(
             self._book_processor.format_blocks_text(julia_chapter_code),
@@ -184,35 +184,34 @@ if __name__ == "__main__":
     prompts_dir = Path(args.prompts_dir)
     TRANSLATED_ALGOS_PATH = Path(args.translated_algorithms_json)
 
-    block_processor = BlockProcessor(pdf_path)
-    builder = PromptBuilder(
-        book_processor=BookCodeProcessor(TRANSLATED_ALGOS_PATH),
-        block_processor=block_processor,
-    )
+    with BlockProcessor(pdf_path) as block_processor:
+        builder = PromptBuilder(
+            book_processor=BookCodeProcessor(TRANSLATED_ALGOS_PATH),
+            block_processor=block_processor,
+        )
 
-    blocks = block_processor.extract_algorithms_and_examples()
+        blocks = block_processor.extract_algorithms_and_examples()
 
-    julia_code = block_processor.extract_algorithms(blocks)
+        julia_code = block_processor.extract_algorithms(blocks)
 
-    prompts_dir.mkdir(parents=True, exist_ok=True)
-    for chapter in TRANSLATED_CHAPTERS:
-        prompt = builder.build_update_descriptions_prompt(chapter, julia_code)
-        with (prompts_dir / "update_description" / f"chapter_{chapter}_code_translation.txt").open(
-            "w", encoding="utf-8"
-        ) as f:
-            f.write(prompt)
+        prompts_dir.mkdir(parents=True, exist_ok=True)
+        for chapter in TRANSLATED_CHAPTERS:
+            prompt = builder.build_update_descriptions_prompt(chapter, julia_code)
+            with (
+                prompts_dir / "update_description" / f"chapter_{chapter}_code_translation.txt"
+            ).open("w", encoding="utf-8") as f:
+                f.write(prompt)
 
-    for chapter in CHAPTERS_TO_TRANSLATE:
-        prompt = builder.build_translate_python_code_prompt(chapter, julia_code)
-        with (prompts_dir / "translate_algorithms" / f"chapter_{chapter}_translation.txt").open(
-            "w", encoding="utf-8"
-        ) as f:
-            f.write(prompt)
+        for chapter in CHAPTERS_TO_TRANSLATE:
+            prompt = builder.build_translate_python_code_prompt(chapter, julia_code)
+            with (prompts_dir / "translate_algorithms" / f"chapter_{chapter}_translation.txt").open(
+                "w", encoding="utf-8"
+            ) as f:
+                f.write(prompt)
 
-    for example in EXAMPLE_WITH_CODE_NUMBERS:
-        prompt = builder.build_translate_example_prompt(example, blocks)
-        with (
-            prompts_dir / "translate_examples" / f"{example.replace(' ', '_')}_translation.txt"
-        ).open("w", encoding="utf-8") as f:
-            f.write(prompt)
-    block_processor.doc.close()
+        for example in EXAMPLE_WITH_CODE_NUMBERS:
+            prompt = builder.build_translate_example_prompt(example, blocks)
+            with (
+                prompts_dir / "translate_examples" / f"{example.replace(' ', '_')}_translation.txt"
+            ).open("w", encoding="utf-8") as f:
+                f.write(prompt)

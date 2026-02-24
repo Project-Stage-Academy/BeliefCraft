@@ -46,10 +46,30 @@ class BlockProcessor:
 
     def __init__(self, pdf_path: str, pdf_jsons_dir: str | Path = "pdf_jsons"):
         """Open the PDF and set the directory used for OCR JSON lookups."""
-        self.doc = fitz.open(pdf_path)
+        self._pdf_path = pdf_path
+        self._doc: fitz.Document | None = None
         self.algorithms_pattern = algorithms_pattern
         self.example_pattern = example_pattern
         self.pdf_jsons_dir = Path(pdf_jsons_dir)
+
+    def __enter__(self) -> "BlockProcessor":
+        self._get_doc()
+        return self
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: Any | None
+    ) -> None:
+        self.close()
+
+    def _get_doc(self) -> fitz.Document:
+        if self._doc is None:
+            self._doc = fitz.open(self._pdf_path)
+        return self._doc
+
+    def close(self) -> None:
+        if self._doc is not None:
+            self._doc.close()
+            self._doc = None
 
     def _determine_block_type_from_text(self, text: str) -> str:
         """Classify a caption string as algorithm/example/other."""
@@ -197,7 +217,7 @@ class BlockProcessor:
     def extract_algorithms_and_examples(self) -> list[BlockData]:
         """Return algorithm/example blocks for the opened PDF."""
         algorithms_and_examples: list[BlockData] = []
-        for page in self.doc:
+        for page in self._get_doc():
             algorithms_and_examples.extend(self._extract_page_algorithms_and_examples(page))
         return algorithms_and_examples
 
@@ -331,52 +351,55 @@ class BlockProcessor:
     def run(self, output_path: str | Path = "blocks_metadata.json") -> None:
         """Extract blocks and dump their metadata to JSON."""
         all_blocks = []
-        for page_num in tqdm(range(len(self.doc)), desc="Extracting gray blocks"):
-            page = self.doc.load_page(page_num)
-            drawings = page.get_drawings()
-            captions = self._extract_captions(page)
+        doc = self._get_doc()
+        try:
+            for page_num in tqdm(range(len(doc)), desc="Extracting gray blocks"):
+                page = doc.load_page(page_num)
+                drawings = page.get_drawings()
+                captions = self._extract_captions(page)
 
-            for caption in captions:
-                test_point = fitz.Point(
-                    caption["bbox"].x0 - DISTANCE_BETWEEN_POINT_IN_GRAY_BLOCK_AND_CAPTION,
-                    caption["bbox"].y0 + 5,
-                )
+                for caption in captions:
+                    test_point = fitz.Point(
+                        caption["bbox"].x0 - DISTANCE_BETWEEN_POINT_IN_GRAY_BLOCK_AND_CAPTION,
+                        caption["bbox"].y0 + 5,
+                    )
 
-                for drawing in drawings:
-                    if (
-                        drawing["fill"]
-                        and drawing["fill"][0] > GRAY_FILL_THRESHOLD
-                        and drawing["rect"].contains(test_point)
-                    ):
-                        block_rect = drawing["rect"]
-                        raw_content = page.get_text("text", clip=block_rect).strip()
+                    for drawing in drawings:
+                        if (
+                            drawing["fill"]
+                            and drawing["fill"][0] > GRAY_FILL_THRESHOLD
+                            and drawing["rect"].contains(test_point)
+                        ):
+                            block_rect = drawing["rect"]
+                            raw_content = page.get_text("text", clip=block_rect).strip()
 
-                        match = re.search(r"(\d+\.\d+)", caption["text"])
-                        entity_id = match.group(1) if match else None
+                            match = re.search(r"(\d+\.\d+)", caption["text"])
+                            entity_id = match.group(1) if match else None
 
-                        all_blocks.append(
-                            {
-                                "chunk_type": caption["type"],
-                                "entity_id": entity_id,
-                                "content": raw_content,
-                                "caption": caption["text"],
-                                "page": page_num + 1,
-                                "bbox": [
-                                    block_rect.x0,
-                                    block_rect.y0,
-                                    block_rect.x1,
-                                    block_rect.y1,
-                                ],
-                            }
-                        )
-                        break
+                            all_blocks.append(
+                                {
+                                    "chunk_type": caption["type"],
+                                    "entity_id": entity_id,
+                                    "content": raw_content,
+                                    "caption": caption["text"],
+                                    "page": page_num + 1,
+                                    "bbox": [
+                                        block_rect.x0,
+                                        block_rect.y0,
+                                        block_rect.x1,
+                                        block_rect.y1,
+                                    ],
+                                }
+                            )
+                            break
+        finally:
+            self.close()
 
         output_path = Path(output_path)
         with output_path.open("w", encoding="utf-8") as fh:
             json.dump(all_blocks, fh, indent=2, ensure_ascii=False)
-        self.doc.close()
 
 
 if __name__ == "__main__":
-    processor = BlockProcessor("dm.pdf")
-    processor.run()
+    with BlockProcessor("dm.pdf") as processor:
+        processor.run()
