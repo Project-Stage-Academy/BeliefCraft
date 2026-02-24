@@ -2,6 +2,7 @@ import math
 import re
 import json
 import logging
+from common.logging import get_logger
 
 # Module-level constants for geometric analysis
 SIDE_NOTES_THRESHOLD_X = 600
@@ -9,7 +10,6 @@ MAX_FORMULA_DISTANCE = 600
 FORMULA_Y_OFFSET_BUFFER = 20
 VERTICAL_TOLERANCE = 5  # Added tolerance for better overlap detection
 
-from common.logging import get_logger
 logger = get_logger(__name__)
 
 class MathTableEngine:

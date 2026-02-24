@@ -5,6 +5,7 @@ import os
 import json
 import re
 from tqdm import tqdm
+from pathlib import Path
 
 from config import (
     DPI_RENDER,
@@ -79,18 +80,18 @@ def get_advanced_caption(page, rect_coords, dpi=DPI_RENDER):
         img_rect.y1
     )
 
-    # 1. Strict Caption detection using regex pattern
+    # 1. Strict Caption detection (Combined nested ifs as per SIM102)
     for b in blocks:
         block_rect = fitz.Rect(b[:4])
         text = b[4].strip()
 
-        # Check for keywords and valid structure (e.g., "Figure 1.1")
-        if any(word in text.lower() for word in CAPTION_KEYWORDS):
-            if re.search(r'(figure|table|algorithm)\s+(?:\d+|[A-G])\.\d+', text, re.I):
-                if block_rect.intersects(caption_area) or block_rect.intersects(side_area):
-                    return text.replace("\n", " ")
+        if (any(word in text.lower() for word in CAPTION_KEYWORDS) and 
+            re.search(r'(figure|table|algorithm)\s+(?:\d+|[A-G])\.\d+', text, re.I) and 
+            (block_rect.intersects(caption_area) or block_rect.intersects(side_area))):
+            
+            return text.replace("\n", " ")
 
-    # 2. Block detection (example / exercise)
+    # 2. Block detection (Combined nested ifs as per SIM102)
     candidate_header = None
     header_type = ""
 
@@ -98,11 +99,9 @@ def get_advanced_caption(page, rect_coords, dpi=DPI_RENDER):
         block_rect = fitz.Rect(b[:4])
         text = b[4].strip().lower()
 
-        if any(word in text for word in BLOCK_KEYWORDS):
-            # Header must be above or near the image
-            if block_rect.y0 < img_rect.y1:
-                candidate_header = block_rect
-                header_type = "EXAMPLE" if "example" in text else "EXERCISE"
+        if any(word in text for word in BLOCK_KEYWORDS) and block_rect.y0 < img_rect.y1:
+            candidate_header = block_rect
+            header_type = "EXAMPLE" if "example" in text else "EXERCISE"
 
     if candidate_header:
         content_rect = fitz.Rect(
@@ -115,7 +114,6 @@ def get_advanced_caption(page, rect_coords, dpi=DPI_RENDER):
         return f"[BLOCK {header_type} CONTENT]:\n{full_content}"
 
     return "Image without specific caption or block header"
-
 
 def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.json"):
     """
@@ -191,12 +189,14 @@ def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.jso
 
     # Write all results at once to avoid corruption and improve performance
     try:
-        with open(output_json, "w", encoding="utf-8") as f:
+        output_path = Path(output_json)
+        
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(all_entries, f, indent=2, ensure_ascii=False)
+            
         logger.info(f"Successfully saved {len(all_entries)} entries to {output_json}")
     except IOError as e:
         logger.error(f"Failed to write results to {output_json}: {e}")
-
 
 if __name__ == "__main__":
     process_pdf(MAIN_PDF, FIGURES_PDF)

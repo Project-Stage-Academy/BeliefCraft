@@ -1,18 +1,18 @@
-import os
+from pathlib import Path
 
 # --- Data Paths ---
-BASE_DATA_DIR = "./data_source"
+BASE_DATA_DIR = Path("./data_source")
 
 # Input files
-MAIN_PDF = os.path.join(BASE_DATA_DIR, "dm.pdf")
-FIGURES_PDF = os.path.join(BASE_DATA_DIR, "dm-figures.pdf")
-PADDLE_RESULTS_DIR = os.path.join(BASE_DATA_DIR, "paddle_results")
+MAIN_PDF = BASE_DATA_DIR / "dm.pdf"
+FIGURES_PDF = BASE_DATA_DIR / "dm-figures.pdf"
+PADDLE_RESULTS_DIR = BASE_DATA_DIR / "paddle_results"
 
 # Intermediate JSON metadata
-OUTPUT_FIGURES_JSON = os.path.join(BASE_DATA_DIR, "figures_metadata.json")
-OUTPUT_BLOCKS_JSON = os.path.join(BASE_DATA_DIR, "blocks_metadata.json")
-TABLES_JSON = os.path.join(BASE_DATA_DIR, "extracted_tables.json")
-FORMULAS_JSON = os.path.join(BASE_DATA_DIR, "formula_mapping.json")
+OUTPUT_FIGURES_JSON = BASE_DATA_DIR / "figures_metadata.json"
+OUTPUT_BLOCKS_JSON = BASE_DATA_DIR / "blocks_metadata.json"
+TABLES_JSON = BASE_DATA_DIR / "extracted_tables.json"
+FORMULAS_JSON = BASE_DATA_DIR / "formula_mapping.json"
 
 # Final output
 FINAL_BOOK_JSON = "ULTIMATE_BOOK_DATA.json"
