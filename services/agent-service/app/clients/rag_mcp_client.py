@@ -105,7 +105,7 @@ class RAGMCPClient:
         # as get_httpx_client() doesn't accept parameters
         transport = StreamableHttpTransport(
             self.mcp_url,
-            httpx_client_factory=lambda: self.http_client.get_httpx_client(),
+            httpx_client_factory=lambda **_: self.http_client.get_httpx_client(),
         )
 
         # Create FastMCP client
