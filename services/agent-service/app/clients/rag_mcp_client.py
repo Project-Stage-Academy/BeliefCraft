@@ -70,7 +70,7 @@ class RAGMCPClient:
         self.timeout = timeout
 
         self.http_client: TracedHttpClient | None = None
-        self.mcp_client: Client | None = None
+        self.mcp_client: Client[Any, Any] | None = None  # type: ignore[type-arg]
 
         logger.debug(
             "rag_mcp_client_initialized",
@@ -105,12 +105,12 @@ class RAGMCPClient:
         # as get_httpx_client() doesn't accept parameters
         transport = StreamableHttpTransport(
             self.mcp_url,
-            httpx_client_factory=lambda **_: self.http_client.get_httpx_client(),
+            httpx_client_factory=lambda: self.http_client.get_httpx_client(),  # type: ignore[arg-type]
         )
 
         # Create FastMCP client
         self.mcp_client = Client(transport)
-        await self.mcp_client.__aenter__()
+        await self.mcp_client.__aenter__()  # type: ignore[no-untyped-call]
 
         logger.info(
             "rag_mcp_client_connected",
@@ -120,7 +120,7 @@ class RAGMCPClient:
     async def close(self) -> None:
         """Close connection to MCP server."""
         if self.mcp_client:
-            await self.mcp_client.__aexit__(None, None, None)
+            await self.mcp_client.__aexit__(None, None, None)  # type: ignore[no-untyped-call]
             self.mcp_client = None
 
         if self.http_client:
