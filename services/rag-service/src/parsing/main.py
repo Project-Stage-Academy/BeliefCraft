@@ -2,11 +2,13 @@ import json
 import os
 import re
 import hashlib
-import logging
+from common.logging import configure_logging, get_logger
 from metadata_extractor import MetadataExtractor
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-logger = logging.getLogger(__name__)
+configure_logging("rag-service", log_level="INFO")
+logger = get_logger(__name__)
+
+logger.info("service_started", message="RAG Service is up and running")
 
 PAGE_OFFSET = 18 
 BBOX_PADDING = 35

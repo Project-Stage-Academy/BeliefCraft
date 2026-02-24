@@ -2,9 +2,13 @@ import math
 import re
 import json
 import logging
-from config import SIDE_NOTES_THRESHOLD_X, MAX_FORMULA_DISTANCE, FORMULA_Y_OFFSET_BUFFER
 
-logger = logging.getLogger(__name__)
+SIDE_NOTES_THRESHOLD_X = 600
+MAX_FORMULA_DISTANCE = 600
+FORMULA_Y_OFFSET_BUFFER = 20
+
+from common.logging import get_logger
+logger = get_logger(__name__)
 
 class MathTableEngine:
     def __init__(self, side_notes_threshold=SIDE_NOTES_THRESHOLD_X):

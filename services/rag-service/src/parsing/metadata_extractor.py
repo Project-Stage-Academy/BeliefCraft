@@ -10,6 +10,10 @@ class MetadataExtractor:
         self.current_subsubsection_num = None
 
     def process_content_and_get_meta(self, content):
+        """
+        Extracts hierarchical metadata (section, subsection, subsubsection)
+        from raw text content and returns cleaned text with metadata flags.
+        """
         if not content:
             return self._get_current_dict("")
 
@@ -57,12 +61,32 @@ class MetadataExtractor:
         return self._get_current_dict("\n".join(clean_lines).strip(), force_new_chunk)
 
     def _reset_lower_levels(self):
+        """
+        Resets lower-level section state when a higher-level section changes.
+
+        For example:
+            - If a new section appears → reset subsection and subsubsection.
+            - If a new subsection appears → reset subsubsection only.
+
+        Args:
+            level: The hierarchy level that was updated ("section", "subsection").
+        """
         self.current_subsection_title = None
         self.current_subsection_num = None
         self.current_subsubsection_title = None
         self.current_subsubsection_num = None
 
     def _get_current_dict(self, clean_text, force_new_chunk=False):
+        """
+          Returns the current hierarchical metadata state.
+
+          The returned dictionary contains:
+              - current section
+              - current subsection
+              - current subsubsection
+           Returns:
+              A dictionary representing the current document structure context.
+         """
         return {
             "section_title": self.current_section_title,
             "section_number": self.current_section_num,
@@ -75,6 +99,10 @@ class MetadataExtractor:
         }
 
     def get_references(self, text):
+        """
+        Extracts references to figures, tables, formulas, algorithms,
+        examples, exercises and sections from text content.
+        """
         if not text: return {}
         lt = text.lower()
         return {

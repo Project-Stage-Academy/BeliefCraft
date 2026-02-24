@@ -4,98 +4,176 @@ import numpy as np
 import os
 import json
 import re
-import logging
 from tqdm import tqdm
 
 from config import (
-    DPI_RENDER, SCALE_FACTOR, SIMILARITY_THRESHOLD,
-    CAPTION_OFFSET_X_MINUS, CAPTION_OFFSET_X_PLUS, CAPTION_HEIGHT,
-    SIDE_NOTE_WIDTH, BLOCK_CONTENT_PADDING, CAPTION_KEYWORDS, BLOCK_KEYWORDS
+    DPI_RENDER,
+    SCALE_FACTOR,
+    CAPTION_KEYWORDS,
+    BLOCK_KEYWORDS,
+    MAIN_PDF,
+    FIGURES_PDF
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from common.logging import get_logger
+logger = get_logger(__name__)
 
+
+# Local geometric constants 
+SIMILARITY_THRESHOLD = 0.8
+CAPTION_OFFSET_X_MINUS = 5
+CAPTION_OFFSET_X_PLUS = 100
+CAPTION_HEIGHT = 60
+SIDE_NOTE_WIDTH = 200
+BLOCK_CONTENT_PADDING = 20
+
+
+# Utility Functions
 def pdf_page_to_img(doc, page_number, dpi=DPI_RENDER):
+    """
+    Render a PDF page into an OpenCV-compatible image.
+
+    Args:
+        doc (fitz.Document): Opened PDF document.
+        page_number (int): Page index.
+        dpi (int): Rendering resolution.
+
+    Returns:
+        np.ndarray: Image in BGR format.
+    """
     page = doc.load_page(page_number)
     pix = page.get_pixmap(dpi=dpi)
+
     img = np.frombuffer(pix.samples, dtype=np.uint8)
     img = img.reshape(pix.height, pix.width, pix.n)
-    img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR if pix.n == 4 else cv2.COLOR_RGB2BGR)
+
+    if pix.n == 4:
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+    else:
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
     return img
 
+
 def get_advanced_caption(page, rect_coords):
-    """Uses constants from the config to analyze the image environment."""
+    """
+    Detect caption or block content associated with an image.
+
+    Args:
+        page (fitz.Page): PDF page object.
+        rect_coords (tuple): (x, y, width, height) of detected image.
+
+    Returns:
+        str: Caption text or detected block content.
+    """
     x, y, w, h = rect_coords
-    
-    img_rect = fitz.Rect(x * SCALE_FACTOR, y * SCALE_FACTOR, 
-                         (x + w) * SCALE_FACTOR, (y + h) * SCALE_FACTOR)
+
+    img_rect = fitz.Rect(
+        x * SCALE_FACTOR,
+        y * SCALE_FACTOR,
+        (x + w) * SCALE_FACTOR,
+        (y + h) * SCALE_FACTOR
+    )
+
     blocks = page.get_text("blocks")
-    
+
     caption_area = fitz.Rect(
-        img_rect.x0 - CAPTION_OFFSET_X_MINUS, 
-        img_rect.y1, 
-        img_rect.x1 + CAPTION_OFFSET_X_PLUS, 
+        img_rect.x0 - CAPTION_OFFSET_X_MINUS,
+        img_rect.y1,
+        img_rect.x1 + CAPTION_OFFSET_X_PLUS,
         img_rect.y1 + CAPTION_HEIGHT
     )
+
     side_area = fitz.Rect(
-        img_rect.x1, 
-        img_rect.y0, 
-        img_rect.x1 + SIDE_NOTE_WIDTH, 
+        img_rect.x1,
+        img_rect.y0,
+        img_rect.x1 + SIDE_NOTE_WIDTH,
         img_rect.y1
     )
 
+    # Caption detection
     for b in blocks:
         block_rect = fitz.Rect(b[:4])
         text = b[4].strip()
+
         if any(word in text.lower() for word in CAPTION_KEYWORDS):
             if block_rect.intersects(caption_area) or block_rect.intersects(side_area):
-                return text.replace('\n', ' ')
+                return text.replace("\n", " ")
 
+    # Block detection (example / exercise)
     candidate_header = None
     header_type = ""
+
     for b in blocks:
         block_rect = fitz.Rect(b[:4])
         text = b[4].strip().lower()
+
         if any(word in text for word in BLOCK_KEYWORDS):
-            if block_rect.y0 < img_rect.y1: 
+            if block_rect.y0 < img_rect.y1:
                 candidate_header = block_rect
                 header_type = "EXAMPLE" if "example" in text else "EXERCISE"
 
     if candidate_header:
-        content_rect = fitz.Rect(candidate_header.x0, candidate_header.y0, 
-                                 page.rect.width, img_rect.y1 + BLOCK_CONTENT_PADDING)
+        content_rect = fitz.Rect(
+            candidate_header.x0,
+            candidate_header.y0,
+            page.rect.width,
+            img_rect.y1 + BLOCK_CONTENT_PADDING
+        )
+
         full_content = page.get_text("text", clip=content_rect).strip()
+
         return f"[BLOCK {header_type} CONTENT]:\n{full_content}"
 
     return "Image without specific caption or block header"
 
+
 def update_json_file(file_path, data):
-    """Reads existing data and writes back with new entry to prevent corruption."""
+    """
+    Append new entry to JSON file safely.
+
+    Args:
+        file_path (str): Path to JSON file.
+        data (dict): Entry to append.
+    """
     existing_data = []
+
     if os.path.exists(file_path):
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 existing_data = json.load(f)
         except (json.JSONDecodeError, IOError):
             logger.error(f"Failed to read {file_path}. Creating new array.")
             existing_data = []
 
     existing_data.append(data)
-    
-    with open(file_path, 'w', encoding='utf-8') as f:
+
+    with open(file_path, "w", encoding="utf-8") as f:
         json.dump(existing_data, f, indent=2, ensure_ascii=False)
 
+
+# Main Processing Logic
 def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.json"):
+    """
+    Detect figures in main PDF using template matching and
+    extract metadata including captions and block content.
+
+    Args:
+        dm_pdf_path (str): Path to main PDF.
+        figures_pdf_path (str): Path to figures-only PDF.
+        output_json (str): Output JSON path.
+    """
     with fitz.open(dm_pdf_path) as dm_doc, fitz.open(figures_pdf_path) as figs_doc:
-        
+
         if os.path.exists(output_json):
             os.remove(output_json)
 
         already_found = set()
         total_figs = len(figs_doc)
 
-        logger.info(f"Processing {len(dm_doc)} pages against {total_figs} templates...")
+        logger.info(
+            f"Processing {len(dm_doc)} pages against {total_figs} templates..."
+        )
 
         for page_num in tqdm(range(len(dm_doc)), desc="Searching images"):
             page_img = pdf_page_to_img(dm_doc, page_num)
@@ -108,26 +186,40 @@ def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.jso
 
                 template = pdf_page_to_img(figs_doc, idx)
                 template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-                
+
                 t_h, t_w = template.shape[:2]
                 p_h, p_w = page_img.shape[:2]
-                
+
                 if t_h <= p_h and t_w <= p_w:
-                    res = cv2.matchTemplate(page_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+                    res = cv2.matchTemplate(
+                        page_gray, template_gray, cv2.TM_CCOEFF_NORMED
+                    )
+
                     _, max_val, _, max_loc = cv2.minMaxLoc(res)
 
                     if max_val >= SIMILARITY_THRESHOLD:
-                        description = get_advanced_caption(page_obj, (max_loc[0], max_loc[1], t_w, t_h))
-                        
+                        description = get_advanced_caption(
+                            page_obj,
+                            (max_loc[0], max_loc[1], t_w, t_h)
+                        )
+
                         img_type = "captioned_image"
-                        if "[BLOCK EXAMPLE" in description: img_type = "example"
-                        elif "[BLOCK EXERCISE" in description: img_type = "exercise"
-                        
+                        if "[BLOCK EXAMPLE" in description:
+                            img_type = "example"
+                        elif "[BLOCK EXERCISE" in description:
+                            img_type = "exercise"
+
                         decimal_match = re.search(r"(\d+\.\d+)", description)
                         integer_match = re.search(r"(\d+)", description)
-                        entity_id = (decimal_match.group(1) if decimal_match else 
-                                     integer_match.group(1) if integer_match else None)
-                        
+
+                        entity_id = (
+                            decimal_match.group(1)
+                            if decimal_match
+                            else integer_match.group(1)
+                            if integer_match
+                            else None
+                        )
+
                         entry = {
                             "chunk_type": img_type,
                             "entity_id": entity_id,
@@ -135,13 +227,19 @@ def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.jso
                             "image_index": idx + 1,
                             "content": description,
                             "similarity": round(float(max_val), 4),
-                            "bbox": [max_loc[0], max_loc[1], max_loc[0]+t_w, max_loc[1]+t_h]
+                            "bbox": [
+                                max_loc[0],
+                                max_loc[1],
+                                max_loc[0] + t_w,
+                                max_loc[1] + t_h,
+                            ],
                         }
-                        
+
                         update_json_file(output_json, entry)
                         already_found.add(idx)
 
     logger.info(f"Results successfully saved to {output_json}")
 
+
 if __name__ == "__main__":
-    process_pdf("dm.pdf", "dm-figures.pdf")
+    process_pdf(MAIN_PDF, FIGURES_PDF)

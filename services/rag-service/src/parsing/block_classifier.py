@@ -3,14 +3,16 @@ import re
 import json
 from enum import Enum
 from tqdm import tqdm
-import logging
+from common.logging import get_logger
+from config import MAIN_PDF, OUTPUT_BLOCKS_JSON
 
-from config import (
-    COLUMNS_DIVIDER_X, DISTANCE_BETWEEN_NOTES, DISTANCE_OFFSET_X, 
-    GRAY_FILL_THRESHOLD, MAIN_PDF, OUTPUT_BLOCKS_JSON
-)
 
-logger = logging.getLogger(__name__)
+COLUMNS_DIVIDER_X = 300
+DISTANCE_BETWEEN_NOTES = 20
+DISTANCE_OFFSET_X = 100
+GRAY_FILL_THRESHOLD = 0.9
+
+logger = get_logger(__name__)
 
 class BlockType(Enum):
     ALGORITHM = "algorithm"
