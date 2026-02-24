@@ -22,7 +22,7 @@ from typing import Any
 from app.tools.mcp_tool import MCPClientProtocol
 from common.http_client import TracedHttpClient
 from common.logging import get_logger
-from fastmcp.client import Client, StreamableHttpTransport  # type: ignore[import-not-found]
+from fastmcp.client import Client, StreamableHttpTransport
 
 logger = get_logger(__name__)
 
@@ -154,16 +154,15 @@ class RAGMCPClient:
             {
                 "name": tool.name,
                 "description": tool.description or "",
-                "inputSchema": tool.inputSchema
-                or {"type": "object", "properties": {}, "required": []},
+                "parameters": tool.inputSchema if hasattr(tool, "inputSchema") else {},
             }
             for tool in tools
         ]
 
         logger.info(
             "mcp_tools_listed",
-            count=len(tools_list),
-            tools=[t["name"] for t in tools_list],
+            tool_count=len(tools_list),
+            tool_names=[t["name"] for t in tools_list],
         )
 
         return tools_list
@@ -174,7 +173,7 @@ class RAGMCPClient:
 
         Args:
             name: Tool name to execute
-            arguments: Tool arguments as dictionary
+            arguments: Tool input arguments
 
         Returns:
             Tool execution result
@@ -190,15 +189,15 @@ class RAGMCPClient:
 
         logger.debug(
             "calling_mcp_tool",
-            tool=name,
+            tool_name=name,
             arguments=arguments,
         )
 
         result = await self.mcp_client.call_tool(name, arguments)
 
-        logger.debug(
+        logger.info(
             "mcp_tool_called",
-            tool=name,
+            tool_name=name,
             result_type=type(result).__name__,
         )
 
