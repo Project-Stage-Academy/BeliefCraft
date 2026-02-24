@@ -133,4 +133,3 @@ def test_procurement_pipeline_summary_endpoint_aggregates_po_lines(
     assert row["total_qty_ordered"] == 15.0
     assert row["total_qty_received"] == 4.0
     assert row["total_qty_remaining"] == 11.0
-

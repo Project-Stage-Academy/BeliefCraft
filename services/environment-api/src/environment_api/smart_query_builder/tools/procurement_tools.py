@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from common.schemas.common import ToolResult
 from common.schemas.procurement import (
@@ -15,8 +16,8 @@ from common.schemas.procurement import (
     ListPurchaseOrdersResponse,
     ListSuppliersRequest,
     ListSuppliersResponse,
-    POStatus,
     PoLineOut,
+    POStatus,
     ProcurementGroupBy,
     ProcurementPipelineRow,
     ProcurementPipelineSummaryRequest,
@@ -68,6 +69,35 @@ def _to_status(value: Any, field_name: str = "status") -> POStatus:
         return POStatus(raw)
     except ValueError:
         return POStatus(raw.lower())
+
+
+def _parse_uuid(value: str, field_name: str) -> UUID:
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise ValueError(f"Invalid UUID for {field_name}: {value!r}") from exc
+
+
+def _parse_optional_uuid(value: str | None, field_name: str) -> UUID | None:
+    if value is None:
+        return None
+    return _parse_uuid(value, field_name)
+
+
+def _parse_uuid_list(values: list[str] | None, field_name: str) -> list[UUID] | None:
+    if values is None:
+        return None
+    return [_parse_uuid(value, field_name) for value in values]
+
+
+def _parse_status_list(values: list[str] | None) -> list[POStatus] | None:
+    if values is None:
+        return None
+    return [POStatus(value) for value in values]
+
+
+def _parse_group_by(value: str) -> ProcurementGroupBy:
+    return ProcurementGroupBy(value)
 
 
 def _serialize_statuses(status_in: list[POStatus] | None) -> list[str] | None:
@@ -182,7 +212,7 @@ def get_supplier(
     USE THIS TOOL to retrieve supplier details by supplier UUID.
     """
     try:
-        request = GetSupplierRequest(supplier_id=supplier_id)
+        request = GetSupplierRequest(supplier_id=_parse_uuid(supplier_id, "supplier_id"))
 
         with get_session() as session:
             row = fetch_supplier_row(session, request)
@@ -217,9 +247,11 @@ def list_purchase_orders(
     """
     try:
         request = ListPurchaseOrdersRequest(
-            supplier_id=supplier_id,
-            destination_warehouse_id=destination_warehouse_id,
-            status_in=status_in,
+            supplier_id=_parse_optional_uuid(supplier_id, "supplier_id"),
+            destination_warehouse_id=_parse_optional_uuid(
+                destination_warehouse_id, "destination_warehouse_id"
+            ),
+            status_in=_parse_status_list(status_in),
             created_after=created_after,
             created_before=created_before,
             expected_after=expected_after,
@@ -282,7 +314,7 @@ def get_purchase_order(
     """
     try:
         request = GetPurchaseOrderRequest(
-            purchase_order_id=purchase_order_id,
+            purchase_order_id=_parse_uuid(purchase_order_id, "purchase_order_id"),
             include_names=include_names,
         )
 
@@ -316,9 +348,9 @@ def list_po_lines(
     """
     try:
         request = ListPoLinesRequest(
-            purchase_order_id=purchase_order_id,
-            purchase_order_ids=purchase_order_ids,
-            product_id=product_id,
+            purchase_order_id=_parse_optional_uuid(purchase_order_id, "purchase_order_id"),
+            purchase_order_ids=_parse_uuid_list(purchase_order_ids, "purchase_order_ids"),
+            product_id=_parse_optional_uuid(product_id, "product_id"),
             include_product_fields=include_product_fields,
         )
 
@@ -366,18 +398,22 @@ def get_procurement_pipeline_summary(
     """
     try:
         request = ProcurementPipelineSummaryRequest(
-            destination_warehouse_id=destination_warehouse_id,
-            supplier_id=supplier_id,
-            status_in=status_in,
+            destination_warehouse_id=_parse_optional_uuid(
+                destination_warehouse_id, "destination_warehouse_id"
+            ),
+            supplier_id=_parse_optional_uuid(supplier_id, "supplier_id"),
+            status_in=_parse_status_list(status_in),
             horizon_days=horizon_days,
-            group_by=group_by,
+            group_by=_parse_group_by(group_by),
             include_names=include_names,
         )
 
         with get_session() as session:
             rows = fetch_procurement_pipeline_summary_rows(session, request)
 
-        response = ProcurementPipelineSummaryResponse(rows=[_pipeline_row_from_row(row) for row in rows])
+        response = ProcurementPipelineSummaryResponse(
+            rows=[_pipeline_row_from_row(row) for row in rows]
+        )
         return ToolResult(
             data=response,
             message=(

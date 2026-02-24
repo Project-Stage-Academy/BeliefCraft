@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from common.schemas.procurement import POStatus, ProcurementGroupBy
 from environment_api.smart_query_builder.tools import (
@@ -49,7 +49,7 @@ def procurement_get_supplier(supplier_id: str) -> dict[str, Any]:
 def procurement_list_purchase_orders(
     supplier_id: str | None = None,
     destination_warehouse_id: str | None = None,
-    status_in: list[POStatus] | None = Query(default=None),
+    status_in: Annotated[list[POStatus] | None, Query()] = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
     expected_after: datetime | None = None,
@@ -90,7 +90,7 @@ def procurement_get_purchase_order(
 @router.get("/po-lines")
 def procurement_list_po_lines(
     purchase_order_id: str | None = None,
-    purchase_order_ids: list[str] | None = Query(default=None),
+    purchase_order_ids: Annotated[list[str] | None, Query()] = None,
     product_id: str | None = None,
     include_product_fields: bool = False,
 ) -> dict[str, Any]:
@@ -108,8 +108,8 @@ def procurement_list_po_lines(
 def procurement_pipeline_summary(
     destination_warehouse_id: str | None = None,
     supplier_id: str | None = None,
-    status_in: list[POStatus] | None = Query(default=None),
-    horizon_days: int | None = Query(default=None, ge=1, le=365),
+    status_in: Annotated[list[POStatus] | None, Query()] = None,
+    horizon_days: Annotated[int | None, Query(ge=1, le=365)] = None,
     group_by: ProcurementGroupBy = ProcurementGroupBy.warehouse_supplier,
     include_names: bool = False,
 ) -> dict[str, Any]:
