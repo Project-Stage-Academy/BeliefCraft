@@ -17,8 +17,17 @@ def top_level():
 """
     stripped = strip_to_signatures(code)
 
-    assert "def a" in stripped
-    assert "return x" in stripped
-    assert "def b" in stripped
-    assert "..." in stripped
-    assert "def top_level" in stripped
+    expected = """
+class Foo:
+    def a(self):
+        return x
+
+    def b(self):
+        ...
+
+
+def top_level():
+    return 3
+""".strip()
+
+    assert stripped == expected

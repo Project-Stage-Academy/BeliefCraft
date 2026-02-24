@@ -222,27 +222,26 @@ def main() -> None:
 
     prompts_dir = Path(args.prompts_dir)
 
-    block_processor = BlockProcessor(args.pdf_path)
-    blocks = block_processor.extract_algorithms_and_examples()
-    julia_code = block_processor.extract_algorithms(blocks)
+    with BlockProcessor(args.pdf_path) as block_processor:
+        blocks = block_processor.extract_algorithms_and_examples()
+        julia_code = block_processor.extract_algorithms(blocks)
 
-    prompts_builder = PromptBuilder(
-        book_processor=BookCodeProcessor(Path(args.translated_algorithms_json)),
-        block_processor=block_processor,
-    )
+        prompts_builder = PromptBuilder(
+            book_processor=BookCodeProcessor(Path(args.translated_algorithms_json)),
+            block_processor=block_processor,
+        )
 
-    translator = Translator(
-        client=client,
-        prompts_dir=prompts_dir,
-        translated_algorithms_json=args.translated_algorithms_json,
-        prompts_builder=prompts_builder,
-    )
-    logger.info("translation_started", prompts_dir=str(prompts_dir))
-    translator.process_update_descriptions(julia_code)
-    translator.process_translate_algorithms(julia_code)
-    translator.process_translate_examples(blocks)
-    logger.info("translation_completed")
-    block_processor.doc.close()
+        translator = Translator(
+            client=client,
+            prompts_dir=prompts_dir,
+            translated_algorithms_json=args.translated_algorithms_json,
+            prompts_builder=prompts_builder,
+        )
+        logger.info("translation_started", prompts_dir=str(prompts_dir))
+        translator.process_update_descriptions(julia_code)
+        translator.process_translate_algorithms(julia_code)
+        translator.process_translate_examples(blocks)
+        logger.info("translation_completed")
 
 
 if __name__ == "__main__":

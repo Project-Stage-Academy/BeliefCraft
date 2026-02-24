@@ -8,7 +8,6 @@ imported from chXX modules (transitively).
 import ast
 import re
 import urllib.request
-from pathlib import PurePosixPath
 from typing import cast
 from urllib.parse import urlparse
 
@@ -22,11 +21,19 @@ class GitHubUrlHelper:
 
     @staticmethod
     def blob_to_raw(url: str) -> str:
-        """Convert a GitHub blob URL to a raw content URL."""
+        """Convert a GitHub blob URL to a raw content URL.
+
+        Expected path parts: [user, repo, "blob", branch, *file_path].
+
+        Examples:
+            >>> GitHubUrlHelper.blob_to_raw(
+            ...     "https://github.com/user/repo/blob/main/src/ch02.py"
+            ... )
+            'https://raw.githubusercontent.com/user/repo/main/src/ch02.py'
+        """
         url = url.rstrip("/")
         parsed = urlparse(url)
         parts = parsed.path.lstrip("/").split("/")
-        # parts: [user, repo, "blob", branch, *file_path]
         if len(parts) < 5 or parts[2] != "blob":
             raise ValueError(f"Not a GitHub blob URL: {url}")
         user, repo, _, branch, *file_parts = parts
@@ -35,9 +42,15 @@ class GitHubUrlHelper:
 
     @staticmethod
     def make_ch_raw_url(base_raw_url: str, ch_module: str) -> str:
-        """Given the raw URL of any file in the repo, build the raw URL for chXX.py."""
-        # base_raw_url: https://raw.githubusercontent.com/user/repo/branch/src/chXX.py
-        # ch_module:    ch07  (no .py)
+        """Build the raw URL for a `chXX.py` file using a base raw URL.
+
+        Example:
+            >>> GitHubUrlHelper.make_ch_raw_url(
+            ...     "https://raw.githubusercontent.com/user/repo/main/src/ch02.py",
+            ...     "ch07",
+            ... )
+            'https://raw.githubusercontent.com/user/repo/main/src/ch07.py'
+        """
         parts = base_raw_url.split("/")
         parts[-1] = ch_module + ".py"  # replace filename
         return "/".join(parts)
@@ -223,7 +236,7 @@ class DependencyCollector:
         for dep_mod, dep_syms in chxx_imports.items():
             self.collect_symbols(dep_mod, dep_syms)
 
-    def build_result(self, main_source: str, requested_symbols: list[str] | None) -> str:
+    def build_result(self, main_source: str) -> str:
         """
         Assemble the final string.
         Order: dependency symbols first (sorted by module number), then the main file / symbols.
@@ -246,25 +259,11 @@ class DependencyCollector:
             sections.append(sym_items[key].rstrip())
             sections.append("")
 
-        # Finally the main file / requested symbols
-        if requested_symbols:
-            main_module = PurePosixPath(urlparse(self.base_raw_url).path).stem
-            for sym in requested_symbols:
-                code = AstImportParser.find_symbol(main_source, sym)
-                if code:
-                    sections.append(f"# --- {main_module}.py :: {sym} ---")
-                    sections.append(code.rstrip())
-                    sections.append("")
-        else:
-            sections.append("# --- main file ---")
-            sections.append(main_source.rstrip())
-            sections.append("")
+        sections.append("# --- main file ---")
+        sections.append(main_source.rstrip())
+        sections.append("")
 
-        logger.info(
-            "github_assembly_complete",
-            sections=len(sections),
-            requested_symbols=bool(requested_symbols),
-        )
+        logger.info("github_assembly_complete", sections=len(sections))
         return "\n".join(sections)
 
 
@@ -274,18 +273,14 @@ class GitHubCodeFetcher:
     def __init__(self, repo_url: str) -> None:
         self._repo_url = repo_url
 
-    def get_translated_python_code(
-        self, chapter: str, requested_symbols: list[str] | None = None
-    ) -> str:
-        """
-        Main function.
+    def get_translated_python_code(self, chapter: str) -> str:
+        """Fetch translated Python code for a chapter.
 
-        chapter        – Chapter number as a string, e.g. "02" (no "ch" prefix)
-        requested_symbols – optional list of specific symbols to extract;
-                            if None/empty the full file is used
-        repo_url       – GitHub repo base URL, e.g. "https://github.com/user/repo"
+        Args:
+            chapter: Chapter number as a string, e.g. "02" (no "ch" prefix).
 
-        Returns a single string with all the code.
+        Returns:
+            A single string containing the assembled code.
         """
         raw_url = GitHubUrlHelper.blob_to_raw(f"{self._repo_url}/blob/main/src/ch{chapter}.py")
         logger.info("github_fetching_source", url=raw_url)
@@ -293,55 +288,15 @@ class GitHubCodeFetcher:
 
         collector = DependencyCollector(raw_url)
 
-        if requested_symbols:
-            # Collect only the requested symbols and their transitive deps
-            main_module = PurePosixPath(urlparse(raw_url).path).stem
-            # First collect the requested symbols from the main module's chXX imports
-            chxx_imports = AstImportParser.parse_chxx_imports(main_source)
-            # Also parse which chXX symbols requested_symbols themselves use
-            collector._fetcher._source_cache[main_module] = main_source
-            collector.collect_symbols(main_module, requested_symbols)
-            # Also check direct imports for the requested symbols
-            for sym in requested_symbols:
-                for dep_mod, dep_syms in chxx_imports.items():
-                    if sym in dep_syms:
-                        collector.collect_symbols(dep_mod, [sym])
-        else:
-            # Full file mode: collect all chXX imports recursively
-            chxx_imports = AstImportParser.parse_chxx_imports(main_source)
-            for dep_mod, dep_syms in chxx_imports.items():
-                collector.collect_symbols(dep_mod, dep_syms)
+        # Full file mode: collect all chXX imports recursively
+        chxx_imports = AstImportParser.parse_chxx_imports(main_source)
+        for dep_mod, dep_syms in chxx_imports.items():
+            collector.collect_symbols(dep_mod, dep_syms)
 
-        return collector.build_result(main_source, requested_symbols)
+        return collector.build_result(main_source)
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-
-def get_translated_python_code_from_github(
-    chapter: str,
-    requested_symbols: list[str] | None = None,
-    repo_url: str = "https://github.com/griffinbholt/decisionmaking-code-py",
-) -> str:
-    """
-    Main function.
-
-    chapter        – Chapter number as a string, e.g. "02" (no "ch" prefix)
-    requested_symbols – optional list of specific symbols to extract;
-                        if None/empty the full file is used
-    repo_url       – GitHub repo base URL, e.g. "https://github.com/user/repo"
-
-    Returns a single string with all the code.
-    """
-    # Delegate to the class implementation to avoid drift.
-    return GitHubCodeFetcher(repo_url).get_translated_python_code(chapter, requested_symbols)
-
-
-# ---------------------------------------------------------------------------
-# Run
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    result = get_translated_python_code_from_github("02", None)
+    result = GitHubCodeFetcher(
+        "https://github.com/griffinbholt/decisionmaking-code-py"
+    ).get_translated_python_code("02")
