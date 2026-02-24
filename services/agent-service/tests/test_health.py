@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from typing import cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.config import Settings, get_settings
@@ -11,17 +11,24 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    with TestClient(app) as test_client:
-        mock_redis = MagicMock()
-        mock_redis.ping.return_value = True
-        app.state.redis_client = mock_redis
+    # Mock RAGMCPClient to prevent actual connection attempts during lifespan
+    with patch("app.clients.rag_mcp_client.RAGMCPClient") as mock_rag_mcp_class:
+        mock_mcp_client = AsyncMock()
+        mock_mcp_client.connect = AsyncMock()
+        mock_mcp_client.close = AsyncMock()
+        mock_rag_mcp_class.return_value = mock_mcp_client
 
-        mock_http_client = AsyncMock()
-        ok_response = MagicMock()
-        ok_response.status_code = 200
-        mock_http_client.get.return_value = ok_response
-        app.state.http_client = mock_http_client
-        yield test_client
+        with TestClient(app) as test_client:
+            mock_redis = MagicMock()
+            mock_redis.ping.return_value = True
+            app.state.redis_client = mock_redis
+
+            mock_http_client = AsyncMock()
+            ok_response = MagicMock()
+            ok_response.status_code = 200
+            mock_http_client.get.return_value = ok_response
+            app.state.http_client = mock_http_client
+            yield test_client
 
 
 def test_health_endpoint_exists(client: TestClient) -> None:
