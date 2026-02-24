@@ -203,28 +203,6 @@ class RAGMCPClient:
         return result
 
 
-def create_rag_mcp_client(base_url: str) -> RAGMCPClient:
-    """
-    Factory function to create RAG MCP client.
-
-    Args:
-        base_url: RAG service base URL from settings
-
-    Returns:
-        RAGMCPClient instance (requires calling connect() or using as context manager)
-
-    Example:
-        ```python
-        from app.config import get_settings
-
-        settings = get_settings()
-        async with create_rag_mcp_client(settings.RAG_API_URL) as client:
-            tools = await client.list_tools()
-        ```
-    """
-    return RAGMCPClient(base_url=base_url)
-
-
 # Type check: RAGMCPClient implements MCPClientProtocol
 def _type_check() -> None:
     """Type checking function - never called, only for static analysis."""
