@@ -127,8 +127,9 @@ module = [
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "fastmcp.*"
+module = ["fastmcp", "fastmcp.*"]
 ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.uv]
 package = false
