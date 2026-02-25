@@ -9,7 +9,6 @@ from common.logging import get_logger
 
 from .config import MAIN_PDF, OUTPUT_BLOCKS_JSON
 
-
 # Module-level constants for geometric analysis
 COLUMNS_DIVIDER_X = 300
 DISTANCE_BETWEEN_NOTES = 20

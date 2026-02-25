@@ -105,6 +105,7 @@ def get_advanced_caption(
 
     return "Image without specific caption or block header"
 
+
 def _match_template_on_page(
     page_gray: np.ndarray, template_gray: np.ndarray
 ) -> tuple[float, tuple[int, int]] | None:
@@ -119,17 +120,24 @@ def _match_template_on_page(
 
     res = cv2.matchTemplate(page_gray, template_gray, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(res)
-    
+
     if max_val >= SIMILARITY_THRESHOLD:
         return float(max_val), max_loc
     return None
 
 
 def _create_entry(
-    description: str, page_num: int, idx: int, max_val: float, max_loc: tuple[int, int], t_w: int, t_h: int
+    description: str,
+    page_num: int,
+    idx: int,
+    max_val: float,
+    max_loc: tuple[int, int],
+    t_w: int,
+    t_h: int,
 ) -> dict[str, Any]:
     """
-    Encapsulates the logic for determining chunk type, extracting entity ID, and constructing the metadata dictionary.
+    Encapsulates the logic for determining chunk type, extracting entity ID, and constructing
+    the metadata dictionary.
     """
     img_type = "captioned_image"
     if "[BLOCK EXAMPLE" in description:
@@ -168,7 +176,8 @@ def process_pdf(
     output_json: str = "figures_metadata.json",
 ) -> None:
     """
-    Main processing function that orchestrates the PDF parsing, image matching, caption extraction, and result saving.
+    Main processing function that orchestrates the PDF parsing, image matching, caption extraction,
+    and result saving.
     """
     all_entries: list[dict[str, Any]] = []
 
@@ -187,13 +196,13 @@ def process_pdf(
 
                 template_img = pdf_page_to_img(figs_doc, idx)
                 template_gray = cv2.cvtColor(template_img, cv2.COLOR_BGR2GRAY)
-                
+
                 match_res = _match_template_on_page(page_gray, template_gray)
-                
+
                 if match_res:
                     max_val, max_loc = match_res
                     t_h, t_w = template_gray.shape[:2]
-                    
+
                     description = get_advanced_caption(
                         page_obj, (max_loc[0], max_loc[1], t_w, t_h), dpi=DPI_RENDER
                     )

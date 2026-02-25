@@ -166,7 +166,11 @@ class DocumentAssembler:
             else:
                 if "image_index" in item:
                     merged[eid]["image_index"] = item["image_index"]
-                if "bbox" in item and isinstance(item["bbox"], (list, tuple)) and len(item["bbox"]) == 4:
+                if (
+                    "bbox" in item
+                    and isinstance(item["bbox"], (list, tuple))
+                    and len(item["bbox"]) == 4
+                ):
                     b2 = item["bbox"]
                     b1 = merged[eid].get("bbox")
 
@@ -179,7 +183,7 @@ class DocumentAssembler:
                         ]
                     else:
                         merged[eid]["bbox"] = list(b2)
-                        return merged
+        return merged
 
     def _handle_text_stream(
         self, page_num: int, blocks: list[dict[str, Any]], used_indices: set[int]
@@ -205,7 +209,7 @@ class DocumentAssembler:
                     if acc:
                         self._flush(acc, page_num)
                         acc.clear()
-                    
+
                     self._add_formula_chunk(formula_id, page_num)
 
             if label in ["header", "title"] and acc:
