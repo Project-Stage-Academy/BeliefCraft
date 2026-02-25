@@ -8,7 +8,7 @@ if src_path not in sys.path:
 
 import pytest  # noqa: E402
 from common.logging import configure_logging  # noqa: E402
-from rag_service.config import Settings  # noqa: E402
+from config import Settings  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)

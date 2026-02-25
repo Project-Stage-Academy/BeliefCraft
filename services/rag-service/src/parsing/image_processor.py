@@ -7,7 +7,7 @@ import cv2  # type: ignore
 import fitz  # type: ignore
 import numpy as np
 from common.logging import get_logger
-from config import (  # type: ignore
+from .config import (  # type: ignore
     BLOCK_KEYWORDS,
     CAPTION_KEYWORDS,
     DPI_RENDER,

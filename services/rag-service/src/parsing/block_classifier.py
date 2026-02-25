@@ -6,7 +6,7 @@ from typing import Any
 
 import fitz  # type: ignore
 from common.logging import get_logger
-from config import MAIN_PDF, OUTPUT_BLOCKS_JSON  # type: ignore
+from .config import MAIN_PDF, OUTPUT_BLOCKS_JSON  # type: ignore
 from tqdm import tqdm  # type: ignore
 
 # Module-level constants for geometric analysis

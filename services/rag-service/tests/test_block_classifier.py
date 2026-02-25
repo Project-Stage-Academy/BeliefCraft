@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from src.parsing.block_classifier import BlockProcessor
+from parsing.block_classifier import BlockProcessor
 
 
 def test_determine_block_type():
