@@ -5,6 +5,9 @@ from httpx import ASGITransport
 from rag_service.main import app
 
 
+# https://github.com/PrefectHQ/fastmcp/issues/2792 this bug is probably the
+# reason of PytestUnraisableExceptionWarning
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 @pytest.mark.asyncio
 async def test_mcp_connection_lists_three_tools():
     """
@@ -26,3 +29,8 @@ async def test_mcp_connection_lists_three_tools():
         async with Client(transport) as client:
             tools = await client.list_tools()
             assert len(tools) == 3
+
+    # without this, some tests that run next may also raise PytestUnraisableExceptionWarning
+    import gc
+
+    gc.collect()

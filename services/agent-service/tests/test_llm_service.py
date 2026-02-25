@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from app.core.exceptions import LLMServiceError
 from app.services.llm_service import LLMService
-from langchain_core.messages import (  # type: ignore[import-not-found]
+from langchain_core.messages import (
     AIMessage,
     HumanMessage,
     SystemMessage,
@@ -335,7 +335,7 @@ class TestLLMServiceInit:
             )
             mock_chat_bedrock.assert_called_once_with(
                 client=mock_boto3.client.return_value,
-                model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
                 model_kwargs={
                     "temperature": 0.0,
                     "max_tokens": 4000,

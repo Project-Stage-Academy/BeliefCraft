@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from common.logging import get_logger
-from fastmcp import FastMCP  # type: ignore
+from fastmcp import FastMCP
 
 from .constants import ENTITY_TYPE_TO_CHUNK_TYPE
 from .models import Document, EntityType, MetadataFilter, MetadataFilters, SearchFilters

@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from typing import cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.config import Settings, get_settings
@@ -11,17 +11,24 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    with TestClient(app) as test_client:
-        mock_redis = MagicMock()
-        mock_redis.ping.return_value = True
-        app.state.redis_client = mock_redis
+    # Mock RAGMCPClient to prevent actual connection attempts during lifespan
+    with patch("app.clients.rag_mcp_client.RAGMCPClient") as mock_rag_mcp_class:
+        mock_mcp_client = AsyncMock()
+        mock_mcp_client.connect = AsyncMock()
+        mock_mcp_client.close = AsyncMock()
+        mock_rag_mcp_class.return_value = mock_mcp_client
 
-        mock_http_client = AsyncMock()
-        ok_response = MagicMock()
-        ok_response.status_code = 200
-        mock_http_client.get.return_value = ok_response
-        app.state.http_client = mock_http_client
-        yield test_client
+        with TestClient(app) as test_client:
+            mock_redis = MagicMock()
+            mock_redis.ping.return_value = True
+            app.state.redis_client = mock_redis
+
+            mock_http_client = AsyncMock()
+            ok_response = MagicMock()
+            ok_response.status_code = 200
+            mock_http_client.get.return_value = ok_response
+            app.state.http_client = mock_http_client
+            yield test_client
 
 
 def test_health_endpoint_exists(client: TestClient) -> None:
@@ -35,8 +42,8 @@ def test_health_all_services_healthy(client: TestClient) -> None:
 
     def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
-        mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
+        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
+        mock_settings.RAG_API_URL = "http://rag-api:8001/api/v1"
         mock_settings.REDIS_URL = "redis://localhost:6379"
         mock_settings.AWS_DEFAULT_REGION = "us-east-1"
         mock_settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
@@ -64,8 +71,8 @@ def test_health_missing_aws_config(client: TestClient) -> None:
 
     def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
-        mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
+        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
+        mock_settings.RAG_API_URL = "http://rag-api:8001/api/v1 "
         mock_settings.REDIS_URL = "redis://localhost:6379"
         mock_settings.AWS_DEFAULT_REGION = ""  # Тепер перевіряємо і регіон
         mock_settings.BEDROCK_MODEL_ID = ""
@@ -81,7 +88,6 @@ def test_health_missing_aws_config(client: TestClient) -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == HealthStatus.DEGRADED
-    # Прибрано коментар про невпевненість
     assert data["dependencies"]["aws_bedrock"] == HealthStatus.MISSING_CONFIG
 
 
@@ -90,8 +96,8 @@ def test_health_redis_failure(client: TestClient) -> None:
 
     def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
-        mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
+        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
+        mock_settings.RAG_API_URL = "http://rag-api:8001"
         mock_settings.REDIS_URL = "redis://localhost:6379"
         mock_settings.AWS_DEFAULT_REGION = "us-east-1"
         mock_settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
