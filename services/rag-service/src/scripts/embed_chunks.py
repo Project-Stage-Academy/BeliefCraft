@@ -3,13 +3,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-import weaviate  # type: ignore
+import weaviate
 from rag_service.constants import COLLECTION_NAME, REFERENCE_TYPE_MAP
-from weaviate.classes.config import Configure, ReferenceProperty  # type: ignore
-from weaviate.collections import Collection  # type: ignore
-from weaviate.collections.classes.config import VectorDistances  # type: ignore
-from weaviate.collections.classes.data import DataReference  # type: ignore
-from weaviate.util import generate_uuid5  # type: ignore
+from weaviate.classes.config import Configure, ReferenceProperty
+from weaviate.collections import Collection
+from weaviate.collections.classes.config import VectorDistances
+from weaviate.collections.classes.data import DataReference, DataReferenceMulti
+from weaviate.util import generate_uuid5
 
 PROPERTIES_TO_EMBED = ["content"]
 EMBEDDING_MODEL_REGION = "us-east-1"
@@ -49,8 +49,8 @@ def generate_deterministic_uuid(chunk: dict[str, Any]) -> str:
     if available, otherwise use whole chunk."""
     entity_id = chunk.get("entity_id", "")
     if entity_id:
-        return generate_uuid5(f'{entity_id}:{chunk["chunk_type"]}')  # type: ignore
-    return generate_uuid5(repr(chunk))  # type: ignore
+        return generate_uuid5(f'{entity_id}:{chunk["chunk_type"]}')
+    return generate_uuid5(repr(chunk))
 
 
 ReferenceMap = dict[
@@ -60,7 +60,7 @@ ReferenceMap = dict[
 
 def extract_references_from_chunk(
     chunk: dict[str, Any], reference_map: ReferenceMap
-) -> list[DataReference]:
+) -> list[DataReference | DataReferenceMulti]:
     """Extract references from chunks. Remove old reference fields from chunk because
     they will be passed separately to Weaviate
 
@@ -71,7 +71,7 @@ def extract_references_from_chunk(
     reference_map: ReferenceMap
         A mapping of (entity_id, chunk_type) to the chunks that are referenced by this pair.
     """
-    references = []
+    references: list[DataReference | DataReferenceMulti] = []
     from_id = generate_deterministic_uuid(chunk)
     for ref_name, chunk_type in REFERENCE_TYPE_MAP.items():
         chunk_references = chunk.pop(ref_name, [])
@@ -91,7 +91,7 @@ def insert_chunks(
     collection: Collection, chunks: list[dict[str, Any]], reference_map: ReferenceMap
 ) -> None:
     """Iterate through chunks and insert them into Weaviate."""
-    references = []
+    references: list[DataReference | DataReferenceMulti] = []
     for chunk in chunks:
         chunk.pop("chunk_id", "")
         uuid = generate_deterministic_uuid(chunk)
