@@ -1,5 +1,6 @@
 # Weaviate
 .weaviate_data/
+.weaviate_backups/
 
 # JetBrains
 .idea/
