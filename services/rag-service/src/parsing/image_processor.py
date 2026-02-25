@@ -1,24 +1,24 @@
-import fitz
-import cv2
-import numpy as np
-import os
 import json
 import re
-from tqdm import tqdm
 from pathlib import Path
+from typing import Any
 
-from config import (
-    DPI_RENDER,
-    CAPTION_KEYWORDS,
-    BLOCK_KEYWORDS,
-    MAIN_PDF,
-    FIGURES_PDF
-)
-
+import cv2  # type: ignore
+import fitz  # type: ignore
+import numpy as np
 from common.logging import get_logger
+from config import (  # type: ignore
+    BLOCK_KEYWORDS,
+    CAPTION_KEYWORDS,
+    DPI_RENDER,
+    FIGURES_PDF,
+    MAIN_PDF,
+)
+from tqdm import tqdm  # type: ignore
+
 logger = get_logger(__name__)
 
-# Local geometric constants 
+# Local geometric constants
 SIMILARITY_THRESHOLD = 0.8
 CAPTION_OFFSET_X_MINUS = 5
 CAPTION_OFFSET_X_PLUS = 100
@@ -27,12 +27,12 @@ SIDE_NOTE_WIDTH = 200
 BLOCK_CONTENT_PADDING = 20
 
 
-def get_scale_factor(dpi):
+def get_scale_factor(dpi: int) -> float:
     """Calculates scale factor based on rendering DPI."""
     return 72.0 / dpi
 
 
-def pdf_page_to_img(doc, page_number, dpi=DPI_RENDER):
+def pdf_page_to_img(doc: Any, page_number: int, dpi: int = DPI_RENDER) -> Any:
     """
     Render a PDF page into an OpenCV-compatible image.
     """
@@ -50,19 +50,16 @@ def pdf_page_to_img(doc, page_number, dpi=DPI_RENDER):
     return img
 
 
-def get_advanced_caption(page, rect_coords, dpi=DPI_RENDER):
+def get_advanced_caption(
+    page: Any, rect_coords: tuple[int, int, int, int], dpi: int = DPI_RENDER
+) -> str:
     """
     Detect caption or block content associated with an image with strict pattern matching.
     """
     x, y, w, h = rect_coords
     scale = get_scale_factor(dpi)
 
-    img_rect = fitz.Rect(
-        x * scale,
-        y * scale,
-        (x + w) * scale,
-        (y + h) * scale
-    )
+    img_rect = fitz.Rect(x * scale, y * scale, (x + w) * scale, (y + h) * scale)
 
     blocks = page.get_text("blocks")
 
@@ -70,29 +67,25 @@ def get_advanced_caption(page, rect_coords, dpi=DPI_RENDER):
         img_rect.x0 - CAPTION_OFFSET_X_MINUS,
         img_rect.y1,
         img_rect.x1 + CAPTION_OFFSET_X_PLUS,
-        img_rect.y1 + CAPTION_HEIGHT
+        img_rect.y1 + CAPTION_HEIGHT,
     )
 
-    side_area = fitz.Rect(
-        img_rect.x1,
-        img_rect.y0,
-        img_rect.x1 + SIDE_NOTE_WIDTH,
-        img_rect.y1
-    )
+    side_area = fitz.Rect(img_rect.x1, img_rect.y0, img_rect.x1 + SIDE_NOTE_WIDTH, img_rect.y1)
 
-    # 1. Strict Caption detection (Combined nested ifs as per SIM102)
+    # 1. Strict Caption detection
     for b in blocks:
         block_rect = fitz.Rect(b[:4])
         text = b[4].strip()
 
-        if (any(word in text.lower() for word in CAPTION_KEYWORDS) and 
-            re.search(r'(figure|table|algorithm)\s+(?:\d+|[A-G])\.\d+', text, re.I) and 
-            (block_rect.intersects(caption_area) or block_rect.intersects(side_area))):
-            
-            return text.replace("\n", " ")
+        if (
+            any(word in text.lower() for word in CAPTION_KEYWORDS)
+            and re.search(r"(figure|table|algorithm)\s+(?:\d+|[A-G])\.\d+", text, re.I)
+            and (block_rect.intersects(caption_area) or block_rect.intersects(side_area))
+        ):
+            return str(text.replace("\n", " "))
 
-    # 2. Block detection (Combined nested ifs as per SIM102)
-    candidate_header = None
+    # 2. Block detection (example / exercise)
+    candidate_header: Any | None = None
     header_type = ""
 
     for b in blocks:
@@ -108,22 +101,27 @@ def get_advanced_caption(page, rect_coords, dpi=DPI_RENDER):
             candidate_header.x0,
             candidate_header.y0,
             page.rect.width,
-            img_rect.y1 + BLOCK_CONTENT_PADDING
+            img_rect.y1 + BLOCK_CONTENT_PADDING,
         )
         full_content = page.get_text("text", clip=content_rect).strip()
         return f"[BLOCK {header_type} CONTENT]:\n{full_content}"
 
     return "Image without specific caption or block header"
 
-def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.json"):
+
+def process_pdf(
+    dm_pdf_path: str | Path,
+    figures_pdf_path: str | Path,
+    output_json: str = "figures_metadata.json",
+) -> None:
     """
-    Detect figures in main PDF using template matching and 
+    Detect figures in main PDF using template matching and
     extract metadata efficiently using buffered writes.
     """
-    all_entries = []
-    
+    all_entries: list[dict[str, Any]] = []
+
     with fitz.open(dm_pdf_path) as dm_doc, fitz.open(figures_pdf_path) as figs_doc:
-        already_found = set()
+        already_found: set[int] = set()
         total_figs = len(figs_doc)
 
         logger.info(f"Processing {len(dm_doc)} pages against {total_figs} templates...")
@@ -149,9 +147,7 @@ def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.jso
 
                     if max_val >= SIMILARITY_THRESHOLD:
                         description = get_advanced_caption(
-                            page_obj, 
-                            (max_loc[0], max_loc[1], t_w, t_h),
-                            dpi=DPI_RENDER
+                            page_obj, (max_loc[0], max_loc[1], t_w, t_h), dpi=DPI_RENDER
                         )
 
                         img_type = "captioned_image"
@@ -164,9 +160,9 @@ def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.jso
                         integer_match = re.search(r"(\d+)", description)
 
                         entity_id = (
-                            decimal_match.group(1) if decimal_match 
-                            else integer_match.group(1) if integer_match 
-                            else None
+                            decimal_match.group(1)
+                            if decimal_match
+                            else integer_match.group(1) if integer_match else None
                         )
 
                         entry = {
@@ -177,26 +173,24 @@ def process_pdf(dm_pdf_path, figures_pdf_path, output_json="figures_metadata.jso
                             "content": description,
                             "similarity": round(float(max_val), 4),
                             "bbox": [
-                                max_loc[0],
-                                max_loc[1],
-                                max_loc[0] + t_w,
-                                max_loc[1] + t_h,
+                                float(max_loc[0]),
+                                float(max_loc[1]),
+                                float(max_loc[0] + t_w),
+                                float(max_loc[1] + t_h),
                             ],
                         }
-                        
+
                         all_entries.append(entry)
                         already_found.add(idx)
 
-    # Write all results at once to avoid corruption and improve performance
     try:
         output_path = Path(output_json)
-        
         with output_path.open("w", encoding="utf-8") as f:
             json.dump(all_entries, f, indent=2, ensure_ascii=False)
-            
         logger.info(f"Successfully saved {len(all_entries)} entries to {output_json}")
-    except IOError as e:
+    except OSError as e:
         logger.error(f"Failed to write results to {output_json}: {e}")
+
 
 if __name__ == "__main__":
     process_pdf(MAIN_PDF, FIGURES_PDF)
