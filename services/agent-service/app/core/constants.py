@@ -58,6 +58,7 @@ RAG_SEARCH_MAX_K = 20
 # HTTP
 HTTP_OK_STATUS = 200
 HEALTH_CHECK_TIMEOUT = 5.0
+MCP_REQUEST_TIMEOUT = 30  # seconds for MCP HTTP requests
 
 # Cache TTL constants (in seconds)
 CACHE_TTL_RAG_TOOLS = 86400  # 24 hours - static knowledge from books
