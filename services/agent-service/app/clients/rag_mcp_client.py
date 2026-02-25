@@ -19,6 +19,7 @@ Example:
 
 from typing import Any
 
+from app.core.constants import MCP_REQUEST_TIMEOUT
 from app.tools.mcp_tool import MCPClientProtocol
 from common.http_client import TracedHttpClient
 from common.logging import get_logger
@@ -48,7 +49,7 @@ class RAGMCPClient:
         self,
         base_url: str,
         mcp_path: str = "/mcp",
-        timeout: int = 30,
+        timeout: int = MCP_REQUEST_TIMEOUT,
     ) -> None:
         """
         Initialize RAG MCP client.
@@ -100,9 +101,10 @@ class RAGMCPClient:
         )
         await self.http_client.__aenter__()
 
-        # Create FastMCP transport using our HTTP client
-        # Note: FastMCP may pass additional args/kwargs to the factory, we ignore them
-        # as get_httpx_client() doesn't accept parameters
+        # FastMCP passes args/kwargs to the factory, but we intentionally ignore them
+        # because our httpx.AsyncClient is pre-configured in __aenter__() with all
+        # necessary settings (timeout, base_url, tracing). The factory just returns
+        # the existing client rather than creating a new one.
         transport = StreamableHttpTransport(
             self.mcp_url,
             httpx_client_factory=lambda *args, **kwargs: self.http_client.get_httpx_client(),

@@ -14,6 +14,7 @@ SOLID principles applied:
 
 from typing import Any
 
+from app.core.constants import CACHE_TTL_RAG_TOOLS
 from app.tools.base import BaseTool
 from app.tools.cached_tool import CachedTool
 from app.tools.mcp_tool import MCPClientProtocol, MCPTool
@@ -46,7 +47,7 @@ class MCPToolLoader:
         mcp_client: MCPClientProtocol,
         tool_registry: ToolRegistry,
         wrap_with_cache: bool = True,
-        cache_ttl: int = 86400,  # 24 hours for RAG tools
+        cache_ttl: int = CACHE_TTL_RAG_TOOLS,
     ) -> None:
         """
         Initialize MCP tool loader with dependencies.

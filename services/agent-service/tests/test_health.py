@@ -42,8 +42,8 @@ def test_health_all_services_healthy(client: TestClient) -> None:
 
     def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
-        mock_settings.RAG_API_URL = "http://rag-api:8002/api/v1"
+        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
+        mock_settings.RAG_API_URL = "http://rag-api:8001/api/v1"
         mock_settings.REDIS_URL = "redis://localhost:6379"
         mock_settings.AWS_DEFAULT_REGION = "us-east-1"
         mock_settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
@@ -71,8 +71,8 @@ def test_health_missing_aws_config(client: TestClient) -> None:
 
     def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
-        mock_settings.RAG_API_URL = "http://rag-api:8001"
+        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
+        mock_settings.RAG_API_URL = "http://rag-api:8001/api/v1 "
         mock_settings.REDIS_URL = "redis://localhost:6379"
         mock_settings.AWS_DEFAULT_REGION = ""  # Тепер перевіряємо і регіон
         mock_settings.BEDROCK_MODEL_ID = ""
@@ -96,7 +96,7 @@ def test_health_redis_failure(client: TestClient) -> None:
 
     def override_get_settings() -> Settings:
         mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8001/api/v1"
+        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
         mock_settings.RAG_API_URL = "http://rag-api:8001"
         mock_settings.REDIS_URL = "redis://localhost:6379"
         mock_settings.AWS_DEFAULT_REGION = "us-east-1"

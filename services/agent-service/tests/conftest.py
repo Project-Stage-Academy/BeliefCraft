@@ -15,7 +15,7 @@ def test_settings() -> None:
     os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
     # Service URLs
-    os.environ["ENVIRONMENT_API_URL"] = "http://localhost:8001/api/v1"
+    os.environ["ENVIRONMENT_API_URL"] = "http://localhost:8000/api/v1"
     os.environ["RAG_API_URL"] = "http://localhost:8001"
     os.environ["REDIS_URL"] = "redis://localhost:6379/1"  # Separate DB for tests
 
