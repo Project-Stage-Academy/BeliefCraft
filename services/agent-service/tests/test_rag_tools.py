@@ -1,7 +1,14 @@
 """
 Unit tests for RAG tools.
 
-Tests all 3 RAG tools:
+⚠️ DEPRECATED TESTS ⚠️
+These tests cover deprecated RAG tool classes that are now replaced by
+MCP-based dynamic tool loading. Tests are kept for backward compatibility.
+
+New approach uses MCPToolLoader to discover tools from RAG MCP server.
+See: tests/test_mcp_tools.py for MCP tool tests
+
+Tests all 3 deprecated RAG tools:
 - SearchKnowledgeBaseTool
 - ExpandGraphByIdsTool
 - GetEntityByNumberTool

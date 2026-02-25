@@ -22,50 +22,79 @@ logger = configure_logging()
 settings = get_settings()
 
 
-async def _load_mcp_tools() -> None:
-    """
-    Load tools from MCP server if available.
-
-    This function attempts to discover and register tools from connected
-    MCP servers. If MCP is not available, it logs a warning and continues
-    with hardcoded tools only.
-
-    SOLID: Single Responsibility - only handles MCP tool loading
-    """
-    try:
-        # TODO: Initialize MCP client when available
-        # For now, MCP server is optional - use hardcoded tools as fallback
-        logger.debug(
-            "mcp_tools_optional", message="MCP loader will be enabled when MCP client is available"
-        )
-    except Exception as e:
-        logger.warning(
-            "failed_to_load_mcp_tools",
-            error=str(e),
-            message="Continuing with hardcoded tools only",
-        )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Application lifespan manager"""
+    """
+    Application lifespan manager.
+
+    Manages application startup and shutdown:
+    - Creates persistent HTTP clients and MCP connections
+    - Loads tools from MCP servers
+    - Ensures proper cleanup on shutdown
+
+    The MCP client remains connected throughout the application lifecycle,
+    allowing tools to reuse the connection instead of creating new clients
+    for each request.
+    """
+    from app.clients.rag_mcp_client import RAGMCPClient
+    from app.tools import register_mcp_rag_tools
+
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
-    async with TracedHttpClient("", timeout=HEALTH_CHECK_TIMEOUT) as http_client:
-        app.state.http_client = http_client
-        app.state.redis_pool = redis.ConnectionPool.from_url(
-            settings.REDIS_URL, decode_responses=True
+
+    # Create persistent HTTP client
+    http_client = TracedHttpClient("", timeout=HEALTH_CHECK_TIMEOUT)
+    await http_client.__aenter__()
+    app.state.http_client = http_client
+
+    # Create Redis connection pool
+    app.state.redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
+    app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
+
+    # Create persistent MCP client for RAG service (optional)
+    # Service will work without RAG tools if connection fails (graceful degradation)
+    mcp_client = RAGMCPClient(base_url=settings.RAG_API_URL)
+    try:
+        await mcp_client.connect()
+        app.state.rag_mcp_client = mcp_client
+
+        logger.info(
+            "loading_mcp_rag_tools",
+            rag_mcp_url=f"{settings.RAG_API_URL}/mcp",
         )
-        app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
 
-        # Load MCP tools if available
-        await _load_mcp_tools()
+        # Register RAG tools from MCP server
+        await register_mcp_rag_tools(mcp_client)
 
+        logger.info("mcp_rag_tools_loaded_successfully")
+
+    except Exception as e:
+        logger.warning(
+            "failed_to_load_mcp_tools_continuing_without_rag",
+            error=str(e),
+            error_type=type(e).__name__,
+            message="Service will continue with environment tools only",
+        )
+        # Close MCP client on failure
+        await mcp_client.close()
+        # Continue startup without RAG tools (graceful degradation)
+
+    try:
         yield
-        # Shutdown
+    finally:
+        # Shutdown - cleanup in reverse order
+        logger.info("agent_service_stopping")
+
+        # Close MCP client
+        if hasattr(app.state, "rag_mcp_client"):
+            await app.state.rag_mcp_client.close()
+
+        # Close Redis
         app.state.redis_client.close()
         app.state.redis_pool.disconnect()
-    logger.info("agent_service_stopping")
+
+        # Close HTTP client
+        await http_client.__aexit__(None, None, None)
 
 
 app = FastAPI(
