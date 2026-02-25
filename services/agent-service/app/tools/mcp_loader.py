@@ -14,6 +14,9 @@ SOLID principles applied:
 
 from typing import Any
 
+from app.core.constants import CACHE_TTL_RAG_TOOLS
+from app.tools.base import BaseTool
+from app.tools.cached_tool import CachedTool
 from app.tools.mcp_tool import MCPClientProtocol, MCPTool
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
@@ -29,13 +32,22 @@ class MCPToolLoader:
     1. Connect to MCP server
     2. List available tools
     3. Create MCPTool wrappers for each tool
-    4. Register tools in the tool registry
+    4. Optionally wrap in CachedTool for Redis caching
+    5. Register tools in the tool registry
+
+    Attributes:
+        mcp_client: MCP client for communicating with server
+        tool_registry: Registry to register discovered tools in
+        wrap_with_cache: Whether to wrap tools in CachedTool
+        cache_ttl: Cache TTL in seconds for cached tools
     """
 
     def __init__(
         self,
         mcp_client: MCPClientProtocol,
         tool_registry: ToolRegistry,
+        wrap_with_cache: bool = True,
+        cache_ttl: int = CACHE_TTL_RAG_TOOLS,
     ) -> None:
         """
         Initialize MCP tool loader with dependencies.
@@ -43,6 +55,8 @@ class MCPToolLoader:
         Args:
             mcp_client: MCP client for communicating with server
             tool_registry: Registry to register discovered tools in
+            wrap_with_cache: Whether to wrap tools in CachedTool (default: True)
+            cache_ttl: Cache TTL in seconds (default: 86400 = 24 hours)
 
         Raises:
             ValueError: If dependencies are invalid
@@ -54,6 +68,8 @@ class MCPToolLoader:
 
         self.mcp_client = mcp_client
         self.tool_registry = tool_registry
+        self.wrap_with_cache = wrap_with_cache
+        self.cache_ttl = cache_ttl
 
     async def load_tools(self) -> int:
         """
@@ -107,7 +123,7 @@ class MCPToolLoader:
                     category = self._determine_category(tool_name, tool_schema)
 
                     # Create dynamic tool wrapper
-                    dynamic_tool = MCPTool(
+                    mcp_tool = MCPTool(
                         mcp_client=self.mcp_client,
                         tool_name=tool_name,
                         tool_description=tool_description,
@@ -115,8 +131,21 @@ class MCPToolLoader:
                         category=category,
                     )
 
+                    # Optionally wrap in CachedTool for Redis caching
+                    if self.wrap_with_cache:
+                        tool_to_register: BaseTool = CachedTool(
+                            mcp_tool, ttl_seconds=self.cache_ttl
+                        )
+                        logger.debug(
+                            "mcp_tool_wrapped_with_cache",
+                            tool=tool_name,
+                            cache_ttl=self.cache_ttl,
+                        )
+                    else:
+                        tool_to_register = mcp_tool
+
                     # Register in tool registry
-                    self.tool_registry.register(dynamic_tool)
+                    self.tool_registry.register(tool_to_register)
 
                     logger.debug(
                         "registered_mcp_tool",

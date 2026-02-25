@@ -1,6 +1,39 @@
 """
 RAG tools for querying knowledge base and retrieving algorithms.
 
+⚠️ DEPRECATED ⚠️
+================================================================================
+These tools are DEPRECATED and will be removed in a future version.
+
+RAG tools are now loaded dynamically from the RAG service's MCP server
+via MCPToolLoader. This provides:
+- Dynamic tool discovery (no hardcoded tools)
+- Automatic schema updates from RAG service
+- Unified MCP protocol for tool communication
+- Better separation of concerns (RAG logic in RAG service)
+
+See: app.tools.mcp_loader.MCPToolLoader
+See: app.clients.rag_mcp_client.RAGMCPClient
+
+Migration:
+    Old approach (deprecated):
+        ```python
+        tool = SearchKnowledgeBaseTool()
+        tool_registry.register(tool)
+        ```
+
+    New approach (MCP):
+        ```python
+        from app.clients.rag_mcp_client import create_rag_mcp_client
+        from app.tools import register_mcp_rag_tools
+
+        async with create_rag_mcp_client(settings.RAG_API_URL) as client:
+            await register_mcp_rag_tools(client)
+        ```
+
+This module is kept for backward compatibility and documentation purposes only.
+================================================================================
+
 This module provides tools that allow the ReAct agent to:
 - Search knowledge base book semantically
 - Expand knowledge graph from document IDs
