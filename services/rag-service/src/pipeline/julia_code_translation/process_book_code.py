@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from pipeline.code_translation.signature_stripper import strip_to_signatures
+from pipeline.julia_code_translation.signature_stripper import strip_to_signatures
 from pipeline.parsing.block_processor import BlockType
 
 APPENDIX_START_CHAPTER = (
