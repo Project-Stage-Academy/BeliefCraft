@@ -32,7 +32,7 @@ class PromptBuilder:
         self._book_processor.extract_block_structs_and_functions(julia_chapter_code)
         python_chapter_code = self._github_fetcher.get_translated_python_code(chapter)
 
-        prompt = PromptTemplates.update_descriptions_prompt.format(
+        prompt = PromptTemplates.update_descriptions_prompt(
             self._book_processor.format_blocks_text(julia_chapter_code),
             python_chapter_code,
         )
@@ -75,7 +75,7 @@ class PromptBuilder:
             filtered_related_algorithms
         )
 
-        prompt = PromptTemplates.translate_julia_code_prompt.format(
+        prompt = PromptTemplates.translate_julia_code_prompt(
             self._book_processor.format_blocks_text(julia_chapter_code),
             self._book_processor.format_translated_blocks(translated_algorithms),
         )
@@ -111,7 +111,7 @@ class PromptBuilder:
         translated_text = "\n".join(
             f"{translated['translated']} \n\n" for translated in translated_examples
         )
-        return PromptTemplates.translate_example_prompt.format(
+        return PromptTemplates.translate_example_prompt(
             f"{example['caption']} \n\n {example['text']} \n\n",
             translated_text or "",
         )
