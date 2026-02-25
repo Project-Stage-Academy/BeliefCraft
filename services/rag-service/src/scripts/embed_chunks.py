@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import weaviate  # type: ignore
+from rag_service.constants import REFERENCE_TYPE_MAP
 from weaviate.classes.config import Configure, ReferenceProperty  # type: ignore
 from weaviate.collections import Collection  # type: ignore
 from weaviate.collections.classes.config import VectorDistances  # type: ignore
@@ -14,15 +15,6 @@ PROPERTIES_TO_EMBED = ["content"]
 COLLECTION_NAME = "unified_collection"
 EMBEDDING_MODEL_REGION = "us-east-1"
 EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
-
-REFERENCE_TYPE_MAP = {
-    "referenced_formulas": "formula",
-    "referenced_algorithms": "algorithm",
-    "referenced_tables": "table",
-    "referenced_figures": "image",
-    "referenced_examples": "example",
-    "referenced_exercises": "exercise",
-}
 
 
 def setup_collection(client: weaviate.WeaviateClient, recreate: bool = False) -> Collection:
