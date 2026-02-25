@@ -19,12 +19,12 @@ def top_level():
 
     expected = """
 class Foo:
+
     def a(self):
         return x
 
     def b(self):
         ...
-
 
 def top_level():
     return 3
