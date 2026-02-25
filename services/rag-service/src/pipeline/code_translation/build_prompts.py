@@ -1,12 +1,25 @@
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from common.logging import get_logger
 from pipeline.code_translation.constants import TRANSLATED_ALGOS_PATH, PromptConfig
 from pipeline.code_translation.github_code_fetcher import GitHubCodeFetcher
-from pipeline.code_translation.process_book_code import Block, BookCodeProcessor
+from pipeline.code_translation.process_book_code import (
+    Block,
+    BookCodeProcessor,
+    JuliaEntityExtractor,
+    TranslatedAlgorithmStore,
+    UsageIndexBuilder,
+)
 from pipeline.code_translation.prompts import PromptTemplates
-from pipeline.parsing.extract_algorithms_and_examples import BlockProcessor
+from pipeline.parsing.block_processor import open_block_processor
+
+if TYPE_CHECKING:
+    from pipeline.parsing.block_processor import BlockProcessor
+
 
 logger = get_logger(__name__)
 
@@ -93,7 +106,7 @@ class PromptBuilder:
             logger.warning("example_not_found", example_number=example_number)
             raise ValueError(f"Example with number {example_number} not found")
 
-        return examples[0]
+        return dict(examples[0])
 
     def _collect_related_algorithms_for_example(
         self, example_number: str, blocks: list[Block]
@@ -164,9 +177,14 @@ if __name__ == "__main__":
     prompts_dir = Path(args.prompts_dir)
     translated_algos_path = Path(args.translated_algorithms_json)
 
-    with BlockProcessor(pdf_path) as block_processor:
+    with open_block_processor(pdf_path) as block_processor:
         builder = PromptBuilder(
-            book_processor=BookCodeProcessor(translated_algos_path),
+            book_processor=BookCodeProcessor(
+                translated_algos_path,
+                JuliaEntityExtractor(),
+                UsageIndexBuilder(),
+                TranslatedAlgorithmStore(translated_algos_path),
+            ),
             github_fetcher=GitHubCodeFetcher(
                 "https://github.com/griffinbholt/decisionmaking-code-py"
             ),
