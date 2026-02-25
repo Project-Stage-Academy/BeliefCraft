@@ -255,3 +255,38 @@ class TestProtocolCompliance:
             assert hasattr(client, "search_knowledge_base")
             assert hasattr(client, "expand_graph_by_ids")
             assert hasattr(client, "get_entity_by_number")
+
+
+# RAGMCPClient Tests
+
+
+class TestRAGMCPClient:
+    """Tests for RAGMCPClient validation and initialization."""
+
+    def test_rag_mcp_client_empty_base_url(self) -> None:
+        """Test RAGMCPClient rejects empty base_url."""
+        from app.clients.rag_mcp_client import RAGMCPClient
+
+        with pytest.raises(ValueError, match="base_url cannot be empty"):
+            RAGMCPClient("")
+
+    def test_rag_mcp_client_whitespace_base_url(self) -> None:
+        """Test RAGMCPClient rejects whitespace-only base_url."""
+        from app.clients.rag_mcp_client import RAGMCPClient
+
+        with pytest.raises(ValueError, match="base_url cannot be empty or whitespace-only"):
+            RAGMCPClient("   ")
+
+    def test_rag_mcp_client_strips_whitespace(self) -> None:
+        """Test RAGMCPClient strips leading/trailing whitespace from base_url."""
+        from app.clients.rag_mcp_client import RAGMCPClient
+
+        client = RAGMCPClient("  http://localhost:8001  ")
+        assert client.base_url == "http://localhost:8001"
+
+    def test_rag_mcp_client_strips_trailing_slash(self) -> None:
+        """Test RAGMCPClient strips trailing slash from base_url."""
+        from app.clients.rag_mcp_client import RAGMCPClient
+
+        client = RAGMCPClient("http://localhost:8001/")
+        assert client.base_url == "http://localhost:8001"
