@@ -7,6 +7,8 @@ import cv2  # type: ignore
 import fitz  # type: ignore
 import numpy as np
 from common.logging import get_logger
+from tqdm import tqdm
+
 from .config import (  # type: ignore
     BLOCK_KEYWORDS,
     CAPTION_KEYWORDS,
@@ -14,7 +16,6 @@ from .config import (  # type: ignore
     FIGURES_PDF,
     MAIN_PDF,
 )
-from tqdm import tqdm  # type: ignore
 
 logger = get_logger(__name__)
 

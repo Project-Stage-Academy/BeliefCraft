@@ -6,8 +6,9 @@ from typing import Any
 
 import fitz  # type: ignore
 from common.logging import get_logger
+from tqdm import tqdm
+
 from .config import MAIN_PDF, OUTPUT_BLOCKS_JSON  # type: ignore
-from tqdm import tqdm  # type: ignore
 
 # Module-level constants for geometric analysis
 COLUMNS_DIVIDER_X = 300
