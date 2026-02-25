@@ -9,13 +9,7 @@ import numpy as np
 from common.logging import get_logger
 from tqdm import tqdm
 
-from .config import (  # type: ignore
-    BLOCK_KEYWORDS,
-    CAPTION_KEYWORDS,
-    DPI_RENDER,
-    FIGURES_PDF,
-    MAIN_PDF,
-)
+from .config import  BLOCK_KEYWORDS, CAPTION_KEYWORDS, DPI_RENDER, FIGURES_PDF, MAIN_PDF # type: ignore[attr-defined]
 
 logger = get_logger(__name__)
 
