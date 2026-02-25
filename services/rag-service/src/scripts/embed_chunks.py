@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import weaviate  # type: ignore
-from rag_service.constants import REFERENCE_TYPE_MAP
+from rag_service.constants import COLLECTION_NAME, REFERENCE_TYPE_MAP
 from weaviate.classes.config import Configure, ReferenceProperty  # type: ignore
 from weaviate.collections import Collection  # type: ignore
 from weaviate.collections.classes.config import VectorDistances  # type: ignore
@@ -12,7 +12,6 @@ from weaviate.collections.classes.data import DataReference  # type: ignore
 from weaviate.util import generate_uuid5  # type: ignore
 
 PROPERTIES_TO_EMBED = ["content"]
-COLLECTION_NAME = "unified_collection"
 EMBEDDING_MODEL_REGION = "us-east-1"
 EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
 
