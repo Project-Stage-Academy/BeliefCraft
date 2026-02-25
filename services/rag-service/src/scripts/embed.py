@@ -34,10 +34,7 @@ def setup_collection(client: weaviate.WeaviateClient, recreate: bool = False) ->
         print(f"Creating collection: {COLLECTION_NAME}")
         client.collections.create(
             name=COLLECTION_NAME,
-            vector_config=Configure.Vectors.text2vec_aws_bedrock(
-                source_properties=PROPERTIES_TO_EMBED,
-                region=EMBEDDING_MODEL_REGION,
-                model=EMBEDDING_MODEL,
+            vector_config=Configure.Vectors.none(
                 vector_index_config=Configure.VectorIndex.flat(
                     distance_metric=VectorDistances.COSINE,
                 ),
@@ -54,11 +51,11 @@ def setup_collection(client: weaviate.WeaviateClient, recreate: bool = False) ->
 
 def generate_deterministic_uuid(chunk: dict[str, Any]) -> str:
     """Generate a deterministic UUID based on entity_id and chunk_type
-    if available, otherwise use content."""
+    if available, otherwise use whole chunk."""
     entity_id = chunk.get("entity_id", "")
     if entity_id:
         return generate_uuid5(f'{entity_id}:{chunk["chunk_type"]}')  # type: ignore
-    return generate_uuid5(chunk["content"])  # type: ignore
+    return generate_uuid5(repr(chunk))  # type: ignore
 
 
 ReferenceMap = dict[
@@ -66,23 +63,34 @@ ReferenceMap = dict[
 ]  # Mapping of (entity_id, chunk_type) to referencing chunks
 
 
+def extract_references_from_chunk(
+    chunk: dict[str, Any], reference_map: ReferenceMap
+) -> dict[str, list[str]]:
+    """Extract references from chunks into the format required by Weaviate(list of UUIDs)
+    Remove old reference fields from chunk because they will be passed separately to Weaviate"""
+    references = {}
+    for ref_name, chunk_type in REFERENCE_TYPE_MAP.items():
+        chunk_references = chunk.pop(ref_name, [])
+        if not chunk_references:
+            continue
+        referenced_ids = []
+        for entity_id in chunk_references:
+            key = (entity_id, chunk_type)
+            referenced_chunk = reference_map[key]
+            # deterministic uuid allows to know chunk's uuid before it is even inserted
+            referenced_ids.append(generate_deterministic_uuid(referenced_chunk))
+        references[ref_name] = referenced_ids
+    return references
+
+
 def insert_chunks(
     collection: Collection, chunks: list[dict[str, Any]], reference_map: ReferenceMap
 ) -> None:
     """Iterate through chunks and insert them into Weaviate."""
     for chunk in chunks:
-        chunk.pop("chunk_id", "unknown")
+        chunk.pop("chunk_id", "")
         uuid = generate_deterministic_uuid(chunk)
-        references = {}
-        for ref_name, chunk_type in REFERENCE_TYPE_MAP.items():
-            chunk_references = chunk.pop(ref_name, [])
-            if not chunk_references:
-                continue
-            referenced_ids = []
-            for entity_id in chunk_references:
-                key = (entity_id, chunk_type)
-                referenced_ids.append(generate_deterministic_uuid(reference_map[key]))
-            references[ref_name] = referenced_ids
+        references = extract_references_from_chunk(chunk, reference_map)
         collection.data.insert(
             properties=chunk,
             uuid=uuid,
@@ -103,7 +111,11 @@ def build_reference_map(chunks: list[dict[str, Any]]) -> ReferenceMap:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Load and embed document chunks from JSON into Weaviate."
+        description="Load and embed document chunks from JSON into Weaviate. Passes 'content' "
+        "field to embedding model, sets up cross-references for fields: 'referenced_formulas', "
+        "'referenced_algorithms', 'referenced_tables', 'referenced_figures', 'referenced_examples',"
+        " 'referenced_exercises'. Ignores 'chunk_id' and generates own UUIDs. All other"
+        " fields are treated as metadata and stored in Weaviate as is without embedding."
     )
     parser.add_argument("file_path", help="Path to the JSON file containing chunks.", type=Path)
     parser.add_argument(
