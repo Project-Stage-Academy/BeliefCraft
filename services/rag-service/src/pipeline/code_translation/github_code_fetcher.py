@@ -153,11 +153,19 @@ class AstImportParser:
     @staticmethod
     def symbols_used_in_code(code: str, candidates: set[str]) -> set[str]:
         """Return which names from `candidates` appear in `code`."""
-        used = set()
-        for name in candidates:
-            # Use word-boundary search to avoid false positives
-            if re.search(r"\b" + re.escape(name) + r"\b", code):
-                used.add(name)
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return set()
+
+        used: set[str] = set()
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Name)
+                and isinstance(node.ctx, ast.Load)
+                and node.id in candidates
+            ):
+                used.add(node.id)
         return used
 
 
