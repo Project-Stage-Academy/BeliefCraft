@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import cv2  # type: ignore
 import fitz  # type: ignore
@@ -33,7 +33,7 @@ def get_scale_factor(dpi: int) -> float:
     return 72.0 / dpi
 
 
-def pdf_page_to_img(doc: Any, page_number: int, dpi: int = DPI_RENDER) -> Any:
+def pdf_page_to_img(doc: Any, page_number: int, dpi: int = DPI_RENDER) -> np.ndarray:
     """
     Render a PDF page into an OpenCV-compatible image.
     """
@@ -44,11 +44,8 @@ def pdf_page_to_img(doc: Any, page_number: int, dpi: int = DPI_RENDER) -> Any:
     img = img.reshape(pix.height, pix.width, pix.n)
 
     if pix.n == 4:
-        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-    else:
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-    return img
+        return cast(np.ndarray, cv2.cvtColor(img, cv2.COLOR_BGRA2BGR))
+    return cast(np.ndarray, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
 
 def get_advanced_caption(
@@ -61,7 +58,6 @@ def get_advanced_caption(
     scale = get_scale_factor(dpi)
 
     img_rect = fitz.Rect(x * scale, y * scale, (x + w) * scale, (y + h) * scale)
-
     blocks = page.get_text("blocks")
 
     caption_area = fitz.Rect(
@@ -109,6 +105,62 @@ def get_advanced_caption(
 
     return "Image without specific caption or block header"
 
+def _match_template_on_page(
+    page_gray: np.ndarray, template_gray: np.ndarray
+) -> tuple[float, tuple[int, int]] | None:
+    """
+    Encapsulates the template matching logic, returning similarity and location if a match is found.
+    """
+    t_h, t_w = template_gray.shape[:2]
+    p_h, p_w = page_gray.shape[:2]
+
+    if t_h > p_h or t_w > p_w:
+        return None
+
+    res = cv2.matchTemplate(page_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+    
+    if max_val >= SIMILARITY_THRESHOLD:
+        return float(max_val), max_loc
+    return None
+
+
+def _create_entry(
+    description: str, page_num: int, idx: int, max_val: float, max_loc: tuple[int, int], t_w: int, t_h: int
+) -> dict[str, Any]:
+    """
+    Encapsulates the logic for determining chunk type, extracting entity ID, and constructing the metadata dictionary.
+    """
+    img_type = "captioned_image"
+    if "[BLOCK EXAMPLE" in description:
+        img_type = "example"
+    elif "[BLOCK EXERCISE" in description:
+        img_type = "exercise"
+
+    decimal_match = re.search(r"((?:\d+|[A-G])\.\d+)", description)
+    integer_match = re.search(r"(\d+)", description)
+
+    entity_id = (
+        decimal_match.group(1)
+        if decimal_match
+        else integer_match.group(1) if integer_match else None
+    )
+
+    return {
+        "chunk_type": img_type,
+        "entity_id": entity_id,
+        "page": page_num + 1,
+        "image_index": idx + 1,
+        "content": description,
+        "similarity": round(max_val, 4),
+        "bbox": [
+            float(max_loc[0]),
+            float(max_loc[1]),
+            float(max_loc[0] + t_w),
+            float(max_loc[1] + t_h),
+        ],
+    }
+
 
 def process_pdf(
     dm_pdf_path: str | Path,
@@ -116,81 +168,52 @@ def process_pdf(
     output_json: str = "figures_metadata.json",
 ) -> None:
     """
-    Detect figures in main PDF using template matching and
-    extract metadata efficiently using buffered writes.
+    Main processing function that orchestrates the PDF parsing, image matching, caption extraction, and result saving.
     """
     all_entries: list[dict[str, Any]] = []
 
     with fitz.open(dm_pdf_path) as dm_doc, fitz.open(figures_pdf_path) as figs_doc:
         already_found: set[int] = set()
-        total_figs = len(figs_doc)
-
-        logger.info(f"Processing {len(dm_doc)} pages against {total_figs} templates...")
+        logger.info(f"Processing {len(dm_doc)} pages against {len(figs_doc)} templates...")
 
         for page_num in tqdm(range(len(dm_doc)), desc="Searching images"):
             page_img = pdf_page_to_img(dm_doc, page_num)
             page_obj = dm_doc.load_page(page_num)
             page_gray = cv2.cvtColor(page_img, cv2.COLOR_BGR2GRAY)
 
-            for idx in range(total_figs):
+            for idx in range(len(figs_doc)):
                 if idx in already_found:
                     continue
 
-                template = pdf_page_to_img(figs_doc, idx)
-                template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+                template_img = pdf_page_to_img(figs_doc, idx)
+                template_gray = cv2.cvtColor(template_img, cv2.COLOR_BGR2GRAY)
+                
+                match_res = _match_template_on_page(page_gray, template_gray)
+                
+                if match_res:
+                    max_val, max_loc = match_res
+                    t_h, t_w = template_gray.shape[:2]
+                    
+                    description = get_advanced_caption(
+                        page_obj, (max_loc[0], max_loc[1], t_w, t_h), dpi=DPI_RENDER
+                    )
 
-                t_h, t_w = template.shape[:2]
-                p_h, p_w = page_img.shape[:2]
+                    entry = _create_entry(description, page_num, idx, max_val, max_loc, t_w, t_h)
+                    all_entries.append(entry)
+                    already_found.add(idx)
 
-                if t_h <= p_h and t_w <= p_w:
-                    res = cv2.matchTemplate(page_gray, template_gray, cv2.TM_CCOEFF_NORMED)
-                    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+    _save_to_json(all_entries, output_json)
 
-                    if max_val >= SIMILARITY_THRESHOLD:
-                        description = get_advanced_caption(
-                            page_obj, (max_loc[0], max_loc[1], t_w, t_h), dpi=DPI_RENDER
-                        )
 
-                        img_type = "captioned_image"
-                        if "[BLOCK EXAMPLE" in description:
-                            img_type = "example"
-                        elif "[BLOCK EXERCISE" in description:
-                            img_type = "exercise"
-
-                        decimal_match = re.search(r"((?:\d+|[A-G])\.\d+)", description)
-                        integer_match = re.search(r"(\d+)", description)
-
-                        entity_id = (
-                            decimal_match.group(1)
-                            if decimal_match
-                            else integer_match.group(1) if integer_match else None
-                        )
-
-                        entry = {
-                            "chunk_type": img_type,
-                            "entity_id": entity_id,
-                            "page": page_num + 1,
-                            "image_index": idx + 1,
-                            "content": description,
-                            "similarity": round(float(max_val), 4),
-                            "bbox": [
-                                float(max_loc[0]),
-                                float(max_loc[1]),
-                                float(max_loc[0] + t_w),
-                                float(max_loc[1] + t_h),
-                            ],
-                        }
-
-                        all_entries.append(entry)
-                        already_found.add(idx)
-
+def _save_to_json(entries: list[dict[str, Any]], filename: str) -> None:
+    """Saves the extracted metadata entries to a JSON file with error handling."""
     try:
-        output_path = Path(output_json)
+        output_path = Path(filename)
         with output_path.open("w", encoding="utf-8") as f:
-            json.dump(all_entries, f, indent=2, ensure_ascii=False)
-        logger.info(f"Successfully saved {len(all_entries)} entries to {output_json}")
+            json.dump(entries, f, indent=2, ensure_ascii=False)
+        logger.info(f"Successfully saved {len(entries)} entries to {filename}")
     except OSError as e:
-        logger.error(f"Failed to write results to {output_json}: {e}")
+        logger.error(f"Failed to write results to {filename}: {e}")
 
 
 if __name__ == "__main__":

@@ -166,15 +166,20 @@ class DocumentAssembler:
             else:
                 if "image_index" in item:
                     merged[eid]["image_index"] = item["image_index"]
-                if "bbox" in item:
-                    b1, b2 = merged[eid]["bbox"], item["bbox"]
-                    merged[eid]["bbox"] = [
-                        min(b1[0], b2[0]),
-                        min(b1[1], b2[1]),
-                        max(b1[2], b2[2]),
-                        max(b1[3], b2[3]),
-                    ]
-        return merged
+                if "bbox" in item and isinstance(item["bbox"], (list, tuple)) and len(item["bbox"]) == 4:
+                    b2 = item["bbox"]
+                    b1 = merged[eid].get("bbox")
+
+                    if b1 and isinstance(b1, (list, tuple)) and len(b1) == 4:
+                        merged[eid]["bbox"] = [
+                            min(b1[0], b2[0]),
+                            min(b1[1], b2[1]),
+                            max(b1[2], b2[2]),
+                            max(b1[3], b2[3]),
+                        ]
+                    else:
+                        merged[eid]["bbox"] = list(b2)
+                        return merged
 
     def _handle_text_stream(
         self, page_num: int, blocks: list[dict[str, Any]], used_indices: set[int]
@@ -192,12 +197,16 @@ class DocumentAssembler:
                 acc = []
 
             f_match = re.search(r"\((\d+\.\d+)\)", content)
-            if f_match and f_match.group(0) in self.formula_map:
-                if acc:
-                    self._flush(acc, page_num)
-                    acc = []
-                self._add_formula_chunk(f_match.group(1), page_num)
-                continue
+            if f_match:
+                formula_key = f_match.group(0)
+                formula_id = f_match.group(1)
+
+                if formula_key in self.formula_map:
+                    if acc:
+                        self._flush(acc, page_num)
+                        acc.clear()
+                    
+                    self._add_formula_chunk(formula_id, page_num)
 
             if label in ["header", "title"] and acc:
                 self._flush(acc, page_num)
