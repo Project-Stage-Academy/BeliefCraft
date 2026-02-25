@@ -1,10 +1,15 @@
 """
 Unit tests for MCP tool wrapper and loader.
+
+Tests cover:
+- MCPTool: Dynamic wrapper for MCP server tools
+- MCPToolLoader: Autodiscovery and registration with caching support
 """
 
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from app.tools.cached_tool import CachedTool
 from app.tools.mcp_loader import MCPToolLoader
 from app.tools.mcp_tool import MCPClientProtocol, MCPTool
 from app.tools.registry import ToolRegistry
@@ -169,6 +174,22 @@ class TestMCPToolLoader:
 
         assert loader.mcp_client is mock_mcp_client
         assert loader.tool_registry is tool_registry
+        assert loader.wrap_with_cache is True  # Default
+        assert loader.cache_ttl == 86400  # 24 hours default
+
+    def test_mcp_tool_loader_initialization_custom_cache(
+        self, mock_mcp_client: Mock, tool_registry: ToolRegistry
+    ) -> None:
+        """Test MCPToolLoader initialization with custom cache settings."""
+        loader = MCPToolLoader(
+            mcp_client=mock_mcp_client,
+            tool_registry=tool_registry,
+            wrap_with_cache=False,
+            cache_ttl=3600,
+        )
+
+        assert loader.wrap_with_cache is False
+        assert loader.cache_ttl == 3600
 
     def test_mcp_tool_loader_initialization_invalid_client(
         self, tool_registry: ToolRegistry
@@ -192,7 +213,7 @@ class TestMCPToolLoader:
     async def test_mcp_tool_loader_load_tools_success(
         self, mock_mcp_client: Mock, tool_registry: ToolRegistry
     ) -> None:
-        """Test successful tool loading from MCP server."""
+        """Test successful tool loading from MCP server with caching."""
         mock_mcp_client.list_tools.return_value = [
             {
                 "name": "search_knowledge_base",
@@ -217,11 +238,47 @@ class TestMCPToolLoader:
         loader = MCPToolLoader(
             mcp_client=mock_mcp_client,
             tool_registry=tool_registry,
+            wrap_with_cache=True,  # Default behavior
         )
 
         registered_count = await loader.load_tools()
 
         assert registered_count == 2
+        mock_mcp_client.list_tools.assert_called_once()
+
+        # Verify tools are wrapped in CachedTool
+        assert "search_knowledge_base" in tool_registry.tools
+        assert "retrieve_document" in tool_registry.tools
+        assert isinstance(tool_registry.tools["search_knowledge_base"], CachedTool)
+        assert isinstance(tool_registry.tools["retrieve_document"], CachedTool)
+
+    @pytest.mark.asyncio
+    async def test_mcp_tool_loader_load_tools_without_cache(
+        self, mock_mcp_client: Mock, tool_registry: ToolRegistry
+    ) -> None:
+        """Test tool loading without caching wrapper."""
+        mock_mcp_client.list_tools.return_value = [
+            {
+                "name": "test_tool",
+                "description": "Test tool",
+                "inputSchema": {"type": "object", "properties": {}},
+            },
+        ]
+
+        loader = MCPToolLoader(
+            mcp_client=mock_mcp_client,
+            tool_registry=tool_registry,
+            wrap_with_cache=False,  # Disable caching
+        )
+
+        registered_count = await loader.load_tools()
+
+        assert registered_count == 1
+
+        # Verify tool is NOT wrapped in CachedTool
+        assert "test_tool" in tool_registry.tools
+        assert isinstance(tool_registry.tools["test_tool"], MCPTool)
+        assert not isinstance(tool_registry.tools["test_tool"], CachedTool)
         mock_mcp_client.list_tools.assert_called_once()
 
     @pytest.mark.asyncio
@@ -287,12 +344,15 @@ class TestMCPToolLoader:
         loader = MCPToolLoader(
             mcp_client=mock_mcp_client,
             tool_registry=tool_registry,
+            wrap_with_cache=False,  # Disable caching for simpler test
         )
 
         registered_count = await loader.load_tools()
 
         # Should register only valid tools (2 out of 4)
         assert registered_count == 2
+        assert "valid_tool" in tool_registry.tools
+        assert "another_valid_tool" in tool_registry.tools
 
     @pytest.mark.asyncio
     async def test_mcp_tool_loader_error_handling(
