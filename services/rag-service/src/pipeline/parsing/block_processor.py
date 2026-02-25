@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, cast
 
-import fitz  # type: ignore[import-not-found]
+import fitz  # type: ignore[import-untyped]
 from tqdm import tqdm  # type: ignore[import-untyped]
 
 COLUMNS_DIVIDER_X = 300  # adjust this value based on the actual layout of the PDF

@@ -107,7 +107,6 @@ explicit_package_bases = true
 namespace_packages = true
 exclude = [
     '(^|/)tests/',
-    '(^|/)services/rag-service/',
 ]
 mypy_path = [
     "packages/common/src",

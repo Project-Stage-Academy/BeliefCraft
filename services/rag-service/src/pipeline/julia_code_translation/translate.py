@@ -5,8 +5,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-import boto3  # type: ignore[import-not-found]
-from botocore.config import Config  # type: ignore[import-not-found]
+import boto3
+from botocore.config import Config  # type: ignore[import-untyped]
 from common.logging import get_logger
 from pipeline.julia_code_translation.build_prompts import PromptBuilder
 from pipeline.julia_code_translation.constants import TRANSLATED_ALGOS_PATH, PromptConfig
