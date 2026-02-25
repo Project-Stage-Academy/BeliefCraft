@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-import fitz  # type: ignore
+import fitz  # type: ignore[import-untyped]
 from common.logging import get_logger
 from tqdm import tqdm  # type: ignore[import-untyped]
 
