@@ -105,6 +105,17 @@ class PromptBuilder:
             self._book_processor.extract_block_chapter(example_number),
         )
 
+    def _format_translate_example_prompt(
+        self, example: dict[str, object], translated_examples: list[dict[str, str]]
+    ) -> str:
+        translated_text = "\n".join(
+            f"{translated['translated']} \n\n" for translated in translated_examples
+        )
+        return PromptTemplates.translate_example_prompt.format(
+            f"{example['caption']} \n\n {example['text']} \n\n",
+            translated_text or "",
+        )
+
     def build_translate_example_prompt(self, example_number: str, blocks: list[Block]) -> str:
         """Build a prompt to translate a single example block to Python."""
         self._book_processor.extract_block_structs_and_functions(blocks)
@@ -118,11 +129,7 @@ class PromptBuilder:
             filtered_related_algorithms, True
         )
 
-        prompt = PromptTemplates.translate_example_prompt.format(
-            f"{example['caption']} \n\n {example['text']} \n\n",
-            "\n".join(f"{translated['translated']} \n\n" for translated in translated_examples)
-            or "",
-        )
+        prompt = self._format_translate_example_prompt(example, translated_examples)
         logger.info(
             "prompt_built",
             kind="translate_example",
