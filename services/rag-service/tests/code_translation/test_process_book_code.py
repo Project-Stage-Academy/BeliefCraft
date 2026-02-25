@@ -1,9 +1,24 @@
 import json
+from pathlib import Path
 
-from pipeline.code_translation.process_book_code import BookCodeProcessor
+from pipeline.code_translation.process_book_code import (
+    BookCodeProcessor,
+    JuliaEntityExtractor,
+    TranslatedAlgorithmStore,
+    UsageIndexBuilder,
+)
 
 
-def test_extract_entities_from_julia_code_top_level_only():
+def _make_processor(json_path: Path) -> BookCodeProcessor:
+    return BookCodeProcessor(
+        json_path,
+        JuliaEntityExtractor(),
+        UsageIndexBuilder(),
+        TranslatedAlgorithmStore(json_path),
+    )
+
+
+def test_extract_entities_from_julia_code_top_level_only(tmp_path):
     code = """
 struct Foo
 end
@@ -15,7 +30,7 @@ end
 
 bar(x) = x
 """
-    processor = BookCodeProcessor()
+    processor = _make_processor(tmp_path / "unused.json")
     structs, funcs = processor.extract_entities_from_julia_code(code)
 
     assert structs == ["Foo"]
@@ -31,15 +46,15 @@ def test_get_translated_algorithms_reads_json(tmp_path):
     json_path = tmp_path / "translated.json"
     json_path.write_text(json.dumps(data), encoding="utf-8")
 
-    processor = BookCodeProcessor(json_path)
+    processor = _make_processor(json_path)
     result = processor.get_translated_algorithms(["Algorithm 1.1.", "Algorithm 2.1."])
 
     assert result[0]["translated"] == "print(1)"
     assert result[1]["translated"] == ""
 
 
-def test_filter_out_older_chapters():
-    processor = BookCodeProcessor()
+def test_filter_out_older_chapters(tmp_path):
+    processor = _make_processor(tmp_path / "unused.json")
     blocks = ["Algorithm 2.1.", "Algorithm 3.1.", "Algorithm A.1."]
 
     filtered = processor.filter_out_older_chapters(blocks, "3")
