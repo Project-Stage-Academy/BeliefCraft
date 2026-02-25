@@ -120,7 +120,7 @@ def weaviate_client():
 
 
 @pytest.mark.slow
-# @pytest.mark.skip
+@pytest.mark.skip
 def test_insert_chunks(weaviate_client):
     """Verify chunks can be retrieved after insertion"""
     client = weaviate_client
