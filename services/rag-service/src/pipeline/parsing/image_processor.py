@@ -7,9 +7,15 @@ import cv2  # type: ignore
 import fitz  # type: ignore
 import numpy as np
 from common.logging import get_logger
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore[import-untyped]
 
-from .config import  BLOCK_KEYWORDS, CAPTION_KEYWORDS, DPI_RENDER, FIGURES_PDF, MAIN_PDF # type: ignore[attr-defined]
+from .config import (
+    BLOCK_KEYWORDS,
+    CAPTION_KEYWORDS,
+    DPI_RENDER,
+    FIGURES_PDF,
+    MAIN_PDF,
+)
 
 logger = get_logger(__name__)
 
