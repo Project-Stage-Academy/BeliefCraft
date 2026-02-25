@@ -42,7 +42,10 @@ def db_engine():
     Provisions a temporary PostgreSQL container for the test session.
     Creates all database tables defined in Base.metadata and drops them on teardown.
     """
-    postgres = PostgresContainer("postgres:15-alpine")
+    postgres = PostgresContainer(
+        "postgres:15-alpine",
+        privileged=True
+    )
     postgres.waiting_for(LogMessageWaitStrategy("database system is ready to accept connections"))
 
     with postgres as pg:
@@ -53,10 +56,6 @@ def db_engine():
         yield engine
 
         Base.metadata.drop_all(engine)
-
-
-# conftest.py
-
 
 @pytest.fixture(scope="function")
 def db_session(db_engine) -> Generator[Session, None, None]:
