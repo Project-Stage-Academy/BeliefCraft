@@ -49,7 +49,6 @@ def test_generate_deterministic_uuid(chunk1, chunk2, expected_equal):
         assert uuid1 != uuid2
 
 
-@pytest.mark.skip
 def test_build_reference_map():
     """Verify the reference map correctly indexes chunks by their target entity identity."""
     chunks = [
@@ -80,11 +79,9 @@ def test_extract_references_logic():
 
 
 @patch("weaviate.WeaviateClient")
-@pytest.mark.skip
-def test_setup_collection_logic():
+def test_setup_collection_logic(mock_client):
     """Test collection initialization and deletion logic."""
     mock_collections = MagicMock()
-    mock_client = MagicMock()
     mock_client.collections = mock_collections
 
     # Case 1: Create if not exists
@@ -99,6 +96,8 @@ def test_setup_collection_logic():
     mock_collections.create.assert_not_called()
 
     # Case 3: Recreate
+    mock_collections.create.reset_mock()
+    mock_collections.exists.side_effect = [True, False]
     setup_collection(mock_client, recreate=True)
     mock_collections.delete.assert_called_with(COLLECTION_NAME)
     mock_collections.create.assert_called_once()
@@ -150,6 +149,20 @@ def test_insert_chunks(weaviate_client):
             "referenced_formulas": ["formula_1"],
         },
     ]
+    expected_directly_fetched = {
+        "entity_id": "text_1",
+        "chunk_type": "text",
+        "content": "Einstein's theory of relativity",
+        "additional_field": "Some extra info",
+        "additional_info": None,
+    }
+    expected_fetched_by_reference = {
+        "entity_id": "formula_1",
+        "chunk_type": "formula",
+        "content": "E=mc^2",
+        "additional_info": "This is a famous formula.",
+        "additional_field": None,
+    }
     reference_map = build_reference_map(chunks)
 
     insert_chunks(collection, chunks, reference_map)
@@ -163,15 +176,14 @@ def test_insert_chunks(weaviate_client):
         return_references=[
             QueryReference(
                 link_on="referenced_formulas",
-                # return_properties=["title"]
             ),
         ],
         limit=1,
     )
-    print(response)
-    for o in response.objects:
-        print(o.properties)
-        # print referenced objects
-        for ref_obj in o.references["referenced_formulas"].objects:
-            print(ref_obj.properties)
-    # TODO
+
+    directly_fetched = response.objects[0].properties
+    fetched_by_reference = (
+        response.objects[0].references["referenced_formulas"].objects[0].properties
+    )
+    assert directly_fetched == expected_directly_fetched
+    assert fetched_by_reference == expected_fetched_by_reference
