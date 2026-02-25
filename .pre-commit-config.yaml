@@ -37,6 +37,7 @@ repos:
         additional_dependencies:
           - sqlalchemy
           - types-psycopg2
+          - jinja2
           - fastapi
           - httpx
           - structlog
