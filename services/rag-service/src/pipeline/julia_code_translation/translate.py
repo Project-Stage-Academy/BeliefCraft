@@ -21,6 +21,15 @@ from pipeline.parsing.block_processor import open_block_processor
 
 logger = get_logger(__name__)
 
+BEDROCK_MODEL_ID = "eu.anthropic.claude-sonnet-4-5-20250929-v1:0"
+BEDROCK_SYSTEM_PROMPT = (
+    "You are an expert at translating Julia code to idiomatic Python, "
+    "maintaining consistency with existing code patterns"
+)
+BEDROCK_MAX_TOKENS = 10000
+BEDROCK_TEMPERATURE = 0.0
+ANTHROPIC_VERSION = "bedrock-2023-05-31"
+
 
 class ModelClient(Protocol):
     def send_prompt(self, prompt: str) -> str: ...
@@ -112,24 +121,23 @@ class BedrockModelClient:
     def __init__(
         self,
         client: Any,
-        model_id: str = "eu.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        model_id: str = BEDROCK_MODEL_ID,
         system_prompt: str | None = None,
-        max_tokens: int = 10000,
-        temperature: float = 0.0,
+        max_tokens: int = BEDROCK_MAX_TOKENS,
+        temperature: float = BEDROCK_TEMPERATURE,
+        anthropic_version: str = ANTHROPIC_VERSION,
     ) -> None:
         self._client = client
         self._model_id = model_id
-        self._system_prompt = system_prompt or (
-            "You are an expert at translating Julia code to idiomatic Python, "
-            "maintaining consistency with existing code patterns"
-        )
+        self._system_prompt = system_prompt or BEDROCK_SYSTEM_PROMPT
         self._max_tokens = max_tokens
         self._temperature = temperature
+        self._anthropic_version = anthropic_version
 
     def send_prompt(self, prompt: str) -> str:
         logger.info("sending_prompt", prompt_chars=len(prompt))
         body = {
-            "anthropic_version": "bedrock-2023-05-31",
+            "anthropic_version": self._anthropic_version,
             "max_tokens": self._max_tokens,
             "temperature": self._temperature,
             "system": self._system_prompt,
