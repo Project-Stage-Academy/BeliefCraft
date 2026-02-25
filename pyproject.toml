@@ -106,7 +106,7 @@ strict = true
 explicit_package_bases = true
 namespace_packages = true
 exclude = [
-    '(^|/)tests/',
+    '(^|/)tests/'
 ]
 mypy_path = [
     "packages/common/src",
