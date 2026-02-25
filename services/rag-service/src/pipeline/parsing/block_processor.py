@@ -99,7 +99,8 @@ class CaptionFinder:
                 caption_rect = line_rect if caption_rect is None else (caption_rect | line_rect)
 
                 for span in line["spans"]:
-                    caption_text += span["text"] + " "
+                    if span["text"].strip():
+                        caption_text += span["text"] + " "
 
         return caption_text, caption_rect
 
