@@ -34,7 +34,10 @@ def setup_collection(client: weaviate.WeaviateClient, recreate: bool = False) ->
         print(f"Creating collection: {COLLECTION_NAME}")
         client.collections.create(
             name=COLLECTION_NAME,
-            vector_config=Configure.Vectors.none(
+            vector_config=Configure.Vectors.text2vec_aws_bedrock(
+                source_properties=PROPERTIES_TO_EMBED,
+                region=EMBEDDING_MODEL_REGION,
+                model=EMBEDDING_MODEL,
                 vector_index_config=Configure.VectorIndex.flat(
                     distance_metric=VectorDistances.COSINE,
                 ),
