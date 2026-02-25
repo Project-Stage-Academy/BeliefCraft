@@ -159,7 +159,7 @@ class BaseAPIClient:
         """
         if not self._client:
             raise RuntimeError(
-                f"{self.service_name} client not initialized. " "Use 'async with' context manager."
+                f"{self.service_name} client not initialized. Use 'async with' context manager."
             )
 
         # Override timeout if specified

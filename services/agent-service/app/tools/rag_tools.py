@@ -178,7 +178,7 @@ class SearchKnowledgeBaseTool(APIClientTool):
             invalid_types = [t for t in traverse_types if t not in valid_types]
             if invalid_types:
                 raise ValueError(
-                    f"Invalid traverse_types: {invalid_types}. " f"Valid values are: {valid_types}"
+                    f"Invalid traverse_types: {invalid_types}. Valid values are: {valid_types}"
                 )
 
         # Validate filters parameter
@@ -303,7 +303,7 @@ class ExpandGraphByIdsTool(APIClientTool):
             invalid_types = [t for t in traverse_types if t not in valid_types]
             if invalid_types:
                 raise ValueError(
-                    f"Invalid traverse_types: {invalid_types}. " f"Valid values are: {valid_types}"
+                    f"Invalid traverse_types: {invalid_types}. Valid values are: {valid_types}"
                 )
 
         async with self.get_client() as client:

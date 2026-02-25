@@ -73,7 +73,7 @@ class ToolRegistry:
 
         if tool_name in self._tools:
             raise ValueError(
-                f"Tool '{tool_name}' already registered. " f"Each tool must have a unique name."
+                f"Tool '{tool_name}' already registered. Each tool must have a unique name."
             )
 
         self._tools[tool_name] = tool
@@ -101,7 +101,7 @@ class ToolRegistry:
         if name not in self._tools:
             available_tools = ", ".join(self._tools.keys())
             raise ToolExecutionError(
-                f"Tool '{name}' not found in registry. " f"Available tools: {available_tools}",
+                f"Tool '{name}' not found in registry. Available tools: {available_tools}",
                 tool_name=name,
             )
 

@@ -15,6 +15,7 @@ Usage:
         data = response.json()
 """
 
+import time
 from types import TracebackType
 from typing import Any, TypedDict
 
@@ -41,6 +42,7 @@ class RequestLogger:
         trace_id = ctx.get("trace_id", "internal-request")
 
         request.headers["X-Request-ID"] = trace_id
+        request.extensions["start_time"] = time.perf_counter()
 
         logger.info(
             "http_request_started", method=request.method, url=str(request.url), trace_id=trace_id
@@ -48,17 +50,31 @@ class RequestLogger:
 
     async def log_response(self, response: httpx.Response) -> None:
         """Log response details. Only reads body for errors to prevent OOM."""
-        duration_ms = response.elapsed.total_seconds() * 1000 if response.elapsed else 0
+        streaming = not hasattr(response, "_content")
+        if not streaming:
+            duration_ms = response.elapsed.total_seconds() * 1000 if response.elapsed else 0
+        else:
+            try:
+                start_time = response.request.extensions["start_time"]
+                duration_ms = (time.perf_counter() - start_time) * 1000
+            except KeyError:
+                duration_ms = None
 
         if response.status_code >= 400:
-            await response.aread()
+            if streaming:
+                prefix = await response.aiter_bytes().__anext__()
+                body_preview = prefix.decode(errors="replace")[:500]
+            else:
+                await response.aread()
+                body_preview = response.text[:500]
             logger.warning(
                 "http_request_failed",
                 status_code=response.status_code,
                 method=response.request.method,
                 url=str(response.request.url),
                 duration_ms=duration_ms,
-                response_body=response.text[:500],
+                streaming=streaming,
+                response_body=body_preview,
             )
         else:
             logger.info(
@@ -67,6 +83,7 @@ class RequestLogger:
                 url=str(response.request.url),
                 status_code=response.status_code,
                 duration_ms=duration_ms,
+                streaming=streaming,
             )
 
 
@@ -127,6 +144,10 @@ class TracedHttpClient:
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
         return self._client
+
+    def get_httpx_client(self) -> httpx.AsyncClient:
+        """Expose the underlying httpx.AsyncClient."""
+        return self._ensure_initialized()
 
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
         """Send GET request with automatic trace_id propagation."""
