@@ -1,11 +1,21 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from common.schemas.common import ToolResult
 from fastapi import HTTPException, status
 from pydantic import ValidationError
+
+
+def enum_value_or_raw(value: Any) -> Any:
+    return getattr(value, "value", value)
+
+
+def enum_values_or_none(values: Sequence[Any] | None) -> list[Any] | None:
+    if not values:
+        return None
+    return [enum_value_or_raw(value) for value in values]
 
 
 def execute_tool(tool_call: Callable[[], ToolResult[Any]]) -> dict[str, Any]:

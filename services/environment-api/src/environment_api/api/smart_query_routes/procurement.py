@@ -14,7 +14,7 @@ from environment_api.smart_query_builder.tools import (
 )
 from fastapi import APIRouter, Query
 
-from .common import execute_tool
+from .common import enum_value_or_raw, enum_values_or_none, execute_tool
 
 router = APIRouter(prefix="/procurement", tags=["smart-query"])
 
@@ -62,7 +62,7 @@ def procurement_list_purchase_orders(
         lambda: list_purchase_orders(
             supplier_id=supplier_id,
             destination_warehouse_id=destination_warehouse_id,
-            status_in=[s.value for s in status_in] if status_in else None,
+            status_in=enum_values_or_none(status_in),
             created_after=created_after,
             created_before=created_before,
             expected_after=expected_after,
@@ -117,9 +117,9 @@ def procurement_pipeline_summary(
         lambda: get_procurement_pipeline_summary(
             destination_warehouse_id=destination_warehouse_id,
             supplier_id=supplier_id,
-            status_in=[s.value for s in status_in] if status_in else None,
+            status_in=enum_values_or_none(status_in),
             horizon_days=horizon_days,
-            group_by=group_by.value,
+            group_by=enum_value_or_raw(group_by),
             include_names=include_names,
         )
     )

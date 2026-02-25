@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -13,24 +14,169 @@ from common.schemas.procurement import (
     ProcurementGroupBy,
     ProcurementPipelineSummaryRequest,
 )
-from sqlalchemy import MetaData, Table, func, literal, select
+from database.inventory import Product
+from database.logistics import Supplier, Warehouse
+from database.orders import POLine, PurchaseOrder
+from sqlalchemy import func, literal, select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.selectable import FromClause
+
+_PROCUREMENT_TABLES: dict[str, FromClause] = {
+    "suppliers": Supplier.__table__,
+    "purchase_orders": PurchaseOrder.__table__,
+    "po_lines": POLine.__table__,
+    "products": Product.__table__,
+    "warehouses": Warehouse.__table__,
+}
 
 
-def _load_tables(session: Session) -> dict[str, Table]:
-    bind = session.get_bind()
-    if bind is None:
+def _build_optional_name_columns(
+    include_names: bool, suppliers: Any, warehouses: Any
+) -> tuple[Any, Any]:
+    supplier_name_col = (
+        suppliers.c.name.label("supplier_name")
+        if include_names
+        else literal(None).label("supplier_name")
+    )
+    warehouse_name_col = (
+        warehouses.c.name.label("warehouse_name")
+        if include_names
+        else literal(None).label("warehouse_name")
+    )
+    return supplier_name_col, warehouse_name_col
+
+
+def _build_purchase_orders_from_clause(
+    include_names: bool,
+    purchase_orders: Any,
+    suppliers: Any,
+    warehouses: Any,
+) -> Any:
+    if not include_names:
+        return purchase_orders
+    return purchase_orders.join(suppliers, suppliers.c.id == purchase_orders.c.supplier_id).join(
+        warehouses, warehouses.c.id == purchase_orders.c.destination_warehouse_id
+    )
+
+
+def _build_procurement_pipeline_from_clause(
+    include_names: bool,
+    purchase_orders: Any,
+    po_lines: Any,
+    suppliers: Any,
+    warehouses: Any,
+) -> Any:
+    from_clause = purchase_orders.join(
+        po_lines, po_lines.c.purchase_order_id == purchase_orders.c.id
+    )
+    if not include_names:
+        return from_clause
+    return from_clause.join(suppliers, suppliers.c.id == purchase_orders.c.supplier_id).join(
+        warehouses, warehouses.c.id == purchase_orders.c.destination_warehouse_id
+    )
+
+
+@dataclass(frozen=True)
+class _ProcurementPipelineGroupingSpec:
+    destination_id_col: Any
+    supplier_id_col: Any
+    supplier_name_col: Any
+    warehouse_name_col: Any
+    group_cols: tuple[Any, ...]
+
+
+def _procurement_pipeline_grouping_by_warehouse(
+    include_names: bool,
+    purchase_orders: Any,
+    _suppliers: Any,
+    warehouses: Any,
+) -> _ProcurementPipelineGroupingSpec:
+    destination_id_col = purchase_orders.c.destination_warehouse_id
+    supplier_id_col = literal(None)
+    supplier_name_col = literal(None)
+    warehouse_name_col = warehouses.c.name if include_names else literal(None)
+    group_cols: tuple[Any, ...] = (destination_id_col, supplier_id_col)
+    if include_names:
+        group_cols = (*group_cols, warehouses.c.name)
+    return _ProcurementPipelineGroupingSpec(
+        destination_id_col=destination_id_col,
+        supplier_id_col=supplier_id_col,
+        supplier_name_col=supplier_name_col,
+        warehouse_name_col=warehouse_name_col,
+        group_cols=group_cols,
+    )
+
+
+def _procurement_pipeline_grouping_by_supplier(
+    include_names: bool,
+    purchase_orders: Any,
+    suppliers: Any,
+    _warehouses: Any,
+) -> _ProcurementPipelineGroupingSpec:
+    destination_id_col = literal(None)
+    supplier_id_col = purchase_orders.c.supplier_id
+    supplier_name_col = suppliers.c.name if include_names else literal(None)
+    warehouse_name_col = literal(None)
+    group_cols: tuple[Any, ...] = (destination_id_col, supplier_id_col)
+    if include_names:
+        group_cols = (*group_cols, suppliers.c.name)
+    return _ProcurementPipelineGroupingSpec(
+        destination_id_col=destination_id_col,
+        supplier_id_col=supplier_id_col,
+        supplier_name_col=supplier_name_col,
+        warehouse_name_col=warehouse_name_col,
+        group_cols=group_cols,
+    )
+
+
+def _procurement_pipeline_grouping_by_warehouse_supplier(
+    include_names: bool,
+    purchase_orders: Any,
+    suppliers: Any,
+    warehouses: Any,
+) -> _ProcurementPipelineGroupingSpec:
+    destination_id_col = purchase_orders.c.destination_warehouse_id
+    supplier_id_col = purchase_orders.c.supplier_id
+    supplier_name_col = suppliers.c.name if include_names else literal(None)
+    warehouse_name_col = warehouses.c.name if include_names else literal(None)
+    group_cols: tuple[Any, ...] = (destination_id_col, supplier_id_col)
+    if include_names:
+        group_cols = (*group_cols, suppliers.c.name, warehouses.c.name)
+    return _ProcurementPipelineGroupingSpec(
+        destination_id_col=destination_id_col,
+        supplier_id_col=supplier_id_col,
+        supplier_name_col=supplier_name_col,
+        warehouse_name_col=warehouse_name_col,
+        group_cols=group_cols,
+    )
+
+
+def _build_procurement_pipeline_grouping_spec(
+    group_by: ProcurementGroupBy,
+    include_names: bool,
+    purchase_orders: Any,
+    suppliers: Any,
+    warehouses: Any,
+) -> _ProcurementPipelineGroupingSpec:
+    if group_by == ProcurementGroupBy.warehouse:
+        return _procurement_pipeline_grouping_by_warehouse(
+            include_names, purchase_orders, suppliers, warehouses
+        )
+    if group_by == ProcurementGroupBy.supplier:
+        return _procurement_pipeline_grouping_by_supplier(
+            include_names, purchase_orders, suppliers, warehouses
+        )
+    return _procurement_pipeline_grouping_by_warehouse_supplier(
+        include_names, purchase_orders, suppliers, warehouses
+    )
+
+
+def _load_tables(session: Session) -> dict[str, FromClause]:
+    if session.get_bind() is None:
         raise RuntimeError("Database session is not bound.")
 
-    metadata = MetaData()
-    return {
-        "suppliers": Table("suppliers", metadata, autoload_with=bind),
-        "purchase_orders": Table("purchase_orders", metadata, autoload_with=bind),
-        "po_lines": Table("po_lines", metadata, autoload_with=bind),
-        "products": Table("products", metadata, autoload_with=bind),
-        "warehouses": Table("warehouses", metadata, autoload_with=bind),
-    }
+    return _PROCUREMENT_TABLES.copy()
 
 
 def _status_values(statuses: Sequence[object]) -> list[str]:
@@ -105,22 +251,13 @@ def fetch_purchase_order_rows(
     suppliers = tables["suppliers"]
     warehouses = tables["warehouses"]
 
-    supplier_name_col = (
-        suppliers.c.name.label("supplier_name")
-        if request.include_names
-        else literal(None).label("supplier_name")
-    )
-    warehouse_name_col = (
-        warehouses.c.name.label("warehouse_name")
-        if request.include_names
-        else literal(None).label("warehouse_name")
+    supplier_name_col, warehouse_name_col = _build_optional_name_columns(
+        request.include_names, suppliers, warehouses
     )
 
-    from_clause: Any = purchase_orders
-    if request.include_names:
-        from_clause = from_clause.join(
-            suppliers, suppliers.c.id == purchase_orders.c.supplier_id
-        ).join(warehouses, warehouses.c.id == purchase_orders.c.destination_warehouse_id)
+    from_clause = _build_purchase_orders_from_clause(
+        request.include_names, purchase_orders, suppliers, warehouses
+    )
 
     stmt = (
         select(
@@ -169,22 +306,13 @@ def fetch_purchase_order_row(
     suppliers = tables["suppliers"]
     warehouses = tables["warehouses"]
 
-    supplier_name_col = (
-        suppliers.c.name.label("supplier_name")
-        if request.include_names
-        else literal(None).label("supplier_name")
-    )
-    warehouse_name_col = (
-        warehouses.c.name.label("warehouse_name")
-        if request.include_names
-        else literal(None).label("warehouse_name")
+    supplier_name_col, warehouse_name_col = _build_optional_name_columns(
+        request.include_names, suppliers, warehouses
     )
 
-    from_clause: Any = purchase_orders
-    if request.include_names:
-        from_clause = from_clause.join(
-            suppliers, suppliers.c.id == purchase_orders.c.supplier_id
-        ).join(warehouses, warehouses.c.id == purchase_orders.c.destination_warehouse_id)
+    from_clause = _build_purchase_orders_from_clause(
+        request.include_names, purchase_orders, suppliers, warehouses
+    )
 
     stmt = (
         select(
@@ -213,9 +341,10 @@ def fetch_po_line_rows(
     po_lines = tables["po_lines"]
     products = tables["products"]
 
-    remaining_qty_expr = func.greatest(po_lines.c.qty_ordered - po_lines.c.qty_received, 0).label(
-        "remaining_qty"
-    )
+    remaining_qty_expr = func.greatest(
+        func.coalesce(po_lines.c.qty_ordered, 0) - func.coalesce(po_lines.c.qty_received, 0),
+        0,
+    ).label("remaining_qty")
     sku_col = (
         products.c.sku.label("sku")
         if request.include_product_fields
@@ -272,52 +401,29 @@ def fetch_procurement_pipeline_summary_rows(
     suppliers = tables["suppliers"]
     warehouses = tables["warehouses"]
 
-    from_clause = purchase_orders.join(
-        po_lines, po_lines.c.purchase_order_id == purchase_orders.c.id
+    from_clause = _build_procurement_pipeline_from_clause(
+        request.include_names, purchase_orders, po_lines, suppliers, warehouses
     )
-    if request.include_names:
-        from_clause = from_clause.join(
-            suppliers, suppliers.c.id == purchase_orders.c.supplier_id
-        ).join(warehouses, warehouses.c.id == purchase_orders.c.destination_warehouse_id)
-
-    destination_id_col = (
-        purchase_orders.c.destination_warehouse_id
-        if request.group_by in (ProcurementGroupBy.warehouse, ProcurementGroupBy.warehouse_supplier)
-        else literal(None)
-    )
-    supplier_id_col = (
-        purchase_orders.c.supplier_id
-        if request.group_by in (ProcurementGroupBy.supplier, ProcurementGroupBy.warehouse_supplier)
-        else literal(None)
+    grouping_spec = _build_procurement_pipeline_grouping_spec(
+        request.group_by, request.include_names, purchase_orders, suppliers, warehouses
     )
 
-    warehouse_name_col = (
-        warehouses.c.name
-        if request.include_names
-        and request.group_by
-        in (ProcurementGroupBy.warehouse, ProcurementGroupBy.warehouse_supplier)
-        else literal(None)
+    remaining_line_qty_expr = func.greatest(
+        func.coalesce(po_lines.c.qty_ordered, 0) - func.coalesce(po_lines.c.qty_received, 0),
+        0,
     )
-    supplier_name_col = (
-        suppliers.c.name
-        if request.include_names
-        and request.group_by in (ProcurementGroupBy.supplier, ProcurementGroupBy.warehouse_supplier)
-        else literal(None)
-    )
-
-    remaining_line_qty_expr = func.greatest(po_lines.c.qty_ordered - po_lines.c.qty_received, 0)
 
     stmt = select(
-        destination_id_col.label("destination_warehouse_id"),
-        supplier_id_col.label("supplier_id"),
+        grouping_spec.destination_id_col.label("destination_warehouse_id"),
+        grouping_spec.supplier_id_col.label("supplier_id"),
         func.count(func.distinct(purchase_orders.c.id)).label("po_count"),
         func.coalesce(func.sum(po_lines.c.qty_ordered), 0.0).label("total_qty_ordered"),
         func.coalesce(func.sum(po_lines.c.qty_received), 0.0).label("total_qty_received"),
         func.coalesce(func.sum(remaining_line_qty_expr), 0.0).label("total_qty_remaining"),
         func.min(purchase_orders.c.expected_at).label("next_expected_at"),
         func.max(purchase_orders.c.created_at).label("last_created_at"),
-        supplier_name_col.label("supplier_name"),
-        warehouse_name_col.label("warehouse_name"),
+        grouping_spec.supplier_name_col.label("supplier_name"),
+        grouping_spec.warehouse_name_col.label("warehouse_name"),
     ).select_from(from_clause)
 
     if request.destination_warehouse_id:
@@ -335,19 +441,7 @@ def fetch_procurement_pipeline_summary_rows(
             purchase_orders.c.expected_at <= horizon_cutoff,
         )
 
-    group_cols = [destination_id_col, supplier_id_col]
-    if request.include_names and request.group_by in (
-        ProcurementGroupBy.supplier,
-        ProcurementGroupBy.warehouse_supplier,
-    ):
-        group_cols.append(suppliers.c.name)
-    if request.include_names and request.group_by in (
-        ProcurementGroupBy.warehouse,
-        ProcurementGroupBy.warehouse_supplier,
-    ):
-        group_cols.append(warehouses.c.name)
-
-    stmt = stmt.group_by(*group_cols).order_by(
+    stmt = stmt.group_by(*grouping_spec.group_cols).order_by(
         func.min(purchase_orders.c.expected_at).asc().nulls_last(),
         func.coalesce(func.sum(remaining_line_qty_expr), 0.0).desc(),
     )
