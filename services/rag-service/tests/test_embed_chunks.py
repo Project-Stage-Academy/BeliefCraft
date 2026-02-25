@@ -12,6 +12,7 @@ from scripts.embed_chunks import (
     setup_collection,
 )
 from weaviate.collections.classes.config import Configure, ReferenceProperty
+from weaviate.collections.classes.data import DataReference
 from weaviate.collections.classes.filters import Filter
 from weaviate.collections.classes.grpc import QueryReference
 
@@ -70,10 +71,15 @@ def test_extract_references_logic():
     target_uuid = generate_deterministic_uuid(target)
     ref_map = {("f1", "formula"): target}
     source = {"content": "source", "referenced_formulas": ["f1"], "referenced_algorithms": []}
+    source_uuid = generate_deterministic_uuid(source)
 
     refs = extract_references_from_chunk(source, ref_map)
 
-    assert refs == {"referenced_formulas": [target_uuid]}
+    assert refs == [
+        DataReference(
+            from_uuid=source_uuid, from_property="referenced_formulas", to_uuid=target_uuid
+        )
+    ]
     assert "referenced_formulas" not in source
     assert "referenced_algorithms" not in source
 

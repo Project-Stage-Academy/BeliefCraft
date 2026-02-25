@@ -69,21 +69,30 @@ ReferenceMap = dict[
 
 def extract_references_from_chunk(
     chunk: dict[str, Any], reference_map: ReferenceMap
-) -> dict[str, list[str]]:
+) -> list[DataReference]:
     """Extract references from chunks. Remove old reference fields from chunk because
-    they will be passed separately to Weaviate"""
-    references = {}
+    they will be passed separately to Weaviate
+
+    Parameters
+    ----------
+    chunk: dict[str, Any]
+        The chunk dictionary from which to extract references.
+    reference_map: ReferenceMap
+        A mapping of (entity_id, chunk_type) to the chunks that are referenced by this pair.
+    """
+    references = []
+    from_id = generate_deterministic_uuid(chunk)
     for ref_name, chunk_type in REFERENCE_TYPE_MAP.items():
         chunk_references = chunk.pop(ref_name, [])
         if not chunk_references:
             continue
-        referenced_ids = []
         for entity_id in chunk_references:
             key = (entity_id, chunk_type)
             referenced_chunk = reference_map[key]
-            # deterministic uuid allows to know chunk's uuid before it is even inserted
-            referenced_ids.append(generate_deterministic_uuid(referenced_chunk))
-        references[ref_name] = referenced_ids
+            to_id = generate_deterministic_uuid(referenced_chunk)
+            references.append(
+                DataReference(from_uuid=from_id, from_property=ref_name, to_uuid=to_id)
+            )
     return references
 
 
@@ -100,15 +109,9 @@ def insert_chunks(
             properties=chunk,
             uuid=uuid,
         )
-        references.append((uuid, chunk_references))
-
-    refs_list = []
-    for from_id, chunk_references in references:
-        for ref_name, referenced_ids in chunk_references.items():
-            for to_id in referenced_ids:
-                ref_obj = DataReference(from_uuid=from_id, from_property=ref_name, to_uuid=to_id)
-                refs_list.append(ref_obj)
-    collection.data.reference_add_many(refs_list)
+        references.extend(chunk_references)
+    # add references in batch after all chunks are inserted to avoid referencing non-existing UUIDs
+    collection.data.reference_add_many(references)
 
 
 def build_reference_map(chunks: list[dict[str, Any]]) -> ReferenceMap:
