@@ -150,16 +150,16 @@ translate_julia_code_prompt = (
     "name::Symbol\n"
     "r::Int # number of possible values\n"
     "end\n"
-    "const Assignment = Dict{Symbol,Int}\n"
-    "const FactorTable = Dict{Assignment,Float64}\n"
+    "const Assignment = Dict{{Symbol,Int}}\n"
+    "const FactorTable = Dict{{Assignment,Float64}}\n"
     "struct Factor\n"
-    "vars::Vector{Variable}\n"
+    "vars::Vector{{Variable}}\n"
     "table::FactorTable\n"
     "end\n"
     "variablenames(ϕ::Factor) = [var.name for var in ϕ.vars]\n"
-    "select(a::Assignment, varnames::Vector{Symbol}) =\n"
+    "select(a::Assignment, varnames::Vector{{Symbol}}) =\n"
     "Assignment(n=>a[n] for n in varnames)\n"
-    "function assignments(vars::AbstractVector{Variable})\n"
+    "function assignments(vars::AbstractVector{{Variable}})\n"
     "names = [var.name for var in vars]\n"
     "return vec([Assignment(n=>v for (n,v) in zip(names, values))\n"
     "for values in product((1:v.r for v in vars)...)])\n"
@@ -176,9 +176,9 @@ translate_julia_code_prompt = (
     "factors, and a graph. The graph data structure is provided by Graphs.jl.\n"
     "\n"
     "struct BayesianNetwork\n"
-    "vars::Vector{Variable}\n"
-    "factors::Vector{Factor}\n"
-    "graph::SimpleDiGraph{Int64}\n"
+    "vars::Vector{{Variable}}\n"
+    "factors::Vector{{Factor}}\n"
+    "graph::SimpleDiGraph{{Int64}}\n"
     "end\n"
     "\n"
     "Algorithm 2.3. A function for evaluating the probability of an assignment given a Bayesian "
@@ -230,8 +230,8 @@ translate_julia_code_prompt = (
     '"struct Variable": "Variable",\n'
     '"struct Factor": "Factor",\n'
     '"variablenames(ϕ::Factor)": "Factor.variable_names",\n'
-    '"select(a::Assignment, varnames::Vector{Symbol})": "Assignment.select",\n'
-    '"function assignments(vars::AbstractVector{Variable})": "assignments",\n'
+    '"select(a::Assignment, varnames::Vector{{Symbol}})": "Assignment.select",\n'
+    '"function assignments(vars::AbstractVector{{Variable}})": "assignments",\n'
     '"function normalize!(ϕ::Factor)": "Factor.normalize"\n'
     "}}\n"
     "}},\n"

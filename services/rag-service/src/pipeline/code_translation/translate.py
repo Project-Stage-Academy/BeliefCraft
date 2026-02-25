@@ -8,12 +8,9 @@ from typing import Any, cast
 import boto3  # type: ignore[import-not-found]
 from botocore.config import Config  # type: ignore[import-not-found]
 from common.logging import get_logger
-from pipeline.code_translation.build_prompts import (
-    CHAPTERS_TO_TRANSLATE,
-    EXAMPLE_WITH_CODE_NUMBERS,
-    TRANSLATED_CHAPTERS,
-    PromptBuilder,
-)
+from pipeline.code_translation.build_prompts import PromptBuilder
+from pipeline.code_translation.constants import TRANSLATED_ALGOS_PATH, PromptConfig
+from pipeline.code_translation.github_code_fetcher import GitHubCodeFetcher
 from pipeline.code_translation.process_book_code import BookCodeProcessor
 from pipeline.parsing.extract_algorithms_and_examples import BlockProcessor
 
@@ -29,11 +26,13 @@ class Translator:
         prompts_dir: Path,
         translated_algorithms_json: str | Path,
         prompts_builder: PromptBuilder,
+        config: PromptConfig,
     ) -> None:
         self._client = client
         self._prompts_dir = prompts_dir
         self._translated_algorithms_json = translated_algorithms_json
         self._prompts_builder = prompts_builder
+        self._config = config
 
     @staticmethod
     def extract_json_from_text(text: str) -> list[dict[str, Any]]:
@@ -125,7 +124,7 @@ class Translator:
     def process_update_descriptions(self, julia_code: list[dict[str, Any]]) -> None:
         """Update descriptions for already-translated chapters."""
         prompts_queue: list[str] = []
-        for chapter in TRANSLATED_CHAPTERS:
+        for chapter in self._config.translated_chapters:
             prompt = self._prompts_builder.build_update_descriptions_prompt(chapter, julia_code)
             update_description_dir = self._prompts_dir / "update_description"
             self._persist_prompt(
@@ -149,7 +148,7 @@ class Translator:
 
     def process_translate_algorithms(self, julia_code: list[dict[str, Any]]) -> None:
         """Translate new algorithm chapters from Julia to Python."""
-        for chapter in CHAPTERS_TO_TRANSLATE:
+        for chapter in self._config.chapters_to_translate:
             logger.info("translating_chapter", chapter=chapter)
             prompt = self._prompts_builder.build_translate_python_code_prompt(chapter, julia_code)
             translate_algorithms_dir = self._prompts_dir / "translate_algorithms"
@@ -168,7 +167,7 @@ class Translator:
     def process_translate_examples(self, blocks: list[dict[str, Any]]) -> None:
         """Translate example blocks from Julia to Python."""
         prompts_queue: list[str] = []
-        for example in EXAMPLE_WITH_CODE_NUMBERS:
+        for example in self._config.example_with_code_numbers:
             prompt = self._prompts_builder.build_translate_example_prompt(example, blocks)
             translate_examples_dir = self._prompts_dir / "translate_examples"
             self._persist_prompt(
@@ -200,11 +199,13 @@ def main() -> None:
         "--pdf-path", default="dm.pdf", help="Path to the source PDF (default: dm.pdf)"
     )
     parser.add_argument(
-        "--prompts-dir", default="prompts", help="Output directory for prompts (default: prompts)"
+        "--prompts-dir",
+        default=PromptConfig().prompts_dir,
+        help="Output directory for prompts (default: prompts)",
     )
     parser.add_argument(
         "--translated-algorithms-json",
-        default="translated_algorithms.json",
+        default=str(TRANSLATED_ALGOS_PATH),
         help="Path to translated algorithms JSON (default: translated_algorithms.json)",
     )
     args = parser.parse_args()
@@ -228,6 +229,9 @@ def main() -> None:
 
         prompts_builder = PromptBuilder(
             book_processor=BookCodeProcessor(Path(args.translated_algorithms_json)),
+            github_fetcher=GitHubCodeFetcher(
+                "https://github.com/griffinbholt/decisionmaking-code-py"
+            ),
             block_processor=block_processor,
         )
 
@@ -236,6 +240,7 @@ def main() -> None:
             prompts_dir=prompts_dir,
             translated_algorithms_json=args.translated_algorithms_json,
             prompts_builder=prompts_builder,
+            config=PromptConfig(),
         )
         logger.info("translation_started", prompts_dir=str(prompts_dir))
         translator.process_update_descriptions(julia_code)

@@ -1,6 +1,7 @@
 import json
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -8,87 +9,172 @@ from pipeline.code_translation.constants import TRANSLATED_ALGOS_PATH
 from pipeline.code_translation.signature_stripper import strip_to_signatures
 from pipeline.parsing.extract_algorithms_and_examples import BlockType
 
-APPENDIX_START_CHAPTER = 28
+APPENDIX_START_CHAPTER = (
+    28  # Chapters 1-27 are numeric, then appendices A-H map to 28-35 for sorting purposes.
+)
 APPENDIX_LETTERS = set("ABCDEFGH")
 
+# Julia identifier and signature patterns.
+JULIA_IDENT_PATTERN = r"[A-Za-z_\u0080-\uFFFF]\w*"
+JULIA_FUNC_NAME_PATTERN = rf"{JULIA_IDENT_PATTERN}[!?]?"
+
+# Julia definition patterns.
+JULIA_ONELINER_FUNC_PATTERN = rf"^\s*({JULIA_FUNC_NAME_PATTERN})\s*\([^=\n]*\)\s*="
+JULIA_BLOCK_FUNC_PATTERN = rf"^\s*function\s+({JULIA_FUNC_NAME_PATTERN})\("
+JULIA_STRUCT_PATTERN = rf"^\s*(?:mutable\s+)?struct\s+({JULIA_IDENT_PATTERN})\b"
+
+# Julia block tracking patterns.
+JULIA_BLOCK_OPEN_PATTERN = (
+    r"^\s*(function|(?:mutable\s+)?struct|if|for|while|begin|let|try|quote|macro|module)\b"
+)
+JULIA_BLOCK_END_PATTERN = r"(?<!:)\bend\b"
+
+# Julia keywords to ignore as function names.
+JULIA_STOPWORDS = frozenset(
+    {"if", "for", "while", "begin", "let", "try", "catch", "finally", "end", "do"}
+)
+
+# Usage pattern templates for usage index building.
+STRUCT_QUAL_PATTERN_TEMPLATE = r"::({struct_names})\b"
+STRUCT_CALL_PATTERN_TEMPLATE = r"\b({struct_names})\s*\("
+FUNC_CALL_PATTERN_TEMPLATE = r"\b({func_names})\s*\("
+FUNC_DEF_PATTERN_TEMPLATE = r"^\s*function\s+({func_names})\s*\("
+FUNC_ONELINER_DEF_PATTERN_TEMPLATE = r"^\s*({func_names})\s*\([^=\n]*\)\s*="
+
+# Compiled Julia patterns for the entity extractor.
+JULIA_ONELINER_FUNC_RE = re.compile(JULIA_ONELINER_FUNC_PATTERN)
+JULIA_BLOCK_FUNC_RE = re.compile(JULIA_BLOCK_FUNC_PATTERN)
+JULIA_STRUCT_RE = re.compile(JULIA_STRUCT_PATTERN)
+JULIA_BLOCK_OPEN_RE = re.compile(JULIA_BLOCK_OPEN_PATTERN)
+JULIA_BLOCK_END_RE = re.compile(JULIA_BLOCK_END_PATTERN)
+
 Block = dict[str, Any]
+
+
+@dataclass(frozen=True)
+class UsagePatterns:
+    struct_qual_pattern: re.Pattern[str] | None
+    struct_call_pattern: re.Pattern[str] | None
+    func_pattern: re.Pattern[str] | None
+    func_def_pattern: re.Pattern[str] | None
+    func_oneliner_def_pattern: re.Pattern[str] | None
 
 
 class BookCodeProcessor:
     def __init__(self, translated_algos_path: Path = TRANSLATED_ALGOS_PATH) -> None:
         self._translated_algos_path = translated_algos_path
 
-    def extract_entities_from_julia_code(self, code: str) -> tuple[list[str], list[str]]:
-        """Return top-level structs and function names defined in a Julia code block."""
-        ident = r"[A-Za-z_\u0080-\uFFFF]\w*"
-        func_name = rf"{ident}[!?]?"
+    def _update_block_depth(self, line: str, depth: int) -> int:
+        """Update block nesting depth based on the current line."""
+        opens = 1 if JULIA_BLOCK_OPEN_RE.match(line) else 0
+        ends = len(JULIA_BLOCK_END_RE.findall(line))
+        return max(0, depth + opens - ends)
 
-        oneliner_func_re = re.compile(rf"^\s*({func_name})\s*\([^=\n]*\)\s*=")
-        block_func_re = re.compile(rf"^\s*function\s+({func_name})\(")
-        struct_re = re.compile(rf"^\s*(?:mutable\s+)?struct\s+({ident})\b")
+    def _normalize_julia_line(self, raw: str) -> str | None:
+        """Strip comments and whitespace; return None for empty lines."""
+        line = raw.split("#", 1)[0].rstrip()
+        return line if line.strip() else None
 
-        block_open_re = re.compile(
-            r"^\s*(function|(?:mutable\s+)?struct|if|for|while|begin|let|try|quote|macro|module)\b"
-        )
+    def _collect_top_level_entities(
+        self,
+        line: str,
+        structs: list[str],
+        functions: list[str],
+        seen_structs: set[str],
+        seen_funcs: set[str],
+    ) -> None:
+        """Append unique top-level entities from a normalized line."""
+        m = JULIA_STRUCT_RE.match(line)
+        if m:
+            name = m.group(1)
+            if name not in seen_structs:
+                seen_structs.add(name)
+                structs.append(name)
 
-        block_end_re = re.compile(r"(?<!:)\bend\b")
+        m = JULIA_BLOCK_FUNC_RE.match(line)
+        if m:
+            name = m.group(1)
+            if name not in JULIA_STOPWORDS and name not in seen_funcs:
+                seen_funcs.add(name)
+                functions.append(name)
 
-        stopwords = {"if", "for", "while", "begin", "let", "try", "catch", "finally", "end", "do"}
+        m = JULIA_ONELINER_FUNC_RE.match(line)
+        if m:
+            name = m.group(1)
+            if name not in JULIA_STOPWORDS and name not in seen_funcs:
+                seen_funcs.add(name)
+                functions.append(name)
 
-        structs, functions = [], []
-        seen_structs, seen_funcs = set(), set()
+    def _iter_julia_lines(self, code: str) -> Iterable[str]:
+        """Yield normalized, non-empty Julia lines from a code block."""
+        for raw in code.splitlines():
+            line = self._normalize_julia_line(raw)
+            if line:
+                yield line
 
+    def _extract_entities_from_lines(
+        self,
+        lines: Iterable[str],
+    ) -> tuple[list[str], list[str]]:
+        """Return top-level structs and function names from normalized lines."""
+        structs: list[str] = []
+        functions: list[str] = []
+        seen_structs: set[str] = set()
+        seen_funcs: set[str] = set()
         depth = 0
 
-        for raw in code.splitlines():
-            line = raw.split("#", 1)[0].rstrip()
-            if not line.strip():
-                continue
-
-            opens = 1 if block_open_re.match(line) else 0
-
-            ends = len(block_end_re.findall(line))
-
-            # Only capture top-level declarations to avoid nested helpers.
+        for line in lines:
             if depth == 0:
-                m = struct_re.match(line)
-                if m:
-                    name = m.group(1)
-                    if name not in seen_structs:
-                        seen_structs.add(name)
-                        structs.append(name)
+                self._collect_top_level_entities(
+                    line,
+                    structs,
+                    functions,
+                    seen_structs,
+                    seen_funcs,
+                )
 
-                m = block_func_re.match(line)
-                if m:
-                    name = m.group(1)
-                    if name not in stopwords and name not in seen_funcs:
-                        seen_funcs.add(name)
-                        functions.append(name)
-
-                m = oneliner_func_re.match(line)
-                if m:
-                    name = m.group(1)
-                    if name not in stopwords and name not in seen_funcs:
-                        seen_funcs.add(name)
-                        functions.append(name)
-
-            depth = max(0, depth + opens - ends)
+            depth = self._update_block_depth(line, depth)
 
         return structs, functions
 
-    def extract_block_number_from_caption(self, caption: str) -> str:
-        """Normalize a caption into its stable key, e.g. 'Algorithm 2.1.'"""
+    def extract_entities_from_julia_code(self, code: str) -> tuple[list[str], list[str]]:
+        """Return top-level structs and function names defined in a Julia code block."""
+        return self._extract_entities_from_lines(self._iter_julia_lines(code))
+
+    def _split_caption_parts(self, caption: str) -> tuple[str, str] | None:
+        """Return (label, number) parts from a caption or None if unavailable."""
         parts = caption.split()
         if len(parts) < 2:
+            return None
+        return parts[0], parts[1]
+
+    def _record_struct_usage(
+        self,
+        pattern: re.Pattern[str],
+        text: str,
+        block_number: str,
+        struct_usage: dict[str, set[str]],
+    ) -> None:
+        """Record struct usage for matches from the provided pattern."""
+        for match in pattern.finditer(text):
+            name = match.group(1)
+            if name:
+                struct_usage[name].add(block_number)
+
+    def extract_block_number_from_caption(self, caption: str) -> str:
+        """Normalize a caption into its stable key, e.g. 'Algorithm 2.1.'"""
+        parts = self._split_caption_parts(caption)
+        if not parts:
             return caption
-        return f"{parts[0]} {parts[1]}"
+        label, number = parts
+        return f"{label} {number}"
 
     def extract_chapter_from_block_caption(self, caption: str) -> str:
         """Extract the chapter component from a block caption string."""
-        parts = caption.split()
-        if len(parts) < 2:
+        parts = self._split_caption_parts(caption)
+        if not parts:
             return ""
-        block_number = parts[1]
+        _, block_number = parts
         return block_number.split(".")[0]
 
     def get_blocks_with_chapter(self, blocks: list[Block], chapter_number: str) -> list[Block]:
@@ -138,6 +224,107 @@ class BookCodeProcessor:
             block["structs"] = {struct: [] for struct in structs}
             block["functions"] = {func: [] for func in functions}
 
+    def _collect_declared_entities(self, blocks: list[Block]) -> tuple[set[str], set[str]]:
+        """Collect all declared struct and function names from blocks."""
+        all_structs: set[str] = set()
+        all_functions: set[str] = set()
+        for block in blocks:
+            all_structs.update(block.get("structs", {}).keys())
+            all_functions.update(block.get("functions", {}).keys())
+        return all_structs, all_functions
+
+    def _init_usage_maps(
+        self, all_structs: set[str], all_functions: set[str]
+    ) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+        """Initialize usage maps for structs and functions."""
+        struct_usage: dict[str, set[str]] = {name: set() for name in all_structs}
+        function_usage: dict[str, set[str]] = {name: set() for name in all_functions}
+        return struct_usage, function_usage
+
+    def _build_usage_patterns(
+        self, all_structs: set[str], all_functions: set[str]
+    ) -> UsagePatterns:
+        """Compile regex patterns for usage and definitions."""
+        struct_qual_pattern = None
+        struct_call_pattern = None
+        if all_structs:
+            struct_names = "|".join(
+                re.escape(name) for name in sorted(all_structs, key=len, reverse=True)
+            )
+            struct_qual_pattern = re.compile(
+                STRUCT_QUAL_PATTERN_TEMPLATE.format(struct_names=struct_names)
+            )
+            struct_call_pattern = re.compile(
+                STRUCT_CALL_PATTERN_TEMPLATE.format(struct_names=struct_names)
+            )
+
+        func_pattern = None
+        func_def_pattern = None
+        func_oneliner_def_pattern = None
+        if all_functions:
+            func_names = "|".join(
+                re.escape(name) for name in sorted(all_functions, key=len, reverse=True)
+            )
+            func_pattern = re.compile(FUNC_CALL_PATTERN_TEMPLATE.format(func_names=func_names))
+            func_def_pattern = re.compile(FUNC_DEF_PATTERN_TEMPLATE.format(func_names=func_names))
+            func_oneliner_def_pattern = re.compile(
+                FUNC_ONELINER_DEF_PATTERN_TEMPLATE.format(func_names=func_names)
+            )
+
+        return UsagePatterns(
+            struct_qual_pattern=struct_qual_pattern,
+            struct_call_pattern=struct_call_pattern,
+            func_pattern=func_pattern,
+            func_def_pattern=func_def_pattern,
+            func_oneliner_def_pattern=func_oneliner_def_pattern,
+        )
+
+    def _collect_defined_functions(self, text: str, patterns: UsagePatterns) -> set[str]:
+        """Collect function names defined in the provided text."""
+        defined: set[str] = set()
+        if not patterns.func_def_pattern and not patterns.func_oneliner_def_pattern:
+            return defined
+
+        for line in text.splitlines():
+            def_match = patterns.func_def_pattern.match(line) if patterns.func_def_pattern else None
+            if def_match:
+                defined.add(def_match.group(1))
+                continue
+            def_match = (
+                patterns.func_oneliner_def_pattern.match(line)
+                if patterns.func_oneliner_def_pattern
+                else None
+            )
+            if def_match:
+                defined.add(def_match.group(1))
+        return defined
+
+    def _scan_block_usage(
+        self,
+        text: str,
+        block_number: str,
+        patterns: UsagePatterns,
+        struct_usage: dict[str, set[str]],
+        function_usage: dict[str, set[str]],
+    ) -> None:
+        """Update usage maps for a single block."""
+        if patterns.struct_qual_pattern:
+            self._record_struct_usage(
+                patterns.struct_qual_pattern, text, block_number, struct_usage
+            )
+
+        if patterns.struct_call_pattern:
+            self._record_struct_usage(
+                patterns.struct_call_pattern, text, block_number, struct_usage
+            )
+
+        if patterns.func_pattern:
+            defined = self._collect_defined_functions(text, patterns)
+            for match in patterns.func_pattern.finditer(text):
+                name = match.group(1)
+                if name not in defined:
+                    function_usage[name].add(block_number)
+
     def _build_usage_index(
         self, blocks: list[Block]
     ) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
@@ -145,36 +332,14 @@ class BookCodeProcessor:
 
         The index maps each entity name to block numbers where it is used (not defined).
         """
-        all_structs = set()
-        all_functions = set()
-        for block in blocks:
-            all_structs.update(block.get("structs", {}).keys())
-            all_functions.update(block.get("functions", {}).keys())
-
-        struct_usage: dict[str, set[str]] = {name: set() for name in all_structs}
-        function_usage: dict[str, set[str]] = {name: set() for name in all_functions}
+        all_structs, all_functions = self._collect_declared_entities(blocks)
+        struct_usage, function_usage = self._init_usage_maps(all_structs, all_functions)
 
         if not all_structs and not all_functions:
             return struct_usage, function_usage
 
         # Single-pass regex matches keep scanning per block fast even with many entities.
-        struct_pattern = None
-        if all_structs:
-            struct_names = "|".join(
-                re.escape(name) for name in sorted(all_structs, key=len, reverse=True)
-            )
-            struct_pattern = re.compile(
-                rf"(?:(?:::)({struct_names})\b)|(?:\b({struct_names})\s*\()"
-            )
-
-        func_pattern = None
-        if all_functions:
-            func_names = "|".join(
-                re.escape(name) for name in sorted(all_functions, key=len, reverse=True)
-            )
-            func_pattern = re.compile(rf"\b({func_names})\s*\(")
-            func_def_pattern = re.compile(rf"^\s*function\s+({func_names})\s*\(")
-            func_oneliner_def_pattern = re.compile(rf"^\s*({func_names})\s*\([^=\n]*\)\s*=")
+        patterns = self._build_usage_patterns(all_structs, all_functions)
 
         for block in blocks:
             text = block.get("text", "")
@@ -182,31 +347,33 @@ class BookCodeProcessor:
             if not text or not block_number:
                 continue
 
-            if struct_pattern:
-                for match in struct_pattern.finditer(text):
-                    name = match.group(1) or match.group(2)
-                    if name:
-                        struct_usage[name].add(block_number)
-
-            if func_pattern:
-                defined = set()
-                for line in text.splitlines():
-                    def_match = func_def_pattern.match(line) if func_def_pattern else None
-                    if def_match:
-                        defined.add(def_match.group(1))
-                        continue
-                    def_match = (
-                        func_oneliner_def_pattern.match(line) if func_oneliner_def_pattern else None
-                    )
-                    if def_match:
-                        defined.add(def_match.group(1))
-
-                for match in func_pattern.finditer(text):
-                    name = match.group(1)
-                    if name not in defined:
-                        function_usage[name].add(block_number)
+            self._scan_block_usage(
+                text,
+                block_number,
+                patterns,
+                struct_usage,
+                function_usage,
+            )
 
         return struct_usage, function_usage
+
+    def _extend_usage_list(
+        self,
+        used_list: list[str],
+        usage_sorted: dict[str, list[str]],
+        usage_sets: dict[str, set[str]],
+        name: str,
+        block_number: str,
+    ) -> None:
+        """Extend a usage list, excluding the current block when it appears as usage."""
+        usage = usage_sorted.get(name)
+        if not usage:
+            return
+        usage_set = usage_sets.get(name)
+        if usage_set and block_number in usage_set:
+            used_list.extend(num for num in usage if num != block_number)
+        else:
+            used_list.extend(usage)
 
     def extract_entities_usage(
         self, blocks: list[Block], blocks_type: BlockType = BlockType.ALGORITHM
@@ -229,22 +396,22 @@ class BookCodeProcessor:
                 continue
 
             for struct_name, used_list in block["structs"].items():
-                usage = struct_usage_sorted.get(struct_name)
-                if not usage:
-                    continue
-                if block_number in struct_usage.get(struct_name, set()):
-                    used_list.extend(num for num in usage if num != block_number)
-                else:
-                    used_list.extend(usage)
+                self._extend_usage_list(
+                    used_list,
+                    struct_usage_sorted,
+                    struct_usage,
+                    struct_name,
+                    block_number,
+                )
 
             for function_name, used_list in block["functions"].items():
-                usage = function_usage_sorted.get(function_name)
-                if not usage:
-                    continue
-                if block_number in function_usage.get(function_name, set()):
-                    used_list.extend(num for num in usage if num != block_number)
-                else:
-                    used_list.extend(usage)
+                self._extend_usage_list(
+                    used_list,
+                    function_usage_sorted,
+                    function_usage,
+                    function_name,
+                    block_number,
+                )
 
     def _load_translated_algorithms(self) -> list[dict[str, Any]]:
         """Load translated algorithms JSON once per run."""
