@@ -5,16 +5,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from common.logging import get_logger
-from pipeline.code_translation.constants import TRANSLATED_ALGOS_PATH, PromptConfig
-from pipeline.code_translation.github_code_fetcher import GitHubCodeFetcher
-from pipeline.code_translation.process_book_code import (
+from pipeline.julia_code_translation.constants import TRANSLATED_ALGOS_PATH, PromptConfig
+from pipeline.julia_code_translation.github_code_fetcher import GitHubCodeFetcher
+from pipeline.julia_code_translation.process_book_code import (
     Block,
     BookCodeProcessor,
     JuliaEntityExtractor,
     TranslatedAlgorithmStore,
     UsageIndexBuilder,
 )
-from pipeline.code_translation.prompts import PromptTemplates
+from pipeline.julia_code_translation.prompts import PromptTemplates
 from pipeline.parsing.block_processor import open_block_processor
 
 if TYPE_CHECKING:

@@ -8,10 +8,10 @@ from typing import Any, Protocol, cast
 import boto3  # type: ignore[import-not-found]
 from botocore.config import Config  # type: ignore[import-not-found]
 from common.logging import get_logger
-from pipeline.code_translation.build_prompts import PromptBuilder
-from pipeline.code_translation.constants import TRANSLATED_ALGOS_PATH, PromptConfig
-from pipeline.code_translation.github_code_fetcher import GitHubCodeFetcher
-from pipeline.code_translation.process_book_code import (
+from pipeline.julia_code_translation.build_prompts import PromptBuilder
+from pipeline.julia_code_translation.constants import TRANSLATED_ALGOS_PATH, PromptConfig
+from pipeline.julia_code_translation.github_code_fetcher import GitHubCodeFetcher
+from pipeline.julia_code_translation.process_book_code import (
     BookCodeProcessor,
     JuliaEntityExtractor,
     TranslatedAlgorithmStore,
