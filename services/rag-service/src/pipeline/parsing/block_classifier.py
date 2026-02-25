@@ -6,7 +6,6 @@ from typing import Any
 
 import fitz  # type: ignore[import-untyped]
 from common.logging import get_logger
-from tqdm import tqdm  # type: ignore[import-untyped]
 
 from .config import MAIN_PDF, OUTPUT_BLOCKS_JSON
 
@@ -91,7 +90,7 @@ class BlockProcessor:
         all_blocks: list[dict[str, Any]] = []
 
         with fitz.open(self.pdf_path) as doc:
-            for page_num in tqdm(range(len(doc)), desc="Extracting gray blocks"):
+            for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
                 drawings = page.get_drawings()
                 captions = self._extract_captions(page)
