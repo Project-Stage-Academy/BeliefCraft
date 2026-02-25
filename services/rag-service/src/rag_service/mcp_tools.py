@@ -3,8 +3,9 @@ from typing import Annotated
 from common.logging import get_logger
 from fastmcp import FastMCP
 
+from .constants import ENTITY_TYPE_TO_CHUNK_TYPE
 from .models import Document, EntityType, MetadataFilter, MetadataFilters, SearchFilters
-from .repositories import ENTITY_TYPE_TO_CHUNK_TYPE, AbstractVectorStoreRepository
+from .repositories import AbstractVectorStoreRepository
 
 BOOK_CONTENTS = """part i probabilistic reasoning
 2 Representation 19

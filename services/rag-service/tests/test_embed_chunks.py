@@ -67,9 +67,9 @@ def test_build_reference_map():
 
 def test_extract_references_logic():
     """Test the logic of converting reference IDs to UUIDs and cleaning up the chunk dict."""
-    target = {"entity_id": "f1", "chunk_type": "formula", "content": "target"}
+    target = {"entity_id": "f1", "chunk_type": "numbered_formula", "content": "target"}
     target_uuid = generate_deterministic_uuid(target)
-    ref_map = {("f1", "formula"): target}
+    ref_map = {("f1", "numbered_formula"): target}
     source = {"content": "source", "referenced_formulas": ["f1"], "referenced_algorithms": []}
     source_uuid = generate_deterministic_uuid(source)
 
@@ -142,7 +142,7 @@ def test_insert_chunks(weaviate_client):
     chunks = [
         {
             "entity_id": "formula_1",
-            "chunk_type": "formula",
+            "chunk_type": "numbered_formula",
             "content": "E=mc^2",
             "additional_info": "This is a famous formula.",
             "referenced_formulas": [],
@@ -164,7 +164,7 @@ def test_insert_chunks(weaviate_client):
     }
     expected_fetched_by_reference = {
         "entity_id": "formula_1",
-        "chunk_type": "formula",
+        "chunk_type": "numbered_formula",
         "content": "E=mc^2",
         "additional_info": "This is a famous formula.",
         "additional_field": None,

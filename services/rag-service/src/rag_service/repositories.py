@@ -8,28 +8,11 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .constants import ENTITY_TYPE_TO_CHUNK_TYPE, TRAVERSE_TYPE_TO_REFERENCE_FIELD
 from .models import Document, EntityType, MetadataFilter, MetadataFilters
 
 if TYPE_CHECKING:
     from .config import Settings
-
-ENTITY_TYPE_TO_CHUNK_TYPE: dict[EntityType, str] = {
-    EntityType.FORMULA: "numbered_formula",
-    EntityType.TABLE: "numbered_table",
-    EntityType.ALGORITHM: "algorithm",
-    EntityType.IMAGE: "captioned_image",
-    EntityType.EXERCISE: "exercise",
-    EntityType.EXAMPLE: "example",
-}
-
-TRAVERSE_TYPE_TO_REFERENCE_FIELD: dict[EntityType, str] = {
-    EntityType.FORMULA: "referenced_formulas",
-    EntityType.TABLE: "referenced_tables",
-    EntityType.ALGORITHM: "referenced_algorithms",
-    EntityType.IMAGE: "referenced_figures",
-    EntityType.EXERCISE: "referenced_exercises",
-    EntityType.EXAMPLE: "referenced_examples",
-}
 
 
 class AbstractVectorStoreRepository(ABC):
