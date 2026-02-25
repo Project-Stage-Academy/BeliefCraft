@@ -25,3 +25,6 @@ REFERENCE_TYPE_MAP: dict[str, str] = {
     reference_field: ENTITY_TYPE_TO_CHUNK_TYPE[traverse_type]
     for traverse_type, reference_field in TRAVERSE_TYPE_TO_REFERENCE_FIELD.items()
 }
+
+# Name of the collection in the Weaviate where all chunks are stored.
+COLLECTION_NAME = "unified_collection"
