@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from pipeline.code_translation.translate import ResponseParser, TranslationRepository
+from pipeline.julia_code_translation.translate import ResponseParser, TranslationRepository
 
 
 def test_extract_json_from_text_parses_json_block():

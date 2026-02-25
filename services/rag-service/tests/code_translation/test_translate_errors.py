@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from pipeline.code_translation.translate import TranslationRepository
+from pipeline.julia_code_translation.translate import TranslationRepository
 
 
 def test_append_items_raises_for_non_list(tmp_path):

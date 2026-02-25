@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pipeline.code_translation.process_book_code import (
+from pipeline.julia_code_translation.process_book_code import (
     BookCodeProcessor,
     JuliaEntityExtractor,
     TranslatedAlgorithmStore,
