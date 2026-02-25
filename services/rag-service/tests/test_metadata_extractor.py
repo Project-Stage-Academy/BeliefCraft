@@ -1,5 +1,5 @@
 import pytest
-from parsing.metadata_extractor import MetadataExtractor
+from pipeline.parsing.metadata_extractor import MetadataExtractor
 
 
 @pytest.fixture
