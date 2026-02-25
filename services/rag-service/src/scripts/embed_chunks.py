@@ -1,0 +1,153 @@
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+import weaviate  # type: ignore
+from weaviate.classes.config import Configure, ReferenceProperty  # type: ignore
+from weaviate.collections import Collection  # type: ignore
+from weaviate.collections.classes.config import VectorDistances  # type: ignore
+from weaviate.collections.classes.data import DataReference  # type: ignore
+from weaviate.util import generate_uuid5  # type: ignore
+
+PROPERTIES_TO_EMBED = ["content"]
+COLLECTION_NAME = "unified_collection"
+EMBEDDING_MODEL_REGION = "us-east-1"
+EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
+
+REFERENCE_TYPE_MAP = {
+    "referenced_formulas": "formula",
+    "referenced_algorithms": "algorithm",
+    "referenced_tables": "table",
+    "referenced_figures": "image",
+    "referenced_examples": "example",
+    "referenced_exercises": "exercise",
+}
+
+
+def setup_collection(client: weaviate.WeaviateClient, recreate: bool = False) -> Collection:
+    """Initialize the unified collection schema with Bedrock embedding and cross-references."""
+    if recreate and client.collections.exists(COLLECTION_NAME):
+        print(f"Deleting existing collection: {COLLECTION_NAME}")
+        client.collections.delete(COLLECTION_NAME)
+
+    if not client.collections.exists(COLLECTION_NAME):
+        print(f"Creating collection: {COLLECTION_NAME}")
+        client.collections.create(
+            name=COLLECTION_NAME,
+            vector_config=Configure.Vectors.text2vec_aws_bedrock(
+                source_properties=PROPERTIES_TO_EMBED,
+                region=EMBEDDING_MODEL_REGION,
+                model=EMBEDDING_MODEL,
+                vector_index_config=Configure.VectorIndex.flat(
+                    distance_metric=VectorDistances.COSINE,
+                ),
+            ),
+            references=[
+                ReferenceProperty(name=name, target_collection=COLLECTION_NAME)
+                for name in REFERENCE_TYPE_MAP
+            ],
+        )
+    else:
+        print(f"Using existing collection: {COLLECTION_NAME}")
+    return client.collections.use(COLLECTION_NAME)
+
+
+def generate_deterministic_uuid(chunk: dict[str, Any]) -> str:
+    """Generate a deterministic UUID based on entity_id and chunk_type
+    if available, otherwise use whole chunk."""
+    entity_id = chunk.get("entity_id", "")
+    if entity_id:
+        return generate_uuid5(f'{entity_id}:{chunk["chunk_type"]}')  # type: ignore
+    return generate_uuid5(repr(chunk))  # type: ignore
+
+
+ReferenceMap = dict[
+    tuple[str, str], dict[str, Any]
+]  # Mapping of (entity_id, chunk_type) to referencing chunks
+
+
+def extract_references_from_chunk(
+    chunk: dict[str, Any], reference_map: ReferenceMap
+) -> dict[str, list[str]]:
+    """Extract references from chunks. Remove old reference fields from chunk because
+    they will be passed separately to Weaviate"""
+    references = {}
+    for ref_name, chunk_type in REFERENCE_TYPE_MAP.items():
+        chunk_references = chunk.pop(ref_name, [])
+        if not chunk_references:
+            continue
+        referenced_ids = []
+        for entity_id in chunk_references:
+            key = (entity_id, chunk_type)
+            referenced_chunk = reference_map[key]
+            # deterministic uuid allows to know chunk's uuid before it is even inserted
+            referenced_ids.append(generate_deterministic_uuid(referenced_chunk))
+        references[ref_name] = referenced_ids
+    return references
+
+
+def insert_chunks(
+    collection: Collection, chunks: list[dict[str, Any]], reference_map: ReferenceMap
+) -> None:
+    """Iterate through chunks and insert them into Weaviate."""
+    references = []
+    for chunk in chunks:
+        chunk.pop("chunk_id", "")
+        uuid = generate_deterministic_uuid(chunk)
+        chunk_references = extract_references_from_chunk(chunk, reference_map)
+        collection.data.insert(
+            properties=chunk,
+            uuid=uuid,
+        )
+        references.append((uuid, chunk_references))
+
+    refs_list = []
+    for from_id, chunk_references in references:
+        for ref_name, referenced_ids in chunk_references.items():
+            for to_id in referenced_ids:
+                ref_obj = DataReference(from_uuid=from_id, from_property=ref_name, to_uuid=to_id)
+                refs_list.append(ref_obj)
+    collection.data.reference_add_many(refs_list)
+
+
+def build_reference_map(chunks: list[dict[str, Any]]) -> ReferenceMap:
+    """Build a mapping of (entity_id, chunk_type) to the chunks that are referenced by this pair."""
+    reference_map = {}
+    for chunk in chunks:
+        if "entity_id" in chunk and "chunk_type" in chunk:
+            key = (chunk["entity_id"], chunk["chunk_type"])
+            reference_map[key] = chunk
+    return reference_map
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Load and embed document chunks from JSON into Weaviate. Passes 'content' "
+        "field to embedding model, sets up cross-references for fields: 'referenced_formulas', "
+        "'referenced_algorithms', 'referenced_tables', 'referenced_figures', 'referenced_examples',"
+        " 'referenced_exercises'. Ignores 'chunk_id' and generates own UUIDs. All other"
+        " fields are treated as metadata and stored in Weaviate as is without embedding."
+    )
+    parser.add_argument("file_path", help="Path to the JSON file containing chunks.", type=Path)
+    parser.add_argument(
+        "--recreate", action="store_true", help="Delete and recreate the collection before loading."
+    )
+    args = parser.parse_args()
+
+    try:
+        with args.file_path.open() as f:
+            chunks = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Failed to load JSON file: {e}")
+        return
+
+    with weaviate.connect_to_local() as client:
+        collection = setup_collection(client, recreate=args.recreate)
+        reference_map = build_reference_map(chunks)
+        insert_chunks(collection, chunks, reference_map)
+        print(f"Successfully processed {len(chunks)} chunks.")
+
+
+if __name__ == "__main__":
+    main()
