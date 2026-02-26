@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from common.schemas.observations import CompareObservationsToBalancesRequest
-from database.enums import LocationType, ObservationType, QualityStatus
+from database.enums import DeviceType, LocationType, ObservationType, QualityStatus
 from database.models import (
     InventoryBalance,
     Location,
@@ -26,7 +26,7 @@ def test_compare_observations_to_balances_discrepancy_math(db_session: Session):
         id=uuid.uuid4(), warehouse_id=wh.id, code="LOC-1", type=LocationType.BIN, capacity_units=100
     )
     prod = Product(id=uuid.uuid4(), sku="SKU-NOISE-TEST", name="Test Item", category="Parts")
-    device = SensorDevice(id=uuid.uuid4(), warehouse_id=wh.id, device_type="scale")
+    device = SensorDevice(id=uuid.uuid4(), warehouse_id=wh.id, device_type=DeviceType.SCANNER)
 
     # True State: Exactly 100 units physically exist
     balance = InventoryBalance(
