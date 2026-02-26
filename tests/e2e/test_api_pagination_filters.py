@@ -32,3 +32,44 @@ def test_smart_query_inventory_pagination_and_filtering(
             reserved=0.0,
             quality_status=QualityStatus.OK,
         )
+        products.append(prod)
+        balances.append(bal)
+
+    db_session.add_all(products + balances)
+    db_session.flush()
+
+    # 2. Act: Test Limit and Offset (Pagination)
+    # The default sort is by `available ASC`.
+    # Quantities are 10, 20, 30. Skipping 1 (offset=1) should yield the 20-qty item.
+    response_page = client.get(
+        "/api/v1/smart-query/inventory/current",
+        params={"warehouse_id": str(wh.id), "limit": 1, "offset": 1},
+    )
+
+    # 3. Assert Pagination Logic
+    assert response_page.status_code == 200
+    data_page = response_page.json()["data"]
+
+    assert len(data_page) == 1
+    assert data_page[0]["sku"] == "TEST-SKU-001"
+    assert data_page[0]["on_hand"] == 20.0
+
+    # Verify metadata is accurately tracking the pagination state
+    meta = response_page.json()["meta"]
+    assert meta["pagination"]["limit"] == 1
+    assert meta["pagination"]["offset"] == 1
+    assert meta["count"] == 1
+
+    # 4. Act: Test Exact Match Filtering
+    response_filter = client.get(
+        "/api/v1/smart-query/inventory/current",
+        params={"warehouse_id": str(wh.id), "sku": "TEST-SKU-002"},
+    )
+
+    # 5. Assert Filtering Logic
+    assert response_filter.status_code == 200
+    data_filter = response_filter.json()["data"]
+
+    assert len(data_filter) == 1
+    assert data_filter[0]["sku"] == "TEST-SKU-002"
+    assert data_filter[0]["on_hand"] == 30.0
