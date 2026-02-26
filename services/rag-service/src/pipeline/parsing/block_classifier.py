@@ -91,7 +91,10 @@ class BlockProcessor:
     def _find_matching_drawing(
         self, page: Any, cap: dict[str, Any], drawings: list[dict[str, Any]]
     ) -> fitz.Rect | None:
-        """Search for a drawing that contains a point to the left of the caption, indicating it's likely the block's border."""
+        """
+        Search for a drawing that contains a point to the left of the caption,
+        indicating it's likely the block's border.
+        """
         test_point = fitz.Point(cap["bbox"].x0 - DISTANCE_OFFSET_X, cap["bbox"].y0 + 5)
 
         for draw in drawings:
