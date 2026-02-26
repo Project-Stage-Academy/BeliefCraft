@@ -1,5 +1,7 @@
 # Julia Code Translation
 
+> **Important**: Running `translate.py` incurs LLM costs. Avoid re-running it unless you need new translations. Use `build_prompts.py` if you only need the prompts.
+
 ## Purpose
 `services/rag-service/src/pipeline/julia_code_translation/translate.py` translates Julia algorithms and examples from the Decision Making PDF into idiomatic Python using an LLM. It also updates descriptions for already-translated chapters and stores all generated translations in JSON for later use.
 
