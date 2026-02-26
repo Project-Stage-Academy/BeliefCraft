@@ -79,7 +79,14 @@ def extract_references_from_chunk(
             continue
         for entity_id in chunk_references:
             key = (entity_id, chunk_type)
-            referenced_chunk = reference_map[key]
+            try:
+                referenced_chunk = reference_map[key]
+            except KeyError:
+                print(
+                    f"Warning: Referenced chunk not found with entity_id={entity_id}, "
+                    f"chunk_type={chunk_type}. Skipping reference."
+                )
+                continue
             to_id = generate_deterministic_uuid(referenced_chunk)
             references.append(
                 DataReference(from_uuid=from_id, from_property=ref_name, to_uuid=to_id)
@@ -92,15 +99,16 @@ def insert_chunks(
 ) -> None:
     """Iterate through chunks and insert them into Weaviate."""
     references: list[DataReference | DataReferenceMulti] = []
-    for chunk in chunks:
-        chunk.pop("chunk_id", "")
-        uuid = generate_deterministic_uuid(chunk)
-        chunk_references = extract_references_from_chunk(chunk, reference_map)
-        collection.data.insert(
-            properties=chunk,
-            uuid=uuid,
-        )
-        references.extend(chunk_references)
+    with collection.batch.dynamic() as batch:
+        for chunk in chunks:
+            chunk.pop("chunk_id", "")
+            uuid = generate_deterministic_uuid(chunk)
+            chunk_references = extract_references_from_chunk(chunk, reference_map)
+            batch.add_object(
+                properties=chunk,
+                uuid=uuid,
+            )
+            references.extend(chunk_references)
     # add references in batch after all chunks are inserted to avoid referencing non-existing UUIDs
     collection.data.reference_add_many(references)
 

@@ -84,6 +84,27 @@ def test_extract_references_logic():
     assert "referenced_algorithms" not in source
 
 
+def test_extract_references_missing_target():
+    """Verify that references to missing chunks are skipped and a warning is printed."""
+    source = {
+        "entity_id": "s1",
+        "chunk_type": "text",
+        "content": "source",
+        "referenced_formulas": ["missing_f1"],
+    }
+    ref_map = {}  # Map is empty, so "missing_f1" won't be found
+
+    with patch("builtins.print") as mock_print:
+        refs = extract_references_from_chunk(source, ref_map)
+
+    assert refs == []
+    assert "referenced_formulas" not in source
+    mock_print.assert_called_with(
+        "Warning: Referenced chunk not found with entity_id=missing_f1, "
+        "chunk_type=numbered_formula. Skipping reference."
+    )
+
+
 @patch("weaviate.WeaviateClient")
 def test_setup_collection_logic(mock_client):
     """Test collection initialization and deletion logic."""
