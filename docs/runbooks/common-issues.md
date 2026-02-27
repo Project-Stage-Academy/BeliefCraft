@@ -83,15 +83,25 @@ Then restart:
 docker compose restart agent-service
 ```
 
-## 6. Expecting RAG Search Endpoints but Getting 404
+## 6. Calling Legacy RAG REST Endpoints Returns 404
 ### Symptom
 Calls to `/search/semantic` on `rag-service` return `404`.
 
 ### Cause
-Current `rag-service` implementation exposes only `/health`.
+Current RAG integration is MCP-based. `rag-service` exposes:
+- `GET /health`
+- MCP endpoint at `/mcp`
+
+Legacy REST routes like `/search/semantic`, `/search/expand-graph`, `/entity/{entity_type}/{number}` are not part of the current RAG service API.
 
 ### Resolution
-Treat search/graph/entity routes as not implemented in this service yet. Keep dependency checks limited to `/health`.
+Use MCP tools instead (`search_knowledge_base`, `expand_graph_by_ids`, `get_entity_by_number`) via an MCP client.
+
+Quick checks:
+```bash
+curl -s http://localhost:8001/health | jq .
+curl -s http://localhost:8003/api/v1/tools | jq .
+```
 
 ## 7. Agent Tool Calls Fail with 404 on Environment Routes
 ### Symptom

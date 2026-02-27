@@ -27,11 +27,11 @@ C4Container
 
         Container(agent_service, "Agent Service", "FastAPI + LangGraph", "Runs ReAct loop and tool orchestration")
         Container(environment_api, "Environment API", "FastAPI", "Smart-query analytics over warehouse data")
-        Container(rag_service, "RAG Service", "FastAPI", "Current implementation: health endpoint")
+        Container(rag_service, "RAG Service", "FastAPI", "Health endpoint + MCP tools at /mcp")
 
         ContainerDb(redis, "Redis", "Redis", "Agent cache")
         ContainerDb(postgres, "PostgreSQL", "PostgreSQL", "Relational warehouse data")
-        ContainerDb(qdrant, "Qdrant", "Vector DB", "Provisioned vector store")
+        ContainerDb(weaviate, "Weaviate", "Vector DB", "Provisioned vector store")
     }
 
     Rel(operator, ui, "Uses", "HTTPS")
@@ -42,7 +42,7 @@ C4Container
 
     Rel(agent_service, redis, "Caches results", "TCP")
     Rel(environment_api, postgres, "Reads data", "SQL")
-    Rel(rag_service, qdrant, "Configured for vector store", "HTTP")
+    Rel(rag_service, weaviate, "Target vector backend (provisioned, not active in current repository implementation)", "HTTP")
 ```
 
 Current-state note:
@@ -65,7 +65,7 @@ C4Component
         Component(llm_service, "LLMService", "Bedrock client", "ChatBedrock invocation")
         Component(tool_registry, "Tool Registry", "Python", "Registered environment/rag tools")
         Component(cached_tools, "CachedTool", "Redis-backed wrapper", "TTL and skip_cache behavior")
-        Component(http_clients, "API Clients", "HTTP", "EnvironmentAPIClient, RAGAPIClient")
+        Component(http_clients, "API Clients", "HTTP", "EnvironmentAPIClient, RAGMCPClient")
     }
 
     Rel(ui, api_routes, "Planned: POST /api/v1/agent/analyze", "HTTP")
