@@ -1,11 +1,13 @@
 # RAG Service API Reference
 
 ## Overview
-`rag-service` is currently a minimal FastAPI service with a health endpoint.
+`rag-service` is a FastAPI service exposing:
+- `GET /health`
+- MCP endpoint at `/mcp` with 3 tools (`search_knowledge_base`, `expand_graph_by_ids`, `get_entity_by_number`)
 
 Important current-state note:
-- The repository contains an agent-side RAG client/tool contract (`/search/semantic`, `/search/expand-graph`, `/entity/{entity_type}/{number}`),
-- but these endpoints are **not implemented** in `services/rag-service/src/rag_service/main.py` yet.
+- RAG access is MCP-based in the running implementation.
+- Legacy REST routes like `/search/semantic`, `/search/expand-graph`, `/entity/{entity_type}/{number}` are not implemented in `services/rag-service/src/rag_service/main.py`.
 
 ## Base URL
 - Local: `http://localhost:8001`
@@ -22,21 +24,26 @@ Example response:
 }
 ```
 
+### MCP `/mcp`
+Use an MCP client (for example `fastmcp`) and call tools:
+- `search_knowledge_base`
+- `expand_graph_by_ids`
+- `get_entity_by_number`
+
 ## Configuration
 From `services/rag-service/.env.example`:
-- `PORT`
-- `LOG_LEVEL`
-- `RAG_INDEX_PATH`
-- `DATABASE_URL`
-- `QDRANT_URL`
+- `ENV` (selects YAML config profile)
+
+From `services/rag-service/config/default.yaml` (+ optional `config/{ENV}.yaml`):
+- `logging.level`
+- `logging.fakeredis_level`
+- `logging.docket_level`
+- `logging.sse_level`
+- `repository` (currently `FakeDataRepository`)
 
 ## Implementation Scope Today
 Implemented:
 - Service bootstrap
 - Health check
-
-Not implemented in this service code yet:
-- Semantic search HTTP API
-- Graph expansion HTTP API
-- Entity-by-number HTTP API
-- Ingestion/vectorization runtime endpoints
+- MCP server/tool registration
+- Mock retrieval through `FakeDataRepository` (`mock_vector_store_data.json`)

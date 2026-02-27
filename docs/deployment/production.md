@@ -19,9 +19,9 @@ Use runtime secret/config management to provide variables from service `.env.exa
 
 Critical variables by service:
 - `environment-api`: `DATABASE_URL`
-- `rag-service`: `QDRANT_URL`, `DATABASE_URL`
+- `rag-service`: `ENV` (config profile; runtime settings are loaded from `services/rag-service/config/*.yaml`)
 - `agent-service`: `ENVIRONMENT_API_URL`, `RAG_API_URL`, `REDIS_URL`, Bedrock variables (`AWS_DEFAULT_REGION`, `BEDROCK_MODEL_ID`, etc.)
-- root infra: `POSTGRES_*`, `ENVIRONMENT_DB`, `RAG_DB`, `QDRANT_PORT`, `REDIS_PORT` (if reusing compose style)
+- root infra: `POSTGRES_*`, `ENVIRONMENT_DB`, `RAG_DB`, `WEAVIATE_PORT`, `REDIS_PORT` (if reusing compose style)
 
 ### 3. Run DB Migrations Before App Traffic
 Apply Alembic migrations before starting API pods/containers:
@@ -38,7 +38,7 @@ Use existing health endpoints:
 
 ## Operational Notes (Current Implementation)
 - `agent-service` health is degraded when dependency checks fail (environment API, rag API, redis, Bedrock config).
-- `rag-service` currently exposes only `/health`; search endpoints are not implemented in this service code yet.
+- `rag-service` exposes `GET /health` and MCP at `/mcp`; legacy REST search routes (`/search/*`, `/entity/*`) are not implemented.
 - Structured JSON logging and `X-Request-ID` propagation are already present in common middleware/client utilities.
 
 ## Security Notes
