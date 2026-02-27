@@ -7,7 +7,7 @@ It is located in the monorepo under `services/rag-service/`.
 ## High-level responsibilities
 
 - Provide a Model Context Protocol (MCP) interface for agent interaction.
-- Perform repository-backed search across the knowledge base.
+- Perform semantic search across the knowledge base.
 - Enable graph-like expansion of search results (retrieving linked formulas, algorithms, etc.).
 - Provide precise retrieval of entities by their unique identifiers (e.g., formula numbers).
 - Abstract the underlying vector store through a repository pattern.

@@ -5,7 +5,7 @@ Base URL (local): `http://localhost:8001`
 The RAG Service primarily provides a **Model Context Protocol (MCP)** interface for retrieving knowledge from the "Algorithms for Decision Making" book. It also includes a standard health check endpoint.
 
 Current implementation note:
-- The active repository is `FakeDataRepository` backed by `mock_vector_store_data.json`.
+- The active repository is `FakeDataRepository` backed by `mock_vector_store_data.json` which simulates vector search.
 - Retrieval behavior is suitable for development/testing and does not yet represent production-grade vector retrieval.
 
 ## HTTP Endpoints
@@ -36,9 +36,9 @@ with TracedHttpClient is provided below after the tool descriptions.
 ### Available MCP Tools
 
 #### `search_knowledge_base`
-**Universal knowledge base search.** Performs repository-backed search across the book's content.
+**Universal knowledge base search.** Performs semantic vector search across the book's content.
 
-- **Search Backend**: In the current code, `FakeDataRepository` simulates retrieval over mock data (no production embedding/vector backend yet).
+- **Semantic Search**: Uses embeddings to find the most relevant chunks of text based on the `query`.
 - **Metadata Filtering**: Can restrict search to specific parts, sections, or pages using the `filters` argument.
 - **Graph Expansion**: If `traverse_types` are provided, it automatically fetches linked entities (like formulas or algorithms mentioned in the text) and includes them in the results.
 

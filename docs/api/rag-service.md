@@ -47,8 +47,3 @@ Implemented:
 - Health check
 - MCP server/tool registration
 - Mock retrieval through `FakeDataRepository` (`mock_vector_store_data.json`)
-
-Not implemented in this service code yet:
-- REST semantic search API (`/search/*`, `/entity/*`)
-- Ingestion/vectorization runtime endpoints
-- Production vector backend repository integration (e.g., Weaviate-backed implementation)
