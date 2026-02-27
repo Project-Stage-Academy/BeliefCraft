@@ -9,24 +9,37 @@ import numpy as np
 from common.logging import get_logger
 from tqdm import tqdm  # type: ignore[import-untyped]
 
-from .config import (
-    BLOCK_KEYWORDS,
-    CAPTION_KEYWORDS,
-    DPI_RENDER,
-    FIGURES_PDF,
-    MAIN_PDF,
-)
+try:
+    from .config import (
+        BLOCK_KEYWORDS,
+        CAPTION_KEYWORDS,
+        DPI_RENDER,
+        FIGURES_PDF,
+        MAIN_PDF,
+    )
+except ImportError:
+    from config import (
+        BLOCK_KEYWORDS,
+        CAPTION_KEYWORDS,
+        DPI_RENDER,
+        FIGURES_PDF,
+        MAIN_PDF,
+    )
 
 logger = get_logger(__name__)
 
 # Local geometric constants
-SIMILARITY_THRESHOLD = 0.8
+SIMILARITY_THRESHOLD = 0.6
 CAPTION_OFFSET_X_MINUS = 5
 CAPTION_OFFSET_X_PLUS = 100
 CAPTION_HEIGHT = 60
 SIDE_NOTE_WIDTH = 200
 BLOCK_CONTENT_PADDING = 20
 
+SCALES = np.concatenate([  # Different scales to try for template matching
+    [1.0, 1.05, 1.1],
+    np.arange(1.0, 0.49, -0.01)
+])
 
 def get_scale_factor(dpi: int) -> float:
     """Calculates scale factor based on rendering DPI."""
@@ -110,19 +123,39 @@ def _match_template_on_page(
     page_gray: np.ndarray, template_gray: np.ndarray
 ) -> tuple[float, tuple[int, int]] | None:
     """
-    Encapsulates the template matching logic, returning similarity and location if a match is found.
+    Multi-scale template matching using TM_CCOEFF_NORMED.
+    Returns best similarity and location if a match is found.
     """
-    t_h, t_w = template_gray.shape[:2]
     p_h, p_w = page_gray.shape[:2]
 
-    if t_h > p_h or t_w > p_w:
-        return None
+    best_val = -1.0
+    best_loc = None
 
-    res = cv2.matchTemplate(page_gray, template_gray, cv2.TM_CCOEFF_NORMED)
-    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+    for scale in SCALES:
+        resized = cv2.resize(
+            template_gray,
+            None,
+            fx=scale,
+            fy=scale,
+            interpolation=cv2.INTER_LINEAR,
+        )
 
-    if max_val >= SIMILARITY_THRESHOLD:
-        return float(max_val), max_loc
+        t_h, t_w = resized.shape[:2]
+
+        if t_h > p_h or t_w > p_w:
+            continue
+
+        res = cv2.matchTemplate(page_gray, resized, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+        if max_val > best_val:
+            best_val = max_val
+            best_loc = max_loc
+        logger.debug("Template match scale=%s similarity=%.4f", scale, max_val)
+
+    if best_val >= SIMILARITY_THRESHOLD:
+        return float(best_val), best_loc
+    
     return None
 
 
@@ -185,31 +218,45 @@ def process_pdf(
         already_found: set[int] = set()
         logger.info(f"Processing {len(dm_doc)} pages against {len(figs_doc)} templates...")
 
-        for page_num in tqdm(range(len(dm_doc)), desc="Searching images"):
-            page_img = pdf_page_to_img(dm_doc, page_num)
-            page_obj = dm_doc.load_page(page_num)
-            page_gray = cv2.cvtColor(page_img, cv2.COLOR_BGR2GRAY)
+        for idx, fig in tqdm(enumerate(figs_doc), desc="Searching templates"):
+            logger.info("Processing figure page %s of %s", idx + 1, len(figs_doc))
+            if idx in already_found:
+                continue
 
-            for idx in range(len(figs_doc)):
-                if idx in already_found:
-                    continue
+            template_img = pdf_page_to_img(figs_doc, idx)
+            template_gray = cv2.cvtColor(template_img, cv2.COLOR_BGR2GRAY)
+            t_h, t_w = template_gray.shape[:2]
 
-                template_img = pdf_page_to_img(figs_doc, idx)
-                template_gray = cv2.cvtColor(template_img, cv2.COLOR_BGR2GRAY)
+            # Start scanning dm_doc from the last matched page (page_ptr).
+            # Do not restart from the beginning for each template.
+            if "page_ptr" not in locals():
+                page_ptr = 0
+
+            matched = False
+            while page_ptr < len(dm_doc):
+                logger.debug("Scanning page %s", page_ptr + 1)
+                page_img = pdf_page_to_img(dm_doc, page_ptr)
+                page_obj = dm_doc.load_page(page_ptr)
+                page_gray = cv2.cvtColor(page_img, cv2.COLOR_BGR2GRAY)
 
                 match_res = _match_template_on_page(page_gray, template_gray)
 
                 if match_res:
                     max_val, max_loc = match_res
-                    t_h, t_w = template_gray.shape[:2]
 
                     description = get_advanced_caption(
                         page_obj, (max_loc[0], max_loc[1], t_w, t_h), dpi=DPI_RENDER
                     )
 
-                    entry = _create_entry(description, page_num, idx, max_val, max_loc, t_w, t_h)
+                    entry = _create_entry(description, page_ptr, idx, max_val, max_loc, t_w, t_h)
                     all_entries.append(entry)
                     already_found.add(idx)
+                    
+                    matched = True
+                    # Do not reset page_ptr; continue from current position for next template
+                    break
+
+                page_ptr += 1
 
     _save_to_json(all_entries, output_json)
 
