@@ -42,9 +42,9 @@ class DocumentAssembler:
         )
 
         self.paddle_pages = self._load_all_paddle_jsons(self.paddle_dir)
-        self.image_map = self._load_and_offset(self.figures_json, "page")
-        self.block_map = self._load_and_offset(self.blocks_json, "page")
-        self.table_map = self._load_and_offset(self.tables_json, "page_number")
+        self.image_map = self._load_and_offset(self.figures_json, "page", offset=PAGE_OFFSET)
+        self.block_map = self._load_and_offset(self.blocks_json, "page", offset=0)
+        self.table_map = self._load_and_offset(self.tables_json, "page", offset=0)
         self.formula_map = self._safe_load_json(self.formulas_json)
 
         self.meta_extractor = MetadataExtractor()
@@ -65,7 +65,9 @@ class DocumentAssembler:
             res: dict[str, Any] = json.load(f)
             return res
 
-    def _load_and_offset(self, path: Path, page_key: str) -> dict[int, list[dict[str, Any]]]:
+    def _load_and_offset(
+        self, path: Path, page_key: str, offset: int = 0
+    ) -> dict[int, list[dict[str, Any]]]:
         data = self._safe_load_json(path)
         if not data:
             return {}
@@ -75,7 +77,7 @@ class DocumentAssembler:
                 try:
                     p_val = item.get(page_key)
                     if p_val is not None:
-                        actual_page = int(p_val) + PAGE_OFFSET
+                        actual_page = int(p_val) + offset
                         m.setdefault(actual_page, []).append(item)
                 except (KeyError, ValueError):
                     continue
