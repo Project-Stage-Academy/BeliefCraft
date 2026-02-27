@@ -9,22 +9,13 @@ import numpy as np
 from common.logging import get_logger
 from tqdm import tqdm  # type: ignore[import-untyped]
 
-try:
-    from .config import (
-        BLOCK_KEYWORDS,
-        CAPTION_KEYWORDS,
-        DPI_RENDER,
-        FIGURES_PDF,
-        MAIN_PDF,
-    )
-except ImportError:
-    from config import (
-        BLOCK_KEYWORDS,
-        CAPTION_KEYWORDS,
-        DPI_RENDER,
-        FIGURES_PDF,
-        MAIN_PDF,
-    )
+from .config import (
+    BLOCK_KEYWORDS,
+    CAPTION_KEYWORDS,
+    DPI_RENDER,
+    FIGURES_PDF,
+    MAIN_PDF,
+)
 
 logger = get_logger(__name__)
 
@@ -36,10 +27,10 @@ CAPTION_HEIGHT = 60
 SIDE_NOTE_WIDTH = 200
 BLOCK_CONTENT_PADDING = 20
 
-SCALES = np.concatenate([  # Different scales to try for template matching
-    [1.0, 1.05, 1.1],
-    np.arange(1.0, 0.49, -0.01)
-])
+SCALES = np.concatenate(
+    [[1.0, 1.05, 1.1], np.arange(1.0, 0.49, -0.01)]  # Different scales to try for template matching
+)
+
 
 def get_scale_factor(dpi: int) -> float:
     """Calculates scale factor based on rendering DPI."""
@@ -129,7 +120,7 @@ def _match_template_on_page(
     p_h, p_w = page_gray.shape[:2]
 
     best_val = -1.0
-    best_loc = None
+    best_loc: tuple[int, int] | None = None
 
     for scale in SCALES:
         resized = cv2.resize(
@@ -153,9 +144,9 @@ def _match_template_on_page(
             best_loc = max_loc
         logger.debug("Template match scale=%s similarity=%.4f", scale, max_val)
 
-    if best_val >= SIMILARITY_THRESHOLD:
+    if best_val >= SIMILARITY_THRESHOLD and best_loc is not None:
         return float(best_val), best_loc
-    
+
     return None
 
 
@@ -218,7 +209,7 @@ def process_pdf(
         already_found: set[int] = set()
         logger.info(f"Processing {len(dm_doc)} pages against {len(figs_doc)} templates...")
 
-        for idx, fig in tqdm(enumerate(figs_doc), desc="Searching templates"):
+        for idx, _fig in tqdm(enumerate(figs_doc), desc="Searching templates"):
             logger.info("Processing figure page %s of %s", idx + 1, len(figs_doc))
             if idx in already_found:
                 continue
@@ -251,7 +242,7 @@ def process_pdf(
                     entry = _create_entry(description, page_ptr, idx, max_val, max_loc, t_w, t_h)
                     all_entries.append(entry)
                     already_found.add(idx)
-                    
+
                     matched = True
                     # Do not reset page_ptr; continue from current position for next template
                     break
