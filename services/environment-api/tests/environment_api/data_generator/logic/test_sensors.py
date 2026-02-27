@@ -61,8 +61,24 @@ class TestSensorMathLogic:
         assert obs_qty == 105.0  # 100 + 5 noise
         assert confidence == 0.8  # 1.0 base - (0.02 * 10.0 multiplier)
 
-    def test_calculate_sensor_reading_bounds(self, mock_settings):
-        """Ensures observations cannot be negative and confidence is floored."""
+    def test_calculate_sensor_reading_negative_noise(self, mock_settings):
+        """Verifies that negative noise correctly reduces the observed quantity
+        without hitting bounds."""
+        rng = MagicMock(spec=random.Random)
+        rng.random.return_value = 0.50
+        rng.gauss.return_value = -10.0  # Normal negative noise
+
+        # 100 actual qty, 5% noise sigma
+        obs_qty, confidence, is_missing = calculate_sensor_reading(
+            actual_qty=100.0, noise_sigma=0.05, missing_rate=0.10, rng=rng
+        )
+
+        assert is_missing is False
+        assert obs_qty == 90.0  # 100.0 - 10.0
+        assert confidence == 0.5  # 1.0 - (0.05 * 10.0 multiplier) = 0.5
+
+    def test_calculate_sensor_reading_zero_bounds(self, mock_settings):
+        """Ensures observations cannot be negative and confidence is floored at the minimum."""
         rng = MagicMock(spec=random.Random)
         rng.random.return_value = 0.50
         rng.gauss.return_value = -50.0  # Extreme negative noise
@@ -74,7 +90,9 @@ class TestSensorMathLogic:
 
         assert is_missing is False
         assert obs_qty == 0.0  # Bounded from -40.0 to 0.0
-        assert confidence == 0.1  # Floored at min_confidence (1.0 - (0.2 * 10) = -1.0 -> 0.1)
+        assert (
+            confidence == 0.1
+        )  # Floored at min_confidence (1.0 - (0.2 * 10.0 multiplier) = -1.0 -> 0.1)
 
 
 class TestSensorManager:

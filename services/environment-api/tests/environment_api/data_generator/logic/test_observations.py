@@ -43,7 +43,6 @@ def test_compare_observations_to_balances_discrepancy_math(db_session: Session):
     base_time = datetime.now(tz=UTC)
 
     # 2. Inject Noisy Observations
-    # Math: (110 * 0.8 + 90 * 0.2) / (0.8 + 0.2) = (88 + 18) / 1.0 = 106.0
     obs1 = Observation(
         observed_at=base_time,
         device_id=device.id,
@@ -82,7 +81,13 @@ def test_compare_observations_to_balances_discrepancy_math(db_session: Session):
     assert len(rows) == 1
     row = rows[0]
 
+    # Explicitly calculate the expected weighted average to validate the SQL logic
+    expected_estimate = (
+        obs1.observed_qty * obs1.confidence + obs2.observed_qty * obs2.confidence
+    ) / (obs1.confidence + obs2.confidence)
+    expected_discrepancy = expected_estimate - balance.on_hand
+
     assert row["on_hand"] == 100.0  # True State
-    assert row["observed_estimate"] == 106.0  # Noisy State Estimate
-    assert row["discrepancy"] == 6.0  # Delta (Estimate - True)
+    assert row["observed_estimate"] == expected_estimate  # Noisy State Estimate (106.0)
+    assert row["discrepancy"] == expected_discrepancy  # Delta (6.0)
     assert row["obs_count"] == 2

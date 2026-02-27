@@ -17,102 +17,124 @@ from database.orders import Order, OrderLine, POLine, PurchaseOrder
 from sqlalchemy.exc import IntegrityError
 
 
-@pytest.mark.parametrize(
-    "factory_fn",
-    [
-        lambda w, p, ctx, v: Product(sku=f"P-{v}", name="A", category="A", shelf_life_days=v),
-        lambda w, p, ctx, v: Location(
-            warehouse_id=w.id, code=f"L-{v}", type=LocationType.SHELF, capacity_units=v
-        ),
-        lambda w, p, ctx, v: InventoryBalance(
-            product_id=p.id, location_id=ctx["dock"].id, on_hand=v
-        ),
-        lambda w, p, ctx, v: InventoryBalance(
-            product_id=p.id, location_id=ctx["dock"].id, reserved=v
-        ),
-        lambda w, p, ctx, v: OrderLine(
-            order_id=ctx["order"].id, product_id=p.id, qty_ordered=1, qty_allocated=v
-        ),
-        lambda w, p, ctx, v: OrderLine(
-            order_id=ctx["order"].id, product_id=p.id, qty_ordered=1, qty_shipped=v
-        ),
-        lambda w, p, ctx, v: OrderLine(
-            order_id=ctx["order"].id, product_id=p.id, qty_ordered=1, service_level_penalty=v
-        ),
-        lambda w, p, ctx, v: POLine(
-            purchase_order_id=ctx["po"].id, product_id=p.id, qty_ordered=1, qty_received=v
-        ),
-        lambda w, p, ctx, v: InventoryMove(
-            product_id=p.id,
-            move_type=MoveType.ADJUSTMENT,
-            qty=1,
-            occurred_at=datetime.now(UTC),
-            reported_qty=v,
-        ),
-        lambda w, p, ctx, v: InventoryMove(
-            product_id=p.id,
-            move_type=MoveType.ADJUSTMENT,
-            qty=1,
-            occurred_at=datetime.now(UTC),
-            actual_qty=v,
-        ),
-        lambda w, p, ctx, v: Route(
-            origin_warehouse_id=w.id,
-            destination_warehouse_id=ctx["w2"].id,
-            mode=TransportMode.TRUCK,
-            distance_km=v,
-        ),
-        lambda w, p, ctx, v: LeadtimeModel(
-            scope=LeadtimeScope.SUPPLIER, dist_family=DistFamily.NORMAL, rare_delay_add_days=v
-        ),
-        lambda w, p, ctx, v: SensorDevice(
-            warehouse_id=w.id, device_type=DeviceType.CAMERA, noise_sigma=v
-        ),
-        lambda w, p, ctx, v: Observation(
-            observed_at=datetime.now(UTC),
-            device_id=ctx["device"].id,
-            product_id=p.id,
-            location_id=ctx["dock"].id,
-            obs_type=ObservationType.SCAN,
-            observed_qty=v,
-        ),
-        lambda w, p, ctx, v: Observation(
-            observed_at=datetime.now(UTC),
-            device_id=ctx["device"].id,
-            product_id=p.id,
-            location_id=ctx["dock"].id,
-            obs_type=ObservationType.SCAN,
-            reported_noise_sigma=v,
-        ),
-    ],
-)
-def test_non_negative_constraints(db_session, seed_base_world, factory_fn):
-    """
-    Test that fields representing physical bounds or capacities reject negative values.
-
-    Why this is important: Negative distances, capacities, or inventory balances
-    are physically impossible. Allowing them would cause silent mathematical
-    failures in routing algorithms and financial reporting.
-    """
+@pytest.fixture
+def constraint_ctx(db_session, seed_base_world):
+    """Provides the dependent entities required for constraint testing."""
     w = seed_base_world["warehouse"]
-    p = seed_base_world["product"]
-    dock = seed_base_world["dock"]
     sup = seed_base_world["supplier"]
 
     w2 = Warehouse(name="W2", region="A", tz="UTC")
-    db_session.add(w2)
     order = Order(customer_name="A")
-    db_session.add(order)
     po = PurchaseOrder(supplier_id=sup.id, destination_warehouse_id=w.id)
-    db_session.add(po)
     dev = SensorDevice(warehouse_id=w.id, device_type=DeviceType.CAMERA)
-    db_session.add(dev)
+
+    db_session.add_all([w2, order, po, dev])
     db_session.flush()
 
-    ctx = {"dock": dock, "w2": w2, "order": order, "po": po, "device": dev}
+    return {
+        "warehouse": w,
+        "product": seed_base_world["product"],
+        "dock": seed_base_world["dock"],
+        "w2": w2,
+        "order": order,
+        "po": po,
+        "device": dev,
+    }
 
-    obj = factory_fn(w, p, ctx, -1.0)
+
+INT_FACTORIES = [
+    lambda ctx, v: Product(sku=f"P-{v}", name="A", category="A", shelf_life_days=v),
+    lambda ctx, v: Location(
+        warehouse_id=ctx["warehouse"].id, code=f"L-{v}", type=LocationType.SHELF, capacity_units=v
+    ),
+    lambda ctx, v: Route(
+        origin_warehouse_id=ctx["warehouse"].id,
+        destination_warehouse_id=ctx["w2"].id,
+        mode=TransportMode.TRUCK,
+        distance_km=v,
+    ),
+]
+
+FLOAT_FACTORIES = [
+    lambda ctx, v: InventoryBalance(
+        product_id=ctx["product"].id, location_id=ctx["dock"].id, on_hand=v
+    ),
+    lambda ctx, v: InventoryBalance(
+        product_id=ctx["product"].id, location_id=ctx["dock"].id, reserved=v
+    ),
+    lambda ctx, v: OrderLine(
+        order_id=ctx["order"].id, product_id=ctx["product"].id, qty_ordered=1, qty_allocated=v
+    ),
+    lambda ctx, v: OrderLine(
+        order_id=ctx["order"].id, product_id=ctx["product"].id, qty_ordered=1, qty_shipped=v
+    ),
+    lambda ctx, v: OrderLine(
+        order_id=ctx["order"].id,
+        product_id=ctx["product"].id,
+        qty_ordered=1,
+        service_level_penalty=v,
+    ),
+    lambda ctx, v: POLine(
+        purchase_order_id=ctx["po"].id, product_id=ctx["product"].id, qty_ordered=1, qty_received=v
+    ),
+    lambda ctx, v: InventoryMove(
+        product_id=ctx["product"].id,
+        move_type=MoveType.ADJUSTMENT,
+        qty=1,
+        occurred_at=datetime.now(UTC),
+        reported_qty=v,
+    ),
+    lambda ctx, v: InventoryMove(
+        product_id=ctx["product"].id,
+        move_type=MoveType.ADJUSTMENT,
+        qty=1,
+        occurred_at=datetime.now(UTC),
+        actual_qty=v,
+    ),
+    lambda ctx, v: LeadtimeModel(
+        scope=LeadtimeScope.SUPPLIER, dist_family=DistFamily.NORMAL, rare_delay_add_days=v
+    ),
+    lambda ctx, v: SensorDevice(
+        warehouse_id=ctx["warehouse"].id, device_type=DeviceType.CAMERA, noise_sigma=v
+    ),
+    lambda ctx, v: Observation(
+        observed_at=datetime.now(UTC),
+        device_id=ctx["device"].id,
+        product_id=ctx["product"].id,
+        location_id=ctx["dock"].id,
+        obs_type=ObservationType.SCAN,
+        observed_qty=v,
+    ),
+    lambda ctx, v: Observation(
+        observed_at=datetime.now(UTC),
+        device_id=ctx["device"].id,
+        product_id=ctx["product"].id,
+        location_id=ctx["dock"].id,
+        obs_type=ObservationType.SCAN,
+        reported_noise_sigma=v,
+    ),
+]
+
+
+@pytest.mark.parametrize("invalid_value", [-1, -9999])
+@pytest.mark.parametrize("factory_fn", INT_FACTORIES)
+def test_non_negative_int_constraints(db_session, constraint_ctx, factory_fn, invalid_value):
+    """Verifies that integer-based physical constraints correctly reject negative numbers."""
+    obj = factory_fn(constraint_ctx, invalid_value)
     db_session.add(obj)
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+
+@pytest.mark.parametrize("invalid_value", [-1.0, -0.001, -9999.99])
+@pytest.mark.parametrize("factory_fn", FLOAT_FACTORIES)
+def test_non_negative_float_constraints(db_session, constraint_ctx, factory_fn, invalid_value):
+    """Verifies that float-based physical constraints strictly
+    reject even fractional negative values."""
+    obj = factory_fn(constraint_ctx, invalid_value)
+    db_session.add(obj)
+
     with pytest.raises(IntegrityError):
         db_session.commit()
 
