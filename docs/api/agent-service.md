@@ -1,12 +1,14 @@
 # Agent Service API Reference
 
 ## Overview
-`agent-service` is a FastAPI service that runs a ReAct loop over a fixed tool registry.
+`agent-service` is a FastAPI service that runs a ReAct loop over a tool registry:
+- environment tools are registered locally,
+- RAG tools are discovered from `rag-service` MCP endpoint during startup.
 
 Current implementation:
 - LLM provider: AWS Bedrock (Claude) via `langchain-aws`
 - API prefix: `/api/v1`
-- Current registered tool categories: `environment`, `rag`
+- Tool registry includes environment tools and MCP-loaded RAG tools
 - Built-in request tracing: `X-Request-ID` header in responses
 
 The repository does **not** implement Bearer-token auth for this service at the API layer.
@@ -150,11 +152,11 @@ RAG tools:
 - `get_entity_by_number`
 
 ## Downstream Contract Note
-The agent tool layer currently uses HTTP client contracts from:
-- `services/agent-service/app/clients/environment_client.py`
-- `services/agent-service/app/clients/rag_client.py`
+The agent tool layer currently uses:
+- HTTP client contracts for `environment-api` (`services/agent-service/app/clients/environment_client.py`)
+- MCP client contract for `rag-service` (`services/agent-service/app/clients/rag_mcp_client.py`)
 
-Those contracts can evolve independently from downstream service implementations. If tools return `404`/`error`, verify route compatibility with currently deployed `environment-api` and `rag-service`.
+Deprecated compatibility code for REST RAG client still exists in `services/agent-service/app/clients/rag_client.py`, but active startup path loads RAG tools from MCP.
 
 ## Error Handling
 - Request validation errors: FastAPI `422`

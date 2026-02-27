@@ -31,7 +31,7 @@ make dev
 
 This starts:
 - `postgres` (`${POSTGRES_PORT}:5432`)
-- `qdrant` (`${QDRANT_PORT}:6333`)
+- `weaviate` (`${WEAVIATE_PORT}:8080`)
 - `redis` (`${REDIS_PORT}:6379`)
 - `environment-api` (`8000`)
 - `rag-service` (`8001`)

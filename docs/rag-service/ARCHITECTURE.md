@@ -7,10 +7,14 @@ It is located in the monorepo under `services/rag-service/`.
 ## High-level responsibilities
 
 - Provide a Model Context Protocol (MCP) interface for agent interaction.
-- Perform semantic search across the knowledge base.
+- Perform repository-backed search across the knowledge base.
 - Enable graph-like expansion of search results (retrieving linked formulas, algorithms, etc.).
 - Provide precise retrieval of entities by their unique identifiers (e.g., formula numbers).
 - Abstract the underlying vector store through a repository pattern.
+
+Current implementation note:
+- Active repository: `FakeDataRepository` using mock JSON data.
+- Weaviate-backed retrieval is not yet wired into the runtime repository implementation.
 
 ## Runtime dependencies
 
