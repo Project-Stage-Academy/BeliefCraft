@@ -144,9 +144,7 @@ def _sort_tree(nodes: list[LocationTreeNode]) -> None:
 
 
 def _build_location_tree(flat_locations: list[LocationOut]) -> list[LocationTreeNode]:
-    nodes_by_id = {
-        location.id: _tree_node_from_location(location) for location in flat_locations
-    }
+    nodes_by_id = {location.id: _tree_node_from_location(location) for location in flat_locations}
 
     roots: list[LocationTreeNode] = []
     for location in flat_locations:
@@ -180,9 +178,7 @@ def _calculate_capacity_totals(
     data_rows: list[LocationCapacityUtilizationRow],
 ) -> tuple[float | None, int, float | None]:
     observed_values = [
-        row.observed_qty_sum
-        for row in data_rows
-        if row.observed_qty_sum is not None
+        row.observed_qty_sum for row in data_rows if row.observed_qty_sum is not None
     ]
     total_observed_qty_sum = sum(observed_values) if observed_values else None
     total_capacity_units = sum(row.capacity_units for row in data_rows)
@@ -470,6 +466,3 @@ def get_capacity_utilization_snapshot(
         )
     except Exception as exc:
         raise RuntimeError("Unable to get capacity utilization snapshot.") from exc
-
-
-

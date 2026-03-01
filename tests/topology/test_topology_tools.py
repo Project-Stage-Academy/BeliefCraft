@@ -95,4 +95,3 @@ def test_get_capacity_utilization_snapshot_requires_time_mode() -> None:
         topology_tools.get_capacity_utilization_snapshot(warehouse_id=str(uuid4()))
 
     assert isinstance(excinfo.value.__cause__, ValidationError)
-

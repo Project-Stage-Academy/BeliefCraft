@@ -259,8 +259,7 @@ def _build_capacity_utilization_stmt(
 ) -> Any:
     utilization_expr = case(
         (
-            (locations.c.capacity_units > 0)
-            & location_estimates.c.observed_qty_sum.is_not(None),
+            (locations.c.capacity_units > 0) & location_estimates.c.observed_qty_sum.is_not(None),
             location_estimates.c.observed_qty_sum / locations.c.capacity_units,
         ),
         else_=None,

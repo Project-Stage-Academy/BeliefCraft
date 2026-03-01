@@ -91,4 +91,3 @@ def topology_capacity_utilization(
             type=enum_value_or_raw(location_type),
         )
     )
-

@@ -151,16 +151,10 @@ class GetWarehouseCapacityUtilizationRequest(BaseModel):
         uses_range = self.observed_from is not None or self.observed_to is not None
 
         if uses_snapshot and uses_range:
-            raise ValueError(
-                "Use either snapshot_at or observed_from/observed_to, not both."
-            )
+            raise ValueError("Use either snapshot_at or observed_from/observed_to, not both.")
 
-        if not uses_snapshot and (
-            self.observed_from is None or self.observed_to is None
-        ):
-            raise ValueError(
-                "Provide snapshot_at, or provide both observed_from and observed_to."
-            )
+        if not uses_snapshot and (self.observed_from is None or self.observed_to is None):
+            raise ValueError("Provide snapshot_at, or provide both observed_from and observed_to.")
 
         if (
             self.observed_from is not None
@@ -185,6 +179,3 @@ class GetWarehouseCapacityUtilizationResponse(BaseModel):
 
 
 LocationTreeNode.model_rebuild()
-
-
-
