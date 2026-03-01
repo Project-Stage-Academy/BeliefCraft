@@ -35,6 +35,9 @@ def _seed_topology_records(db_session: Session, seed_base_world: dict) -> dict:
         type=LocationType.SHELF,
         capacity_units=80,
     )
+    db_session.add(shelf)
+    db_session.flush()
+
     bin_location = Location(
         warehouse_id=warehouse.id,
         parent_location_id=shelf.id,
@@ -42,7 +45,7 @@ def _seed_topology_records(db_session: Session, seed_base_world: dict) -> dict:
         type=LocationType.BIN,
         capacity_units=40,
     )
-    db_session.add_all([shelf, bin_location])
+    db_session.add(bin_location)
     db_session.flush()
 
     product_b = Product(
