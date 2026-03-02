@@ -89,7 +89,7 @@ def test_block_processor_edge_cases():
 def test_block_processor_is_inside_logic():
     from pipeline.parsing import block_processor as bp
 
-    processor = bp.BlockProcessor("dummy.pdf")
+    processor = bp.BlockProcessor.__new__(bp.BlockProcessor)
 
     assert processor._is_inside_bbox((10, 10, 50, 50), (0, 0, 100, 100)) is True
     assert processor._is_inside_bbox((100, 100, 150, 150), (0, 0, 50, 50)) is False
