@@ -11,7 +11,6 @@ from pipeline.julia_code_translation.process_book_code import (
 
 def _make_processor(json_path: Path) -> BookCodeProcessor:
     return BookCodeProcessor(
-        json_path,
         JuliaEntityExtractor(),
         UsageIndexBuilder(),
         TranslatedAlgorithmStore(json_path),

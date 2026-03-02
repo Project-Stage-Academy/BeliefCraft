@@ -59,7 +59,7 @@ From the repo root:
 ```bash
 uv run services/rag-service/src/pipeline/julia_code_translation/translate.py \
   --pdf-path dm.pdf \
-  --pdf-jsons-dir ocr_jsons \
+  --paddle-ocr-dir ocr_jsons \
   --prompts-dir prompts \
   --translated-algorithms-json translated_algorithms.json
 ```

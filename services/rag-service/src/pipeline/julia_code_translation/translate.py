@@ -277,7 +277,6 @@ def build_prompt_builder(translated_algorithms_json: str, block_processor: Any) 
     translated_algorithms_path = Path(translated_algorithms_json)
     return PromptBuilder(
         book_processor=BookCodeProcessor(
-            translated_algorithms_path,
             JuliaEntityExtractor(),
             UsageIndexBuilder(),
             TranslatedAlgorithmStore(translated_algorithms_path),

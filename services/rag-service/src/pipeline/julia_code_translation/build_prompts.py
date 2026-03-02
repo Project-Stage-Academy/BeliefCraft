@@ -185,7 +185,6 @@ if __name__ == "__main__":
     with open_block_processor(pdf_path, paddle_ocr_dir=args.paddle_ocr_dir) as block_processor:
         builder = PromptBuilder(
             book_processor=BookCodeProcessor(
-                translated_algos_path,
                 JuliaEntityExtractor(),
                 UsageIndexBuilder(),
                 TranslatedAlgorithmStore(translated_algos_path),
