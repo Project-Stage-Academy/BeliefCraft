@@ -1,8 +1,7 @@
-import ast
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AgentStep(BaseModel):
@@ -146,17 +145,3 @@ class AgentRecommendationResponse(BaseModel):
 
     warnings: list[str] = Field(default_factory=list, description="Potential issues/limitations")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-    @field_validator("code_snippets")
-    @classmethod
-    def validate_code_syntax(cls, snippets: list[CodeSnippet]) -> list[CodeSnippet]:
-        """Validate Python snippets using AST before returning response."""
-        for snippet in snippets:
-            if snippet.language.lower() != "python":
-                continue
-            try:
-                ast.parse(snippet.code)
-                snippet.validated = True
-            except SyntaxError as e:
-                raise ValueError(f"Invalid Python syntax in code snippet: {e}") from e
-        return snippets

@@ -33,7 +33,7 @@ def test_structured_response_accepts_valid_payload() -> None:
         {
             "language": "python",
             "code": "import math\nx = math.sqrt(16)\nprint(x)\n",
-            "validated": False,
+            "validated": True,
         }
     ]
 
@@ -44,7 +44,7 @@ def test_structured_response_accepts_valid_payload() -> None:
     assert response.code_snippets[0].validated is True
 
 
-def test_structured_response_rejects_invalid_python_syntax() -> None:
+def test_structured_response_trusts_extractor_managed_validation_flag() -> None:
     payload = _base_payload()
     payload["code_snippets"] = [
         CodeSnippet(
@@ -54,11 +54,11 @@ def test_structured_response_rejects_invalid_python_syntax() -> None:
         )
     ]
 
-    try:
-        AgentRecommendationResponse(**payload)
-        raise AssertionError("Expected ValidationError was not raised")
-    except ValidationError as exc:
-        assert "Invalid Python syntax in code snippet" in str(exc)
+    response = AgentRecommendationResponse(**payload)
+
+    assert len(response.code_snippets) == 1
+    assert response.code_snippets[0].language == "python"
+    assert response.code_snippets[0].validated is False
 
 
 def test_structured_response_requires_recommendations() -> None:

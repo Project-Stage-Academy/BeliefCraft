@@ -17,6 +17,11 @@ from app.models.responses import (
 from app.services.extractors.citation_extractor import CitationExtractor
 from app.services.extractors.code_extractor import CodeExtractor
 from app.services.extractors.formula_extractor import FormulaExtractor
+from app.services.extractors.tool_result_utils import (
+    collect_result_documents,
+    is_rag_tool_call,
+    tool_call_field,
+)
 from app.services.llm_service import LLMService
 from common.logging import get_logger
 
@@ -32,8 +37,6 @@ def _coerce_status(status: str) -> _ResponseStatus:
     # 'running' or any unexpected value treated as partial
     return "partial"
 
-
-_RAG_TOOL_NAMES = {"search_knowledge_base", "expand_graph_by_ids", "get_entity_by_number"}
 
 _PARSE_SYSTEM_PROMPT = "You are a data extraction assistant. Always return valid JSON."
 
@@ -104,9 +107,9 @@ class RecommendationGenerator:
         citations = self._extract_citations(agent_state)
 
         tools_used = [
-            self._field(tc, "tool_name")
+            tool_call_field(tc, "tool_name")
             for tc in agent_state["tool_calls"]
-            if self._field(tc, "tool_name")
+            if tool_call_field(tc, "tool_name")
         ]
 
         reasoning_trace = self._build_reasoning_trace(agent_state)
@@ -207,11 +210,12 @@ class RecommendationGenerator:
         formulas.extend(self.formula_extractor.extract_from_text(final_answer))
 
         for tool_call in agent_state["tool_calls"]:
-            if self._field(tool_call, "tool_name") not in _RAG_TOOL_NAMES:
+            if not is_rag_tool_call(tool_call):
                 continue
-            result = self._field(tool_call, "result") or {}
-            if isinstance(result, dict) and "documents" in result:
-                formulas.extend(self.formula_extractor.extract_from_rag_chunks(result["documents"]))
+            result = tool_call_field(tool_call, "result")
+            documents = collect_result_documents(result)
+            if documents:
+                formulas.extend(self.formula_extractor.extract_from_rag_chunks(documents))
 
         return formulas
 
@@ -249,12 +253,12 @@ class RecommendationGenerator:
                 "iteration": i + 1,
                 "thought": thought_text,
                 "action": {
-                    "tool": self._field(tool_call, "tool_name"),
-                    "arguments": self._field(tool_call, "arguments"),
+                    "tool": tool_call_field(tool_call, "tool_name"),
+                    "arguments": tool_call_field(tool_call, "arguments"),
                 },
             }
 
-            result = self._field(tool_call, "result")
+            result = tool_call_field(tool_call, "result")
             if result:
                 if isinstance(result, dict) and "documents" in result:
                     step["observation"] = f"Received {len(result['documents'])} documents"
@@ -288,9 +292,9 @@ class RecommendationGenerator:
             )
 
         failed_tools = [
-            self._field(tc, "tool_name")
+            tool_call_field(tc, "tool_name")
             for tc in agent_state["tool_calls"]
-            if self._field(tc, "error")
+            if tool_call_field(tc, "error")
         ]
         if failed_tools:
             warnings.append(
@@ -337,13 +341,6 @@ class RecommendationGenerator:
     # ------------------------------------------------------------------
     # Utility helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _field(obj: Any, name: str) -> Any:
-        """Retrieve a field from a dict or Pydantic model."""
-        if isinstance(obj, dict):
-            return obj.get(name)
-        return getattr(obj, name, None)
 
     @staticmethod
     def _calc_execution_time(agent_state: AgentState) -> float:

@@ -7,6 +7,12 @@ import re
 from typing import Any
 
 from app.models.responses import CodeSnippet
+from app.services.extractors.tool_result_utils import (
+    collect_result_documents,
+    extract_metadata,
+    is_rag_tool_call,
+    tool_call_field,
+)
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,11 +30,6 @@ class CodeExtractor:
     - Deduplicates snippets by language + normalized code content
     """
 
-    _RAG_TOOL_NAMES = {
-        "search_knowledge_base",
-        "expand_graph_by_ids",
-        "get_entity_by_number",
-    }
     _RAG_CODE_CHUNK_TYPES = {"algorithm", "algorithm_code"}
     _CODE_BLOCK_PATTERN = re.compile(
         r"```(?P<lang>[a-zA-Z0-9_+-]*)\n(?P<code>.*?)```",
@@ -47,11 +48,11 @@ class CodeExtractor:
         snippets.extend(self.extract_from_text(final_answer))
 
         for tool_call in tool_calls:
-            if self._tool_field(tool_call, "tool_name") not in self._RAG_TOOL_NAMES:
+            if not is_rag_tool_call(tool_call):
                 continue
 
-            result = self._tool_field(tool_call, "result")
-            for document in self._collect_result_documents(result):
+            result = tool_call_field(tool_call, "result")
+            for document in collect_result_documents(result):
                 snippets.extend(self.extract_from_document(document))
 
         deduplicated = self._deduplicate_code_snippets(snippets)
@@ -83,7 +84,7 @@ class CodeExtractor:
         """
         Extract snippets from a single RAG document-like object.
         """
-        metadata = self._extract_metadata(document)
+        metadata = extract_metadata(document)
         description = self._first_non_empty(
             metadata.get("section_title"),
             document.get("section_title"),
@@ -146,17 +147,6 @@ class CodeExtractor:
             snippets.extend(fenced)
 
         return self._deduplicate_code_snippets(snippets)
-
-    @staticmethod
-    def _tool_field(tool_call: Any, field_name: str) -> Any:
-        if isinstance(tool_call, dict):
-            return tool_call.get(field_name)
-        return getattr(tool_call, field_name, None)
-
-    @staticmethod
-    def _extract_metadata(document: dict[str, Any]) -> dict[str, Any]:
-        metadata = document.get("metadata")
-        return metadata if isinstance(metadata, dict) else {}
 
     def _build_code_snippet(
         self,
@@ -235,31 +225,6 @@ class CodeExtractor:
                 dependencies.add(node.module.split(".")[0])
 
         return sorted(dependencies)
-
-    @staticmethod
-    def _collect_result_documents(result: Any) -> list[dict[str, Any]]:
-        if isinstance(result, list):
-            return [entry for entry in result if isinstance(entry, dict)]
-
-        if not isinstance(result, dict):
-            return []
-
-        for field in ("documents", "results", "expanded"):
-            entries = result.get(field)
-            if isinstance(entries, list):
-                return [entry for entry in entries if isinstance(entry, dict)]
-
-        document = result.get("document")
-        if isinstance(document, dict):
-            return [document]
-
-        if any(
-            key in result
-            for key in ("id", "chunk_id", "metadata", "content", "chunk_type", "entity_type")
-        ):
-            return [result]
-
-        return []
 
     @staticmethod
     def _first_non_empty(*values: Any) -> str | None:

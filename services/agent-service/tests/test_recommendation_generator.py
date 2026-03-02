@@ -39,17 +39,20 @@ def _make_tool_call(
     arguments: dict | None = None,
     result: dict | None = None,
     error: str | None = None,
+    category: str | None = None,
     as_dict: bool = False,
 ) -> Any:
     if as_dict:
         return {
             "tool_name": tool_name,
+            "category": category,
             "arguments": arguments or {},
             "result": result,
             "error": error,
         }
     return ToolCall(
         tool_name=tool_name,
+        category=category,
         arguments=arguments or {},
         result=result,
         error=error,
@@ -412,6 +415,34 @@ class TestFormulaExtraction:
         tool_result = {"documents": [{"content": "D = \\lambda t", "chunk_type": "formula"}]}
         state = _base_agent_state(
             tool_calls=[_make_tool_call("search_knowledge_base", result=tool_result)]
+        )
+        result = await gen.generate(state)
+        assert any(f.latex == "D = \\lambda t" for f in result.formulas)
+        extractor.extract_from_rag_chunks.assert_called_once_with(tool_result["documents"])
+
+    @pytest.mark.asyncio
+    async def test_formulas_extracted_when_tool_call_has_rag_category(
+        self, mock_llm: MagicMock, mock_citation_extractor: MagicMock
+    ) -> None:
+        formula_from_rag = Formula(latex="D = \\lambda t", description="Demand formula")
+        extractor = MagicMock()
+        extractor.extract_from_text.return_value = []
+        extractor.extract_from_rag_chunks.return_value = [formula_from_rag]
+
+        gen = RecommendationGenerator(
+            llm=mock_llm,
+            formula_extractor=extractor,
+            citation_extractor=mock_citation_extractor,
+        )
+        tool_result = {"documents": [{"content": "D = \\lambda t", "chunk_type": "formula"}]}
+        state = _base_agent_state(
+            tool_calls=[
+                _make_tool_call(
+                    "semantic_lookup_v2",
+                    result=tool_result,
+                    category="rag",
+                )
+            ]
         )
         result = await gen.generate(state)
         assert any(f.latex == "D = \\lambda t" for f in result.formulas)

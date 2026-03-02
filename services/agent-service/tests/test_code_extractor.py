@@ -230,6 +230,27 @@ def test_extract_from_answer_and_tool_calls_accepts_toolcall_models() -> None:
     assert snippets[0].dependencies == ["random"]
 
 
+def test_extract_from_answer_and_tool_calls_uses_tool_category_when_present() -> None:
+    extractor = CodeExtractor()
+    tool_calls = [
+        ToolCall(
+            tool_name="semantic_lookup_v2",
+            category="rag",
+            arguments={"query": "policy iteration"},
+            result={"documents": [{"code_snippet_python": "import math\nx = math.sqrt(25)"}]},
+        )
+    ]
+
+    snippets = extractor.extract_from_answer_and_tool_calls(
+        final_answer="",
+        tool_calls=tool_calls,
+    )
+
+    assert len(snippets) == 1
+    assert snippets[0].language == "python"
+    assert snippets[0].dependencies == ["math"]
+
+
 def test_extract_from_answer_and_tool_calls_deduplicates_across_sources() -> None:
     extractor = CodeExtractor()
     final_answer = "```python\nimport math\nx = math.sqrt(16)\n```"

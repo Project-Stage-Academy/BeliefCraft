@@ -123,3 +123,24 @@ def test_extract_from_tool_calls_uses_get_entity_arguments_as_fallbacks() -> Non
     assert citation.entity_number == "16.4"
     assert citation.page == 317
     assert citation.title == "Bayes Update Rule"
+
+
+def test_extract_from_tool_calls_uses_tool_category_when_present() -> None:
+    extractor = CitationExtractor()
+    chunks = _load_mock_chunks()
+    formula_chunk = next(c for c in chunks if c.get("chunk_type") == "numbered_formula")
+
+    citations = extractor.extract_from_tool_calls(
+        [
+            ToolCall(
+                tool_name="semantic_lookup_v2",
+                category="rag",
+                arguments={"query": "bayes"},
+                result={"documents": [_as_document_shape(formula_chunk)]},
+            )
+        ]
+    )
+
+    assert len(citations) == 1
+    assert citations[0].chunk_id == formula_chunk["chunk_id"]
+    assert citations[0].entity_type == "formula"

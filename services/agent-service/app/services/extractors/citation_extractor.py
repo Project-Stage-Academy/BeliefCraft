@@ -5,6 +5,12 @@ Utilities for extracting citations from RAG tool outputs.
 from typing import Any
 
 from app.models.responses import Citation
+from app.services.extractors.tool_result_utils import (
+    collect_result_documents,
+    extract_metadata,
+    is_rag_tool_call,
+    tool_call_field,
+)
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -14,12 +20,6 @@ class CitationExtractor:
     """
     Extract citation references from RAG tool results and agent tool calls.
     """
-
-    _RAG_TOOL_NAMES = {
-        "search_knowledge_base",
-        "expand_graph_by_ids",
-        "get_entity_by_number",
-    }
 
     _CHUNK_TYPE_TO_ENTITY_TYPE = {
         "numbered_formula": "formula",
@@ -59,15 +59,14 @@ class CitationExtractor:
         citations: list[Citation] = []
 
         for tool_call in tool_calls:
-            tool_name = self._tool_field(tool_call, "tool_name")
-            if tool_name not in self._RAG_TOOL_NAMES:
+            if not is_rag_tool_call(tool_call):
                 continue
 
-            rag_results = self._tool_field(tool_call, "result")
+            rag_results = tool_call_field(tool_call, "result")
             if not rag_results:
                 continue
 
-            tool_arguments_raw = self._tool_field(tool_call, "arguments")
+            tool_arguments_raw = tool_call_field(tool_call, "arguments")
             tool_arguments = tool_arguments_raw if isinstance(tool_arguments_raw, dict) else {}
 
             citations.extend(
@@ -93,53 +92,15 @@ class CitationExtractor:
 
         return self._deduplicate(citations)
 
-    @staticmethod
-    def _tool_field(tool_call: Any, field_name: str) -> Any:
-        if isinstance(tool_call, dict):
-            return tool_call.get(field_name)
-        return getattr(tool_call, field_name, None)
-
     def _collect_documents(self, rag_results: Any) -> list[dict[str, Any]]:
-        if isinstance(rag_results, list):
-            return [entry for entry in rag_results if isinstance(entry, dict)]
-
-        if not isinstance(rag_results, dict):
-            return []
-
-        for field in ("documents", "results", "expanded"):
-            entries = rag_results.get(field)
-            if isinstance(entries, list):
-                return [entry for entry in entries if isinstance(entry, dict)]
-
-        document = rag_results.get("document")
-        if isinstance(document, dict):
-            return [document]
-
-        if self._looks_like_document(rag_results):
-            return [rag_results]
-
-        return []
-
-    @staticmethod
-    def _looks_like_document(value: dict[str, Any]) -> bool:
-        candidate_fields = {
-            "id",
-            "chunk_id",
-            "metadata",
-            "content",
-            "chunk_type",
-            "entity_type",
-            "number",
-            "entity_id",
-        }
-        return any(field in value for field in candidate_fields)
+        return collect_result_documents(rag_results)
 
     def _build_citation(
         self,
         document: dict[str, Any],
         tool_arguments: dict[str, Any],
     ) -> Citation | None:
-        metadata = self._extract_metadata(document)
+        metadata = extract_metadata(document)
 
         raw_entity_type = self._first_non_empty(
             metadata.get("entity_type"),
@@ -195,11 +156,6 @@ class CitationExtractor:
             entity_type=entity_type,
             entity_number=entity_number,
         )
-
-    @staticmethod
-    def _extract_metadata(document: dict[str, Any]) -> dict[str, Any]:
-        metadata = document.get("metadata")
-        return metadata if isinstance(metadata, dict) else {}
 
     def _format_title(
         self,
