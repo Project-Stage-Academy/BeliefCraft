@@ -20,8 +20,7 @@ class ClassMethodStripper(ast.NodeTransformer):
                     body=self._extract_top_level_returns(item),
                     decorator_list=item.decorator_list,
                     returns=item.returns,
-                    type_comment=item.type_comment,
-                    type_params=getattr(item, "type_params", []),
+                    type_comment=item.type_comment
                 )
                 new_body.append(new_func)
 
