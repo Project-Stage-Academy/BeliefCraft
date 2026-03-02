@@ -122,3 +122,19 @@ def test_merge_visual_items(mock_data_env):
     assert "fig_1" in merged
     assert merged["fig_1"]["bbox"] == [10, 10, 100, 100]
     assert merged["fig_1"]["image_index"] == 5
+
+
+def test_assembler_load_and_offset(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    path = mock_data_env["paddle_dir"] / "temp_test.json"
+    path.write_text(json.dumps([{"page": "not_an_int"}, {"page": 5}]), encoding="utf-8")
+
+    res = assembler._load_and_offset(path, "page", offset=10)
+    assert 15 in res
