@@ -90,3 +90,35 @@ def test_assembler_safe_load_non_existent(mock_data_env):
     assert assembler._extract_id("Figure 1.2") == "1.2"
     assert assembler._extract_id("Table 10.5") == "10.5"
     assert assembler._extract_id(None) is None
+
+
+def test_assembler_is_inside(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    assert assembler._is_inside([100, 100, 200, 200], [90, 90, 210, 210]) is True
+    assert assembler._is_inside([100, 100, 200, 200], [300, 300, 400, 400]) is False
+    assert assembler._is_inside([], [10, 10, 20, 20]) is False
+
+
+def test_merge_visual_items(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    items = [
+        {"entity_id": "fig_1", "bbox": [10, 10, 50, 50], "chunk_type": "image"},
+        {"entity_id": "fig_1", "bbox": [40, 40, 100, 100], "image_index": 5},
+    ]
+    merged = assembler._merge_visual_items(items)
+
+    assert "fig_1" in merged
+    assert merged["fig_1"]["bbox"] == [10, 10, 100, 100]
+    assert merged["fig_1"]["image_index"] == 5

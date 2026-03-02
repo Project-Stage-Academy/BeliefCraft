@@ -33,3 +33,27 @@ def test_get_references(extractor):
 
     assert "1.2" in refs["referenced_figures"]
     assert "3.4" in refs["referenced_tables"]
+
+
+def test_metadata_extractor_deep_hierarchy():
+    extractor = MetadataExtractor()
+
+    content = "2.1.3 Advanced Optimization"
+    meta = extractor.process_content_and_get_meta(content)
+    assert meta["subsubsection_number"] == "2.1.3"
+    assert "Advanced Optimization" in meta["subsubsection_title"]
+
+    content = "PART I: THE BEGINNING"
+    meta = extractor.process_content_and_get_meta(content)
+    assert meta["part"] == "I"
+    assert "THE BEGINNING" in meta["part_title"]
+
+
+def test_metadata_extractor_all_references():
+    extractor = MetadataExtractor()
+    text = "Refer to Example 1.1, Exercise 4.2 and Equation (5.6)."
+    refs = extractor.get_references(text)
+
+    assert "1.1" in refs["referenced_examples"]
+    assert "4.2" in refs["referenced_exercises"]
+    assert "5.6" in refs["referenced_formulas"]
