@@ -46,10 +46,9 @@ def _build_warehouse_filter_clause(
         loc_from = locations.alias("loc_from")
         loc_to = locations.alias("loc_to")
 
-        from_clause = (
-            moves.outerjoin(loc_from, loc_from.c.id == moves.c.from_location_id)
-            .outerjoin(loc_to, loc_to.c.id == moves.c.to_location_id)
-        )
+        from_clause = moves.outerjoin(
+            loc_from, loc_from.c.id == moves.c.from_location_id
+        ).outerjoin(loc_to, loc_to.c.id == moves.c.to_location_id)
 
         conditions.append(
             or_(
@@ -228,4 +227,3 @@ def fetch_inventory_adjustments_summary(
 
     breakdown_rows = session.execute(breakdown_stmt).mappings().all()
     return summary_row, breakdown_rows
-

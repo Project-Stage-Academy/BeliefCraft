@@ -12,14 +12,13 @@ from common.schemas.inventory import (
 from database.enums import DeviceType, MoveType, ObservationType
 from database.inventory import InventoryMove
 from database.observations import Observation, SensorDevice
-from sqlalchemy.orm import Session
-
 from environment_api.smart_query_builder.repo.inventory_moves import (
     fetch_inventory_adjustments_summary,
     fetch_inventory_move_audit_trace_rows,
     fetch_inventory_move_row,
     fetch_inventory_move_rows,
 )
+from sqlalchemy.orm import Session
 
 
 def _seed_inventory_moves(db_session: Session, seed_base_world: dict) -> dict:
@@ -70,7 +69,9 @@ def _seed_inventory_moves(db_session: Session, seed_base_world: dict) -> dict:
 
 
 @pytest.mark.integration
-def test_fetch_inventory_move_rows_applies_filters(db_session: Session, seed_base_world: dict) -> None:
+def test_fetch_inventory_move_rows_applies_filters(
+    db_session: Session, seed_base_world: dict
+) -> None:
     seeded = _seed_inventory_moves(db_session, seed_base_world)
 
     request = ListInventoryMovesRequest(
@@ -86,7 +87,9 @@ def test_fetch_inventory_move_rows_applies_filters(db_session: Session, seed_bas
 
 
 @pytest.mark.integration
-def test_fetch_inventory_move_row_returns_single_move(db_session: Session, seed_base_world: dict) -> None:
+def test_fetch_inventory_move_row_returns_single_move(
+    db_session: Session, seed_base_world: dict
+) -> None:
     seeded = _seed_inventory_moves(db_session, seed_base_world)
 
     request = GetInventoryMoveRequest(move_id=str(seeded["move_transfer"].id))
@@ -161,4 +164,3 @@ def test_fetch_inventory_move_audit_trace_rows_returns_move_and_observations(
     assert move_row is not None
     assert move_row["id"] == seeded["move_transfer"].id
     assert len(observation_rows) == 2
-

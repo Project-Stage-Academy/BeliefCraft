@@ -58,9 +58,7 @@ def test_list_inventory_moves_returns_tool_result_with_meta(
 
 
 def test_list_inventory_moves_wraps_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        inventory_history_tools, "get_session", lambda: _fake_session_ctx(object())
-    )
+    monkeypatch.setattr(inventory_history_tools, "get_session", lambda: _fake_session_ctx(object()))
 
     with pytest.raises(RuntimeError, match="Unable to list inventory moves.") as excinfo:
         inventory_history_tools.list_inventory_moves(
@@ -105,9 +103,7 @@ def test_get_inventory_move_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_get_inventory_move_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        inventory_history_tools, "get_session", lambda: _fake_session_ctx(object())
-    )
+    monkeypatch.setattr(inventory_history_tools, "get_session", lambda: _fake_session_ctx(object()))
     monkeypatch.setattr(
         inventory_history_tools,
         "fetch_inventory_move_row",
@@ -195,4 +191,3 @@ def test_get_inventory_adjustments_summary_builds_response(
     assert len(result.data.by_reason) == 2
     assert result.meta["filters"]["warehouse_id"] == "wh-1"
     assert result.message == "Aggregated 3 inventory adjustments."
-

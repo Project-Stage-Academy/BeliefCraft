@@ -71,9 +71,7 @@ def _inventory_move_from_row(row: Any) -> InventoryMoveRow:
             else None
         ),
         actual_qty=(
-            _to_float(row["actual_qty"], "actual_qty")
-            if row["actual_qty"] is not None
-            else None
+            _to_float(row["actual_qty"], "actual_qty") if row["actual_qty"] is not None else None
         ),
     )
 
@@ -270,4 +268,3 @@ def get_inventory_adjustments_summary(
         )
     except Exception as exc:
         raise RuntimeError("Unable to get inventory adjustments summary.") from exc
-
