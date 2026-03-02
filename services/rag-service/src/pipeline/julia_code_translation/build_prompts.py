@@ -162,9 +162,9 @@ if __name__ == "__main__":
         "--pdf-path", default="dm.pdf", help="Path to the source PDF (default: dm.pdf)"
     )
     parser.add_argument(
-        "--pdf-jsons-dir",
-        default="pdf_jsons",
-        help="Directory with OCR JSON pages (default: pdf_jsons)",
+        "--paddle-ocr-dir",
+        default="ocr_jsons",
+        help="Directory with OCR JSON pages (default: ocr_jsons)",
     )
     parser.add_argument(
         "--prompts-dir",
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     prompts_dir = Path(args.prompts_dir)
     translated_algos_path = Path(args.translated_algorithms_json)
 
-    with open_block_processor(pdf_path, pdf_jsons_dir=args.pdf_jsons_dir) as block_processor:
+    with open_block_processor(pdf_path, paddle_ocr_dir=args.paddle_ocr_dir) as block_processor:
         builder = PromptBuilder(
             book_processor=BookCodeProcessor(
                 translated_algos_path,

@@ -59,7 +59,7 @@ From the repo root:
 ```bash
 uv run services/rag-service/src/pipeline/julia_code_translation/translate.py \
   --pdf-path dm.pdf \
-  --pdf-jsons-dir pdf_jsons \
+  --pdf-jsons-dir ocr_jsons \
   --prompts-dir prompts \
   --translated-algorithms-json translated_algorithms.json
 ```
@@ -79,7 +79,7 @@ Run these scripts to load them from AWS CLI configuration:
 ```
 2. Defaults if you omit flags:
   - `--pdf-path dm.pdf`
-  - `--pdf-jsons-dir pdf_jsons`
+  - `--paddle-ocr-dir ocr_jsons`
   - `--prompts-dir prompts`
   - `--translated-algorithms-json translated_algorithms.json`
 
@@ -98,7 +98,7 @@ Prompts are always saved when you run `translate.py`. If you only want to genera
 ```bash
 uv run services/rag-service/src/pipeline/julia_code_translation/build_prompts.py \
   --pdf-path dm.pdf \
-  --pdf-jsons-dir pdf_jsons \
+  --paddle-ocr-dir ocr_jsons \
   --prompts-dir prompts \
   --translated-algorithms-json translated_algorithms.json
 ```
