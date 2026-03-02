@@ -177,3 +177,18 @@ def test_document_assembler_full_flow(mock_data_env, monkeypatch):
     assembler.assemble()
 
     assert len(assembler.final_chunks) > 0
+
+
+def test_assembler_flush_empty(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    assembler._flush([], 1)
+    assert len(assembler.final_chunks) == 0
+
+    assembler._flush(["Hello"], 1)
+    assert len(assembler.final_chunks) > 0

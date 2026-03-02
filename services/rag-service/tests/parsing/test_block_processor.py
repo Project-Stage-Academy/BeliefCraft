@@ -75,3 +75,15 @@ def test_is_inside_bbox_normalizes_bounds(tmp_path: Path):
         (0, 0, 576, 648),
         (0, 0, 2000, 1235),
     )
+
+
+def test_block_processor_edge_cases():
+    from pipeline.parsing import block_processor as bp
+
+    assert bp.BlockProcessor._extract_entity_id("Figure 10.5") == "10.5"
+    assert bp.BlockProcessor._extract_entity_id("Table A.1") == "A.1"
+    assert bp.BlockProcessor._extract_entity_id("Just text 123") is None
+
+    if hasattr(bp.OcrCaptionRepository, "strip_html"):
+        dirty = "<div><b>Text</b></div>"
+        assert "Text" in bp.OcrCaptionRepository.strip_html(dirty)
