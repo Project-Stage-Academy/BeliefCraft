@@ -98,12 +98,13 @@ def test_match_template_on_page_no_match(mock_min_max, mock_match):
     """Test that _match_template_on_page returns None when similarity is below threshold."""
     page_gray = np.zeros((100, 100), dtype=np.uint8)
     template_gray = np.ones((20, 20), dtype=np.uint8)
-    
+
     mock_min_max.return_value = (0.0, 0.1, (0, 0), (0, 0))
     mock_match.return_value = np.zeros((81, 81), dtype=np.float32)
 
     result = ip._match_template_on_page(page_gray, template_gray)
     assert result is None
+
 
 def test_save_to_json_success(tmp_path):
     """Test successful JSON saving."""
@@ -118,8 +119,9 @@ def test_save_to_json_error(tmp_path):
     with patch("pipeline.parsing.image_processor.logger") as mock_log:
         invalid_path = "/this/path/does/not/exist/at/all/final_test.json"
         ip._save_to_json([{"data": 1}], invalid_path)
-        
+
         assert mock_log.error.called
+
 
 def test_create_entry_various_descriptions():
     """Test the logic of _create_entry for different description formats."""

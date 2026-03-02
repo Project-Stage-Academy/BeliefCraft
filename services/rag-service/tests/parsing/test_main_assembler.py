@@ -70,6 +70,7 @@ def test_generate_deterministic_id():
     with pytest.raises(FileNotFoundError):
         DocumentAssembler("no", "no", "no", "no", "no")
 
+
 def test_assembler_safe_load_non_existent(mock_data_env):
     """Test that _safe_load_json returns an empty dict when the file does not exist."""
     assembler = DocumentAssembler(
@@ -77,15 +78,15 @@ def test_assembler_safe_load_non_existent(mock_data_env):
         figures_json=mock_data_env["figures"],
         blocks_json=mock_data_env["blocks"],
         tables_json=mock_data_env["tables"],
-        formulas_json=mock_data_env["formulas"]
+        formulas_json=mock_data_env["formulas"],
     )
-    
+
     res = assembler._safe_load_json("imaginary_file.json")
     assert res == {}
-    
+
     uid = assembler._generate_deterministic_id("text", "1.1", "some content")
     assert "text_1.1_" in uid
-    
+
     assert assembler._extract_id("Figure 1.2") == "1.2"
     assert assembler._extract_id("Table 10.5") == "10.5"
     assert assembler._extract_id(None) is None
