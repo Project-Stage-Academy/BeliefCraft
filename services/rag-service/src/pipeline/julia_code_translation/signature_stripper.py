@@ -1,5 +1,6 @@
 import ast
 from _ast import Return, stmt
+from typing import Any
 
 from common.logging import get_logger
 
@@ -14,15 +15,23 @@ class ClassMethodStripper(ast.NodeTransformer):
 
         for item in node.body:
             if isinstance(item, ast.FunctionDef):
-                new_func = ast.FunctionDef(
-                    name=item.name,
-                    args=item.args,
-                    body=self._extract_top_level_returns(item),
-                    decorator_list=item.decorator_list,
-                    returns=item.returns,
-                    type_comment=item.type_comment
-                )
+
+                func_kwargs: dict[str, Any] = {
+                    "name": item.name,
+                    "args": item.args,
+                    "body": self._extract_top_level_returns(item),
+                    "decorator_list": item.decorator_list,
+                    "returns": item.returns,
+                    "type_comment": item.type_comment,
+                }
+
+                if hasattr(item, "type_params"):
+                    func_kwargs["type_params"] = item.type_params
+
+                new_func = ast.FunctionDef(**func_kwargs)
                 new_body.append(new_func)
+            else:
+                new_body.append(item)
 
         node.body = new_body
         return node
