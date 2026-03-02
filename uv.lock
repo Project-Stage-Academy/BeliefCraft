@@ -142,7 +142,6 @@ name = "beliefcraft"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "beautifulsoup4" },
     { name = "beliefcraft-agent-service" },
     { name = "beliefcraft-common" },
     { name = "beliefcraft-database" },
@@ -150,7 +149,6 @@ dependencies = [
     { name = "beliefcraft-rag-service" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "types-beautifulsoup4" },
 ]
 
 [package.dev-dependencies]
@@ -171,7 +169,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "beliefcraft-agent-service", editable = "services/agent-service" },
     { name = "beliefcraft-common", editable = "packages/common" },
     { name = "beliefcraft-database", editable = "packages/database" },
@@ -179,7 +176,6 @@ requires-dist = [
     { name = "beliefcraft-rag-service", editable = "services/rag-service" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.0" },
-    { name = "types-beautifulsoup4", specifier = ">=4.12.0.20250516" },
 ]
 
 [package.metadata.requires-dev]
@@ -370,7 +366,9 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "beautifulsoup4" },
     { name = "pytest" },
+    { name = "types-beautifulsoup4" },
 ]
 
 [package.metadata]
@@ -386,7 +384,11 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.0" }]
+dev = [
+    { name = "beautifulsoup4", specifier = ">=4.14.3" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "types-beautifulsoup4", specifier = ">=4.12.0.20250516" },
+]
 
 [[package]]
 name = "black"

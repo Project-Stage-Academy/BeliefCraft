@@ -2,7 +2,7 @@ import math
 import re
 from typing import Any
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup  # type: ignore[import-not-found]
 from common.logging import get_logger
 
 # Module-level constants for geometric analysis

@@ -119,6 +119,7 @@ class MetadataExtractor:
             return {}
         lt = text.lower()
         return {
+            "referenced_parts": list(set(re.findall(r"part\s+([ivxcdlm]+)", lt))),
             "referenced_figures": list(set(re.findall(r"figure\s+(\d+\.\d+)", lt))),
             "referenced_tables": list(set(re.findall(r"table\s+(\d+\.\d+)", lt))),
             "referenced_formulas": list(

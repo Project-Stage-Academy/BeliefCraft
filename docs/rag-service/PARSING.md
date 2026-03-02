@@ -47,3 +47,27 @@ Maintains the stateful document hierarchy during processing:
 3. **Assembly**: `DocumentAssembler` merges OCR data from `paddle_results` with the enriched metadata.
 4. **Deduplication**: Validates bounding boxes to ensure caption text is not duplicated within the text stream.
 5. **Output**: Produces deterministic `chunk_ids` (SHA-256) for stable indexing.
+
+## Running the Parser
+
+To execute the full processing cycle (assembling the final JSON), run:
+
+```bash
+# Run the main assembler module
+uv run python -m services.rag_service.src.rag_service.main
+
+```
+
+### Running Individual Components (Debug Mode)
+
+If you need to run only the block processor, image processing or math engine components independently:
+
+```bash
+# Process text blocks only
+uv run python -m services.rag_service.src.rag_service.block_processor
+
+# Process CV-based image matching only
+uv run python -m services.rag_service.src.rag_service.image_processor
+
+# Process formulas and tabels only
+uv run python -m services.rag_service.src.rag_service.math_table_engine
