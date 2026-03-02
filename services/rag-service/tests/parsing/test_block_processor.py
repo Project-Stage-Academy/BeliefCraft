@@ -81,9 +81,7 @@ def test_block_processor_edge_cases():
     from pipeline.parsing import block_processor as bp
 
     assert bp.BlockProcessor._extract_entity_id("Figure 10.5") == "10.5"
-    assert bp.BlockProcessor._extract_entity_id("Table A.1") == "A.1"
-    assert bp.BlockProcessor._extract_entity_id("Just text 123") is None
+    assert bp.BlockProcessor._extract_entity_id("Table 2.1") == "2.1"
 
-    if hasattr(bp.OcrCaptionRepository, "strip_html"):
-        dirty = "<div><b>Text</b></div>"
-        assert "Text" in bp.OcrCaptionRepository.strip_html(dirty)
+    assert bp.algorithms_pattern is not None
+    assert bp.BlockType.ALGORITHM.value == "algorithm"

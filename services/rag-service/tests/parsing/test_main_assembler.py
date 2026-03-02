@@ -192,3 +192,19 @@ def test_assembler_flush_empty(mock_data_env):
 
     assembler._flush(["Hello"], 1)
     assert len(assembler.final_chunks) > 0
+
+
+def test_assembler_id_generation_variants(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    id1 = assembler._generate_deterministic_id("image", None, "content1")
+    id2 = assembler._generate_deterministic_id("table", "2.2", "content1")
+
+    assert id1 != id2
+    assert "image_" in id1
+    assert "table_2.2_" in id2
