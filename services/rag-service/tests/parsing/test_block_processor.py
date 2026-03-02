@@ -91,5 +91,5 @@ def test_block_processor_is_inside_logic():
 
     processor = bp.BlockProcessor.__new__(bp.BlockProcessor)
 
-    assert processor._is_inside_bbox((10, 10, 50, 50), (0, 0, 100, 100)) is True
-    assert processor._is_inside_bbox((100, 100, 150, 150), (0, 0, 50, 50)) is False
+    assert processor.is_inside_bbox((10, 10, 50, 50), (0, 0, 100, 100)) is True
+    assert processor.is_inside_bbox((100, 100, 150, 150), (0, 0, 50, 50)) is False
