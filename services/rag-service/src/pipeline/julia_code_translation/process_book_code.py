@@ -370,12 +370,10 @@ class TranslatedAlgorithmStore:
 class BookCodeProcessor:
     def __init__(
         self,
-        translated_algos_path: Path,
         entity_extractor: JuliaEntityExtractor,
         usage_indexer: UsageIndexBuilder,
         algorithm_store: TranslatedAlgorithmStore,
     ) -> None:
-        self._translated_algos_path = translated_algos_path
         self._entity_extractor = entity_extractor
         self._usage_indexer = usage_indexer
         self._algorithm_store = algorithm_store

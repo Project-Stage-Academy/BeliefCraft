@@ -1,7 +1,7 @@
 $services = @(
   @{ Name = "environment-api"; Url = "http://localhost:8000/health" },
   @{ Name = "rag-service"; Url = "http://localhost:8001/health" },
-  @{ Name = "agent-service"; Url = "http://localhost:8003/health" },
+  @{ Name = "agent-service"; Url = "http://localhost:8003/api/v1/health" },
   @{ Name = "ui"; Url = "http://localhost:3000/health" }
 )
 

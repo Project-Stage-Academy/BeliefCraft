@@ -4,6 +4,10 @@ Base URL (local): `http://localhost:8001`
 
 The RAG Service primarily provides a **Model Context Protocol (MCP)** interface for retrieving knowledge from the "Algorithms for Decision Making" book. It also includes a standard health check endpoint.
 
+Current implementation note:
+- The active repository is `FakeDataRepository` backed by `mock_vector_store_data.json` which simulates vector search.
+- Retrieval behavior is suitable for development/testing and does not yet represent production-grade vector retrieval.
+
 ## HTTP Endpoints
 
 ### GET `/health`

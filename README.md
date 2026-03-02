@@ -35,7 +35,7 @@ graph TD
 - `services/environment-api/`: FastAPI service for environments
 - `services/rag-service/`: FastAPI service for retrieval
 - `services/agent-service/`: FastAPI service for agents
-- `services/ui/`: Vite + React UI shell
+- `services/ui/`: Next.js UI shell
 - `packages/common/`: shared schemas and utilities
 - `packages/database/`: shared database models and connection helpers
 - `infrastructure/`: Docker and scripts

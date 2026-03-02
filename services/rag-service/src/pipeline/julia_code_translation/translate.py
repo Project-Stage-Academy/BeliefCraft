@@ -243,6 +243,11 @@ def parse_args() -> argparse.Namespace:
         "--pdf-path", default="dm.pdf", help="Path to the source PDF (default: dm.pdf)"
     )
     parser.add_argument(
+        "--paddle-ocr-dir",
+        default="ocr_jsons",
+        help="Directory with OCR JSON pages (default: ocr_jsons)",
+    )
+    parser.add_argument(
         "--prompts-dir",
         default=PromptConfig().prompts_dir,
         help="Output directory for prompts (default: prompts)",
@@ -272,7 +277,6 @@ def build_prompt_builder(translated_algorithms_json: str, block_processor: Any) 
     translated_algorithms_path = Path(translated_algorithms_json)
     return PromptBuilder(
         book_processor=BookCodeProcessor(
-            translated_algorithms_path,
             JuliaEntityExtractor(),
             UsageIndexBuilder(),
             TranslatedAlgorithmStore(translated_algorithms_path),
@@ -311,7 +315,7 @@ def main() -> None:
     prompts_dir = Path(args.prompts_dir)
     config = PromptConfig()
 
-    with open_block_processor(args.pdf_path) as block_processor:
+    with open_block_processor(args.pdf_path, paddle_ocr_dir=args.paddle_ocr_dir) as block_processor:
         blocks = block_processor.extract_algorithms_and_examples()
         julia_code = block_processor.extract_algorithms(blocks)
 

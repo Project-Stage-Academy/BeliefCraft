@@ -215,11 +215,14 @@ class GrayBlockMatcher:
 class OcrCaptionRepository:
     """Access OCR JSON pages and provide caption utilities."""
 
-    def __init__(self, pdf_jsons_dir: str | Path) -> None:
-        self._pdf_jsons_dir = Path(pdf_jsons_dir)
+    def __init__(self, paddle_ocr_dir: str | Path) -> None:
+        self._paddle_ocr_dir = Path(paddle_ocr_dir)
 
     def iter_json_pages(self) -> Iterable[Path]:
-        return sorted(self._pdf_jsons_dir.glob("*.json"))
+        pages = sorted(self._paddle_ocr_dir.glob("*.json"))
+        if not pages:
+            raise FileNotFoundError(f"No OCR JSON files found in `{self._paddle_ocr_dir}`")
+        return pages
 
     @staticmethod
     def strip_html(text: str) -> str:
@@ -477,12 +480,12 @@ class BlockProcessor:
 @contextmanager
 def open_block_processor(
     pdf_path: str,
-    pdf_jsons_dir: str | Path = "pdf_jsons",
+    paddle_ocr_dir: str | Path,
 ) -> Iterator["BlockProcessor"]:
     """Yield a BlockProcessor with default collaborators wired."""
     caption_finder = CaptionFinder(algorithms_pattern, example_pattern)
     gray_block_matcher = GrayBlockMatcher()
-    ocr_repo = OcrCaptionRepository(pdf_jsons_dir)
+    ocr_repo = OcrCaptionRepository(paddle_ocr_dir)
     block_hydrator = BlockHydrator(ocr_repo)
 
     with BlockProcessor(
@@ -496,5 +499,5 @@ def open_block_processor(
 
 if __name__ == "__main__":
     processor: BlockProcessor
-    with open_block_processor("dm.pdf") as processor:
+    with open_block_processor("dm.pdf", "ocr_json") as processor:
         processor.run()

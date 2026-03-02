@@ -57,8 +57,9 @@ The prompt builder and processors add useful context and normalize data before p
 From the repo root:
 
 ```bash
-python services/rag-service/src/pipeline/julia_code_translation/translate.py \
+uv run services/rag-service/src/pipeline/julia_code_translation/translate.py \
   --pdf-path dm.pdf \
+  --paddle-ocr-dir ocr_jsons \
   --prompts-dir prompts \
   --translated-algorithms-json translated_algorithms.json
 ```
@@ -78,6 +79,7 @@ Run these scripts to load them from AWS CLI configuration:
 ```
 2. Defaults if you omit flags:
   - `--pdf-path dm.pdf`
+  - `--paddle-ocr-dir ocr_jsons`
   - `--prompts-dir prompts`
   - `--translated-algorithms-json translated_algorithms.json`
 
@@ -94,8 +96,9 @@ Running `translate.py` will produce or update:
 Prompts are always saved when you run `translate.py`. If you only want to generate prompts without sending them to the LLM, run:
 
 ```bash
-python services/rag-service/src/pipeline/julia_code_translation/build_prompts.py \
+uv run services/rag-service/src/pipeline/julia_code_translation/build_prompts.py \
   --pdf-path dm.pdf \
+  --paddle-ocr-dir ocr_jsons \
   --prompts-dir prompts \
   --translated-algorithms-json translated_algorithms.json
 ```

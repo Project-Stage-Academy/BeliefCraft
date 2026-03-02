@@ -162,6 +162,11 @@ if __name__ == "__main__":
         "--pdf-path", default="dm.pdf", help="Path to the source PDF (default: dm.pdf)"
     )
     parser.add_argument(
+        "--paddle-ocr-dir",
+        default="ocr_jsons",
+        help="Directory with OCR JSON pages (default: ocr_jsons)",
+    )
+    parser.add_argument(
         "--prompts-dir",
         default=config.prompts_dir,
         help=f"Output directory for prompts (default: {config.prompts_dir})",
@@ -177,10 +182,9 @@ if __name__ == "__main__":
     prompts_dir = Path(args.prompts_dir)
     translated_algos_path = Path(args.translated_algorithms_json)
 
-    with open_block_processor(pdf_path) as block_processor:
+    with open_block_processor(pdf_path, paddle_ocr_dir=args.paddle_ocr_dir) as block_processor:
         builder = PromptBuilder(
             book_processor=BookCodeProcessor(
-                translated_algos_path,
                 JuliaEntityExtractor(),
                 UsageIndexBuilder(),
                 TranslatedAlgorithmStore(translated_algos_path),
@@ -198,21 +202,27 @@ if __name__ == "__main__":
         prompts_dir.mkdir(parents=True, exist_ok=True)
         for chapter in config.translated_chapters:
             prompt = builder.build_update_descriptions_prompt(chapter, julia_code)
-            with (
-                prompts_dir / "update_description" / f"chapter_{chapter}_code_translation.txt"
-            ).open("w", encoding="utf-8") as f:
+            update_description_dir = prompts_dir / "update_description"
+            update_description_dir.mkdir(parents=True, exist_ok=True)
+            with (update_description_dir / f"chapter_{chapter}_code_translation.txt").open(
+                "w", encoding="utf-8"
+            ) as f:
                 f.write(prompt)
 
         for chapter in config.chapters_to_translate:
             prompt = builder.build_translate_python_code_prompt(chapter, julia_code)
-            with (prompts_dir / "translate_algorithms" / f"chapter_{chapter}_translation.txt").open(
+            translate_algorithms_dir = prompts_dir / "translate_algorithms"
+            translate_algorithms_dir.mkdir(parents=True, exist_ok=True)
+            with (translate_algorithms_dir / f"chapter_{chapter}_translation.txt").open(
                 "w", encoding="utf-8"
             ) as f:
                 f.write(prompt)
 
         for example in config.example_with_code_numbers:
             prompt = builder.build_translate_example_prompt(example, blocks)
-            with (
-                prompts_dir / "translate_examples" / f"{example.replace(' ', '_')}_translation.txt"
-            ).open("w", encoding="utf-8") as f:
+            translate_examples_dir = prompts_dir / "translate_examples"
+            translate_examples_dir.mkdir(parents=True, exist_ok=True)
+            with (translate_examples_dir / f"{example.replace(' ', '_')}_translation.txt").open(
+                "w", encoding="utf-8"
+            ) as f:
                 f.write(prompt)
