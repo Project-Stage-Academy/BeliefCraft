@@ -188,6 +188,23 @@ When modifying or adding a feature, run tests only for the relevant component to
 - Type checks → missing polymorphism.
 - Many files touched per change → abstraction failure.
 
+## You are provided with different ways to read documentation
+
+- Weaviate - weaviate-docs mcp
+- Pyndatic - https://docs.pydantic.dev/latest/llms.txt
+- Redis - https://redis.io/llms.txt
+- AWS/boto3 - context7 libraryId /websites/aws_amazon
+- Langgraph/Langchain - context7 libraryId /websites/langchain_oss_python_langgraph
+- FastAPI - context7 libraryId /websites/fastapi_tiangolo
+- SQLAlchemy/Alembic - context7 libraryId /websites/sqlalchemy_en_21
+- FastMCP 2 - context7 libraryId /llmstxt/gofastmcp_llms_txt
+- Docker/Docker Compose - context7 libraryId /llmstxt/docker_llms_txt
+
+Don't use context7 when llms.txt or mcp server is provided for the library.
+DON'T RESOLVE libraryId if you already know it from this instructions. DIRECTLY CALL library with knows id.
+For all other libraries resolve library id in context7 and choose id with "Source Reputation": "High" and highest Benchmark Score.
+If you fail to find anything useful there, use web search.
+DO NOT USE docs unless you failed to do something, or user specifically asked you to read docs.
 
 ## Test-Driven Development (TDD)
 
