@@ -243,6 +243,11 @@ def parse_args() -> argparse.Namespace:
         "--pdf-path", default="dm.pdf", help="Path to the source PDF (default: dm.pdf)"
     )
     parser.add_argument(
+        "--pdf-jsons-dir",
+        default="pdf_jsons",
+        help="Directory with OCR JSON pages (default: pdf_jsons)",
+    )
+    parser.add_argument(
         "--prompts-dir",
         default=PromptConfig().prompts_dir,
         help="Output directory for prompts (default: prompts)",
@@ -311,7 +316,7 @@ def main() -> None:
     prompts_dir = Path(args.prompts_dir)
     config = PromptConfig()
 
-    with open_block_processor(args.pdf_path) as block_processor:
+    with open_block_processor(args.pdf_path, pdf_jsons_dir=args.pdf_jsons_dir) as block_processor:
         blocks = block_processor.extract_algorithms_and_examples()
         julia_code = block_processor.extract_algorithms(blocks)
 
