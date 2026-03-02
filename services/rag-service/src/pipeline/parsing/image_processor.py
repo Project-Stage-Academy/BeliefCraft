@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import Any, cast
 
-import cv2  
+import cv2
 import fitz  # type: ignore
 import numpy as np
 from common.logging import get_logger
@@ -137,7 +137,8 @@ def _match_template_on_page(
             continue
 
         res = cv2.matchTemplate(page_gray, resized, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+        min_v, max_val, min_l, max_l = cv2.minMaxLoc(res)
+        max_loc = (int(max_l[0]), int(max_l[1]))
 
         if max_val > best_val:
             best_val = max_val
