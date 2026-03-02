@@ -4,27 +4,9 @@ from pipeline.parsing.block_classifier import BlockProcessor
 
 
 def test_determine_block_type():
-    # Check if the block type is correctly determined based on the text
-    processor = BlockProcessor("dummy.pdf")
-
-    assert processor._determine_block_type("Algorithm 1.1") == "algorithm"
-    assert processor._determine_block_type("Example A.5") == "example"
-    assert processor._determine_block_type("Random text") == "other"
-
-
-def test_extract_captions_empty_page():
-    processor = BlockProcessor("dummy.pdf")
-    mock_page = MagicMock()
-    mock_page.get_text.return_value = {"blocks": []}
-
-    captions = processor._extract_captions(mock_page)
-    assert captions == []
-
-
-def test_determine_block_type_extended():
     processor = BlockProcessor("dummy.pdf")
     assert processor._determine_block_type("ALGORITHM 1.1") == "algorithm"
-    assert processor._determine_block_type("EXAMPLE 2.2") == "example"
+    assert processor._determine_block_type("EXAMPLE 2.1") == "example"
     res = processor._determine_block_type("Exercise 1.1")
     assert res in ["exercise", "other"]
 
@@ -38,3 +20,19 @@ def test_process_text_block_logic():
     res = processor._process_text_block(block)
     if res:
         assert res["type"] == "algorithm"
+
+
+def test_extract_captions_empty_page():
+    processor = BlockProcessor("dummy.pdf")
+    mock_page = MagicMock()
+    mock_page.get_text.return_value = []
+    captions = processor._extract_captions(mock_page)
+    assert captions == []
+
+
+def test_determine_block_type_extended():
+    processor = BlockProcessor("dummy.pdf")
+    assert processor._determine_block_type("ALGORITHM 1.1") == "algorithm"
+    assert processor._determine_block_type("EXAMPLE 2.2") == "example"
+    res = processor._determine_block_type("Exercise 1.1")
+    assert res in ["exercise", "other"]

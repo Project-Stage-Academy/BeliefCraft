@@ -37,14 +37,13 @@ def test_get_references(extractor):
 
 def test_metadata_extractor_deep_hierarchy():
     extractor = MetadataExtractor()
-
     content = "2.1.3 Advanced Optimization"
     meta = extractor.process_content_and_get_meta(content)
     assert meta.get("subsubsection_number") == "2.1.3"
 
-    content = "PART I: INTRODUCTION"
+    content = "CHAPTER 5 SUMMARY"
     meta = extractor.process_content_and_get_meta(content)
-    assert isinstance(meta, dict)
+    assert meta.get("section_number") == "5"
 
 
 def test_metadata_extractor_all_references():

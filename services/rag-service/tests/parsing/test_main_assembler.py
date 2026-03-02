@@ -138,3 +138,20 @@ def test_assembler_load_and_offset(mock_data_env):
 
     res = assembler._load_and_offset(path, "page", offset=10)
     assert 15 in res
+
+
+def test_assembler_load_and_offset_edge_cases(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    bad_json = mock_data_env["paddle_dir"] / "bad_data.json"
+    bad_json.write_text(json.dumps([{"page": "not_a_number"}, {"page": 10}]), encoding="utf-8")
+
+    res = assembler._load_and_offset(bad_json, "page", offset=5)
+    assert 15 in res  # 10 + 5
+
+    assert assembler._safe_load_json("missing.json") == {}
