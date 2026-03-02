@@ -64,6 +64,7 @@ When modifying or adding a feature, run tests only for the relevant component to
 
 ## Critical Mandates
 - **Read Before Write:** ALWAYS read the entire file content before attempting to edit or replace text within it to ensure context and precision.
+- **ALWAYS** run precommit hooks after end of work to check for any issues and fix them before commit.
 - **Surgical Updates:** Check `packages/` if shared logic is involved in a service change.
 - **Database Migrations:** Use Alembic for all schema changes in `packages/database`.
 - **NEVER** read secret environment variables, .env files, etc.
