@@ -10,10 +10,12 @@ from app.models.agent_state import AgentState
 from app.models.responses import (
     AgentRecommendationResponse,
     Citation,
+    CodeSnippet,
     Formula,
     Recommendation,
 )
 from app.services.extractors.citation_extractor import CitationExtractor
+from app.services.extractors.code_extractor import CodeExtractor
 from app.services.extractors.formula_extractor import FormulaExtractor
 from app.services.llm_service import LLMService
 from common.logging import get_logger
@@ -74,10 +76,12 @@ class RecommendationGenerator:
         llm: LLMService | None = None,
         formula_extractor: FormulaExtractor | None = None,
         citation_extractor: CitationExtractor | None = None,
+        code_extractor: CodeExtractor | None = None,
     ) -> None:
         self.llm = llm or LLMService()
         self.formula_extractor = formula_extractor or FormulaExtractor()
         self.citation_extractor = citation_extractor or CitationExtractor()
+        self.code_extractor = code_extractor or CodeExtractor()
 
     # ------------------------------------------------------------------
     # Public API
@@ -96,6 +100,7 @@ class RecommendationGenerator:
         structured = await self._parse_final_answer(final_answer)
 
         formulas = self._extract_formulas(agent_state, final_answer)
+        code_snippets = self._extract_code_snippets(agent_state, final_answer)
         citations = self._extract_citations(agent_state)
 
         tools_used = [
@@ -115,6 +120,7 @@ class RecommendationGenerator:
             analysis=structured.get("analysis") or final_answer,
             algorithm=structured.get("algorithm"),
             formulas=formulas,
+            code_snippets=code_snippets,
             recommendations=structured.get("recommendations")
             or [
                 Recommendation(
@@ -138,6 +144,7 @@ class RecommendationGenerator:
             "recommendation_generated",
             request_id=agent_state["request_id"],
             formulas_count=len(formulas),
+            code_snippets_count=len(code_snippets),
             citations_count=len(citations),
         )
         return response
@@ -211,6 +218,19 @@ class RecommendationGenerator:
     def _extract_citations(self, agent_state: AgentState) -> list[Citation]:
         """Extract citations from agent tool call history."""
         return self.citation_extractor.extract_from_tool_calls(agent_state["tool_calls"])
+
+    def _extract_code_snippets(
+        self,
+        agent_state: AgentState,
+        final_answer: str,
+    ) -> list[CodeSnippet]:
+        """
+        Extract code snippets via dedicated CodeExtractor service.
+        """
+        return self.code_extractor.extract_from_answer_and_tool_calls(
+            final_answer=final_answer,
+            tool_calls=agent_state["tool_calls"],
+        )
 
     # ------------------------------------------------------------------
     # Reasoning trace

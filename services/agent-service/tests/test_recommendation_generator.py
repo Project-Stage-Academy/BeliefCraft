@@ -438,6 +438,67 @@ class TestFormulaExtraction:
 
 
 # ---------------------------------------------------------------------------
+# Code snippet enrichment
+# ---------------------------------------------------------------------------
+
+
+class TestCodeSnippetEnrichment:
+    @pytest.mark.asyncio
+    async def test_extracts_python_code_from_final_answer(
+        self, generator: RecommendationGenerator
+    ) -> None:
+        state = _base_agent_state(
+            final_answer=(
+                "Use this snippet:\n" "```python\n" "import math\n" "x = math.sqrt(16)\n" "```"
+            )
+        )
+        result = await generator.generate(state)
+
+        python_snippets = [s for s in result.code_snippets if s.language == "python"]
+        assert len(python_snippets) == 1
+        assert python_snippets[0].validated is True
+        assert "math" in python_snippets[0].dependencies
+
+    @pytest.mark.asyncio
+    async def test_extracts_julia_from_rag_algorithm_chunk(
+        self, generator: RecommendationGenerator
+    ) -> None:
+        state = _base_agent_state(
+            tool_calls=[
+                _make_tool_call(
+                    "search_knowledge_base",
+                    result={
+                        "documents": [
+                            {
+                                "chunk_type": "algorithm",
+                                "section_title": "Policy Iteration",
+                                "content": "function POLICY(x)\n    return x\nend",
+                            }
+                        ]
+                    },
+                )
+            ]
+        )
+        result = await generator.generate(state)
+
+        julia_snippets = [s for s in result.code_snippets if s.language == "julia"]
+        assert len(julia_snippets) == 1
+        assert "function POLICY" in julia_snippets[0].code
+        assert julia_snippets[0].description == "Policy Iteration"
+
+    @pytest.mark.asyncio
+    async def test_invalid_python_is_downgraded_to_text(
+        self, generator: RecommendationGenerator
+    ) -> None:
+        state = _base_agent_state(final_answer=("```python\n" "def broken(:\n" "    pass\n" "```"))
+        result = await generator.generate(state)
+
+        assert len(result.code_snippets) == 1
+        assert result.code_snippets[0].language == "text"
+        assert result.code_snippets[0].validated is False
+
+
+# ---------------------------------------------------------------------------
 # Reasoning trace
 # ---------------------------------------------------------------------------
 
