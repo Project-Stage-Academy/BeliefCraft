@@ -153,6 +153,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "beautifulsoup4" },
     { name = "black" },
     { name = "isort" },
     { name = "mypy" },
@@ -180,6 +181,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "black", specifier = ">=26.1.0" },
     { name = "isort", specifier = ">=7.0.0" },
     { name = "mypy", specifier = ">=1.19.1" },
