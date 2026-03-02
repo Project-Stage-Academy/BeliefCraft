@@ -2,6 +2,8 @@
 Integration tests for the Smart Query Builder Inventory endpoints.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from database.enums import MoveType, QualityStatus
 from database.models import InventoryBalance, InventoryMove
@@ -75,7 +77,7 @@ def test_list_inventory_moves_endpoint(
         to_location_id=None,
         move_type=MoveType.ADJUSTMENT,
         qty=5.0,
-        occurred_at=datetime.now(tz=QualityStatus.OK.__class__.__mro__[0].__mro__[0]),
+        occurred_at=datetime.now(UTC),
         reason_code="cycle_count_gain",
     )
     db_session.add(move)

@@ -9,8 +9,9 @@ from common.schemas.inventory import (
     GetInventoryMoveRequest,
     ListInventoryMovesRequest,
 )
-from database.enums import MoveType
+from database.enums import DeviceType, MoveType, ObservationType
 from database.inventory import InventoryMove
+from database.observations import Observation, SensorDevice
 from sqlalchemy.orm import Session
 
 from environment_api.smart_query_builder.repo.inventory_moves import (
@@ -114,4 +115,50 @@ def test_fetch_inventory_adjustments_summary_aggregates_by_reason(
     breakdown = {row["reason_code"]: float(row["total_qty"]) for row in breakdown_rows}
     assert breakdown["cycle_count_gain"] == 3.0
     assert breakdown["cycle_count_loss"] == 2.0
+
+
+@pytest.mark.integration
+def test_fetch_inventory_move_audit_trace_rows_returns_move_and_observations(
+    db_session: Session, seed_base_world: dict
+) -> None:
+    seeded = _seed_inventory_moves(db_session, seed_base_world)
+
+    device = SensorDevice(
+        warehouse_id=seeded["warehouse"].id,
+        device_type=DeviceType.CAMERA,
+    )
+    db_session.add(device)
+    db_session.flush()
+
+    obs1 = Observation(
+        observed_at=datetime.now(UTC) - timedelta(minutes=10),
+        device_id=device.id,
+        product_id=seeded["product"].id,
+        location_id=seeded["dock"].id,
+        obs_type=ObservationType.SCAN,
+        observed_qty=1.0,
+        confidence=0.8,
+        related_move_id=seeded["move_transfer"].id,
+    )
+    obs2 = Observation(
+        observed_at=datetime.now(UTC) - timedelta(minutes=5),
+        device_id=device.id,
+        product_id=seeded["product"].id,
+        location_id=seeded["dock"].id,
+        obs_type=ObservationType.SCAN,
+        observed_qty=1.5,
+        confidence=0.9,
+        related_move_id=seeded["move_transfer"].id,
+    )
+    db_session.add_all([obs1, obs2])
+    db_session.flush()
+
+    move_row, observation_rows = fetch_inventory_move_audit_trace_rows(
+        db_session,
+        GetInventoryMoveAuditTraceRequest(move_id=str(seeded["move_transfer"].id)),
+    )
+
+    assert move_row is not None
+    assert move_row["id"] == seeded["move_transfer"].id
+    assert len(observation_rows) == 2
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from typing import Any
 
 from common.schemas.inventory import (
     GetInventoryAdjustmentsSummaryRequest,
@@ -35,11 +35,11 @@ def _build_warehouse_filter_clause(
     warehouse_id: str | None,
     locations: FromClause,
     moves: FromClause,
-) -> tuple[FromClause, list]:
+) -> tuple[FromClause, list[Any]]:
     """
     Build join/where fragments to support filtering moves by warehouse via locations.
     """
-    conditions: list = []
+    conditions: list[Any] = []
     from_clause: FromClause = moves
 
     if warehouse_id is not None:
@@ -142,7 +142,6 @@ def fetch_inventory_move_audit_trace_rows(
     request: GetInventoryMoveAuditTraceRequest,
 ) -> tuple[RowMapping | None, Sequence[RowMapping]]:
     tables = _load_tables(session)
-    moves = tables["inventory_moves"]
     observations = tables["observations"]
 
     move_row = fetch_inventory_move_row(
@@ -188,7 +187,7 @@ def fetch_inventory_adjustments_summary(
         ),
     )
 
-    conditions: list = [moves.c.move_type == "adjustment"]
+    conditions: list[Any] = [moves.c.move_type == "adjustment"]
 
     if request.warehouse_id:
         conditions.append(locations.c.warehouse_id == request.warehouse_id)
