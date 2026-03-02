@@ -155,3 +155,25 @@ def test_assembler_load_and_offset_edge_cases(mock_data_env):
     assert 15 in res  # 10 + 5
 
     assert assembler._safe_load_json("missing.json") == {}
+
+
+def test_document_assembler_full_flow(mock_data_env, monkeypatch):
+    """Comprehensive test of the DocumentAssembler's full flow with mocked data."""
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    assembler.image_map = {
+        1: [{"chunk_type": "captioned_image", "entity_id": "1.1", "content": "Fig 1"}]
+    }
+    assembler.table_map = {1: [{"caption_content": "Table 1.1", "table_content": "data"}]}
+
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+
+    assembler.assemble()
+
+    assert len(assembler.final_chunks) > 0

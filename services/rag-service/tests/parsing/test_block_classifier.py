@@ -25,7 +25,8 @@ def test_process_text_block_logic():
 def test_extract_captions_empty_page():
     processor = BlockProcessor("dummy.pdf")
     mock_page = MagicMock()
-    mock_page.get_text.return_value = []
+    mock_page.get_text.return_value = {"blocks": []}
+
     captions = processor._extract_captions(mock_page)
     assert captions == []
 
