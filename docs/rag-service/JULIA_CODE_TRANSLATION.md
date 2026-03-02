@@ -63,9 +63,20 @@ python services/rag-service/src/pipeline/julia_code_translation/translate.py \
   --translated-algorithms-json translated_algorithms.json
 ```
 
-Notes:
-- The script uses AWS Bedrock. Make sure `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are set.
-- Defaults if you omit flags:
+### Notes:
+1. The script uses AWS Bedrock. Make sure `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are set.
+Run these scripts to load them from AWS CLI configuration:
+
+**On Linux/macOS:**
+```bash
+. scripts/aws-env.sh
+```
+
+**On Windows (PowerShell):**
+```powershell
+. .\scripts\aws-env.ps1
+```
+2. Defaults if you omit flags:
   - `--pdf-path dm.pdf`
   - `--prompts-dir prompts`
   - `--translated-algorithms-json translated_algorithms.json`
