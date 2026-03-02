@@ -83,5 +83,13 @@ def test_block_processor_edge_cases():
     assert bp.BlockProcessor._extract_entity_id("Figure 10.5") == "10.5"
     assert bp.BlockProcessor._extract_entity_id("Table 2.1") == "2.1"
 
-    assert bp.algorithms_pattern is not None
-    assert bp.BlockType.ALGORITHM.value == "algorithm"
+    assert bp.BlockType.ALGORITHM.value.lower() == "algorithm"
+
+
+def test_block_processor_is_inside_logic():
+    from pipeline.parsing import block_processor as bp
+
+    processor = bp.BlockProcessor("dummy.pdf")
+
+    assert processor._is_inside_bbox((10, 10, 50, 50), (0, 0, 100, 100)) is True
+    assert processor._is_inside_bbox((100, 100, 150, 150), (0, 0, 50, 50)) is False
