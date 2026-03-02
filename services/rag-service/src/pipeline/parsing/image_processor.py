@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import Any, cast
 
-import cv2  # type: ignore
+import cv2  
 import fitz  # type: ignore
 import numpy as np
 from common.logging import get_logger
