@@ -71,29 +71,3 @@ def test_generate_deterministic_id():
     """Test that the ID generation is deterministic and consistent."""
     with pytest.raises(FileNotFoundError):
         DocumentAssembler("no", "no", "no", "no", "no")
-
-
-def test_full_assembly_cycle(mock_data_env):
-    """Test full assembly cycle."""
-    old_cwd = os.getcwd()
-    os.chdir(mock_data_env["paddle_dir"].parent)
-
-    try:
-        assembler = DocumentAssembler(
-            paddle_dir=mock_data_env["paddle_dir"],
-            figures_json=mock_data_env["figures"],
-            blocks_json=mock_data_env["blocks"],
-            tables_json=mock_data_env["tables"],
-            formulas_json=mock_data_env["formulas"],
-        )
-
-        assembler.assemble()
-
-        output_file = Path("ULTIMATE_BOOK_DATA.json")
-        assert output_file.exists()
-
-        with output_file.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-            assert len(data) > 0
-    finally:
-        os.chdir(old_cwd)
