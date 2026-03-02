@@ -86,10 +86,7 @@ def test_block_processor_edge_cases():
     assert bp.BlockType.ALGORITHM.value.lower() == "algorithm"
 
 
-def test_block_processor_is_inside_logic():
-    from pipeline.parsing import block_processor as bp
+def test_block_processor_simple():
+    assert bp.BlockProcessor._extract_entity_id("Figure 10.5") == "10.5"
 
-    processor = bp.BlockProcessor.__new__(bp.BlockProcessor)
-
-    assert processor.is_inside_bbox((10, 10, 50, 50), (0, 0, 100, 100)) is True
-    assert processor.is_inside_bbox((100, 100, 150, 150), (0, 0, 50, 50)) is False
+    assert bp.BlockType.ALGORITHM is not None

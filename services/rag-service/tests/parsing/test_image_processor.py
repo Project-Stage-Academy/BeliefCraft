@@ -132,6 +132,5 @@ def test_create_entry_various_descriptions():
     e2 = ip._create_entry("Figure 7 Header", 0, 0, 0.9, (0, 0), 10, 10)
     assert e2["entity_id"] == "7"
 
-    # Тест без ID
     e3 = ip._create_entry("Random image", 0, 0, 0.9, (0, 0), 10, 10)
     assert e3["entity_id"] is None

@@ -208,3 +208,38 @@ def test_assembler_id_generation_variants(mock_data_env):
     assert id1 != id2
     assert "image_" in id1
     assert "table_2.2_" in id2
+
+
+def test_assembler_simple_helpers(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    assert assembler._extract_id("Exercise 5.1") == "5.1"
+    assert assembler._extract_id("Just text") is None
+
+    meta = {"section_title": "Test"}
+    obj = assembler._create_chunk_obj("text", "content", 1, meta)
+    assert obj["chunk_type"] == "text"
+    assert obj["page"] == 1
+
+
+def test_id_generation_logic(mock_data_env):
+    from pipeline.parsing.main import DocumentAssembler
+
+    assembler = DocumentAssembler(
+        mock_data_env["paddle_dir"],
+        mock_data_env["figures"],
+        mock_data_env["blocks"],
+        mock_data_env["tables"],
+        mock_data_env["formulas"],
+    )
+
+    id1 = assembler._generate_deterministic_id("text", "1.1", "content")
+    id2 = assembler._generate_deterministic_id("text", None, "content")
+
+    assert id1 != id2
+    assert len(id1) > 0
