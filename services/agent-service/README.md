@@ -39,7 +39,7 @@ Create `.env` file with these **required** variables:
 
 ```bash
 ENVIRONMENT_API_URL=http://localhost:8001/api/v1
-RAG_API_URL=http://localhost:8002/api/v1
+RAG_API_URL=http://localhost:8001
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 

@@ -3,24 +3,28 @@ Tools package for agent service.
 
 This package provides the tool system used by the ReAct agent to:
 - Query warehouse state (environment tools)
-- Retrieve knowledge (RAG tools)
+- Retrieve knowledge (RAG tools via MCP server)
 - Perform calculations (planning tools)
 
-All tools are automatically wrapped with CachedTool for Redis caching
-and registered in the global tool_registry on import.
+Environment tools are automatically registered on import.
+RAG tools are loaded dynamically from MCP server during application startup.
+
+All tools are automatically wrapped with CachedTool for Redis caching.
 
 Cache Strategy:
 - Real-time sensors (observations, orders): skip_cache=True
 - Shipments: 5 minutes
 - Analytics/risk: 10 minutes
 - History: 1 hour
-- RAG (static knowledge): 24 hours
+- RAG (static knowledge via MCP): 24 hours
 
 Example:
     ```python
     from app.tools import tool_registry
 
-    # Tools are already registered
+    # Environment tools already registered
+    # RAG tools registered during startup via register_mcp_rag_tools()
+
     result = await tool_registry.execute_tool(
         "get_current_observations",
         {"product_id": "P123"}
@@ -38,11 +42,8 @@ from app.tools.environment_tools import (
     GetOrderBacklogTool,
     GetShipmentsInTransitTool,
 )
-from app.tools.rag_tools import (
-    ExpandGraphByIdsTool,
-    GetEntityByNumberTool,
-    SearchKnowledgeBaseTool,
-)
+from app.tools.mcp_loader import MCPToolLoader
+from app.tools.mcp_tool import MCPClientProtocol
 from app.tools.registry import ToolRegistry, tool_registry
 from common.logging import get_logger
 
@@ -58,14 +59,23 @@ __all__ = [
     "tool_registry",
     # Caching
     "CachedTool",
-    # Registration function
-    "register_all_tools",
+    # MCP
+    "MCPClientProtocol",
+    "MCPToolLoader",
+    # Registration functions
+    "register_environment_tools",
+    "register_mcp_rag_tools",
 ]
 
 
-def register_all_tools() -> None:
+def register_environment_tools() -> None:
     """
-    Register all tools with caching in the global registry.
+    Register environment tools with caching in the global registry.
+
+    This function registers all warehouse environment tools:
+    - Real-time sensor tools (skip_cache=True)
+    - Analytics and risk calculation tools (cached)
+    - Historical data tools (cached)
 
     All tools are wrapped with CachedTool which:
     - Uses TTL from tool metadata (cache_ttl field)
@@ -79,13 +89,9 @@ def register_all_tools() -> None:
     - CalculateStockoutProbabilityTool: 10 minutes
     - CalculateLeadTimeRiskTool: 10 minutes
     - GetInventoryHistoryTool: 1 hour
-    - SearchKnowledgeBaseTool: 24 hours
-    - ExpandGraphByIdsTool: 24 hours
-    - GetEntityByNumberTool: 24 hours
     """
-    logger.info("registering_all_tools_started")
+    logger.info("registering_environment_tools_started")
 
-    # Environment Tools (6 tools)
     # Real-time sensors - skip_cache=True in metadata
     tool_registry.register(CachedTool(GetCurrentObservationsTool()))
     tool_registry.register(CachedTool(GetOrderBacklogTool()))
@@ -96,26 +102,70 @@ def register_all_tools() -> None:
     tool_registry.register(CachedTool(CalculateLeadTimeRiskTool()))  # 10 min
     tool_registry.register(CachedTool(GetInventoryHistoryTool()))  # 1 hour
 
-    # RAG Tools (3 tools) - all 24 hours from metadata
-    tool_registry.register(CachedTool(SearchKnowledgeBaseTool()))
-    tool_registry.register(CachedTool(ExpandGraphByIdsTool()))
-    tool_registry.register(CachedTool(GetEntityByNumberTool()))
-
-    # Count tools by category dynamically
     env_count = sum(
         1 for t in tool_registry.tools.values() if t.get_metadata().category == "environment"
     )
-    rag_count = sum(1 for t in tool_registry.tools.values() if t.get_metadata().category == "rag")
 
     logger.info(
-        "tools_registered_successfully",
-        total_tools=len(tool_registry.tools),
-        categories={
-            "environment": env_count,
-            "rag": rag_count,
-        },
+        "environment_tools_registered",
+        count=env_count,
     )
 
 
-# Auto-register all tools on import
-register_all_tools()
+async def register_mcp_rag_tools(mcp_client: MCPClientProtocol) -> None:
+    """
+    Register RAG tools from MCP server with caching.
+
+    This function:
+    1. Uses MCPToolLoader to discover tools from RAG MCP server
+    2. Automatically wraps each tool in CachedTool (24 hour TTL)
+    3. Registers all discovered tools in the global registry
+
+    RAG tools are expected to include:
+    - search_knowledge_base: Semantic search in knowledge base
+    - expand_graph_by_ids: Expand knowledge graph from document IDs
+    - get_entity_by_number: Retrieve specific entities by number
+
+    Args:
+        mcp_client: Connected MCP client for RAG service
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If MCP server communication fails
+
+    Example:
+        ```python
+        from app.clients.rag_mcp_client import create_rag_mcp_client
+        from app.config import get_settings
+
+        settings = get_settings()
+        async with create_rag_mcp_client(settings.RAG_API_URL) as client:
+            await register_mcp_rag_tools(client)
+        ```
+    """
+    logger.info("registering_mcp_rag_tools_started")
+
+    # Load tools from MCP server with automatic caching
+    loader = MCPToolLoader(
+        mcp_client=mcp_client,
+        tool_registry=tool_registry,
+        wrap_with_cache=True,  # Auto-wrap in CachedTool
+        cache_ttl=86400,  # 24 hours for RAG (static knowledge)
+    )
+
+    tools_count = await loader.load_tools()
+
+    rag_count = sum(1 for t in tool_registry.tools.values() if t.get_metadata().category == "rag")
+
+    logger.info(
+        "mcp_rag_tools_registered",
+        discovered=tools_count,
+        rag_category_count=rag_count,
+        total_tools=len(tool_registry.tools),
+    )
+
+
+# Auto-register environment tools on import (sync)
+register_environment_tools()

@@ -1,0 +1,49 @@
+There is a book containing Julia code with accompanying explanatory text. The code has already been translated into Python. Your task is to:
+1. Replace the Julia code with the corresponding Python code.
+2. Update the description so that it naturally matches the Python code, as if it had originally been written for Python.
+3. Do not mention translation or Julia in the updated text.
+
+Important constraints:
+- Modify only the parts of the description that directly refer to the Julia code.
+- Leave everything else unchanged, even if references appear incomplete or out of context.
+- Preserve all variable names.
+- If variables use Greek letters, transliterate them into English.
+- Do not modify mathematical formulas, even if they resemble code.
+- If "Appendix G" is mentioned (it contains Julia instructions), remove that reference.
+- If a fragment defines a method of a class declared elsewhere in the book, wrap the method inside a minimal class definition:
+```python
+class ClassName:
+    # ...
+    def method_name(...):
+        ...
+```
+- Additional helper functions may be provided in the prompt for context (including their full source code). These functions already exist elsewhere in the book and must NOT be duplicated in the translated code unless they are explicitly part of the original fragment being replaced.
+
+Input:
+Original Julia fragments with descriptions:
+
+<<julia_fragments>>
+
+Available Python code to use:
+
+<<available_python_code>>
+
+Output format (JSON array):
+[
+    {
+        "algorithm_number": "Algorithm X.X.",
+        "description": "...",
+        "code": "...",
+        "declarations": {
+            "original_julia_declaration": "corresponding_python_declaration",
+        }
+    },
+    ...
+]
+
+In the "declarations" field:
+- Include only top-level function and struct definitions.
+- Exclude variable assignments and type annotations.
+- Keys must be the original Julia declarations.
+- Values must be the corresponding Python declarations.
+- For methods, use the format: "ClassName.method_name".

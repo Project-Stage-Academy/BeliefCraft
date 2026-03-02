@@ -1,6 +1,46 @@
 """
 HTTP client for RAG Service (knowledge base).
 
+⚠️ DEPRECATED ⚠️
+================================================================================
+This client is DEPRECATED and will be removed in a future version.
+
+RAG service integration now uses MCP (Model Context Protocol) for dynamic
+tool discovery and execution. Direct HTTP client calls are replaced by:
+- RAGMCPClient: MCP client for RAG service
+- MCPTool: Dynamic tool wrappers from MCP server
+- MCPToolLoader: Automatic tool discovery
+
+Benefits of MCP approach:
+- Dynamic tool discovery (no hardcoded tools/client methods)
+- Automatic schema updates from RAG service
+- Unified protocol for all external services
+- Better separation of concerns
+
+See: app.clients.rag_mcp_client.RAGMCPClient
+See: app.tools.mcp_loader.MCPToolLoader
+
+Migration:
+    Old approach (deprecated):
+        ```python
+        async with RAGAPIClient() as client:
+            results = await client.search_knowledge_base(query="POMDP", k=5)
+        ```
+
+    New approach (MCP):
+        ```python
+        from app.clients.rag_mcp_client import create_rag_mcp_client
+        from app.config import get_settings
+
+        settings = get_settings()
+        async with create_rag_mcp_client(settings.RAG_API_URL) as client:
+            tools = await client.list_tools()
+            result = await client.call_tool("search_knowledge_base", {"query": "POMDP", "k": 5})
+        ```
+
+This module is kept for backward compatibility and existing tests only.
+================================================================================
+
 This client provides typed methods for semantic search,
 graph traversal, and entity retrieval from the knowledge base.
 
