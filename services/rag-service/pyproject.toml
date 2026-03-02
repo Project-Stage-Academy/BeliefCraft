@@ -9,6 +9,7 @@ dependencies = [
   "pydantic",
   "pyyaml",
   "python-dotenv",
+  "weaviate-client",
   "beliefcraft-common",
   "fastmcp<3",
 ]
