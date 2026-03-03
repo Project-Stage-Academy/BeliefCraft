@@ -33,6 +33,18 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-packages --all-groups --all-extras --locked --group dev
 
+      - name: Generate OpenAPI spec
+        run: uv run python scripts/ci/generate_openapi.py
+
+      - name: Check for breaking API changes
+        if: github.event_name == 'pull_request'
+        uses: tufin/oasdiff-action@v3
+        with:
+          base: 'origin/${{ github.base_ref }}:docs/api/environment-openapi.yaml'
+          revision: 'docs/api/environment-openapi.yaml'
+          fail-on-diff: false
+          fail-on-breaking: true
+
       - name: Run pre-commit (lint/format/typecheck)
         id: precommit
         continue-on-error: true
