@@ -211,9 +211,18 @@ class FakeDataRepository(AbstractVectorStoreRepository):
 class WeaviateRepository(AbstractVectorStoreRepository):
     """
     Weaviate-based vector store repository implementation.
+
+    This repository handles semantic search and graph expansion using Weaviate's
+    native collection and reference capabilities.
     """
 
     def __init__(self, settings: "Settings") -> None:
+        """
+        Initialize the Weaviate repository.
+
+        Args:
+            settings: Application settings containing Weaviate connection parameters.
+        """
         super().__init__(settings)
         self._client = weaviate.WeaviateAsyncClient(
             connection_params=weaviate.connect.ConnectionParams.from_params(
@@ -225,84 +234,184 @@ class WeaviateRepository(AbstractVectorStoreRepository):
                 grpc_secure=False,
             ),
         )
-        # Attribute _collection must exist for test mocks
         self._collection = self._client.collections.get(COLLECTION_NAME)
 
-    async def __aenter__(self):
-        """Ensure the Weaviate client is connected."""
+    async def __aenter__(self) -> "WeaviateRepository":
+        """
+        Establish connection to Weaviate.
+
+        Returns:
+            The connected repository instance.
+        """
         if not self._client.is_connected():
             await self._client.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Close the Weaviate client connection."""
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """
+        Close the Weaviate connection.
+
+        Args:
+            exc_type: Exception type.
+            exc_val: Exception value.
+            exc_tb: Exception traceback.
+        """
         await self._client.close()
 
     def _convert_filters(self, filters: MetadataFilters | None) -> Any:
-        """Convert repository filters to Weaviate filters."""
+        """
+        Convert domain-specific metadata filters to Weaviate-native filters.
+
+        Args:
+            filters: The filters to convert.
+
+        Returns:
+            Weaviate-native Filter object or None.
+        """
         if not filters or not filters.filters:
             return None
 
-        wv_filters = []
-        for f in filters.filters:
-            if f.operator == "eq":
-                wv_filters.append(Filter.by_property(f.field).equal(f.value))
-            elif f.operator == "in":
-                val = f.value if isinstance(f.value, list) else [f.value]
-                wv_filters.append(Filter.by_property(f.field).contains_any(val))
+        weaviate_filters = []
+        for metadata_filter in filters.filters:
+            property_filter = Filter.by_property(metadata_filter.field)
+            value = (
+                metadata_filter.value
+                if isinstance(metadata_filter.value, list)
+                else [metadata_filter.value]
+            )
 
-        if not wv_filters:
-            return None
+            if metadata_filter.operator == "eq":
+                weaviate_filters.append(property_filter.equal(metadata_filter.value))
+            else:
+                weaviate_filters.append(property_filter.contains_any(value))
 
-        return (
-            Filter.all_of(wv_filters) if filters.condition == "and" else Filter.any_of(wv_filters)
-        )
+        if filters.condition == "and":
+            return Filter.all_of(weaviate_filters)
+        return Filter.any_of(weaviate_filters)
 
     def _get_return_references(
         self, traverse_fields: list[str] | None = None
     ) -> list[QueryReference]:
-        """Generate QueryReference list for metadata and expansion."""
-        refs = []
-        for ref_field in REFERENCE_TYPE_MAP.keys():
-            if traverse_fields and ref_field in traverse_fields:
-                # When traversing, we want the linked objects to also have their references
-                # so that _to_document can resolve them to entity_ids for metadata.
-                refs.append(
-                    QueryReference(
-                        link_on=ref_field,
-                        return_references=[
-                            QueryReference(link_on=name) for name in REFERENCE_TYPE_MAP
-                        ],
-                    )
-                )
-            else:
-                refs.append(QueryReference(link_on=ref_field))
-        return refs
+        """
+        Generate a list of Weaviate QueryReference objects for retrieval.
 
-    def _to_document(self, obj: Any) -> Document:
-        """Convert Weaviate object to Document model."""
-        metadata = dict(obj.properties) if obj.properties else {}
+        Args:
+            traverse_fields: Optional list of reference fields to expand deeply.
 
-        # Resolve references to entity_ids in metadata
-        for ref_field in REFERENCE_TYPE_MAP.keys():
-            if obj.references and ref_field in obj.references:
-                metadata[ref_field] = [
+        Returns:
+            List of configured QueryReference objects.
+        """
+        base_references = [QueryReference(link_on=name) for name in REFERENCE_TYPE_MAP]
+
+        return [
+            QueryReference(
+                link_on=field_name,
+                return_references=(
+                    base_references if traverse_fields and field_name in traverse_fields else None
+                ),
+            )
+            for field_name in REFERENCE_TYPE_MAP
+        ]
+
+    def _to_document(self, weaviate_object: Any) -> Document:
+        """
+        Convert a Weaviate object to a domain Document model.
+
+        Args:
+            weaviate_object: The raw object returned from Weaviate.
+
+        Returns:
+            A populated Document instance.
+        """
+        properties = dict(weaviate_object.properties or {})
+        metadata = {**properties}
+        content = metadata.pop("content", "")
+
+        for field_name in REFERENCE_TYPE_MAP:
+            if weaviate_object.references and field_name in weaviate_object.references:
+                reference_objects = weaviate_object.references.get(field_name).objects
+                metadata[field_name] = [
                     ref_obj.properties.get("entity_id")
-                    for ref_obj in obj.references[ref_field].objects
+                    for ref_obj in reference_objects
                     if ref_obj.properties and ref_obj.properties.get("entity_id")
                 ]
-            elif ref_field not in metadata:
-                metadata[ref_field] = []
 
-        distance = (
-            obj.metadata.distance if obj.metadata and obj.metadata.distance is not None else 0.0
-        )
+        certainty = getattr(weaviate_object.metadata, "certainty", None)
         return Document(
-            id=str(obj.uuid),
-            content=metadata.pop("content", ""),
-            cosine_similarity=round(1.0 - distance, 3),
+            id=str(weaviate_object.uuid),
+            content=content,
+            cosine_similarity=certainty if certainty else None,
             metadata=metadata,
         )
+
+    async def _query(
+        self,
+        query_text: str | None = None,
+        limit: int | None = None,
+        filters: Any | None = None,
+        return_references: list[QueryReference] | None = None,
+    ) -> Any:
+        """
+        Internal helper to execute Weaviate collection queries.
+
+        Args:
+            query_text: Optional text for semantic search.
+            limit: Maximum number of objects to return.
+            filters: Optional Weaviate filters.
+            return_references: Optional list of references to resolve.
+
+        Returns:
+            The raw Weaviate query results.
+        """
+        query_params = {
+            "limit": limit,
+            "filters": filters,
+            "return_references": return_references,
+        }
+
+        if not query_text:
+            return await self._collection.query.fetch_objects(**query_params)
+
+        return await self._collection.query.near_text(
+            query=query_text,
+            **query_params,
+            return_metadata=MetadataQuery(certainty=True),
+        )
+
+    def _process_results(
+        self,
+        weaviate_objects: list[Any],
+        expansion_fields: list[str] | None = None,
+        include_root: bool = True,
+    ) -> list[Document]:
+        """
+        Process query results into documents, handling expansion and deduplication.
+
+        Args:
+            weaviate_objects: Raw objects from Weaviate.
+            expansion_fields: Optional fields to expand into linked documents.
+            include_root: Whether to include the root documents in the output.
+
+        Returns:
+            A deduplicated list of Document instances.
+        """
+        seen_uuids = set()
+        documents = []
+
+        for obj in weaviate_objects:
+            if include_root and obj.uuid not in seen_uuids:
+                documents.append(self._to_document(obj))
+                seen_uuids.add(obj.uuid)
+
+            for field_name in expansion_fields or []:
+                if obj.references and field_name in obj.references:
+                    reference_objects = obj.references.get(field_name).objects
+                    for ref_obj in reference_objects:
+                        if ref_obj.uuid not in seen_uuids:
+                            documents.append(self._to_document(ref_obj))
+                            seen_uuids.add(ref_obj.uuid)
+
+        return documents
 
     async def vector_search(
         self,
@@ -310,60 +419,62 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         k: int,
         filters: MetadataFilters | None = None,
     ) -> list[Document]:
-        """Perform semantic similarity search or filtering."""
-        wv_filters = self._convert_filters(filters)
-        return_refs = self._get_return_references()
+        """
+        Perform semantic similarity search.
 
-        if not query:
-            res = await self._collection.query.fetch_objects(
-                limit=k, filters=wv_filters, return_references=return_refs
-            )
-        else:
-            res = await self._collection.query.near_text(
-                query=query,
-                limit=k,
-                filters=wv_filters,
-                return_references=return_refs,
-                return_metadata=MetadataQuery(distance=True),
-            )
+        Args:
+            query: Text query for embedding and similarity search.
+            k: Maximum number of documents to return.
+            filters: Optional metadata filters.
 
-        return [self._to_document(obj) for obj in res.objects]
+        Returns:
+            List of documents.
+        """
+        return await self.search_with_expansion(query, k, filters)
 
     async def get_by_ids(self, ids: list[str]) -> list[Document]:
-        """Retrieve documents by their UUIDs."""
+        """
+        Retrieve documents by their unique identifiers.
+
+        Args:
+            ids: List of document UUIDs.
+
+        Returns:
+            List of matching documents.
+        """
         if not ids:
             return []
-        res = await self._collection.query.fetch_objects(
+
+        results = await self._query(
             filters=Filter.by_id().contains_any(ids),
-            return_references=[QueryReference(link_on=name) for name in REFERENCE_TYPE_MAP],
+            return_references=self._get_return_references(),
         )
-        return [self._to_document(obj) for obj in res.objects]
+        return self._process_results(results.objects)
 
     async def expand_graph_by_ids(
         self, document_ids: list[str], traverse_types: list[EntityType]
     ) -> list[Document]:
-        """Optimized graph expansion using Weaviate references."""
+        """
+        Retrieve linked documents for specific root documents.
+
+        Args:
+            document_ids: List of root document UUIDs.
+            traverse_types: Types of linked objects to expand.
+
+        Returns:
+            List of expanded linked documents.
+        """
         if not document_ids or not traverse_types:
             return []
 
-        ref_fields = [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in traverse_types]
-        return_refs = self._get_return_references(ref_fields)
-
-        res = await self._collection.query.fetch_objects(
-            filters=Filter.by_id().contains_any(document_ids), return_references=return_refs
+        reference_fields = [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in traverse_types]
+        results = await self._query(
+            filters=Filter.by_id().contains_any(document_ids),
+            return_references=self._get_return_references(reference_fields),
         )
-
-        results = []
-        seen_ids = set()
-        for obj in res.objects:
-            if obj.references:
-                for ref_field in ref_fields:
-                    if ref_field in obj.references:
-                        for ref_obj in obj.references[ref_field].objects:
-                            if ref_obj.uuid not in seen_ids:
-                                results.append(self._to_document(ref_obj))
-                                seen_ids.add(ref_obj.uuid)
-        return results
+        return self._process_results(
+            results.objects, expansion_fields=reference_fields, include_root=False
+        )
 
     async def search_with_expansion(
         self,
@@ -372,44 +483,26 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         filters: MetadataFilters | None = None,
         traverse_types: list[EntityType] | None = None,
     ) -> list[Document]:
-        """Unified search and expansion in a single optimized operation."""
-        wv_filters = self._convert_filters(filters)
+        """
+        Vector search with optional graph expansion in a single operation.
 
-        ref_fields = (
-            [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in traverse_types] if traverse_types else []
+        Args:
+            query: Text query for embedding and similarity search.
+            k: Maximum number of root documents to return.
+            filters: Optional metadata filters.
+            traverse_types: Optional list of linked object types to expand.
+
+        Returns:
+            List of root and expanded documents.
+        """
+        reference_fields = [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in (traverse_types or [])]
+        results = await self._query(
+            query_text=query,
+            limit=k,
+            filters=self._convert_filters(filters),
+            return_references=self._get_return_references(reference_fields),
         )
-        return_refs = self._get_return_references(ref_fields)
-
-        if not query:
-            res = await self._collection.query.fetch_objects(
-                limit=k, filters=wv_filters, return_references=return_refs
-            )
-        else:
-            res = await self._collection.query.near_text(
-                query=query,
-                limit=k,
-                filters=wv_filters,
-                return_references=return_refs,
-                return_metadata=MetadataQuery(distance=True),
-            )
-
-        results = []
-        seen_ids = set()
-        for obj in res.objects:
-            # Add root document
-            if obj.uuid not in seen_ids:
-                results.append(self._to_document(obj))
-                seen_ids.add(obj.uuid)
-
-            # Add linked documents
-            if obj.references:
-                for ref_field in ref_fields:
-                    if ref_field in obj.references:
-                        for ref_obj in obj.references[ref_field].objects:
-                            if ref_obj.uuid not in seen_ids:
-                                results.append(self._to_document(ref_obj))
-                                seen_ids.add(ref_obj.uuid)
-        return results
+        return self._process_results(results.objects, expansion_fields=reference_fields)
 
 
 REPOSITORY_REGISTRY: dict[str, type[AbstractVectorStoreRepository]] = {
