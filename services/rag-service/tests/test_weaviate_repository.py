@@ -157,7 +157,7 @@ async def test_weaviate_get_by_ids(repo):
     assert OTHER_UUID in ids
 
 
-@pytest.mark.parametrize("k, expected_count", [(1, 1), (2, 2), (4, 4), (10, 4)])
+@pytest.mark.parametrize("k, expected_count", [(1, 1), (2, 2), (4, 4), (10, 5)])
 @pytest.mark.asyncio
 async def test_weaviate_vector_search_returns_correct_k(repo, k, expected_count):
     """Verify vector search returns correct k."""

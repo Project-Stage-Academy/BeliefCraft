@@ -265,7 +265,16 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         refs = []
         for ref_field in REFERENCE_TYPE_MAP.keys():
             if traverse_fields and ref_field in traverse_fields:
-                refs.append(QueryReference(link_on=ref_field))
+                # When traversing, we want the linked objects to also have their references
+                # so that _to_document can resolve them to entity_ids for metadata.
+                refs.append(
+                    QueryReference(
+                        link_on=ref_field,
+                        return_references=[
+                            QueryReference(link_on=name) for name in REFERENCE_TYPE_MAP
+                        ],
+                    )
+                )
             else:
                 refs.append(QueryReference(link_on=ref_field))
         return refs
