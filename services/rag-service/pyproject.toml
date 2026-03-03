@@ -12,7 +12,7 @@ dependencies = [
   "python-dotenv",
   "weaviate-client",
   "beliefcraft-common",
-  "fastmcp<3",
+  "fastmcp>=3",
   "tqdm>=4.67.3",
   "boto3>=1.42.49",
   "jinja2>=3.1",
@@ -24,4 +24,5 @@ beliefcraft-common = { workspace = true }
 [dependency-groups]
 dev = [
   "pytest>=8.0",
+  "testcontainers[weaviate]",
 ]
