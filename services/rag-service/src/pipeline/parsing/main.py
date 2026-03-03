@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ logger.info("service_started", message="RAG Service is up and running")
 PAGE_OFFSET = 18
 BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
+FIGURES_BUCKET_URL = os.getenv("FIGURES_BUCKET_URL", "")
 
 
 class DocumentAssembler:
@@ -152,7 +154,9 @@ class DocumentAssembler:
             chunk.update({"entity_id": eid, "caption": full_caption})
 
             if "image_index" in v_obj:
-                chunk["image_links"] = [f"images/fig_{v_obj['image_index']}.png"]
+                chunk["image_links"] = [
+                    f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']}.png"
+                ]
 
             self.final_chunks.append(chunk)
         return used
