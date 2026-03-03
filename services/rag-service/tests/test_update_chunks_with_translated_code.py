@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -103,6 +104,67 @@ def test_update_examples_merges_translations_and_usage() -> None:
     assert updated[0]["used_structs"] == {"State": ["9.9"]}
     assert updated[0]["used_functions"] == {"step": ["9.9"]}
     assert updated[1]["content"] == "leave"
+
+
+@pytest.mark.unit
+def test_parse_args_parses_required_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    argv = [
+        "prog",
+        "--pdf-path",
+        "book.pdf",
+        "--paddle-ocr-dir",
+        "ocr",
+        "--chunks",
+        "chunks.json",
+        "--translated-algorithms",
+        "algos.json",
+        "--translated-examples",
+        "examples.json",
+        "--output",
+        "output.json",
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+
+    args = updater.parse_args()
+
+    assert args.book_pdf == "book.pdf"
+    assert args.ocr_dir == "ocr"
+    assert args.chunks == "chunks.json"
+    assert args.translated_algorithms == "algos.json"
+    assert args.translated_examples == "examples.json"
+    assert args.output == "output.json"
+
+
+@pytest.mark.unit
+def test_load_helpers_read_json(tmp_path: Path) -> None:
+    algorithms_path = tmp_path / "algorithms.json"
+    examples_path = tmp_path / "examples.json"
+    chunks_path = tmp_path / "chunks.json"
+
+    algorithms_payload = [
+        {
+            "algorithm_number": "Algorithm 1.1.",
+            "code": "print('hi')",
+            "description": "Desc",
+            "declarations": {"State": "struct State"},
+        }
+    ]
+    examples_payload = [
+        {
+            "example_number": "Example 2.4.",
+            "description": "Example description",
+            "text": "Example text",
+        }
+    ]
+    chunks_payload = [{"chunk_type": "algorithm", "entity_id": "1.1", "content": "old"}]
+
+    algorithms_path.write_text(json.dumps(algorithms_payload), encoding="utf-8")
+    examples_path.write_text(json.dumps(examples_payload), encoding="utf-8")
+    chunks_path.write_text(json.dumps(chunks_payload), encoding="utf-8")
+
+    assert updater.load_translated_algorithms(algorithms_path) == algorithms_payload
+    assert updater.load_translated_examples(examples_path) == examples_payload
+    assert updater.load_chunks(chunks_path) == chunks_payload
 
 
 @pytest.mark.unit
