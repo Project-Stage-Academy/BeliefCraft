@@ -1,8 +1,6 @@
 import pytest
 import requests
 import weaviate
-from weaviate.collections.classes.config import VectorDistances
-
 from rag_service.config import Settings
 from rag_service.constants import (
     COLLECTION_NAME,
@@ -14,6 +12,7 @@ from requests import HTTPError, Response, get
 from testcontainers.core.waiting_utils import wait_container_is_ready
 from testcontainers.weaviate import WeaviateContainer
 from weaviate.classes.config import Configure, ReferenceProperty
+from weaviate.collections.classes.config import VectorDistances
 
 EXAMPLE_UUID = "00000000-0000-0000-0000-000000000005"
 OTHER_UUID = "00000000-0000-0000-0000-000000000004"
@@ -26,7 +25,7 @@ class FixedWeaviateContainer(WeaviateContainer):
     @wait_container_is_ready(ConnectionError, HTTPError, requests.exceptions.ConnectionError)
     def _connect(self) -> None:
         url = f"http://{self.get_http_host()}:{self.get_http_port()}/v1/.well-known/ready"
-        response: Response = get(url)
+        response: Response = get(url, timeout=5)
         response.raise_for_status()
 
 
@@ -181,27 +180,33 @@ async def test_weaviate_vector_search_returns_correct_k(repo, k, expected_count)
     for doc in docs:
         assert doc.cosine_similarity is not None
 
-@pytest.mark.parametrize("filters",[
-    MetadataFilters(
-        filters=[
-            MetadataFilter(field="page", operator="in", value=[4, 6]),
-            MetadataFilter(field="page", operator="in", value=[1, 2, 3])
-        ], condition="or"
-    ),
-    MetadataFilters(
-        filters=[MetadataFilter(field="page", operator="in", value=[1, 2, 3])], condition="and"
-    ),
-    MetadataFilters(
-        filters=[
-            MetadataFilter(field="chunk_type", operator="eq", value="text"),
-            MetadataFilter(field="page", operator="eq", value=1),
-        ],
-        condition="and",
-    ),
-])
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        MetadataFilters(
+            filters=[
+                MetadataFilter(field="page", operator="in", value=[4, 6]),
+                MetadataFilter(field="page", operator="in", value=[1, 2, 3]),
+            ],
+            condition="or",
+        ),
+        MetadataFilters(
+            filters=[MetadataFilter(field="page", operator="in", value=[1, 2, 3])], condition="and"
+        ),
+        MetadataFilters(
+            filters=[
+                MetadataFilter(field="chunk_type", operator="eq", value="text"),
+                MetadataFilter(field="page", operator="eq", value=1),
+            ],
+            condition="and",
+        ),
+    ],
+)
 @pytest.mark.asyncio
 async def test_weaviate_vector_search_with_filters(repo, filters):
     """Verify vector search applies metadata filters correctly."""
+
     def near_vector(*args, **kwargs):
         kwargs.pop("query")
         return repo._collection.query.near_vector(*args, near_vector=[0.3, 0.4], **kwargs)

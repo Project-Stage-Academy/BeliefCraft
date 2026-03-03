@@ -32,11 +32,16 @@ class AbstractVectorStoreRepository(ABC):
     def __init__(self, settings: "Settings") -> None:
         self._settings = settings
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "AbstractVectorStoreRepository":
         """Optional async context manager entry for resource initialization."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(  # noqa: B027
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
         """Optional async context manager exit for resource cleanup."""
         pass
 
@@ -365,18 +370,18 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         Returns:
             The raw Weaviate query results.
         """
-        query_params = {
-            "limit": limit,
-            "filters": filters,
-            "return_references": return_references,
-        }
-
         if not query_text:
-            return await self._collection.query.fetch_objects(**query_params)
+            return await self._collection.query.fetch_objects(
+                limit=limit,
+                filters=filters,
+                return_references=return_references,
+            )
 
         return await self._collection.query.near_text(
             query=query_text,
-            **query_params,
+            limit=limit,
+            filters=filters,
+            return_references=return_references,
             return_metadata=MetadataQuery(certainty=True),
         )
 
