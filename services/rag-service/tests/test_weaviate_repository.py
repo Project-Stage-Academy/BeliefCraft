@@ -144,6 +144,7 @@ async def test_weaviate_get_by_id(repo):
     # References must be resolved to their entity_id
     assert doc.metadata["referenced_formulas"] == ["F1"]
     assert doc.metadata["referenced_algorithms"] == ["A1"]
+    assert "referenced_examples" not in doc.metadata
 
 
 @pytest.mark.asyncio
@@ -199,6 +200,7 @@ async def test_weaviate_vector_search_with_filters(repo):
     assert docs[0].metadata["page"] == 1
     assert docs[0].metadata["referenced_formulas"] == ["F1"]
     assert docs[0].metadata["referenced_algorithms"] == ["A1"]
+    assert "referenced_examples" not in docs[0].metadata
 
 
 @pytest.mark.asyncio
@@ -220,6 +222,7 @@ async def test_weaviate_vector_search_no_query(repo):
     assert docs[0].content == "Physics and Sorting"
     assert "referenced_formulas" in docs[0].metadata
     assert "referenced_algorithms" in docs[0].metadata
+    assert "referenced_examples" not in docs[0].metadata
 
 
 @pytest.mark.asyncio
@@ -233,6 +236,7 @@ async def test_weaviate_expand_graph_by_ids_expand_formulas(repo):
     assert expanded[0].metadata["entity_id"] == "F1"
     assert expanded[0].metadata["chunk_type"] == "numbered_formula"
     assert expanded[0].metadata["referenced_examples"] == ["3.1"]
+    assert "referenced_algorithms" not in expanded[0].metadata
 
 
 @pytest.mark.asyncio
@@ -286,3 +290,4 @@ async def test_weaviate_search_with_expansion(repo):
     root_doc = next(d for d in results if d.id == ROOT_UUID)
     assert "F1" in root_doc.metadata["referenced_formulas"]
     assert "A1" in root_doc.metadata["referenced_algorithms"]
+    assert "referenced_examples" not in root_doc.metadata

@@ -40,7 +40,7 @@ class Document(BaseModel):
 
     id: str
     content: str
-    cosine_similarity: float
+    cosine_similarity: float | None = None
     metadata: dict[str, Any]
 
 
