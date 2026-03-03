@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 from pipeline.julia_code_translation import update_chunks_with_translated_code as updater
 
@@ -100,3 +103,64 @@ def test_update_examples_merges_translations_and_usage() -> None:
     assert updated[0]["used_structs"] == {"State": ["9.9"]}
     assert updated[0]["used_functions"] == {"step": ["9.9"]}
     assert updated[1]["content"] == "leave"
+
+
+@pytest.mark.unit
+def test_main_writes_updated_chunks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    output_path = tmp_path / "output.json"
+
+    class Args:
+        book_pdf = "book.pdf"
+        ocr_dir = "ocr"
+        chunks = "chunks.json"
+        translated_algorithms = "algos.json"
+        translated_examples = "examples.json"
+        output = str(output_path)
+
+    blocks: list[updater.Block] = [
+        {
+            "block_type": "Algorithm",
+            "number": "Algorithm 9.9.",
+            "caption": "",
+            "text": "",
+            "structs": {"State": ["Algorithm 1.1."]},
+            "functions": {"step": ["Example 2.4."]},
+        }
+    ]
+    chunks: list[updater.Chunk] = [
+        {"chunk_type": "algorithm", "entity_id": "1.1", "content": "old"},
+        {"chunk_type": "example", "entity_id": "2.4", "content": "old"},
+    ]
+    translated_algorithms: list[updater.TranslatedAlgorithm] = [
+        {
+            "algorithm_number": "Algorithm 1.1.",
+            "code": "print('hi')",
+            "description": "New description",
+            "declarations": {"State": "struct State"},
+        }
+    ]
+    translated_examples: list[updater.TranslatedExample] = [
+        {
+            "example_number": "Example 2.4.",
+            "description": "Example description",
+            "text": "Example text",
+        }
+    ]
+
+    monkeypatch.setattr(updater, "parse_args", lambda: Args())
+    monkeypatch.setattr(updater, "prepare_blocks", lambda *_: blocks)
+    monkeypatch.setattr(updater, "load_chunks", lambda *_: chunks)
+    monkeypatch.setattr(updater, "load_translated_algorithms", lambda *_: translated_algorithms)
+    monkeypatch.setattr(updater, "load_translated_examples", lambda *_: translated_examples)
+
+    updater.main()
+
+    assert output_path.exists()
+    output_data = json.loads(output_path.read_text(encoding="utf-8"))
+    assert output_data[0]["content"] == "New description\n\nprint('hi')"
+    assert output_data[0]["declarations"] == ["struct State"]
+    assert output_data[0]["used_structs"] == {"State": ["9.9"]}
+    assert output_data[0]["used_functions"] == {}
+    assert output_data[1]["content"] == "Example description\n\nExample text"
+    assert output_data[1]["used_structs"] == {}
+    assert output_data[1]["used_functions"] == {"step": ["9.9"]}
