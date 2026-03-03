@@ -105,7 +105,7 @@ def find_used_algorithms(
     """Return structs/functions that reference the given entity number."""
 
     used_structs: defaultdict[str, list[str]] = defaultdict(list)
-    used_function: defaultdict[str, list[str]] = defaultdict(list)
+    used_functions: defaultdict[str, list[str]] = defaultdict(list)
     for block in blocks:
         if block["block_type"] == "Algorithm":
             for struct_name, struct_usages in block["structs"].items():
@@ -116,8 +116,8 @@ def find_used_algorithms(
             for struct_name, struct_usages in block["functions"].items():
                 if entity_number in struct_usages:
                     entity_id = extract_entity_id_from_number(block["number"])
-                    used_function[struct_name].append(entity_id)
-    return dict(used_structs), dict(used_function)
+                    used_functions[struct_name].append(entity_id)
+    return dict(used_structs), dict(used_functions)
 
 
 def update_algorithms(
@@ -139,7 +139,7 @@ def update_algorithms(
     return chunks
 
 
-def update_examples_algorithms(
+def update_examples(
     chunks: list[Chunk], translated_examples: list[TranslatedExample], blocks: list[Block]
 ) -> list[Chunk]:
     """Merge translated example content and usage metadata into chunks."""
@@ -162,9 +162,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Update chunks with translated algorithms/examples and usage metadata."
     )
-    parser.add_argument("--book-pdf", required=True, help="Path to the source book PDF.")
     parser.add_argument(
-        "--ocr-dir",
+        "--pdf-path",
+        dest="book_pdf",
+        required=True,
+        help="Path to the source book PDF.",
+    )
+    parser.add_argument(
+        "--paddle-ocr-dir",
+        dest="ocr_dir",
         required=True,
         help="OCR JSON directory name passed to the block processor.",
     )
@@ -201,7 +207,7 @@ def main() -> None:
     translated_examples = load_translated_examples(args.translated_examples)
 
     chunks = update_algorithms(chunks, translated_algorithms, blocks)
-    chunks = update_examples_algorithms(chunks, translated_examples, blocks)
+    chunks = update_examples(chunks, translated_examples, blocks)
 
     output_path = Path(args.output)
     with output_path.open("w", encoding="utf-8") as f:

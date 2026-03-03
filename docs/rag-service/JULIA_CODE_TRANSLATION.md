@@ -113,8 +113,8 @@ From the repo root:
 
 ```bash
 uv run services/rag-service/src/pipeline/julia_code_translation/update_chunks_with_translated_code.py \
-  --book-pdf dm.pdf \
-  --ocr-dir ocr_jsons \
+  --pdf-path dm.pdf \
+  --paddle-ocr-dir ocr_jsons \
   --chunks ULTIMATE_BOOK_DATA.json \
   --translated-algorithms translated_algorithms.json \
   --translated-examples translated_examples.json \
@@ -122,5 +122,5 @@ uv run services/rag-service/src/pipeline/julia_code_translation/update_chunks_wi
 ```
 
 ### Notes
-- `--ocr-dir` is the OCR JSON directory name passed into the block processor.
+- `--paddle-ocr-dir` is the OCR JSON directory name passed into the block processor.
 - The script overwrites the output path you provide; use a new file if you want to keep the original chunks JSON.

@@ -94,7 +94,7 @@ def test_update_examples_merges_translations_and_usage() -> None:
         }
     ]
 
-    updated = updater.update_examples_algorithms(chunks, translated_examples, blocks)
+    updated = updater.update_examples(chunks, translated_examples, blocks)
 
     assert updated[0]["content"] == "New description\n\nExample text"
     assert updated[0]["used_structs"] == {"State": ["9.9"]}
