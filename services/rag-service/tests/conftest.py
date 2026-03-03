@@ -1,5 +1,3 @@
-import sys
-from pathlib import Path
 
 import pytest  # noqa: E402
 from common.logging import configure_logging  # noqa: E402
