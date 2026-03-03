@@ -1,6 +1,8 @@
 import pytest
 import requests
 import weaviate
+from weaviate.collections.classes.config import VectorDistances
+
 from rag_service.config import Settings
 from rag_service.constants import (
     COLLECTION_NAME,
@@ -45,7 +47,11 @@ async def weaviate_setup():
 
         await client.collections.create(
             name=COLLECTION_NAME,
-            vector_config=Configure.Vectors.self_provided(),
+            vector_config=Configure.Vectors.self_provided(
+                vector_index_config=Configure.VectorIndex.flat(
+                    distance_metric=VectorDistances.COSINE,
+                ),
+            ),
             references=[
                 ReferenceProperty(name=name, target_collection=COLLECTION_NAME)
                 for name in REFERENCE_TYPE_MAP
@@ -60,7 +66,7 @@ async def weaviate_setup():
                 "page": 5,
             },
             uuid=F1_UUID,
-            vector=[0.1] * 1536,
+            vector=[0.1] * 2,
         )
         await collection.data.insert(
             properties={
@@ -70,7 +76,7 @@ async def weaviate_setup():
                 "page": 10,
             },
             uuid=A1_UUID,
-            vector=[0.2] * 1536,
+            vector=[0.2] * 2,
         )
         await collection.data.insert(
             properties={
@@ -80,12 +86,12 @@ async def weaviate_setup():
                 "section_title": "Intro",
             },
             uuid=ROOT_UUID,
-            vector=[0.3] * 1536,
+            vector=[0.3] * 2,
         )
         await collection.data.insert(
             properties={"content": "Unrelated info", "chunk_type": "text", "page": 100},
             uuid=OTHER_UUID,
-            vector=[0.4] * 1536,
+            vector=[0.4] * 2,
         )
         await collection.data.insert(
             properties={
@@ -95,7 +101,7 @@ async def weaviate_setup():
                 "entity_id": "3.1",
             },
             uuid=EXAMPLE_UUID,
-            vector=[0.5] * 1536,
+            vector=[0.5] * 2,
         )
         await collection.data.reference_add(
             from_uuid=ROOT_UUID, from_property="referenced_formulas", to=F1_UUID
@@ -165,29 +171,40 @@ async def test_weaviate_vector_search_returns_correct_k(repo, k, expected_count)
 
     def near_vector(*args, **kwargs):
         kwargs.pop("query")
-        return repo._collection.query.near_vector(*args, near_vector=[0.4] * 1536, **kwargs)
+        return repo._collection.query.near_vector(*args, near_vector=[0.4] * 2, **kwargs)
 
     repo._collection.query.near_text = near_vector
 
     docs = await repo.vector_search(query="physics", k=k)
 
     assert len(docs) == expected_count
+    for doc in docs:
+        assert doc.cosine_similarity is not None
 
-
-@pytest.mark.asyncio
-async def test_weaviate_vector_search_with_filters(repo):
-    """Verify vector search applies metadata filters correctly."""
-    filters = MetadataFilters(
+@pytest.mark.parametrize("filters",[
+    MetadataFilters(
+        filters=[
+            MetadataFilter(field="page", operator="in", value=[4, 6]),
+            MetadataFilter(field="page", operator="in", value=[1, 2, 3])
+        ], condition="or"
+    ),
+    MetadataFilters(
+        filters=[MetadataFilter(field="page", operator="in", value=[1, 2, 3])], condition="and"
+    ),
+    MetadataFilters(
         filters=[
             MetadataFilter(field="chunk_type", operator="eq", value="text"),
             MetadataFilter(field="page", operator="eq", value=1),
         ],
         condition="and",
-    )
-
+    ),
+])
+@pytest.mark.asyncio
+async def test_weaviate_vector_search_with_filters(repo, filters):
+    """Verify vector search applies metadata filters correctly."""
     def near_vector(*args, **kwargs):
         kwargs.pop("query")
-        return repo._collection.query.near_vector(*args, near_vector=[0.4] * 1536, **kwargs)
+        return repo._collection.query.near_vector(*args, near_vector=[0.3, 0.4], **kwargs)
 
     repo._collection.query.near_text = near_vector
 
@@ -201,6 +218,7 @@ async def test_weaviate_vector_search_with_filters(repo):
     assert docs[0].metadata["referenced_formulas"] == ["F1"]
     assert docs[0].metadata["referenced_algorithms"] == ["A1"]
     assert "referenced_examples" not in docs[0].metadata
+    assert round(docs[0].cosine_similarity, 4) == round(0.989949, 4)
 
 
 @pytest.mark.asyncio
