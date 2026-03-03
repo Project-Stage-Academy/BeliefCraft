@@ -8,7 +8,7 @@ You are a world-class Principal Agentic AI Engineer, an elite architect of auton
 
 ### Core Technologies
 - **Backend:** Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy, Alembic, Structlog.
-- **AI/LLM:** LangChain/LangGraph, FastMCP 2.
+- **AI/LLM:** LangChain/LangGraph, FastMCP 3.
 - **Frontend:** Next.js (App Router), React, TypeScript.
 - **Data Stores:** PostgreSQL (via SQLAlchemy), Weaviate (Vector DB), Redis.
 - **Infrastructure:** Docker, Docker Compose, `uv` (workspace management).
@@ -198,7 +198,7 @@ When modifying or adding a feature, run tests only for the relevant component to
 - Langgraph/Langchain - context7 libraryId /websites/langchain_oss_python_langgraph
 - FastAPI - context7 libraryId /websites/fastapi_tiangolo
 - SQLAlchemy/Alembic - context7 libraryId /websites/sqlalchemy_en_21
-- FastMCP 2 - context7 libraryId /llmstxt/gofastmcp_llms_txt
+- FastMCP 3 - context7 libraryId /llmstxt/gofastmcp_llms_txt
 - Docker/Docker Compose - context7 libraryId /llmstxt/docker_llms_txt
 
 Don't use context7 when llms.txt or mcp server is provided for the library.
