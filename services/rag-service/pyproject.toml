@@ -5,12 +5,17 @@ description = "RAG service for BeliefCraft."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.110",
+  "pymupdf>=1.26.7",
   "uvicorn[standard]>=0.27",
   "pydantic",
   "pyyaml",
   "python-dotenv",
+  "weaviate-client",
   "beliefcraft-common",
   "fastmcp<3",
+  "tqdm>=4.67.3",
+  "boto3>=1.42.49",
+  "jinja2>=3.1",
 ]
 
 [tool.uv.sources]
@@ -19,4 +24,6 @@ beliefcraft-common = { workspace = true }
 [dependency-groups]
 dev = [
   "pytest>=8.0",
+  "beautifulsoup4>=4.14.3",
+  "types-beautifulsoup4>=4.12.0.20250516",
 ]
