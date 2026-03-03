@@ -1,3 +1,4 @@
+import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -72,14 +73,18 @@ def extract_entity_id_from_number(number: str) -> str:
     return parts[1].rstrip(".")
 
 
-def prepare_blocks(book_pdf_path: str) -> list[Block]:
-    with open_block_processor(book_pdf_path, "ocr_jsons") as block_processor:
+def prepare_blocks(
+    book_pdf_path: str,
+    ocr_dir: str,
+    translated_algorithms_path: str | Path,
+) -> list[Block]:
+    with open_block_processor(book_pdf_path, ocr_dir) as block_processor:
         blocks = cast(list[Block], block_processor.extract_algorithms_and_examples())
 
     book_processor = BookCodeProcessor(
         JuliaEntityExtractor(),
         UsageIndexBuilder(),
-        TranslatedAlgorithmStore(Path("translated_algorithms.json")),
+        TranslatedAlgorithmStore(Path(translated_algorithms_path)),
     )
     blocks_any = cast(list[dict[str, Any]], cast(object, blocks))
     book_processor.extract_block_structs_and_functions(blocks_any)
@@ -142,14 +147,54 @@ def update_examples_algorithms(
     return chunks
 
 
-blocks = prepare_blocks("dm.pdf")
-chunks = load_chunks("ULTIMATE_BOOK_DATA.json")
-translated_algorithms = load_translated_algorithms("translated_algorithms.json")
-translated_examples = load_translated_examples("translated_examples.json")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Update chunks with translated algorithms/examples and usage metadata."
+    )
+    parser.add_argument("--book-pdf", required=True, help="Path to the source book PDF.")
+    parser.add_argument(
+        "--ocr-dir",
+        required=True,
+        help="OCR JSON directory name passed to the block processor.",
+    )
+    parser.add_argument(
+        "--chunks",
+        required=True,
+        help="Path to the input chunks JSON.",
+    )
+    parser.add_argument(
+        "--translated-algorithms",
+        required=True,
+        help="Path to translated algorithms JSON.",
+    )
+    parser.add_argument(
+        "--translated-examples",
+        required=True,
+        help="Path to translated examples JSON.",
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Path to the output JSON file.",
+    )
+    return parser.parse_args()
 
-chunks = update_algorithms(chunks, translated_algorithms, blocks)
-chunks = update_examples_algorithms(chunks, translated_examples, blocks)
 
-output_path = Path("ULTIMATE_BOOK_DATA_translated.json")
-with output_path.open("w", encoding="utf-8") as f:
-    json.dump(chunks, f, ensure_ascii=False, indent=2)
+def main() -> None:
+    args = parse_args()
+
+    blocks = prepare_blocks(args.book_pdf, args.ocr_dir, args.translated_algorithms)
+    chunks = load_chunks(args.chunks)
+    translated_algorithms = load_translated_algorithms(args.translated_algorithms)
+    translated_examples = load_translated_examples(args.translated_examples)
+
+    chunks = update_algorithms(chunks, translated_algorithms, blocks)
+    chunks = update_examples_algorithms(chunks, translated_examples, blocks)
+
+    output_path = Path(args.output)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(chunks, f, ensure_ascii=False, indent=2)
+
+
+if __name__ == "__main__":
+    main()
