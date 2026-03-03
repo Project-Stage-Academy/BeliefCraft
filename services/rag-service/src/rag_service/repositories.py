@@ -263,31 +263,32 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         Convert domain-specific metadata filters to Weaviate-native filters.
 
         Args:
-            filters: The filters to convert.
+            filters: The domain metadata filters to convert.
 
         Returns:
-            Weaviate-native Filter object or None.
+            A Weaviate Filter object or None if no filters are provided.
         """
         if not filters or not filters.filters:
             return None
 
-        weaviate_filters = []
-        for metadata_filter in filters.filters:
-            property_filter = Filter.by_property(metadata_filter.field)
-            value = (
-                metadata_filter.value
-                if isinstance(metadata_filter.value, list)
-                else [metadata_filter.value]
+        operator_map = {
+            "eq": lambda prop, val: prop.equal(val),
+            "in": lambda prop, val: prop.contains_any(val if isinstance(val, list) else [val]),
+        }
+
+        condition_map = {
+            "and": Filter.all_of,
+            "or": Filter.any_of,
+        }
+
+        weaviate_filters = [
+            operator_map[metadata_filter.operator](
+                Filter.by_property(metadata_filter.field), metadata_filter.value
             )
+            for metadata_filter in filters.filters
+        ]
 
-            if metadata_filter.operator == "eq":
-                weaviate_filters.append(property_filter.equal(metadata_filter.value))
-            else:
-                weaviate_filters.append(property_filter.contains_any(value))
-
-        if filters.condition == "and":
-            return Filter.all_of(weaviate_filters)
-        return Filter.any_of(weaviate_filters)
+        return condition_map[filters.condition](weaviate_filters)
 
     def _get_return_references(
         self, traverse_fields: list[str] | None = None
@@ -337,10 +338,11 @@ class WeaviateRepository(AbstractVectorStoreRepository):
                 ]
 
         certainty = getattr(weaviate_object.metadata, "certainty", None)
+        cosine_similarity = 2 * certainty - 1 if certainty is not None else None
         return Document(
             id=str(weaviate_object.uuid),
             content=content,
-            cosine_similarity=certainty if certainty else None,
+            cosine_similarity=cosine_similarity,
             metadata=metadata,
         )
 
