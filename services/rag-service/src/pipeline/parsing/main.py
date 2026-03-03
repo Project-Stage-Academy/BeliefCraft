@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from common.logging import configure_logging, get_logger
+from dotenv import load_dotenv
 
 try:
     from .metadata_extractor import MetadataExtractor
@@ -20,7 +21,9 @@ logger.info("service_started", message="RAG Service is up and running")
 PAGE_OFFSET = 18
 BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
-FIGURES_BUCKET_URL = os.getenv("FIGURES_BUCKET_URL", "")
+
+load_dotenv()
+FIGURES_BUCKET_URL = os.getenv("FIGURES_BUCKET_URL")
 
 
 class DocumentAssembler:
@@ -154,6 +157,9 @@ class DocumentAssembler:
             chunk.update({"entity_id": eid, "caption": full_caption})
 
             if "image_index" in v_obj:
+                if not FIGURES_BUCKET_URL:
+                    raise RuntimeError("FIGURES_BUCKET_URL is not specified")
+
                 chunk["image_links"] = [
                     f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']}.png"
                 ]
