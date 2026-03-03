@@ -1,3 +1,5 @@
+"""Update translated algorithms/examples in chunks and enrich with usage metadata."""
+
 import argparse
 import json
 from collections import defaultdict
@@ -47,24 +49,28 @@ class Block(TypedDict):
 
 
 def load_translated_algorithms(filename: str | Path) -> list[TranslatedAlgorithm]:
+    """Load translated algorithms JSON from disk."""
     with Path(filename).open(encoding="utf-8") as f:
         data = json.load(f)
     return cast(list[TranslatedAlgorithm], data)
 
 
 def load_translated_examples(filename: str | Path) -> list[TranslatedExample]:
+    """Load translated examples JSON from disk."""
     with Path(filename).open(encoding="utf-8") as f:
         data = json.load(f)
     return cast(list[TranslatedExample], data)
 
 
 def load_chunks(filename: str | Path) -> list[Chunk]:
+    """Load chunk records JSON from disk."""
     with Path(filename).open(encoding="utf-8") as f:
         data = json.load(f)
     return cast(list[Chunk], data)
 
 
 def extract_entity_id_from_number(number: str) -> str:
+    """Extract the entity id from a numbered label like 'Algorithm 1.1.'"""
     # Example input: "Algorithm 1.1."
     # We want to extract "1.1"
     parts = number.split()
@@ -78,6 +84,7 @@ def prepare_blocks(
     ocr_dir: str,
     translated_algorithms_path: str | Path,
 ) -> list[Block]:
+    """Extract algorithm/example blocks and populate usage metadata."""
     with open_block_processor(book_pdf_path, ocr_dir) as block_processor:
         blocks = cast(list[Block], block_processor.extract_algorithms_and_examples())
 
@@ -95,6 +102,7 @@ def prepare_blocks(
 def find_used_algorithms(
     blocks: list[Block], entity_number: str
 ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Return structs/functions that reference the given entity number."""
 
     used_structs: defaultdict[str, list[str]] = defaultdict(list)
     used_function: defaultdict[str, list[str]] = defaultdict(list)
@@ -115,6 +123,7 @@ def find_used_algorithms(
 def update_algorithms(
     chunks: list[Chunk], translated_algorithms: list[TranslatedAlgorithm], blocks: list[Block]
 ) -> list[Chunk]:
+    """Merge translated algorithm content and usage metadata into chunks."""
     for translated_algorithm in translated_algorithms:
         entity_id = extract_entity_id_from_number(translated_algorithm["algorithm_number"])
         for chunk in chunks:
@@ -133,6 +142,7 @@ def update_algorithms(
 def update_examples_algorithms(
     chunks: list[Chunk], translated_examples: list[TranslatedExample], blocks: list[Block]
 ) -> list[Chunk]:
+    """Merge translated example content and usage metadata into chunks."""
     for translated_example in translated_examples:
         entity_id = extract_entity_id_from_number(translated_example["example_number"])
         for chunk in chunks:
@@ -148,6 +158,7 @@ def update_examples_algorithms(
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for the update script."""
     parser = argparse.ArgumentParser(
         description="Update chunks with translated algorithms/examples and usage metadata."
     )
@@ -181,6 +192,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """CLI entry point."""
     args = parse_args()
 
     blocks = prepare_blocks(args.book_pdf, args.ocr_dir, args.translated_algorithms)
