@@ -371,15 +371,12 @@ version = "0.1.0"
 source = { editable = "services/rag-service" }
 dependencies = [
     { name = "beliefcraft-common" },
-    { name = "boto3" },
     { name = "fastapi" },
     { name = "fastmcp" },
-    { name = "jinja2" },
     { name = "pydantic" },
     { name = "pymupdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "tqdm" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "weaviate-client" },
 ]
@@ -387,23 +384,23 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "beautifulsoup4" },
+    { name = "boto3" },
+    { name = "jinja2" },
     { name = "pytest" },
     { name = "testcontainers", extra = ["weaviate"] },
+    { name = "tqdm" },
     { name = "types-beautifulsoup4" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "beliefcraft-common", editable = "packages/common" },
-    { name = "boto3", specifier = ">=1.42.49" },
     { name = "fastapi", specifier = ">=0.110" },
     { name = "fastmcp", specifier = ">=3" },
-    { name = "jinja2", specifier = ">=3.1" },
     { name = "pydantic" },
     { name = "pymupdf", specifier = ">=1.26.7" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "tqdm", specifier = ">=4.67.3" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27" },
     { name = "weaviate-client" },
 ]
@@ -411,8 +408,11 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
+    { name = "boto3", specifier = ">=1.42.49" },
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "testcontainers", extras = ["weaviate"] },
+    { name = "tqdm", specifier = ">=4.67.3" },
     { name = "types-beautifulsoup4", specifier = ">=4.12.0.20250516" },
 ]
 
