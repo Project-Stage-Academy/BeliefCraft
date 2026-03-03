@@ -4,9 +4,10 @@ from rag_service.repositories import FakeDataRepository
 
 
 @pytest.fixture
-def repo(settings):
+async def repo(settings):
     """Initialize FakeDataRepository with mock data."""
-    return FakeDataRepository(settings)
+    async with FakeDataRepository(settings) as r:
+        yield r
 
 
 @pytest.mark.asyncio

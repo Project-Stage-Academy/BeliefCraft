@@ -1,7 +1,8 @@
-from typing import Annotated
+from typing import Annotated, AsyncGenerator
 
 from common.logging import get_logger
 from fastmcp import FastMCP
+from fastmcp.server.lifespan import lifespan
 
 from .constants import ENTITY_TYPE_TO_CHUNK_TYPE
 from .models import Document, EntityType, MetadataFilter, MetadataFilters, SearchFilters
@@ -184,6 +185,13 @@ class RagTools:
 
 def create_mcp_server(repository: AbstractVectorStoreRepository) -> FastMCP:
     """Create MCP server and register tools."""
+
+    @lifespan
+    async def server_lifespan(server: FastMCP) -> AsyncGenerator[None, None]:
+        """Manage repository connection lifespan."""
+        async with repository:
+            yield
+
     mcp = FastMCP(
         "'Algorithms for Decision Making' book RAG",
         instructions="""
