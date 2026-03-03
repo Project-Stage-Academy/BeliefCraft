@@ -200,6 +200,7 @@ Book contents:
 part number title
 section_number title page
 """ + BOOK_CONTENTS,
+        lifespan=server_lifespan,
     )
     rag_tools = RagTools(repository)
     for tool_name in RagTools.tools:
