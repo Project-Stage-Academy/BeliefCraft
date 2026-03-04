@@ -34,7 +34,8 @@ def test_find_used_algorithms_filters_and_extracts() -> None:
         },
     ]
 
-    used_structs, used_functions = updater.find_used_structs_and_functions(blocks, "Algorithm 1.1.")
+    used_structs = updater.find_used_structs_and_functions(blocks, "Algorithm 1.1.", "structs")
+    used_functions = updater.find_used_structs_and_functions(blocks, "Algorithm 1.1.", "functions")
 
     assert used_structs == {"State": ["3.2"]}
     assert used_functions == {"step": ["3.2"]}
