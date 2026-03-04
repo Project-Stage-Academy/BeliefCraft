@@ -113,6 +113,9 @@ def _update_chunks(
     translated_items: Sequence[TranslatedAlgorithm | TranslatedExample],
     blocks: list[Block],
 ) -> list[Chunk]:
+    """
+    Merge translated items into chunks in-place, updating content, declarations, and usage metadata.
+    """
     for item in translated_items:
         if _is_algorithm(item):
             algo = cast(TranslatedAlgorithm, item)
