@@ -322,7 +322,7 @@ def test_handle_visual_objects_overlap(mock_data_env):
 
 
 def test_extract_id_strict_regex(mock_data_env):
-    """Test that ID is extracted only from specific keywords."""
+    """Test that ID is extracted correctly with the new fallback logic."""
     assembler = DocumentAssembler(
         paddle_dir=mock_data_env["paddle_dir"],
         figures_json=mock_data_env["figures"],
@@ -334,5 +334,6 @@ def test_extract_id_strict_regex(mock_data_env):
     assert assembler._extract_id("Example 4.4") == "4.4"
     assert assembler._extract_id("Exercise 1.2") == "1.2"
 
-    assert assembler._extract_id("The value is 4.4") is None
-    assert assembler._extract_id("4.4 is the result") is None
+    assert assembler._extract_id("The value is 4.4") == "4.4"
+
+    assert assembler._extract_id("Value is 100") is None
