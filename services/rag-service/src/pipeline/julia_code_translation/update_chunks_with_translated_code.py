@@ -103,6 +103,7 @@ def format_translated_content(*parts: str) -> str:
 
 
 def _is_algorithm(item: TranslatedAlgorithm | TranslatedExample) -> bool:
+    """Check whether the translated item is an algorithm."""
     return "algorithm_number" in item
 
 
@@ -122,7 +123,7 @@ def _update_chunks(
             example = cast(TranslatedExample, item)
             chunk_type = "example"
             entity_number = example["example_number"]
-            content = format_translated_content(item["description"], example["text"])
+            content = format_translated_content(example["description"], example["text"])
             declarations = None
 
         entity_id = extract_entity_id_from_number(entity_number)
