@@ -23,7 +23,7 @@ BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
 
 
-def init_parsing_environment() -> str | None:
+def load_bucket_url_from_env() -> str | None:
     """Load environment variables explicitly for parsing runtime configuration."""
     load_dotenv()
     return os.getenv("FIGURES_BUCKET_URL")
@@ -64,7 +64,7 @@ class DocumentAssembler:
         if figures_bucket_url:
             self.figures_bucket_url = figures_bucket_url
         else:
-            self.figures_bucket_url = init_parsing_environment()
+            self.figures_bucket_url = load_bucket_url_from_env()
 
     def _validate_files(self, file_paths: list[Path]) -> None:
         for path in file_paths:
