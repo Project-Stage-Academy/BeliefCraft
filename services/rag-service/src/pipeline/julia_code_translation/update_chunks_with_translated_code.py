@@ -13,7 +13,7 @@ from pipeline.julia_code_translation.process_book_code import (
     TranslatedAlgorithmStore,
     UsageIndexBuilder,
 )
-from pipeline.julia_code_translation.types import (
+from pipeline.julia_code_translation.translation_types import (
     Block,
     Chunk,
     TranslatedAlgorithm,
