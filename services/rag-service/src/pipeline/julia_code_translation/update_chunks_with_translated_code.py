@@ -4,48 +4,24 @@ import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, cast
 
+from common.logging import get_logger
 from pipeline.julia_code_translation.process_book_code import (
     BookCodeProcessor,
     JuliaEntityExtractor,
     TranslatedAlgorithmStore,
     UsageIndexBuilder,
 )
+from pipeline.julia_code_translation.types import (
+    Block,
+    Chunk,
+    TranslatedAlgorithm,
+    TranslatedExample,
+)
 from pipeline.parsing.block_processor import open_block_processor
 
-
-class TranslatedAlgorithm(TypedDict):
-    algorithm_number: str
-    code: str
-    description: str
-    declarations: dict[str, str]
-
-
-class TranslatedExample(TypedDict):
-    example_number: str
-    description: str
-    text: str
-
-
-class Chunk(TypedDict, total=False):
-    chunk_type: str
-    entity_id: str
-    content: str
-    caption: str
-    declarations: list[str]
-    used_algorithms: dict[str, str]
-    used_structs: dict[str, list[str]]
-    used_functions: dict[str, list[str]]
-
-
-class Block(TypedDict):
-    block_type: str
-    number: str
-    caption: str
-    text: str
-    structs: dict[str, list[str]]
-    functions: dict[str, list[str]]
+logger = get_logger(__name__)
 
 
 def load_translated_algorithms(filename: str | Path) -> list[TranslatedAlgorithm]:
@@ -70,9 +46,10 @@ def load_chunks(filename: str | Path) -> list[Chunk]:
 
 
 def extract_entity_id_from_number(number: str) -> str:
-    """Extract the entity id from a numbered label like 'Algorithm 1.1.'"""
-    # Example input: "Algorithm 1.1."
-    # We want to extract "1.1"
+    """Extract the entity id from a numbered label like 'Algorithm 1.1.'
+
+    Example input: "Algorithm 1.1." -> "1.1"
+    """
     parts = number.split()
     if len(parts) < 2:
         return ""
@@ -136,6 +113,8 @@ def update_algorithms(
                     blocks, translated_algorithm["algorithm_number"]
                 )
                 break
+        else:
+            logger.warning("Chunk for algorithm %s wasn't found!", entity_id)
     return chunks
 
 
@@ -154,6 +133,8 @@ def update_examples(
                     blocks, translated_example["example_number"]
                 )
                 break
+        else:
+            logger.warning("Chunk for example %s wasn't found!", entity_id)
     return chunks
 
 
