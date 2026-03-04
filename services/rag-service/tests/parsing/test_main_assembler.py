@@ -1,6 +1,5 @@
 import json
 
-import pipeline.parsing.main as parsing_main
 import pytest
 from pipeline.parsing.main import DocumentAssembler
 
@@ -253,6 +252,7 @@ def test_visual_object_image_index_builds_link(mock_data_env, monkeypatch):
         blocks_json=mock_data_env["blocks"],
         tables_json=mock_data_env["tables"],
         formulas_json=mock_data_env["formulas"],
+        figures_bucket_url="https://cdn.example.com/",
     )
     assembler.image_map = {
         1: [
@@ -264,8 +264,6 @@ def test_visual_object_image_index_builds_link(mock_data_env, monkeypatch):
             }
         ]
     }
-
-    monkeypatch.setattr(parsing_main, "FIGURES_BUCKET_URL", "https://cdn.example.com/")
 
     assembler._handle_visual_objects(1, [])
 
