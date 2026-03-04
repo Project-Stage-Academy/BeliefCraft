@@ -276,7 +276,21 @@ def test_assembler_markdown_priority(mock_data_env):
 
 
 def test_handle_visual_objects_overlap(mock_data_env):
-    """Test that overlapping visual objects are handled correctly."""
+    """
+    Test that overlapping visual objects are handled correctly.
+    Data is provided through mock files to avoid direct state mutation.
+    """
+    mock_block_data = [
+        {
+            "page": 1,
+            "entity_id": "4.4",
+            "bbox": [0, 0, 100, 100],
+            "chunk_type": "example",
+            "caption": "Example 4.4",
+        }
+    ]
+    mock_data_env["blocks"].write_text(json.dumps(mock_block_data), encoding="utf-8")
+
     assembler = DocumentAssembler(
         paddle_dir=mock_data_env["paddle_dir"],
         figures_json=mock_data_env["figures"],
@@ -285,18 +299,26 @@ def test_handle_visual_objects_overlap(mock_data_env):
         formulas_json=mock_data_env["formulas"],
     )
 
-    assembler.block_map = {
-        1: [{"entity_id": "4.4", "bbox": [0, 0, 100, 100], "chunk_type": "example"}]
-    }
-
-    blocks = [
-        {"block_content": "Example 4.4 text", "block_bbox": [10, 10, 50, 50], "block_label": "text"}
+    blocks_from_paddle = [
+        {
+            "block_content": "Example 4.4 text inside box",
+            "block_bbox": [10, 10, 50, 50],
+            "block_label": "text",
+        },
+        {
+            "block_content": "Normal text outside",
+            "block_bbox": [200, 200, 300, 300],
+            "block_label": "text",
+        },
     ]
 
-    used = assembler._handle_visual_objects(1, blocks)
+    used = assembler._handle_visual_objects(1, blocks_from_paddle)
 
     assert 0 in used
+    assert 1 not in used
     assert any(c["chunk_type"] == "example" for c in assembler.final_chunks)
+    example_chunk = next(c for c in assembler.final_chunks if c["chunk_type"] == "example")
+    assert example_chunk["entity_id"] == "4.4"
 
 
 def test_extract_id_strict_regex(mock_data_env):

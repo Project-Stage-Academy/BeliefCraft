@@ -11,6 +11,10 @@ try:
 except ImportError:
     from metadata_extractor import MetadataExtractor  # type: ignore
 
+import os
+
+FIGURES_BUCKET_URL = os.getenv("FIGURES_BUCKET_URL", "").rstrip("/") + "/"
+
 configure_logging("rag-service", log_level="INFO")
 logger = get_logger(__name__)
 
@@ -122,26 +126,26 @@ class DocumentAssembler:
 
         markdown_data = page_data.get("markdown", {})
         full_markdown_text = markdown_data.get("text", "")
+        blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
+
+        used_indices: set[int] = set()
+
+        if blocks:
+            used_indices.update(self._handle_visual_objects(page_num, blocks))
+            self._handle_tables(page_num)
 
         if full_markdown_text:
             meta_res = self.meta_extractor.process_content_and_get_meta(full_markdown_text)
             chunk = self._create_chunk_obj("text", full_markdown_text, page_num, meta_res)
-
             if hasattr(self.meta_extractor, "get_references"):
                 refs = self.meta_extractor.get_references(full_markdown_text)
                 chunk.update(refs)
-
             self.final_chunks.append(chunk)
             logger.info(f"Page {page_num}: Processed using high-quality Markdown.")
-            return
+        else:
+            self._handle_text_stream(page_num, blocks, used_indices)
 
-        blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
-        if not blocks:
-            return
-        used_indices: set[int] = set()
-        used_indices.update(self._handle_visual_objects(page_num, blocks))
-        self._handle_tables(page_num)
-        self._handle_text_stream(page_num, blocks, used_indices)
+        return
 
     def _handle_visual_objects(self, page_num: int, blocks: list[dict[str, Any]]) -> set[int]:
         used: set[int] = set()
@@ -167,7 +171,9 @@ class DocumentAssembler:
             chunk.update({"entity_id": eid, "caption": full_caption})
 
             if "image_index" in v_obj:
-                chunk["image_links"] = [f"images/fig_{v_obj['image_index']}.png"]
+                chunk["image_links"] = [
+                    f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']}.png"
+                ]
 
             self.final_chunks.append(chunk)
         return used
@@ -306,7 +312,11 @@ class DocumentAssembler:
     def _extract_id(self, text: str | None) -> str | None:
         if not text:
             return None
+        # Спочатку шукаємо за суворим шаблоном
         m = re.search(r"(?:Exercise|Figure|Table|Algorithm|Example)\s+(\d+\.\d+)", str(text), re.I)
+        if not m:
+            # Якщо не знайшли, шукаємо просто число формату X.X (наприклад, "4.4")
+            m = re.search(r"\b(\d+\.\d+)\b", str(text))
         return m.group(1) if m else None
 
     def _save(self) -> None:
