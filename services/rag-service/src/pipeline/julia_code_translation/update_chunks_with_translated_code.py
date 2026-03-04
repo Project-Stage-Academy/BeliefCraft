@@ -127,6 +127,8 @@ def _update_chunks(
             declarations = None
 
         entity_id = extract_entity_id_from_number(entity_number)
+
+        found = False
         for chunk in chunks:
             if chunk.get("chunk_type") == chunk_type and chunk.get("entity_id") == entity_id:
                 chunk["content"] = content
@@ -134,8 +136,10 @@ def _update_chunks(
                     chunk["declarations"] = declarations
                 chunk["used_structs"] = find_used_entities(blocks, entity_number, "structs")
                 chunk["used_functions"] = find_used_entities(blocks, entity_number, "functions")
+                found = True
                 break
-        else:
+
+        if not found:
             logger.warning("Chunk for %s %s wasn't found!", chunk_type, entity_id)
 
     return chunks
