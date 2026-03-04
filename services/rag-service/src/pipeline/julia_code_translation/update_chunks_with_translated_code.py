@@ -3,6 +3,7 @@
 import argparse
 import json
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, cast
 
@@ -101,57 +102,56 @@ def format_translated_content(*parts: str) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
+def _is_algorithm(item: TranslatedAlgorithm | TranslatedExample) -> bool:
+    return "algorithm_number" in item
+
+
+def _update_chunks(
+    chunks: list[Chunk],
+    translated_items: Sequence[TranslatedAlgorithm | TranslatedExample],
+    blocks: list[Block],
+) -> list[Chunk]:
+    for item in translated_items:
+        if _is_algorithm(item):
+            algo = cast(TranslatedAlgorithm, item)
+            chunk_type = "algorithm"
+            entity_number = algo["algorithm_number"]
+            content = format_translated_content(algo["description"], algo["code"])
+            declarations: list[str] | None = list(algo["declarations"].values())
+        else:
+            example = cast(TranslatedExample, item)
+            chunk_type = "example"
+            entity_number = example["example_number"]
+            content = format_translated_content(item["description"], example["text"])
+            declarations = None
+
+        entity_id = extract_entity_id_from_number(entity_number)
+        for chunk in chunks:
+            if chunk.get("chunk_type") == chunk_type and chunk.get("entity_id") == entity_id:
+                chunk["content"] = content
+                if declarations is not None:
+                    chunk["declarations"] = declarations
+                chunk["used_structs"] = find_used_entities(blocks, entity_number, "structs")
+                chunk["used_functions"] = find_used_entities(blocks, entity_number, "functions")
+                break
+        else:
+            logger.warning("Chunk for %s %s wasn't found!", chunk_type, entity_id)
+
+    return chunks
+
+
 def update_algorithms(
     chunks: list[Chunk], translated_algorithms: list[TranslatedAlgorithm], blocks: list[Block]
 ) -> list[Chunk]:
     """Merge translated algorithm content and usage metadata into chunks."""
-    for translated_item in translated_algorithms:
-        entity_id = extract_entity_id_from_number(translated_item["algorithm_number"])
-        found = False
-        for chunk in chunks:
-            if chunk.get("chunk_type") == "algorithm" and chunk.get("entity_id") == entity_id:
-                chunk["content"] = format_translated_content(
-                    translated_item["description"],
-                    translated_item["code"],
-                )
-                chunk["declarations"] = list(translated_item["declarations"].values())
-                chunk["used_structs"] = find_used_entities(
-                    blocks, translated_item["algorithm_number"], "structs"
-                )
-                chunk["used_functions"] = find_used_entities(
-                    blocks, translated_item["algorithm_number"], "functions"
-                )
-                found = True
-                break
-        if not found:
-            logger.warning("Chunk for algorithm %s wasn't found!", entity_id)
-    return chunks
+    return _update_chunks(chunks, translated_algorithms, blocks)
 
 
 def update_examples(
     chunks: list[Chunk], translated_examples: list[TranslatedExample], blocks: list[Block]
 ) -> list[Chunk]:
     """Merge translated example content and usage metadata into chunks."""
-    for translated_item in translated_examples:
-        entity_id = extract_entity_id_from_number(translated_item["example_number"])
-        found = False
-        for chunk in chunks:
-            if chunk.get("chunk_type") == "example" and chunk.get("entity_id") == entity_id:
-                chunk["content"] = format_translated_content(
-                    translated_item["description"],
-                    translated_item["text"],
-                )
-                chunk["used_structs"] = find_used_entities(
-                    blocks, translated_item["example_number"], "structs"
-                )
-                chunk["used_functions"] = find_used_entities(
-                    blocks, translated_item["example_number"], "functions"
-                )
-                found = True
-                break
-        if not found:
-            logger.warning("Chunk for example %s wasn't found!", entity_id)
-    return chunks
+    return _update_chunks(chunks, translated_examples, blocks)
 
 
 def parse_args() -> argparse.Namespace:
