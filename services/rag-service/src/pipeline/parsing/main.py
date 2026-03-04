@@ -22,8 +22,11 @@ PAGE_OFFSET = 18
 BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
 
-load_dotenv()
-FIGURES_BUCKET_URL = os.getenv("FIGURES_BUCKET_URL")
+
+def init_parsing_environment() -> str | None:
+    """Load environment variables explicitly for parsing runtime configuration."""
+    load_dotenv()
+    return os.getenv("FIGURES_BUCKET_URL")
 
 
 class DocumentAssembler:
@@ -34,6 +37,7 @@ class DocumentAssembler:
         blocks_json: str | Path,
         tables_json: str | Path,
         formulas_json: str | Path,
+        figures_bucket_url: str | None = None,
     ) -> None:
         logger.info("[*] Assembler Initialization: Validating Sources...")
         self.paddle_dir = Path(paddle_dir)
@@ -54,6 +58,13 @@ class DocumentAssembler:
 
         self.meta_extractor = MetadataExtractor()
         self.final_chunks: list[dict[str, Any]] = []
+
+        self.figures_bucket_url: str | None = None
+
+        if figures_bucket_url:
+            self.figures_bucket_url = figures_bucket_url
+        else:
+            self.figures_bucket_url = init_parsing_environment()
 
     def _validate_files(self, file_paths: list[Path]) -> None:
         for path in file_paths:
@@ -157,11 +168,11 @@ class DocumentAssembler:
             chunk.update({"entity_id": eid, "caption": full_caption})
 
             if "image_index" in v_obj:
-                if not FIGURES_BUCKET_URL:
+                if not self.figures_bucket_url:
                     raise RuntimeError("FIGURES_BUCKET_URL is not specified")
 
                 chunk["image_links"] = [
-                    f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']}.png"
+                    f"{self.figures_bucket_url}figures/figure_{v_obj['image_index']}.png"
                 ]
 
             self.final_chunks.append(chunk)
