@@ -18,7 +18,7 @@ from .constants import (
     REFERENCE_TYPE_MAP,
     TRAVERSE_TYPE_TO_REFERENCE_FIELD,
 )
-from .models import Document, EntityType, MetadataFilter, MetadataFilters
+from .models import Document, EntityType, MetadataFilter, MetadataFilterOperator, MetadataFilters
 
 if TYPE_CHECKING:
     from .config import Settings
@@ -107,8 +107,14 @@ class AbstractVectorStoreRepository(ABC):
                 chunk_type_value = ENTITY_TYPE_TO_CHUNK_TYPE.get(field, field)
                 filters = MetadataFilters(
                     filters=[
-                        MetadataFilter(field="chunk_type", operator="eq", value=chunk_type_value),
-                        MetadataFilter(field="entity_id", operator="in", value=refs),
+                        MetadataFilter(
+                            field="chunk_type",
+                            operator=MetadataFilterOperator.EQ,
+                            value=chunk_type_value,
+                        ),
+                        MetadataFilter(
+                            field="entity_id", operator=MetadataFilterOperator.IN, value=refs
+                        ),
                     ],
                     condition="and",
                 )
@@ -179,9 +185,9 @@ class FakeDataRepository(AbstractVectorStoreRepository):
         """Check if document matches a single filter."""
         val = doc.get(field.field)
         match field.operator:
-            case "eq":
+            case MetadataFilterOperator.EQ:
                 return val == field.value
-            case "in":
+            case MetadataFilterOperator.IN:
                 return val in field.value if isinstance(field.value, list) else val == field.value
 
     def _matches_filters(self, doc: dict[str, Any], filters: MetadataFilters) -> bool:
@@ -277,8 +283,10 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             return None
 
         operator_map = {
-            "eq": lambda prop, val: prop.equal(val),
-            "in": lambda prop, val: prop.contains_any(val if isinstance(val, list) else [val]),
+            MetadataFilterOperator.EQ: lambda prop, val: prop.equal(val),
+            MetadataFilterOperator.IN: lambda prop, val: prop.contains_any(
+                val if isinstance(val, list) else [val]
+            ),
         }
 
         condition_map = {
@@ -412,7 +420,8 @@ class WeaviateRepository(AbstractVectorStoreRepository):
 
             for field_name in expansion_fields or []:
                 if obj.references and field_name in obj.references:
-                    reference_objects = obj.references.get(field_name).objects
+                    field = obj.references.get(field_name)
+                    reference_objects = field.objects if field else []
                     for ref_obj in reference_objects:
                         if ref_obj.uuid not in seen_uuids:
                             documents.append(self._to_document(ref_obj))

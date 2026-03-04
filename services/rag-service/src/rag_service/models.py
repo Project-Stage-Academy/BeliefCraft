@@ -44,13 +44,18 @@ class Document(BaseModel):
     metadata: dict[str, Any]
 
 
+class MetadataFilterOperator(StrEnum):
+    EQ = "eq"
+    IN = "in"
+
+
 class MetadataFilter(BaseModel):
     """
     Single metadata filter condition for repository queries.
     """
 
     field: str
-    operator: Literal["eq", "in"]
+    operator: MetadataFilterOperator
     value: str | int | float | bool | list[str] | list[int] | list[float] | list[bool] | None
 
 
