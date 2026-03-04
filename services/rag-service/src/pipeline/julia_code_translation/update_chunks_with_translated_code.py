@@ -76,10 +76,11 @@ def prepare_blocks(
     return cast(list[Block], blocks)
 
 
-def find_used_entities(
+def find_used_structs_and_functions(
     blocks: list[Block], entity_number: str, key: Literal["structs", "functions"]
 ) -> dict[str, list[str]]:
-    """Return entities (structs or functions) referenced by algorithms that cite the entity number.
+    """Return structs or functions referenced by algorithms or examples that cite the
+    entity number.
 
     The `key` argument should be either "structs" or "functions" (or any other mapping key present
     on algorithm blocks). Only inspects blocks labeled as "Algorithm".
@@ -134,8 +135,12 @@ def _update_chunks(
                 chunk["content"] = content
                 if declarations is not None:
                     chunk["declarations"] = declarations
-                chunk["used_structs"] = find_used_entities(blocks, entity_number, "structs")
-                chunk["used_functions"] = find_used_entities(blocks, entity_number, "functions")
+                chunk["used_structs"] = find_used_structs_and_functions(
+                    blocks, entity_number, "structs"
+                )
+                chunk["used_functions"] = find_used_structs_and_functions(
+                    blocks, entity_number, "functions"
+                )
                 found = True
                 break
 
