@@ -15,7 +15,7 @@ class TestToolRegistration:
     """Test automatic tool registration on import."""
 
     def test_environment_tools_registered_on_import(self) -> None:
-        """Test that 6 environment tools are auto-registered on import."""
+        """Test that 21 environment tools are auto-registered on import."""
         # Only environment tools are registered automatically
         # RAG tools are loaded via MCP during startup
 
@@ -23,20 +23,36 @@ class TestToolRegistration:
             1 for t in tool_registry.tools.values() if t.get_metadata().category == "environment"
         )
 
-        assert environment_tool_count == 6, (
-            f"Expected 6 environment tools, got {environment_tool_count}. "
+        assert environment_tool_count == 21, (
+            f"Expected 21 environment tools, got {environment_tool_count}. "
             "Environment tools should be auto-registered on import."
         )
 
     def test_environment_tools_registered(self) -> None:
-        """Test that all 6 environment tools are registered."""
+        """Test that all 21 environment tools are registered."""
+        # Sample of environment tools (21 total across 5 modules)
         environment_tools = [
-            "get_current_observations",
-            "get_order_backlog",
-            "get_shipments_in_transit",
-            "calculate_stockout_probability",
-            "calculate_lead_time_risk",
-            "get_inventory_history",
+            "list_suppliers",
+            "get_supplier",
+            "list_purchase_orders",
+            "get_purchase_order",
+            "list_po_lines",
+            "get_procurement_pipeline_summary",
+            "list_inventory_moves",
+            "get_inventory_move",
+            "get_inventory_move_audit_trace",
+            "get_inventory_adjustments_summary",
+            "list_warehouses",
+            "get_warehouse",
+            "list_locations",
+            "get_location",
+            "get_locations_tree",
+            "get_capacity_utilization_snapshot",
+            "list_sensor_devices",
+            "get_sensor_device",
+            "get_device_health_summary",
+            "get_device_anomalies",
+            "get_observed_inventory_snapshot",
         ]
 
         for tool_name in environment_tools:
@@ -66,9 +82,9 @@ class TestToolRegistration:
 
     def test_real_time_tools_skip_cache(self) -> None:
         """Test that real-time tools have skip_cache=True."""
+        # Real-time tools that skip cache
         real_time_tools = [
-            "get_current_observations",
-            "get_order_backlog",
+            "get_observed_inventory_snapshot",  # Real-time observations
         ]
 
         for tool_name in real_time_tools:
@@ -79,10 +95,12 @@ class TestToolRegistration:
     def test_cached_environment_tools_have_ttl(self) -> None:
         """Test that cached environment tools have appropriate TTL."""
         cached_tools_ttl = {
-            "get_shipments_in_transit": 300,  # 5 minutes (CACHE_TTL_SHIPMENTS)
-            "calculate_stockout_probability": 600,  # 10 minutes (CACHE_TTL_ANALYTICS)
-            "calculate_lead_time_risk": 600,  # 10 minutes (CACHE_TTL_ANALYTICS)
-            "get_inventory_history": 3600,  # 1 hour (CACHE_TTL_HISTORY)
+            "list_purchase_orders": 300,  # 5 minutes (CACHE_TTL_SHIPMENTS)
+            "list_po_lines": 300,  # 5 minutes (CACHE_TTL_SHIPMENTS)
+            "get_procurement_pipeline_summary": 600,  # 10 minutes (CACHE_TTL_ANALYTICS)
+            "get_capacity_utilization_snapshot": 600,  # 10 minutes (CACHE_TTL_ANALYTICS)
+            "list_inventory_moves": 3600,  # 1 hour (CACHE_TTL_HISTORY)
+            "get_inventory_move_audit_trace": 3600,  # 1 hour (CACHE_TTL_HISTORY)
             # RAG tools are no longer hardcoded - they come from MCP with 24h TTL
         }
 
@@ -100,32 +118,39 @@ class TestToolRegistration:
 
     def test_environment_tool_metadata_passthrough(self) -> None:
         """Test that CachedTool properly passes through metadata for environment tools."""
-        tool = tool_registry.get_tool("get_current_observations")
+        tool = tool_registry.get_tool("get_observed_inventory_snapshot")
         metadata = tool.get_metadata()
 
-        assert metadata.name == "get_current_observations"
+        assert metadata.name == "get_observed_inventory_snapshot"
         assert metadata.category == "environment"
-        assert "product_id" in metadata.parameters["properties"]
-        assert "warehouse" in metadata.description.lower()
+        assert "quality_status_in" in metadata.parameters["properties"]
+        assert "inventory" in metadata.description.lower()
 
     def test_get_openai_functions(self) -> None:
         """Test getting OpenAI function schemas for registered tools."""
         functions = tool_registry.get_openai_functions()
 
-        # Should contain 6 environment tools (RAG tools loaded separately via MCP)
-        assert len(functions) >= 6, f"Expected at least 6 environment tools, got {len(functions)}"
+        # Should contain 21 environment tools (RAG tools loaded separately via MCP)
+        assert len(functions) >= 21, f"Expected at least 21 environment tools, got {len(functions)}"
 
         # Verify environment functions are present
         # OpenAI format: {"type": "function", "function": {"name": ..., "description": ...,
         #                 "parameters": ...}}
         function_names = {f["function"]["name"] for f in functions}
+        # Sample of expected tools
         expected_env_tools = {
-            "get_current_observations",
-            "get_order_backlog",
-            "get_shipments_in_transit",
-            "calculate_stockout_probability",
-            "calculate_lead_time_risk",
-            "get_inventory_history",
+            "list_suppliers",
+            "get_supplier",
+            "list_purchase_orders",
+            "get_procurement_pipeline_summary",
+            "list_inventory_moves",
+            "get_inventory_adjustments_summary",
+            "list_warehouses",
+            "get_locations_tree",
+            "get_capacity_utilization_snapshot",
+            "list_sensor_devices",
+            "get_device_health_summary",
+            "get_observed_inventory_snapshot",
         }
 
         assert expected_env_tools.issubset(
@@ -140,7 +165,7 @@ class TestToolRegistration:
         RAG tools loaded via MCP during startup.
         """
         env_functions = tool_registry.get_openai_functions(categories=["environment"])
-        assert len(env_functions) == 6
+        assert len(env_functions) == 21
 
         # RAG tools not registered on import (loaded via MCP)
         rag_functions = tool_registry.get_openai_functions(categories=["rag"])
@@ -156,7 +181,7 @@ class TestToolRegistration:
         Note: RAG tools not available here (loaded via MCP during startup).
         """
         # Test with environment tool that's registered on import
-        tool = tool_registry.get_tool("get_current_observations")
+        tool = tool_registry.get_tool("get_observed_inventory_snapshot")
         assert tool is not None
-        assert tool.get_metadata().name == "get_current_observations"
+        assert tool.get_metadata().name == "get_observed_inventory_snapshot"
         assert tool.get_metadata().category == "environment"
