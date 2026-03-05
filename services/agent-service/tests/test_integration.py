@@ -25,12 +25,10 @@ from typing import Any
 
 import pytest
 from app.tools.environment_tools import (
-    CalculateLeadTimeRiskTool,
-    CalculateStockoutProbabilityTool,
-    GetCurrentObservationsTool,
-    GetInventoryHistoryTool,
-    GetOrderBacklogTool,
-    GetShipmentsInTransitTool,
+    GetObservedInventorySnapshotTool,
+    GetProcurementPipelineSummaryTool,
+    ListInventoryMovesTool,
+    ListPurchaseOrdersTool,
 )
 
 # NOTE: Using deprecated RAG tools for backward compatibility testing
@@ -68,21 +66,21 @@ def skip_if_api_unavailable(result: Any) -> None:
 
 
 class TestEnvironmentToolsIntegration:
-    """Integration tests for all 6 environment tools with real API."""
+    """Integration tests for environment tools with real API."""
 
     @pytest.mark.integration
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_get_current_observations_integration(self) -> None:
+    async def test_get_observed_inventory_snapshot_integration(self) -> None:
         """
-        Test get_current_observations with real Environment API.
+        Test get_observed_inventory_snapshot with real Environment API.
 
         Verifies:
         - Tool successfully calls Environment API
         - Returns valid observation data
         - Execution time is recorded
         """
-        tool = GetCurrentObservationsTool()
+        tool = GetObservedInventorySnapshotTool()
         result = await tool.run()
         skip_if_api_unavailable(result)
 
@@ -96,16 +94,16 @@ class TestEnvironmentToolsIntegration:
     @pytest.mark.integration
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_get_order_backlog_integration(self) -> None:
+    async def test_list_purchase_orders_integration(self) -> None:
         """
-        Test get_order_backlog with real Environment API.
+        Test list_purchase_orders with real Environment API.
 
         Verifies:
         - Tool successfully queries order data
-        - Returns backlog information
-        - Supports optional warehouse_id filter
+        - Returns purchase order information
+        - Supports optional filters
         """
-        tool = GetOrderBacklogTool()
+        tool = ListPurchaseOrdersTool()
         result = await tool.run()
         skip_if_api_unavailable(result)
 
@@ -117,16 +115,16 @@ class TestEnvironmentToolsIntegration:
     @pytest.mark.integration
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_get_shipments_in_transit_integration(self) -> None:
+    async def test_get_procurement_pipeline_summary_integration(self) -> None:
         """
-        Test get_shipments_in_transit with real Environment API.
+        Test get_procurement_pipeline_summary with real Environment API.
 
         Verifies:
-        - Tool queries shipment data
-        - Returns transit information
+        - Tool queries procurement pipeline data
+        - Returns inbound supply metrics
         - Handles empty results gracefully
         """
-        tool = GetShipmentsInTransitTool()
+        tool = GetProcurementPipelineSummaryTool()
         result = await tool.run()
         skip_if_api_unavailable(result)
 
@@ -138,22 +136,22 @@ class TestEnvironmentToolsIntegration:
     @pytest.mark.integration
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_calculate_stockout_probability_integration(self) -> None:
+    async def test_list_inventory_moves_integration(self) -> None:
         """
-        Test calculate_stockout_probability with real Environment API.
+        Test list_inventory_moves with real Environment API.
 
         Verifies:
-        - Tool performs risk calculation
-        - Returns probability value
-        - Handles numerical parameters correctly
+        - Tool queries inventory movement history
+        - Returns movement data
+        - Handles optional filters correctly
         """
-        tool = CalculateStockoutProbabilityTool()
+        tool = ListInventoryMovesTool()
 
         # Test with reasonable parameters
-        result = await tool.run(lead_time_days=7)
+        result = await tool.run()
         skip_if_api_unavailable(result)
 
-        # Tool might not succeed if product data is unavailable
+        # Tool might not succeed if data is unavailable
         # but we verify the execution was attempted
         assert result.execution_time_ms > 0
         if result.success:
@@ -163,16 +161,16 @@ class TestEnvironmentToolsIntegration:
     @pytest.mark.integration
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_calculate_lead_time_risk_integration(self) -> None:
+    async def test_get_procurement_pipeline_with_filters_integration(self) -> None:
         """
-        Test calculate_lead_time_risk with real Environment API.
+        Test get_procurement_pipeline_summary with filters.
 
         Verifies:
-        - Tool performs risk analysis
-        - Returns risk metrics
+        - Tool performs pipeline analysis
+        - Returns aggregated metrics
         - Handles optional parameters
         """
-        tool = CalculateLeadTimeRiskTool()
+        tool = GetProcurementPipelineSummaryTool()
         result = await tool.run()
         skip_if_api_unavailable(result)
 
@@ -184,17 +182,17 @@ class TestEnvironmentToolsIntegration:
     @pytest.mark.integration
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_get_inventory_history_integration(self) -> None:
+    async def test_list_inventory_moves_with_filters_integration(self) -> None:
         """
-        Test get_inventory_history with real Environment API.
+        Test list_inventory_moves with filters.
 
         Verifies:
-        - Tool queries historical data
+        - Tool queries historical movement data
         - Returns time-series information
-        - Handles date range parameters
+        - Handles filter parameters
         """
-        tool = GetInventoryHistoryTool()
-        result = await tool.run(days=30)
+        tool = ListInventoryMovesTool()
+        result = await tool.run()
         skip_if_api_unavailable(result)
 
         assert result.execution_time_ms > 0
@@ -354,13 +352,29 @@ class TestToolRegistryIntegration:
         - OpenAI schemas are properly formatted
         - Tools are wrapped with caching
         """
+        # Sample of environment tools (21 total across 5 modules)
         environment_tools = [
-            "get_current_observations",
-            "get_order_backlog",
-            "get_shipments_in_transit",
-            "calculate_stockout_probability",
-            "calculate_lead_time_risk",
-            "get_inventory_history",
+            "list_suppliers",
+            "get_supplier",
+            "list_purchase_orders",
+            "get_purchase_order",
+            "list_po_lines",
+            "get_procurement_pipeline_summary",
+            "list_inventory_moves",
+            "get_inventory_move",
+            "get_inventory_move_audit_trace",
+            "get_inventory_adjustments_summary",
+            "list_warehouses",
+            "get_warehouse",
+            "list_locations",
+            "get_location",
+            "get_locations_tree",
+            "get_capacity_utilization_snapshot",
+            "list_sensor_devices",
+            "get_sensor_device",
+            "get_device_health_summary",
+            "get_device_anomalies",
+            "get_observed_inventory_snapshot",
         ]
 
         # Verify environment tools registered
@@ -384,7 +398,7 @@ class TestToolRegistryIntegration:
         """
         functions = tool_registry.get_openai_functions()
 
-        assert len(functions) >= 6, f"Expected at least 6 environment tools, got {len(functions)}"
+        assert len(functions) >= 21, f"Expected at least 21 environment tools, got {len(functions)}"
 
         for func in functions:
             assert "type" in func or "function" in func
@@ -405,8 +419,8 @@ class TestToolRegistryIntegration:
         """
         stats = tool_registry.get_registry_stats()
 
-        assert stats["total_tools"] >= 6, f"Expected at least 6 tools, got {stats['total_tools']}"
-        assert stats["by_category"]["environment"] == 6
+        assert stats["total_tools"] >= 21, f"Expected at least 21 tools, got {stats['total_tools']}"
+        assert stats["by_category"]["environment"] == 21
         # RAG tools not registered on import (loaded via MCP)
         assert stats["by_category"].get("rag", 0) >= 0
 
@@ -431,7 +445,7 @@ class TestEndToEndIntegration:
         2. Use result to search knowledge base for relevant algorithms
         """
         # Step 1: Get inventory data
-        inventory_tool = GetCurrentObservationsTool()
+        inventory_tool = GetObservedInventorySnapshotTool()
         inventory_result = await inventory_tool.run()
         skip_if_api_unavailable(inventory_result)
 
@@ -460,7 +474,7 @@ class TestEndToEndIntegration:
         - Real-time tools (skip_cache=True) always fresh
         """
         # Real-time tool should never be cached
-        real_time_tool = GetCurrentObservationsTool()
+        real_time_tool = GetObservedInventorySnapshotTool()
         result1 = await real_time_tool.run()
         skip_if_api_unavailable(result1)
         result2 = await real_time_tool.run()
@@ -471,7 +485,7 @@ class TestEndToEndIntegration:
         assert result2.cached is False
 
         # Cached tool (after TTL) should cache results
-        cached_tool = GetShipmentsInTransitTool()
+        cached_tool = ListPurchaseOrdersTool()
         result3 = await cached_tool.run()
         skip_if_api_unavailable(result3)
         result4 = await cached_tool.run()
