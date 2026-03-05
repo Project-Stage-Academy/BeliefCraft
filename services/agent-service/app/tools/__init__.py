@@ -34,13 +34,30 @@ Example:
 
 from app.tools.base import BaseTool, ToolMetadata, ToolResult
 from app.tools.cached_tool import CachedTool
+
+# Import all environment tools (21 total across 5 modules)
 from app.tools.environment_tools import (
-    CalculateLeadTimeRiskTool,
-    CalculateStockoutProbabilityTool,
-    GetCurrentObservationsTool,
-    GetInventoryHistoryTool,
-    GetOrderBacklogTool,
-    GetShipmentsInTransitTool,
+    GetCapacityUtilizationSnapshotTool,
+    GetDeviceAnomaliesTool,
+    GetDeviceHealthSummaryTool,
+    GetInventoryAdjustmentsSummaryTool,
+    GetInventoryMoveAuditTraceTool,
+    GetInventoryMoveTool,
+    GetLocationsTreeTool,
+    GetLocationTool,
+    GetObservedInventorySnapshotTool,
+    GetProcurementPipelineSummaryTool,
+    GetPurchaseOrderTool,
+    GetSensorDeviceTool,
+    GetSupplierTool,
+    GetWarehouseTool,
+    ListInventoryMovesTool,
+    ListLocationsTool,
+    ListPOLinesTool,
+    ListPurchaseOrdersTool,
+    ListSensorDevicesTool,
+    ListSuppliersTool,
+    ListWarehousesTool,
 )
 from app.tools.mcp_loader import MCPToolLoader
 from app.tools.mcp_tool import MCPClientProtocol
@@ -72,35 +89,56 @@ def register_environment_tools() -> None:
     """
     Register environment tools with caching in the global registry.
 
-    This function registers all warehouse environment tools:
-    - Real-time sensor tools (skip_cache=True)
-    - Analytics and risk calculation tools (cached)
-    - Historical data tools (cached)
+    This function registers all 21 warehouse environment tools organized by module:
+    - PROCUREMENT MODULE (6): Suppliers, purchase orders, PO lines, pipeline summary
+    - INVENTORY AUDIT MODULE (4): Moves, audit trace, adjustments
+    - TOPOLOGY MODULE (6): Warehouses, locations, capacity utilization
+    - DEVICE MONITORING MODULE (4): Sensor devices, health summary, anomalies
+    - OBSERVED INVENTORY MODULE (1): Snapshot with quality filtering
 
     All tools are wrapped with CachedTool which:
     - Uses TTL from tool metadata (cache_ttl field)
-    - Respects skip_cache flag for real-time sensors
+    - Respects skip_cache flag for real-time data (devices, observations)
     - Falls back to global CACHE_TTL_SECONDS if not specified
 
     Cache Strategy:
-    - GetCurrentObservationsTool: skip_cache=True (real-time sensors)
-    - GetOrderBacklogTool: skip_cache=True (real-time orders)
-    - GetShipmentsInTransitTool: 5 minutes
-    - CalculateStockoutProbabilityTool: 10 minutes
-    - CalculateLeadTimeRiskTool: 10 minutes
-    - GetInventoryHistoryTool: 1 hour
+    - Real-time data (devices, observations): skip_cache=True
+    - Shipments/POs: 5 minutes (CACHE_TTL_SHIPMENTS)
+    - Analytics/aggregations: 10 minutes (CACHE_TTL_ANALYTICS)
+    - Historical data: 1 hour (CACHE_TTL_HISTORY)
     """
     logger.info("registering_environment_tools_started")
 
-    # Real-time sensors - skip_cache=True in metadata
-    tool_registry.register(CachedTool(GetCurrentObservationsTool()))
-    tool_registry.register(CachedTool(GetOrderBacklogTool()))
+    # PROCUREMENT MODULE (6 tools)
+    tool_registry.register(CachedTool(ListSuppliersTool()))
+    tool_registry.register(CachedTool(GetSupplierTool()))
+    tool_registry.register(CachedTool(ListPurchaseOrdersTool()))
+    tool_registry.register(CachedTool(GetPurchaseOrderTool()))
+    tool_registry.register(CachedTool(ListPOLinesTool()))
+    tool_registry.register(CachedTool(GetProcurementPipelineSummaryTool()))
 
-    # Cached with appropriate TTL from metadata
-    tool_registry.register(CachedTool(GetShipmentsInTransitTool()))  # 5 min
-    tool_registry.register(CachedTool(CalculateStockoutProbabilityTool()))  # 10 min
-    tool_registry.register(CachedTool(CalculateLeadTimeRiskTool()))  # 10 min
-    tool_registry.register(CachedTool(GetInventoryHistoryTool()))  # 1 hour
+    # INVENTORY AUDIT MODULE (4 tools)
+    tool_registry.register(CachedTool(ListInventoryMovesTool()))
+    tool_registry.register(CachedTool(GetInventoryMoveTool()))
+    tool_registry.register(CachedTool(GetInventoryMoveAuditTraceTool()))
+    tool_registry.register(CachedTool(GetInventoryAdjustmentsSummaryTool()))
+
+    # TOPOLOGY MODULE (6 tools)
+    tool_registry.register(CachedTool(ListWarehousesTool()))
+    tool_registry.register(CachedTool(GetWarehouseTool()))
+    tool_registry.register(CachedTool(ListLocationsTool()))
+    tool_registry.register(CachedTool(GetLocationTool()))
+    tool_registry.register(CachedTool(GetLocationsTreeTool()))
+    tool_registry.register(CachedTool(GetCapacityUtilizationSnapshotTool()))
+
+    # DEVICE MONITORING MODULE (4 tools) - Real-time, skip_cache=True
+    tool_registry.register(CachedTool(ListSensorDevicesTool()))
+    tool_registry.register(CachedTool(GetSensorDeviceTool()))
+    tool_registry.register(CachedTool(GetDeviceHealthSummaryTool()))
+    tool_registry.register(CachedTool(GetDeviceAnomaliesTool()))
+
+    # OBSERVED INVENTORY MODULE (1 tool) - Real-time, skip_cache=True
+    tool_registry.register(CachedTool(GetObservedInventorySnapshotTool()))
 
     env_count = sum(
         1 for t in tool_registry.tools.values() if t.get_metadata().category == "environment"
