@@ -116,7 +116,7 @@ If there was error with documentation MCP server, try calling it again. NEVER as
 - **Instruction Neglect**: Failing to follow directives in `AGENTS.md`, `GEMINI.md`, or `pyproject.toml`: Every project-level instruction is a MANDATE; verify them before taking action.
 - **Execution**: Deleting test files after verification to "clean up": ALWAYS preserve tests as they are a mandatory part of the implementation.
 - **Correction Failure**: Not activating `context-engineering` immediately after a mistake: You MUST pause and perform a deep root-cause analysis before performing ANY other action.
-- **Skill Activation Neglect**: Failing to activate the required skill (e.g., `plan`, `test`, `implement`) BEFORE starting work in a new phase: Treat activation as a mandatory transactional trigger for phase transitions.
+- **Test Discrepancy Neglect**: Updating test assertions to match incorrect code output instead of fixing the underlying logic: ALWAYS perform a root-cause analysis of the discrepancy and fix the code to meet the test's requirements.
 - **Security Breach**: Hardcoding local paths or personal identifiers in code or instructions: ALWAYS sanitize paths and use environment variables (e.g., `${HOME}`) or placeholders.
 - **Wandering**: Reading non-relevant files after receiving a direct hint: Focus exclusively on the failure point and the corresponding mandates.
 - **TDD Step 2**: Labeling sections with `# Arrange/Act/Assert`: Use only blank lines to separate sections for better readability.
