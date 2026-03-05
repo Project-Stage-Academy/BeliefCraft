@@ -104,3 +104,23 @@ uv run services/rag-service/src/pipeline/julia_code_translation/build_prompts.py
 ```
 
 This writes the same prompt files to `prompts/` without making any model calls.
+
+## Update Chunks With Translations
+`services/rag-service/src/pipeline/julia_code_translation/update_chunks_with_translated_code.py` merges translated algorithms/examples into chunk JSON and enriches chunks with usage metadata (structs/functions referenced by each entity).
+
+### How to Run
+From the repo root:
+
+```bash
+uv run services/rag-service/src/pipeline/julia_code_translation/update_chunks_with_translated_code.py \
+  --pdf-path dm.pdf \
+  --paddle-ocr-dir ocr_jsons \
+  --chunks ULTIMATE_BOOK_DATA.json \
+  --translated-algorithms translated_algorithms.json \
+  --translated-examples translated_examples.json \
+  --output ULTIMATE_BOOK_DATA.json
+```
+
+### Notes
+- `--paddle-ocr-dir` is the OCR JSON directory name passed into the block processor.
+- The script overwrites the output path you provide; use a new file if you want to keep the original chunks JSON.
