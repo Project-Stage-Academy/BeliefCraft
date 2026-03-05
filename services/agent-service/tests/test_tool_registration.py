@@ -55,6 +55,26 @@ class TestToolRegistration:
             "get_observed_inventory_snapshot",
         ]
 
+        # Validate uniqueness: no duplicate tool names in the list
+        assert len(environment_tools) == len(set(environment_tools)), (
+            f"Tool list contains duplicates: "
+            f"{[t for t in environment_tools if environment_tools.count(t) > 1]}"
+        )
+
+        # Bidirectional verification: registry has exactly these 21 tools
+        registered_env_tools = {
+            name
+            for name, tool in tool_registry.tools.items()
+            if tool.get_metadata().category == "environment"
+        }
+        expected_tools = set(environment_tools)
+
+        assert registered_env_tools == expected_tools, (
+            f"Registry mismatch:\n"
+            f"  Missing from registry: {expected_tools - registered_env_tools}\n"
+            f"  Unexpected in registry: {registered_env_tools - expected_tools}"
+        )
+
         for tool_name in environment_tools:
             tool = tool_registry.get_tool(tool_name)
             assert tool is not None
