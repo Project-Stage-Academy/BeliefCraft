@@ -10,6 +10,14 @@ from .procurement_tools import (
     list_suppliers,
 )
 from .shipment_tools import get_shipments_delay_summary
+from .topology_tools import (
+    get_capacity_utilization_snapshot,
+    get_location,
+    get_locations_tree,
+    get_warehouse,
+    list_locations,
+    list_warehouses,
+)
 
 __all__ = [
     "get_current_inventory",
@@ -22,4 +30,10 @@ __all__ = [
     "get_purchase_order",
     "list_po_lines",
     "get_procurement_pipeline_summary",
+    "list_warehouses",
+    "get_warehouse",
+    "list_locations",
+    "get_location",
+    "get_locations_tree",
+    "get_capacity_utilization_snapshot",
 ]
