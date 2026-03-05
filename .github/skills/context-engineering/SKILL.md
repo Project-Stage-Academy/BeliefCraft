@@ -9,7 +9,7 @@ This skill is the brain of the self-correction loop. It ensures that every lesso
 
 ## Workflow
 
-1.  **Analyze Mistake**: Identify the root cause (e.g., outdated instruction, ambiguous naming, missing edge case).
+1.  **Mandatory Deep Analysis**: Perform a rigorous, multi-perspective analysis of the mistake. Identify the root cause—was it a failure to follow an instruction, a misunderstanding of the environment, a lack of specific knowledge, or a security oversight? **This analysis is an absolute prerequisite; you MUST explicitly state it to the user before any file modifications.**
 2.  **Categorization**: Determine where the fix belongs:
     - **Global `AGENTS.md`**: Architectural or universal rules.
     - **Local `AGENTS.md`**: Service-specific domain rules (e.g., `agent-service`).
@@ -22,6 +22,8 @@ This skill is the brain of the self-correction loop. It ensures that every lesso
 
 ## Mandates
 
+- **Deep Analysis Prerequisite**: You MUST explicitly state the root cause of the mistake and show your work (analysis) before proposing a fix.
+- **Security Check**: Verify that any fix or instruction update is sanitized and free of local paths or personal identifiers.
 - **Standardized Format**: Use clear, concise language in the "Common Mistakes" section.
 - **Permanent Correction**: Every time a user corrects you, this skill MUST be activated to update instructions.
 - **Surgical Precision**: Do not rewrite the entire file; use targeted updates for the specific mistake.
