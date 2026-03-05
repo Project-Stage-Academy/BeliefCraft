@@ -114,6 +114,10 @@ def client(db_session: Session) -> TestClient:
             mock_get_session,
         ),
         patch(
+            "environment_api.smart_query_builder.tools.inventory_history_tools.get_session",
+            mock_get_session,
+        ),
+        patch(
             "environment_api.smart_query_builder.tools.order_tools.get_session", mock_get_session
         ),
         patch(

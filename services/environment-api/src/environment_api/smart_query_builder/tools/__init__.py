@@ -1,3 +1,9 @@
+from .inventory_history_tools import (
+    get_inventory_adjustments_summary,
+    get_inventory_move,
+    get_inventory_move_audit_trace,
+    list_inventory_moves,
+)
 from .inventory_tools import get_current_inventory
 from .observation_tools import compare_observations_to_balances
 from .order_tools import get_at_risk_orders
@@ -21,6 +27,10 @@ from .topology_tools import (
 
 __all__ = [
     "get_current_inventory",
+    "list_inventory_moves",
+    "get_inventory_move",
+    "get_inventory_move_audit_trace",
+    "get_inventory_adjustments_summary",
     "get_shipments_delay_summary",
     "compare_observations_to_balances",
     "get_at_risk_orders",
