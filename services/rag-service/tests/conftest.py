@@ -1,13 +1,12 @@
-import sys
-from pathlib import Path
-
-# Add src to sys.path to allow importing rag_service
-src_path = str(Path(__file__).resolve().parents[1] / "src")
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
 import pytest  # noqa: E402
-from rag_service.config import Settings  # noqa: E402
+from common.logging import configure_logging  # noqa: E402
+from config import Settings  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def configure_test_logging():
+    """Setup logging once for the entire test session."""
+    configure_logging("rag-service-test", log_level="ERROR")
 
 
 @pytest.fixture

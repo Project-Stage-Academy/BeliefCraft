@@ -36,6 +36,8 @@ dev = [
     "pydantic-settings>=2.13.0",
     "sqlalchemy>=2.0.46",
     "respx>=0.22.0",
+    "beautifulsoup4>=4.14.3",
+    "opencv-python>=4.13.0.92",
 ]
 
 [tool.uv.workspace]
