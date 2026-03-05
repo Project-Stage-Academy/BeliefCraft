@@ -45,15 +45,14 @@ import json
 import textwrap
 from pathlib import Path
 
-from pipeline.julia_code_translation.update_chunks_with_translated_code import (
-    extract_entity_id_from_number,
-)
-
-from .code_analyzer import (
+from pipeline.julia_code_translation.code_analyzer import (
     KIND_CLASS_INIT,
     KIND_FUNCTION,
     KIND_METHOD,
     analyze_fragments,
+)
+from pipeline.julia_code_translation.update_chunks_with_translated_code import (
+    extract_entity_id_from_number,
 )
 
 # ------------------------------------------------------------------ #
