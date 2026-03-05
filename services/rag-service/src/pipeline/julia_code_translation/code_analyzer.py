@@ -82,14 +82,16 @@ class CodeAnalyzer(ast.NodeVisitor):
         # match methods with the same name.
         self._local_definitions: defaultdict[str, set[str]] = defaultdict(set)
 
-        # fragment index tracking: which fragment each definition came from
-        # {name: fragment_idx}  — set by analyze_fragments before each visit()
-        self.fragment_idx: dict[str, int] = {}
-        self.current_fragment_idx: int = 0
+        # fragment index tracking: which fragment/algorithm each definition came from
+        # {name: fragment_idx_or_algorithm_number}  — set by analyze_fragments before each visit()
+        self.fragment_idx: dict[str, object] = {}
+        self.current_fragment_idx: object = 0
 
         # For classes that appear in multiple fragments (body split across files),
-        # track the fragment that contains __init__ separately
-        self._class_init_fragment: dict[str, int] = {}  # class_name -> fragment_idx of __init__
+        # track the algorithm_number that contains __init__ separately
+        self._class_init_fragment: dict[str, object] = (
+            {}
+        )  # class_name -> fragment_idx or algorithm_number of __init__
 
     # -----------------------------
     # Definitions
@@ -139,7 +141,7 @@ class CodeAnalyzer(ast.NodeVisitor):
 
         self.fragment_idx[name] = self.current_fragment_idx
 
-        # Track which fragment contains __init__ for this class
+        # Track which fragment/algorithm contains __init__ for this class
         if self.current_class and node.name == "__init__":
             self._class_init_fragment[self.current_class] = self.current_fragment_idx
 
@@ -446,15 +448,32 @@ def build_graph(analyzer: "CodeAnalyzer") -> dict[str, dict[str, str]]:
 # --------------------------------
 
 
-def analyze_fragments(fragments: list[str]) -> tuple["CodeAnalyzer", dict[str, dict[str, str]]]:
+def analyze_fragments(fragments: list[object]) -> tuple["CodeAnalyzer", dict[str, dict[str, str]]]:
+    """Analyze a list of fragments or algorithm objects and return (analyzer, graph).
+
+    Each item in `fragments` may be either:
+      - a plain string with Python code (legacy behavior), or
+      - a mapping-like object (dict) representing an algorithm which must
+        contain at least the key "code". If present, the key
+        "algorithm_number" will be saved as the definition's origin
+        (instead of the integer fragment index).
+    """
     analyzer = CodeAnalyzer()
 
-    for idx, code in enumerate(fragments):
+    for idx, item in enumerate(fragments):
         try:
+            if isinstance(item, dict):
+                code = item.get("code", "")
+                # prefer explicit algorithm_number if provided, otherwise fall back to idx
+                analyzer.current_fragment_idx = item.get("algorithm_number", idx)
+            else:
+                code = str(item)
+                analyzer.current_fragment_idx = idx
+
             tree = ast.parse(code)
-            analyzer.current_fragment_idx = idx
             analyzer.visit(tree)
         except SyntaxError:
+            # Skip fragments that fail to parse
             pass
 
     graph = build_graph(analyzer)
@@ -470,11 +489,9 @@ if __name__ == "__main__":
     with Path("./translated_algorithms.json").open() as f:
         data = json.load(f)
 
-    fragments = []
-    for algo in data:
-        fragments.append(algo["code"])
-
-    analyzer, graph = analyze_fragments(fragments)
+    # `data` is expected to be a list of algorithm objects; pass them
+    # directly so analyze_fragments can extract both code and algorithm_number.
+    analyzer, graph = analyze_fragments(data)
 
     print("Definitions:")
     for func_name in analyzer.functions:

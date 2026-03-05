@@ -44,7 +44,10 @@ import ast
 import json
 import textwrap
 from pathlib import Path
-from typing import cast
+
+from pipeline.julia_code_translation.update_chunks_with_translated_code import (
+    extract_entity_id_from_number,
+)
 
 from .code_analyzer import (
     KIND_CLASS_INIT,
@@ -86,7 +89,7 @@ def _class_init_source(class_node: ast.ClassDef) -> str:
     If __init__ is absent, return just the class header with '...'.
     Docstring of the class is preserved if present.
     """
-    bases = [ast.unparse(cast(ast.AST, b)) for b in class_node.bases]
+    bases = [ast.unparse(b) for b in class_node.bases]
     header = (
         f"class {class_node.name}({', '.join(bases)}):" if bases else f"class {class_node.name}:"
     )
@@ -136,14 +139,14 @@ def _function_source(func_node: ast.FunctionDef) -> str:
 # ------------------------------------------------------------------ #
 
 
-def build_schema(fragments: list[str]) -> dict[str, list[dict[str, object]]]:
+def build_schema(fragments: list[object]) -> dict[str, list[dict[str, object]]]:
     """
-    Аналізує список фрагментів коду і повертає повну схему визначень
+    Аналізує список фрагментів коду або алгоритмів і повертає повну схему визначень
     з посиланнями між ними.
 
     Args:
-        fragments: список рядків Python-коду (кожен може містити
-                   класи, методи та/або функції).
+        fragments: список рядків Python-коду або об'єктів-алгоритмів (кожен може містити
+                   ключі "code" і опційно "algorithm_number").
 
     Returns:
         Словник {"classes": [...], "methods": [...], "functions": [...]}.
@@ -187,13 +190,13 @@ def build_schema(fragments: list[str]) -> dict[str, list[dict[str, object]]]:
 
     classes: list[dict[str, object]] = []
     for name, class_node in analyzer.classes.items():
-        # Prefer the fragment that contains __init__ (the "primary" definition).
-        # Fall back to the last fragment where the class header was seen.
-        alg_id = analyzer._class_init_fragment.get(name, analyzer.fragment_idx.get(name))
+        # Prefer the algorithm_number that contains __init__ (the "primary" definition).
+        # Fall back to the fragment/algorithm origin where the class header was seen.
+        alg_num = analyzer._class_init_fragment.get(name, analyzer.fragment_idx.get(name))
         classes.append(
             {
                 "id": class_id(name),
-                "algorithm_id": alg_id,
+                "algorithm_number": extract_entity_id_from_number(str(alg_num)),
                 "name": name,
                 "code": _class_init_source(class_node),
             }
@@ -223,7 +226,9 @@ def build_schema(fragments: list[str]) -> dict[str, list[dict[str, object]]]:
         methods.append(
             {
                 "id": method_id(qualified),
-                "algorithm_id": analyzer.fragment_idx.get(qualified),
+                "algorithm_number": extract_entity_id_from_number(
+                    str(analyzer.fragment_idx.get(qualified))
+                ),
                 "name": method_name,
                 "qualified_name": qualified,
                 "code": _method_source(method_node),
@@ -244,7 +249,9 @@ def build_schema(fragments: list[str]) -> dict[str, list[dict[str, object]]]:
         functions.append(
             {
                 "id": function_id(name),
-                "algorithm_id": analyzer.fragment_idx.get(name),
+                "algorithm_number": extract_entity_id_from_number(
+                    str(analyzer.fragment_idx.get(name))
+                ),
                 "name": name,
                 "code": _function_source(func_node),
                 "initialized_classes": inits,
@@ -273,9 +280,8 @@ if __name__ == "__main__":
     with Path(input_path).open() as f:
         data = json.load(f)
 
-    fragments = [algo["code"] for algo in data]
-
-    schema = build_schema(fragments)
+    # data is expected to be a list of algorithm objects; pass them directly
+    schema = build_schema(data)
 
     with Path(output_path).open("w") as f:
         json.dump(schema, f, indent=2, ensure_ascii=False)
