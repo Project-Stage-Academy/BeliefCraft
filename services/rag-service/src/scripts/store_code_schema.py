@@ -424,6 +424,14 @@ def store_example_refs(
 
     logger.info("Adding example → code entity references …")
     _ensure_example_code_ref_properties(client)
+
+    # If the unified collection does not exist, skip adding example references.
+    if not client.collections.exists(COLLECTION_NAME):
+        logger.warning(
+            "Collection %s does not exist; skipping example → code entity references.",
+            COLLECTION_NAME,
+        )
+        return
     example_refs = _build_example_code_references(examples, schema)
     unified_col = client.collections.use(COLLECTION_NAME)
     _add_references_safely(unified_col, example_refs, f"{COLLECTION_NAME} (examples)")
