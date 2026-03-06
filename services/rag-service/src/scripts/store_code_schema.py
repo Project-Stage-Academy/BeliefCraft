@@ -377,11 +377,22 @@ def _load_json(path: Path, label: str) -> list[dict[str, Any]] | None:
         return None
 
 
-def _store_schema(
+def store_schema(
     client: weaviate.WeaviateClient,
     schema: dict[str, Any],
     recreate: bool,
 ) -> None:
+    """Store all code schema entities (classes, methods, functions) in Weaviate.
+
+    Sets up the three code collections, inserts all objects, and adds
+    cross-references between them and their originating algorithm chunks.
+
+    Args:
+        client:   Active Weaviate client.
+        schema:   Result of build_code_schema() with keys "classes", "methods", "functions".
+        recreate: If True, drops and recreates the collections before inserting.
+    """
+
     classes, methods, functions = schema["classes"], schema["methods"], schema["functions"]
     cls_col, mth_col, fn_col = setup_collections(client, recreate=recreate)
 
@@ -395,11 +406,22 @@ def _store_schema(
     _add_references_safely(fn_col, _insert_functions(fn_col, functions), CODE_FUNCTION_COLLECTION)
 
 
-def _store_example_refs(
+def store_example_refs(
     client: weaviate.WeaviateClient,
     examples: list[dict[str, Any]],
     schema: dict[str, Any],
 ) -> None:
+    """Add references from example chunks in unified_collection to code entities.
+
+    For each example, extracts code references from its text and creates
+    cross-reference links to the relevant CodeClass, CodeMethod, and CodeFunction objects.
+
+    Args:
+        client:   Active Weaviate client.
+        examples: List of example dicts, each with "example_number" and "text" fields.
+        schema:   Result of build_code_schema(), used to resolve named references.
+    """
+
     logger.info("Adding example → code entity references …")
     _ensure_example_code_ref_properties(client)
     example_refs = _build_example_code_references(examples, schema)
@@ -431,9 +453,9 @@ def main() -> None:
     )
 
     with weaviate.connect_to_local() as client:
-        _store_schema(client, schema, recreate=args.recreate)
+        store_schema(client, schema, recreate=args.recreate)
         if examples:
-            _store_example_refs(client, examples, schema)
+            store_example_refs(client, examples, schema)
 
     logger.info(
         "Done. %d classes, %d methods, %d functions.", len(classes), len(methods), len(functions)
