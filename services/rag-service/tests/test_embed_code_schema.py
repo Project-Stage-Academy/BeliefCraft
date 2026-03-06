@@ -1,11 +1,11 @@
 """
-Unit tests for services/rag-service/src/scripts/embed_code_schema.py
+Unit tests for services/rag-service/src/scripts/store_code_schema.py
 """
 
 import json
 from unittest.mock import MagicMock, patch
 
-from scripts.embed_code_schema import (
+from scripts.store_code_schema import (
     main,
     setup_collections,
 )
@@ -122,7 +122,7 @@ def test_main_runs_without_error(mock_build_schema, mock_connect, tmp_path):
     with patch(
         "sys.argv",
         [
-            "embed_code_schema.py",
+            "store_code_schema.py",
             "--file_path",
             str(alg_file),
             "--examples_file_path",
@@ -137,7 +137,7 @@ def test_main_runs_without_error(mock_build_schema, mock_connect, tmp_path):
 def test_main_exits_gracefully_on_bad_algorithms_file(
     mock_build_schema, mock_connect, tmp_path, capsys
 ):
-    with patch("sys.argv", ["embed_code_schema.py", "--file_path", str(tmp_path / "missing.json")]):
+    with patch("sys.argv", ["store_code_schema.py", "--file_path", str(tmp_path / "missing.json")]):
         main()
 
     captured = capsys.readouterr()
@@ -157,7 +157,7 @@ def test_main_exits_gracefully_on_bad_examples_file(
     with patch(
         "sys.argv",
         [
-            "embed_code_schema.py",
+            "store_code_schema.py",
             "--file_path",
             str(alg_file),
             "--examples_file_path",
@@ -192,7 +192,7 @@ def test_main_skips_example_refs_when_examples_list_is_empty(
     with patch(
         "sys.argv",
         [
-            "embed_code_schema.py",
+            "store_code_schema.py",
             "--file_path",
             str(alg_file),
             "--examples_file_path",

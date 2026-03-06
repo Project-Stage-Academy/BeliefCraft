@@ -1,7 +1,7 @@
 """
-embed_code_schema.py
+store_code_schema.py
 --------------------
-Embeds code schema (classes, methods, functions) produced by build_schema into Weaviate.
+Stores code schema (classes, methods, functions) produced by build_schema into Weaviate.
 
 Three new collections are created alongside the existing unified_collection:
   - CodeClass    — Python class definitions
@@ -28,7 +28,7 @@ CodeFunction
 
 Usage
 -----
-    python embed_code_schema.py <translated_algorithms.json> [--recreate]
+    python store_code_schema.py <translated_algorithms.json> [--recreate]
 """
 
 import argparse
@@ -357,7 +357,7 @@ def _build_example_code_references(
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Build and embed code schema (classes, methods, functions) from translated "
+            "Build and store code schema (classes, methods, functions) from translated "
             "algorithms JSON into Weaviate. Creates three collections: "
             f"{CODE_CLASS_COLLECTION}, {CODE_METHOD_COLLECTION}, {CODE_FUNCTION_COLLECTION}. "
             "Each entity stores its code, metadata, and cross-references to related code entities "
@@ -393,7 +393,7 @@ def _load_json(path: Path, label: str) -> list[dict[str, Any]] | None:
         return None
 
 
-def _embed_schema(
+def _store_schema(
     client: weaviate.WeaviateClient,
     schema: dict[str, Any],
     recreate: bool,
@@ -411,7 +411,7 @@ def _embed_schema(
     _add_references_safely(fn_col, _insert_functions(fn_col, functions), CODE_FUNCTION_COLLECTION)
 
 
-def _embed_example_refs(
+def _store_example_refs(
     client: weaviate.WeaviateClient,
     examples: list[dict[str, Any]],
     schema: dict[str, Any],
@@ -445,9 +445,9 @@ def main() -> None:
     print(f"  Classes: {len(classes)}  Methods: {len(methods)}  Functions: {len(functions)}")
 
     with weaviate.connect_to_local() as client:
-        _embed_schema(client, schema, recreate=args.recreate)
+        _store_schema(client, schema, recreate=args.recreate)
         if examples:
-            _embed_example_refs(client, examples, schema)
+            _store_example_refs(client, examples, schema)
 
     print(f"Done. {len(classes)} classes, {len(methods)} methods, {len(functions)} functions.")
 
