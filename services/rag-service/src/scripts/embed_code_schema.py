@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 import weaviate
+from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
 from weaviate.classes.data import DataReference
 from weaviate.collections import Collection
@@ -48,7 +49,6 @@ from weaviate.util import generate_uuid5
 # Ensure the pipeline package is importable when running from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pipeline.code_processing.python_code_processing.build_schema import build_schema
 from pipeline.code_processing.python_code_processing.extract_example_refs import (
     extract_example_refs,
 )
@@ -431,9 +431,9 @@ def _ensure_example_code_ref_properties(client: weaviate.WeaviateClient) -> None
     """Add reference properties to unified_collection so example chunks can point to code entities.
 
     Properties added (idempotent):
-      - example_classes   -> CodeClass
-      - example_methods   -> CodeMethod
-      - example_functions -> CodeFunction
+      - used_classes   -> CodeClass
+      - used_methods   -> CodeMethod
+      - used_functions -> CodeFunction
     """
     if not client.collections.exists(COLLECTION_NAME):
         print(f"Warning: {COLLECTION_NAME} not found; skipping example-code ref setup.")
@@ -478,7 +478,7 @@ def _build_example_code_references(
             references.append(
                 DataReference(
                     from_uuid=from_uuid,
-                    from_property="example_classes",
+                    from_property="used_classes",
                     to_uuid=uuid_for_schema_id(schema_id),
                 )
             )
@@ -487,7 +487,7 @@ def _build_example_code_references(
             references.append(
                 DataReference(
                     from_uuid=from_uuid,
-                    from_property="example_methods",
+                    from_property="used_methods",
                     to_uuid=uuid_for_schema_id(schema_id),
                 )
             )
@@ -496,7 +496,7 @@ def _build_example_code_references(
             references.append(
                 DataReference(
                     from_uuid=from_uuid,
-                    from_property="example_functions",
+                    from_property="used_functions",
                     to_uuid=uuid_for_schema_id(schema_id),
                 )
             )
@@ -558,11 +558,11 @@ def main() -> None:
             return
 
     print("Building code schema from translated algorithms …")
-    schema = build_schema(algorithms)
+    code_schema = build_code_schema(algorithms)
 
-    classes = schema["classes"]
-    methods = schema["methods"]
-    functions = schema["functions"]
+    classes = code_schema["classes"]
+    methods = code_schema["methods"]
+    functions = code_schema["functions"]
 
     print(f"  Classes:   {len(classes)}")
     print(f"  Methods:   {len(methods)}")
@@ -589,7 +589,7 @@ def main() -> None:
         if examples:
             print("Adding example → code entity references …")
             _ensure_example_code_ref_properties(client)
-            example_refs = _build_example_code_references(examples, schema)
+            example_refs = _build_example_code_references(examples, code_schema)
             unified_col = client.collections.use(COLLECTION_NAME)
             _add_references_safely(unified_col, example_refs, f"{COLLECTION_NAME} (examples)")
             print(f"  Processed {len(examples)} examples.")

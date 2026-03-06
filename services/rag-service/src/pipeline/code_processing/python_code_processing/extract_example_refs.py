@@ -19,6 +19,7 @@ import ast
 import re
 from collections import defaultdict
 
+from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
 from pipeline.code_processing.python_code_processing.code_analyzer import (
     EXTERNAL_MODULES,
 )
@@ -311,8 +312,6 @@ if __name__ == "__main__":
     import sys
     from pathlib import Path
 
-    from pipeline.code_processing.python_code_processing.build_schema import build_schema
-
     algorithms_path = sys.argv[1] if len(sys.argv) > 1 else "./translated_algorithms.json"
     examples_path = sys.argv[2] if len(sys.argv) > 2 else "./translated_examples.json"
 
@@ -323,11 +322,11 @@ if __name__ == "__main__":
         examples = json.load(f)
 
     # Будуємо схему з алгоритмів — кожен має "code" і "algorithm_number"
-    schema = build_schema(algorithms)
+    code_schema = build_code_schema(algorithms)
     print(
-        f"Schema: {len(schema['classes'])} classes, "
-        f"{len(schema['methods'])} methods, "
-        f"{len(schema['functions'])} functions\n"
+        f"Schema: {len(code_schema['classes'])} classes, "
+        f"{len(code_schema['methods'])} methods, "
+        f"{len(code_schema['functions'])} functions\n"
     )
 
     # Обробляємо кожен приклад
@@ -336,7 +335,7 @@ if __name__ == "__main__":
         text = example.get("text", "")
 
         blocks = extract_code_blocks(text)
-        refs = extract_example_refs(text, schema)
+        refs = extract_example_refs(text, code_schema)
 
         # Виводимо тільки якщо є хоч якісь посилання
         if any(refs[k] for k in refs):

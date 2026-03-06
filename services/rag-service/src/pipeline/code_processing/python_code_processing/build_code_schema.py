@@ -1,5 +1,5 @@
 """
-build_schema.py
+build_code_schema.py
 ---------------
 Будує повну схему коду на основі CodeAnalyzer.
 
@@ -138,7 +138,7 @@ def _function_source(func_node: ast.FunctionDef) -> str:
 # ------------------------------------------------------------------ #
 
 
-def build_schema(fragments: list[object]) -> dict[str, list[dict[str, object]]]:
+def build_code_schema(fragments: list[object]) -> dict[str, list[dict[str, object]]]:
     """
     Аналізує список фрагментів коду або алгоритмів і повертає повну схему визначень
     з посиланнями між ними.
@@ -280,12 +280,12 @@ if __name__ == "__main__":
         data = json.load(f)
 
     # data is expected to be a list of algorithm objects; pass them directly
-    schema = build_schema(data)
+    code_schema = build_code_schema(data)
 
     with Path(output_path).open("w") as f:
-        json.dump(schema, f, indent=2, ensure_ascii=False)
+        json.dump(code_schema, f, indent=2, ensure_ascii=False)
 
-    print(f"Classes:   {len(schema['classes'])}")
-    print(f"Methods:   {len(schema['methods'])}")
-    print(f"Functions: {len(schema['functions'])}")
+    print(f"Classes:   {len(code_schema['classes'])}")
+    print(f"Methods:   {len(code_schema['methods'])}")
+    print(f"Functions: {len(code_schema['functions'])}")
     print(f"Saved to:  {output_path}")
