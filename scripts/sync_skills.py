@@ -5,7 +5,7 @@ from pathlib import Path
 SOURCE_DIR = Path(".agents/skills")
 
 # Destination directories
-DEST_DIRS = [Path(".claude/skills"), Path(".github/skills")]
+DEST_DIRS = [Path(".claude/skills"), Path(".github/skills"), Path(".agent/skills")]
 
 
 def sync_skills():
