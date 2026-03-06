@@ -33,6 +33,7 @@ Usage
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -41,12 +42,14 @@ import weaviate
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
 from weaviate.classes.data import DataReference
 from weaviate.collections import Collection
+from weaviate.collections.classes.data import DataReferenceMulti
 from weaviate.util import generate_uuid5
 
 # Ensure the pipeline package is importable when running from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pipeline.julia_code_translation.build_schema import build_schema
+from pipeline.julia_code_translation.extract_example_refs import extract_example_refs
 from rag_service.constants import (
     CODE_CLASS_COLLECTION,
     CODE_FUNCTION_COLLECTION,
@@ -72,6 +75,20 @@ def uuid_for_algorithm_chunk(entity_id: str) -> str:
     for chunks that have an entity_id. Algorithm chunks have chunk_type='algorithm'.
     """
     return generate_uuid5(f"{entity_id}:algorithm")
+
+
+def uuid_for_example_chunk(entity_id: str) -> str:
+    """Deterministic UUID for an example chunk in unified_collection (chunk_type='example')."""
+    return generate_uuid5(f"{entity_id}:example")
+
+
+_EXAMPLE_NUMBER_RE = re.compile(r"[\d]+(?:\.[\d]+)*")
+
+
+def entity_id_from_example_number(example_number: str) -> str | None:
+    """Extract numeric entity_id from a string like 'Example 2.3.' -> '2.3'."""
+    m = _EXAMPLE_NUMBER_RE.search(example_number)
+    return m.group(0) if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -202,9 +219,9 @@ def setup_collections(
 def _insert_classes(
     collection: Collection,
     classes: list[dict[str, Any]],
-) -> list[DataReference]:
+) -> list[DataReference | DataReferenceMulti]:
     """Insert class objects and return algorithm_ref references to add later."""
-    references: list[DataReference] = []
+    references: list[DataReference | DataReferenceMulti] = []
 
     with collection.batch.dynamic() as batch:
         for cls in classes:
@@ -239,9 +256,9 @@ def _insert_classes(
 def _insert_methods(
     collection: Collection,
     methods: list[dict[str, Any]],
-) -> list[DataReference]:
+) -> list[DataReference | DataReferenceMulti]:
     """Insert method objects and return all cross-references to add later."""
-    references: list[DataReference] = []
+    references: list[DataReference | DataReferenceMulti] = []
 
     with collection.batch.dynamic() as batch:
         for mth in methods:
@@ -319,9 +336,9 @@ def _insert_methods(
 def _insert_functions(
     collection: Collection,
     functions: list[dict[str, Any]],
-) -> list[DataReference]:
+) -> list[DataReference | DataReferenceMulti]:
     """Insert function objects and return all cross-references to add later."""
-    references: list[DataReference] = []
+    references: list[DataReference | DataReferenceMulti] = []
 
     with collection.batch.dynamic() as batch:
         for fn in functions:
@@ -385,16 +402,104 @@ def _insert_functions(
 
 
 def _add_references_safely(
-    collection: Collection, references: list[DataReference], label: str
+    collection: Collection, references: list[DataReference | DataReferenceMulti], label: str
 ) -> None:
     """Add references in batch, skipping failures gracefully."""
     if not references:
         return
     try:
-        collection.data.reference_add_many(list(references))
+        collection.data.reference_add_many(references)
         print(f"  Added {len(references)} references for {label}.")
     except Exception as exc:  # noqa: BLE001
         print(f"  Warning: some references for {label} could not be added: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Example → code entity references
+# ---------------------------------------------------------------------------
+
+_EXAMPLE_CODE_REFS = (
+    ("used_classes", CODE_CLASS_COLLECTION),
+    ("used_methods", CODE_METHOD_COLLECTION),
+    ("used_functions", CODE_FUNCTION_COLLECTION),
+)
+
+
+def _ensure_example_code_ref_properties(client: weaviate.WeaviateClient) -> None:
+    """Add reference properties to unified_collection so example chunks can point to code entities.
+
+    Properties added (idempotent):
+      - example_classes   -> CodeClass
+      - example_methods   -> CodeMethod
+      - example_functions -> CodeFunction
+    """
+    if not client.collections.exists(COLLECTION_NAME):
+        print(f"Warning: {COLLECTION_NAME} not found; skipping example-code ref setup.")
+        return
+
+    unified = client.collections.use(COLLECTION_NAME)
+    existing = _existing_reference_names(unified)
+    for ref_name, target in _EXAMPLE_CODE_REFS:
+        if ref_name not in existing:
+            print(f"  Adding reference '{ref_name}' -> {target} on {COLLECTION_NAME} …")
+            unified.config.add_reference(ReferenceProperty(name=ref_name, target_collection=target))
+
+
+def _build_example_code_references(
+    examples: list[dict[str, Any]],
+    schema: dict[str, Any],
+) -> list[DataReference | DataReferenceMulti]:
+    """Use extract_example_refs to build DataReferences from example chunks to code entities.
+
+    Args:
+        examples: list of example dicts, each with 'example_number' and 'text' fields.
+        schema:   result of build_schema(), used for resolving references.
+
+    Returns:
+        List of DataReference objects ready for reference_add_many on unified_collection.
+    """
+    references: list[DataReference | DataReferenceMulti] = []
+
+    for example in examples:
+        example_number = example.get("example_number", "")
+        entity_id = entity_id_from_example_number(example_number)
+        if not entity_id:
+            print(f"  Skipping example with unparseable number: {example_number!r}")
+            continue
+
+        text = example.get("text", "")
+        refs = extract_example_refs(text, schema)
+
+        from_uuid = uuid_for_example_chunk(entity_id)
+
+        for schema_id in refs.get("initialized_classes", []):
+            references.append(
+                DataReference(
+                    from_uuid=from_uuid,
+                    from_property="example_classes",
+                    to_uuid=uuid_for_schema_id(schema_id),
+                )
+            )
+
+        for schema_id in refs.get("used_methods", []):
+            references.append(
+                DataReference(
+                    from_uuid=from_uuid,
+                    from_property="example_methods",
+                    to_uuid=uuid_for_schema_id(schema_id),
+                )
+            )
+
+        for schema_id in refs.get("used_functions", []):
+            references.append(
+                DataReference(
+                    from_uuid=from_uuid,
+                    from_property="example_functions",
+                    to_uuid=uuid_for_schema_id(schema_id),
+                )
+            )
+
+    return references
 
 
 # ---------------------------------------------------------------------------
@@ -420,6 +525,13 @@ def main() -> None:
         type=Path,
     )
     parser.add_argument(
+        "--examples_file_path",
+        default="translated_examples.json",
+        help="Path to the translated_examples.json file. When provided, adds references from "
+        "example chunks in unified_collection to code entities (classes, methods, functions).",
+        type=Path,
+    )
+    parser.add_argument(
         "--recreate",
         action="store_true",
         help="Delete and recreate the code collections before loading.",
@@ -432,6 +544,16 @@ def main() -> None:
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         print(f"Failed to load JSON file: {exc}")
         return
+
+    examples: list[dict[str, Any]] = []
+    if args.examples_file_path is not None:
+        try:
+            with args.examples_file_path.open() as f:
+                examples = json.load(f)
+            print(f"Loaded {len(examples)} examples from {args.examples_file_path}")
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            print(f"Failed to load examples JSON file: {exc}")
+            return
 
     print("Building code schema from translated algorithms …")
     schema = build_schema(algorithms)
@@ -461,6 +583,14 @@ def main() -> None:
         print("Inserting functions …")
         fn_refs = _insert_functions(fn_col, functions)
         _add_references_safely(fn_col, fn_refs, CODE_FUNCTION_COLLECTION)
+
+        if examples:
+            print("Adding example → code entity references …")
+            _ensure_example_code_ref_properties(client)
+            example_refs = _build_example_code_references(examples, schema)
+            unified_col = client.collections.use(COLLECTION_NAME)
+            _add_references_safely(unified_col, example_refs, f"{COLLECTION_NAME} (examples)")
+            print(f"  Processed {len(examples)} examples.")
 
     print("Done.")
     print(
