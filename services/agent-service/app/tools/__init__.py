@@ -191,6 +191,7 @@ async def register_mcp_rag_tools(mcp_client: MCPClientProtocol) -> None:
         tool_registry=tool_registry,
         wrap_with_cache=True,  # Auto-wrap in CachedTool
         cache_ttl=86400,  # 24 hours for RAG (static knowledge)
+        category_override="rag",
     )
 
     tools_count = await loader.load_tools()

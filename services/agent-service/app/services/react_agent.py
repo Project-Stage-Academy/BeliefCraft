@@ -215,6 +215,7 @@ class ReActAgent:
             func_name = tool_call["function"]["name"]
             tool_call_id = tool_call["id"]
             func_args = self._parse_tool_arguments(tool_call["function"]["arguments"])
+            tool_category = self._get_tool_category(func_name)
 
             logger.info(
                 "executing_tool",
@@ -237,6 +238,7 @@ class ReActAgent:
                 new_tool_calls.append(
                     ToolCall(
                         tool_name=func_name,
+                        category=tool_category,
                         arguments=func_args,
                         error=error_msg,
                     )
@@ -261,6 +263,7 @@ class ReActAgent:
                 new_tool_calls.append(
                     ToolCall(
                         tool_name=func_name,
+                        category=tool_category,
                         arguments=func_args,
                         result=tool_data,
                     )
@@ -296,6 +299,14 @@ class ReActAgent:
             "tool_calls": state["tool_calls"] + new_tool_calls,
             "iteration": state["iteration"] + 1,
         }
+
+    @staticmethod
+    def _get_tool_category(tool_name: str) -> str | None:
+        """Resolve category from the registered tool metadata when available."""
+        try:
+            return tool_registry.get_tool(tool_name).get_metadata().category
+        except Exception:  # noqa: BLE001
+            return None
 
     @staticmethod
     def _parse_tool_arguments(raw_args: str | dict[str, Any]) -> dict[str, Any]:

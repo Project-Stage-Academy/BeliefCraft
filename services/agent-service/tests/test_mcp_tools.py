@@ -186,10 +186,12 @@ class TestMCPToolLoader:
             tool_registry=tool_registry,
             wrap_with_cache=False,
             cache_ttl=3600,
+            category_override="rag",
         )
 
         assert loader.wrap_with_cache is False
         assert loader.cache_ttl == 3600
+        assert loader.category_override == "rag"
 
     def test_mcp_tool_loader_initialization_invalid_client(
         self, tool_registry: ToolRegistry
@@ -218,7 +220,7 @@ class TestMCPToolLoader:
             {
                 "name": "search_knowledge_base",
                 "description": "Search knowledge base",
-                "inputSchema": {
+                "parameters": {
                     "type": "object",
                     "properties": {"query": {"type": "string"}},
                     "required": ["query"],
@@ -251,6 +253,9 @@ class TestMCPToolLoader:
         assert "retrieve_document" in tool_registry.tools
         assert isinstance(tool_registry.tools["search_knowledge_base"], CachedTool)
         assert isinstance(tool_registry.tools["retrieve_document"], CachedTool)
+        assert tool_registry.tools["search_knowledge_base"].get_metadata().parameters[
+            "required"
+        ] == ["query"]
 
     @pytest.mark.asyncio
     async def test_mcp_tool_loader_load_tools_without_cache(
@@ -434,6 +439,18 @@ class TestMCPToolLoader:
         )
 
         assert category == "custom"
+
+    def test_mcp_tool_loader_determine_category_override(
+        self, mock_mcp_client: Mock, tool_registry: ToolRegistry
+    ) -> None:
+        """Test category override for a known MCP server type such as RAG."""
+        loader = MCPToolLoader(
+            mcp_client=mock_mcp_client,
+            tool_registry=tool_registry,
+            category_override="rag",
+        )
+
+        assert loader._determine_category("search_knowledge_base", {}) == "rag"
 
     def test_mcp_tool_loader_determine_category_default(
         self, mock_mcp_client: Mock, tool_registry: ToolRegistry
