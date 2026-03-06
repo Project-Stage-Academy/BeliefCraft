@@ -40,8 +40,13 @@ class Document(BaseModel):
 
     id: str
     content: str
-    cosine_similarity: float
+    cosine_similarity: float | None = None
     metadata: dict[str, Any]
+
+
+class MetadataFilterOperator(StrEnum):
+    EQ = "eq"
+    IN = "in"
 
 
 class MetadataFilter(BaseModel):
@@ -50,7 +55,7 @@ class MetadataFilter(BaseModel):
     """
 
     field: str
-    operator: Literal["eq", "in"]
+    operator: MetadataFilterOperator
     value: str | int | float | bool | list[str] | list[int] | list[float] | list[bool] | None
 
 

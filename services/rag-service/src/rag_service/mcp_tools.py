@@ -1,10 +1,19 @@
+from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from common.logging import get_logger
 from fastmcp import FastMCP
+from fastmcp.server.lifespan import lifespan
 
 from .constants import ENTITY_TYPE_TO_CHUNK_TYPE
-from .models import Document, EntityType, MetadataFilter, MetadataFilters, SearchFilters
+from .models import (
+    Document,
+    EntityType,
+    MetadataFilter,
+    MetadataFilterOperator,
+    MetadataFilters,
+    SearchFilters,
+)
 from .repositories import AbstractVectorStoreRepository
 
 BOOK_CONTENTS = """part i probabilistic reasoning
@@ -75,7 +84,9 @@ class RagTools:
             value = getattr(filters, filter_field)
             if value is not None:
                 metadata_filters.append(
-                    MetadataFilter(field=metadata_field, operator="eq", value=value)
+                    MetadataFilter(
+                        field=metadata_field, operator=MetadataFilterOperator.EQ, value=value
+                    )
                 )
 
         if not metadata_filters:
@@ -161,8 +172,10 @@ class RagTools:
         chunk_type_value = ENTITY_TYPE_TO_CHUNK_TYPE.get(entity_type, entity_type.value)
         filters = MetadataFilters(
             filters=[
-                MetadataFilter(field="chunk_type", operator="eq", value=chunk_type_value),
-                MetadataFilter(field="entity_id", operator="eq", value=number),
+                MetadataFilter(
+                    field="chunk_type", operator=MetadataFilterOperator.EQ, value=chunk_type_value
+                ),
+                MetadataFilter(field="entity_id", operator=MetadataFilterOperator.EQ, value=number),
             ],
             condition="and",
         )
@@ -184,6 +197,13 @@ class RagTools:
 
 def create_mcp_server(repository: AbstractVectorStoreRepository) -> FastMCP:
     """Create MCP server and register tools."""
+
+    @lifespan
+    async def server_lifespan(server: FastMCP) -> AsyncGenerator[None, None]:
+        """Manage repository connection lifespan."""
+        async with repository:
+            yield
+
     mcp = FastMCP(
         "'Algorithms for Decision Making' book RAG",
         instructions="""
@@ -191,6 +211,7 @@ Book contents:
 part number title
 section_number title page
 """ + BOOK_CONTENTS,
+        lifespan=server_lifespan,
     )
     rag_tools = RagTools(repository)
     for tool_name in RagTools.tools:
