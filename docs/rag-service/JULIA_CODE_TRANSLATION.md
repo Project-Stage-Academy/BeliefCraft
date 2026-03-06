@@ -106,15 +106,13 @@ uv run services/rag-service/src/pipeline/code_processing/build_prompts.py \
 This writes the same prompt files to `prompts/` without making any model calls.
 
 ## Update Chunks With Translations
-`services/rag-service/src/pipeline/julia_code_translation/update_chunks_with_translated_code.py` merges translated algorithms/examples into chunk JSON and enriches chunks with usage metadata (structs/functions referenced by each entity).
+`services/rag-service/src/pipeline/julia_code_translation/update_chunks_with_translated_code.py` merges translated algorithms/examples into chunk JSON.
 
 ### How to Run
 From the repo root:
 
 ```bash
 uv run services/rag-service/src/pipeline/code_processing/update_chunks_with_translated_code.py \
-  --pdf-path dm.pdf \
-  --paddle-ocr-dir ocr_jsons \
   --chunks ULTIMATE_BOOK_DATA.json \
   --translated-algorithms translated_algorithms.json \
   --translated-examples translated_examples.json \
