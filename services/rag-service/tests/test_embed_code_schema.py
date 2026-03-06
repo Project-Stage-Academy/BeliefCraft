@@ -3,6 +3,7 @@ Unit tests for services/rag-service/src/scripts/store_code_schema.py
 """
 
 import json
+import logging
 from unittest.mock import MagicMock, patch
 
 from scripts.store_code_schema import (
@@ -104,8 +105,8 @@ def _fake_examples():
     return [{"example_number": "Example 1.1.", "text": "Use Foo().", "description": ""}]
 
 
-@patch("scripts.embed_code_schema.weaviate.connect_to_local")
-@patch("scripts.embed_code_schema.build_code_schema")
+@patch("scripts.store_code_schema.weaviate.connect_to_local")
+@patch("scripts.store_code_schema.build_code_schema")
 def test_main_runs_without_error(mock_build_schema, mock_connect, tmp_path):
     alg_file = tmp_path / "algs.json"
     alg_file.write_text(json.dumps(_fake_algorithms()))
@@ -132,48 +133,52 @@ def test_main_runs_without_error(mock_build_schema, mock_connect, tmp_path):
         main()  # Should not raise
 
 
-@patch("scripts.embed_code_schema.weaviate.connect_to_local")
-@patch("scripts.embed_code_schema.build_code_schema")
+@patch("scripts.store_code_schema.weaviate.connect_to_local")
+@patch("scripts.store_code_schema.build_code_schema")
 def test_main_exits_gracefully_on_bad_algorithms_file(
-    mock_build_schema, mock_connect, tmp_path, capsys
+    mock_build_schema, mock_connect, tmp_path, caplog
 ):
-    with patch("sys.argv", ["store_code_schema.py", "--file_path", str(tmp_path / "missing.json")]):
+    with (
+        caplog.at_level(logging.ERROR),
+        patch("sys.argv", ["store_code_schema.py", "--file_path", str(tmp_path / "missing.json")]),
+    ):
         main()
 
-    captured = capsys.readouterr()
-    assert "Failed to load" in captured.out
+    assert any("Failed to load" in r.message for r in caplog.records)
     mock_build_schema.assert_not_called()
     mock_connect.assert_not_called()
 
 
-@patch("scripts.embed_code_schema.weaviate.connect_to_local")
-@patch("scripts.embed_code_schema.build_code_schema")
+@patch("scripts.store_code_schema.weaviate.connect_to_local")
+@patch("scripts.store_code_schema.build_code_schema")
 def test_main_exits_gracefully_on_bad_examples_file(
-    mock_build_schema, mock_connect, tmp_path, capsys
+    mock_build_schema, mock_connect, tmp_path, caplog
 ):
     alg_file = tmp_path / "algs.json"
     alg_file.write_text(json.dumps(_fake_algorithms()))
 
-    with patch(
-        "sys.argv",
-        [
-            "store_code_schema.py",
-            "--file_path",
-            str(alg_file),
-            "--examples_file_path",
-            str(tmp_path / "missing.json"),
-        ],
+    with (
+        caplog.at_level(logging.ERROR),
+        patch(
+            "sys.argv",
+            [
+                "store_code_schema.py",
+                "--file_path",
+                str(alg_file),
+                "--examples_file_path",
+                str(tmp_path / "missing.json"),
+            ],
+        ),
     ):
         main()
 
-    captured = capsys.readouterr()
-    assert "Failed to load" in captured.out
+    assert any("Failed to load" in r.message for r in caplog.records)
     mock_build_schema.assert_not_called()
     mock_connect.assert_not_called()
 
 
-@patch("scripts.embed_code_schema.weaviate.connect_to_local")
-@patch("scripts.embed_code_schema.build_code_schema")
+@patch("scripts.store_code_schema.weaviate.connect_to_local")
+@patch("scripts.store_code_schema.build_code_schema")
 def test_main_skips_example_refs_when_examples_list_is_empty(
     mock_build_schema, mock_connect, tmp_path
 ):
