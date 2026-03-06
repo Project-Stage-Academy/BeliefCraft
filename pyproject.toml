@@ -74,6 +74,7 @@ select = ["E", "F", "N", "W", "B", "C4", "SIM", "UP", "S", "DTZ", "PTH"]
 
 [tool.pytest.ini_options]
 pythonpath = [
+  "scripts",
   "packages/common/src",
   "packages/database/src",
   "services/environment-api/src",
