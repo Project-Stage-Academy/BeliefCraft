@@ -94,13 +94,14 @@ def test_extract_from_text_downgrades_invalid_python_to_text() -> None:
     assert snippets[0].dependencies == []
 
 
-def test_extract_from_document_reads_metadata_code_and_description() -> None:
+def test_extract_from_document_reads_algorithm_content_and_description() -> None:
     extractor = CodeExtractor()
     document = {
+        "content": "import math\nreorder_point = math.ceil(12.2)",
         "metadata": {
             "section_title": "Safety Stock",
-            "code_snippet_python": "import math\nreorder_point = math.ceil(12.2)",
-        }
+            "chunk_type": "algorithm",
+        },
     }
 
     snippets = extractor.extract_from_document(document)
@@ -113,6 +114,25 @@ def test_extract_from_document_reads_metadata_code_and_description() -> None:
     assert snippet.dependencies == ["math"]
 
 
+def test_extract_from_document_uses_declared_metadata_dependencies() -> None:
+    extractor = CodeExtractor()
+    document = {
+        "content": "import math\nx = math.sqrt(4)",
+        "metadata": {
+            "section_title": "Policy",
+            "chunk_type": "algorithm",
+            "dependencies": ["numpy", "scipy"],
+        },
+    }
+
+    snippets = extractor.extract_from_document(document)
+
+    assert len(snippets) == 1
+    assert snippets[0].language == "python"
+    assert snippets[0].validated is True
+    assert snippets[0].dependencies == ["numpy", "scipy"]
+
+
 def test_extract_from_document_reads_algorithm_chunk_content_from_mock_data() -> None:
     extractor = CodeExtractor()
     chunks = _load_mock_chunks()
@@ -123,7 +143,8 @@ def test_extract_from_document_reads_algorithm_chunk_content_from_mock_data() ->
     assert len(snippets) == 1
     assert snippets[0].code == algorithm_chunk["content"]
     assert snippets[0].description == algorithm_chunk["section_title"]
-    assert snippets[0].language in {"julia", "text"}
+    assert snippets[0].language == "text"
+    assert snippets[0].validated is False
 
 
 def test_extract_from_document_applies_section_description_to_fenced_content() -> None:
@@ -151,8 +172,11 @@ def test_extract_from_document_deduplicates_same_code_from_fields_and_fences() -
     extractor = CodeExtractor()
     document = {
         "section_title": "Duplication Case",
-        "code_snippet_python": "import math\nx = math.sqrt(9)",
-        "content": "```python\nimport math\nx = math.sqrt(9)\n```",
+        "content": (
+            "```python\nimport math\nx = math.sqrt(9)\n```\n"
+            "Repeated:\n"
+            "```python\nimport math\nx = math.sqrt(9)\n```"
+        ),
     }
 
     snippets = extractor.extract_from_document(document)
@@ -164,12 +188,16 @@ def test_extract_from_document_deduplicates_same_code_from_fields_and_fences() -
 @pytest.mark.parametrize(
     "result_payload",
     [
-        {"documents": [{"code_snippet_python": "import math\nx = math.sqrt(4)"}]},
-        {"results": [{"code_snippet_python": "import math\nx = math.sqrt(4)"}]},
-        {"expanded": [{"code_snippet_python": "import math\nx = math.sqrt(4)"}]},
-        {"document": {"code_snippet_python": "import math\nx = math.sqrt(4)"}},
-        {"chunk_id": "chunk_x", "code_snippet_python": "import math\nx = math.sqrt(4)"},
-        [{"code_snippet_python": "import math\nx = math.sqrt(4)"}],
+        {"documents": [{"chunk_type": "algorithm", "content": "import math\nx = math.sqrt(4)"}]},
+        {"results": [{"chunk_type": "algorithm", "content": "import math\nx = math.sqrt(4)"}]},
+        {"expanded": [{"chunk_type": "algorithm", "content": "import math\nx = math.sqrt(4)"}]},
+        {"document": {"chunk_type": "algorithm", "content": "import math\nx = math.sqrt(4)"}},
+        {
+            "chunk_id": "chunk_x",
+            "chunk_type": "algorithm",
+            "content": "import math\nx = math.sqrt(4)",
+        },
+        [{"chunk_type": "algorithm", "content": "import math\nx = math.sqrt(4)"}],
     ],
 )
 def test_extract_from_answer_and_tool_calls_supports_result_shapes(result_payload: object) -> None:
@@ -198,7 +226,11 @@ def test_extract_from_answer_and_tool_calls_ignores_non_rag_tools() -> None:
         {
             "tool_name": "get_current_observation",
             "arguments": {},
-            "result": {"documents": [{"code_snippet_python": "import math\nx = math.sqrt(4)"}]},
+            "result": {
+                "documents": [
+                    {"chunk_type": "algorithm", "content": "import math\nx = math.sqrt(4)"}
+                ]
+            },
         }
     ]
 
@@ -216,7 +248,11 @@ def test_extract_from_answer_and_tool_calls_accepts_toolcall_models() -> None:
         ToolCall(
             tool_name="search_knowledge_base",
             arguments={"query": "q-learning"},
-            result={"documents": [{"code_snippet_python": "import random\nx = random.random()"}]},
+            result={
+                "documents": [
+                    {"chunk_type": "algorithm", "content": "import random\nx = random.random()"}
+                ]
+            },
         )
     ]
 
@@ -237,7 +273,11 @@ def test_extract_from_answer_and_tool_calls_uses_tool_category_when_present() ->
             tool_name="semantic_lookup_v2",
             category="rag",
             arguments={"query": "policy iteration"},
-            result={"documents": [{"code_snippet_python": "import math\nx = math.sqrt(25)"}]},
+            result={
+                "documents": [
+                    {"chunk_type": "algorithm", "content": "import math\nx = math.sqrt(25)"}
+                ]
+            },
         )
     ]
 
@@ -258,7 +298,11 @@ def test_extract_from_answer_and_tool_calls_deduplicates_across_sources() -> Non
         {
             "tool_name": "search_knowledge_base",
             "arguments": {"query": "sqrt"},
-            "result": {"documents": [{"code_snippet_python": "import math\nx = math.sqrt(16)"}]},
+            "result": {
+                "documents": [
+                    {"chunk_type": "algorithm", "content": "import math\nx = math.sqrt(16)"}
+                ]
+            },
         }
     ]
 

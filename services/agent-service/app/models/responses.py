@@ -77,7 +77,13 @@ class CodeSnippet(BaseModel):
     dependencies: list[str] = Field(
         default_factory=list, description="Detected package dependencies"
     )
-    validated: bool = Field(default=False, description="Whether code syntax was validated")
+    validated: bool = Field(
+        default=False,
+        description=(
+            "Whether automated syntax validation passed (AST parse only). "
+            "Does not imply human review or semantic correctness."
+        ),
+    )
 
 
 class Formula(BaseModel):
@@ -89,7 +95,6 @@ class Formula(BaseModel):
 
     latex: str = Field(..., min_length=1, description="LaTeX formatted formula")
     description: str | None = Field(default=None, description="Formula meaning")
-    variables: dict[str, str] | None = Field(default=None, description="Variable definitions")
 
 
 class Recommendation(BaseModel):

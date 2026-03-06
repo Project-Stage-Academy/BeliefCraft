@@ -11,6 +11,7 @@ from app.services.extractors.tool_result_utils import (
     collect_result_documents,
     extract_metadata,
     is_rag_tool_call,
+    normalize_document,
     tool_call_field,
 )
 from common.logging import get_logger
@@ -24,13 +25,14 @@ class CodeExtractor:
 
     Behavior:
     - Parses fenced markdown code blocks
-    - Reads code-like fields from RAG documents
-    - Infers language when not explicitly provided
+    - Reads code from RAG algorithm document content
+    - Infers language for free-form markdown code blocks
+    - Treats RAG code payloads as Python-by-contract
     - Validates Python snippets with AST and detects dependencies
     - Deduplicates snippets by language + normalized code content
     """
 
-    _RAG_CODE_CHUNK_TYPES = {"algorithm", "algorithm_code"}
+    _RAG_CODE_CHUNK_TYPES = {"algorithm"}
     _CODE_BLOCK_PATTERN = re.compile(
         r"```(?P<lang>[a-zA-Z0-9_+-]*)\n(?P<code>.*?)```",
         re.DOTALL,
@@ -84,46 +86,25 @@ class CodeExtractor:
         """
         Extract snippets from a single RAG document-like object.
         """
-        metadata = extract_metadata(document)
+        canonical_document = normalize_document(document)
+        if canonical_document is None:
+            return []
+
+        metadata = extract_metadata(canonical_document)
         description = self._first_non_empty(
             metadata.get("section_title"),
-            document.get("section_title"),
             metadata.get("algorithm_name"),
-            document.get("algorithm_name"),
             metadata.get("title"),
-            document.get("title"),
         )
 
         snippets: list[CodeSnippet] = []
-
-        # Prefer explicit code fields when available.
-        candidates: list[tuple[Any, str]] = [
-            (metadata.get("code_snippet_python"), "python"),
-            (document.get("code_snippet_python"), "python"),
-            (metadata.get("code_language_translated"), "python"),
-            (document.get("code_language_translated"), "python"),
-            (metadata.get("code_snippet_julia"), "julia"),
-            (document.get("code_snippet_julia"), "julia"),
-        ]
-
-        for raw_code, language_hint in candidates:
-            if not isinstance(raw_code, str) or not raw_code.strip():
-                continue
-            snippet = self._build_code_snippet(
-                raw_code,
-                language_hint=language_hint,
-                description=description,
-            )
-            if snippet is not None:
-                snippets.append(snippet)
+        declared_dependencies = self._extract_declared_dependencies(metadata)
 
         chunk_type = self._first_non_empty(
             metadata.get("chunk_type"),
             metadata.get("type"),
-            document.get("chunk_type"),
-            document.get("type"),
         )
-        content = document.get("content")
+        content = canonical_document.get("content")
 
         if (
             isinstance(content, str)
@@ -131,10 +112,10 @@ class CodeExtractor:
             and isinstance(chunk_type, str)
             and chunk_type.lower() in self._RAG_CODE_CHUNK_TYPES
         ):
-            snippet = self._build_code_snippet(
+            snippet = self._build_rag_code_snippet(
                 content,
-                language_hint=None,
                 description=description,
+                declared_dependencies=declared_dependencies,
             )
             if snippet is not None:
                 snippets.append(snippet)
@@ -148,6 +129,81 @@ class CodeExtractor:
 
         return self._deduplicate_code_snippets(snippets)
 
+    def _build_rag_code_snippet(
+        self,
+        code: str,
+        description: str | None = None,
+        declared_dependencies: list[str] | None = None,
+    ) -> CodeSnippet | None:
+        """
+        Build a snippet from RAG payload.
+
+        RAG contract currently returns Python code only. We still AST-validate and
+        downgrade invalid code to `text` for safety.
+        """
+        normalized_code = code.strip()
+        if not normalized_code:
+            return None
+
+        syntax_valid = False
+        language = "python"
+        dependencies: list[str] = []
+
+        try:
+            ast.parse(normalized_code)
+        except SyntaxError:
+            logger.warning("invalid_rag_python_snippet_downgraded_to_text")
+            language = "text"
+        else:
+            syntax_valid = True
+            if declared_dependencies:
+                dependencies = declared_dependencies
+            else:
+                dependencies = self._detect_python_dependencies(normalized_code)
+
+        return CodeSnippet(
+            language=language,
+            code=normalized_code,
+            description=description,
+            dependencies=dependencies,
+            validated=syntax_valid,
+        )
+
+    @staticmethod
+    def _extract_declared_dependencies(metadata: dict[str, Any]) -> list[str]:
+        """
+        Extract package dependencies declared by RAG metadata.
+
+        Accepted keys:
+        - dependencies
+        - python_dependencies
+        - required_packages
+        """
+        raw = (
+            metadata.get("dependencies")
+            or metadata.get("python_dependencies")
+            or metadata.get("required_packages")
+        )
+
+        if raw is None:
+            return []
+
+        if isinstance(raw, str):
+            items = [raw]
+        elif isinstance(raw, (list, tuple, set)):
+            items = [item for item in raw if isinstance(item, str)]
+        else:
+            return []
+
+        normalized: set[str] = set()
+        for item in items:
+            for token in item.split(","):
+                dep = token.strip()
+                if dep:
+                    normalized.add(dep)
+
+        return sorted(normalized)
+
     def _build_code_snippet(
         self,
         code: str,
@@ -159,7 +215,7 @@ class CodeExtractor:
             return None
 
         language = self._normalize_code_language(language_hint, normalized_code)
-        validated = False
+        syntax_valid = False
         dependencies: list[str] = []
 
         if language == "python":
@@ -169,7 +225,7 @@ class CodeExtractor:
                 logger.warning("invalid_python_snippet_downgraded_to_text")
                 language = "text"
             else:
-                validated = True
+                syntax_valid = True
                 dependencies = self._detect_python_dependencies(normalized_code)
 
         return CodeSnippet(
@@ -177,7 +233,7 @@ class CodeExtractor:
             code=normalized_code,
             description=description,
             dependencies=dependencies,
-            validated=validated,
+            validated=syntax_valid,
         )
 
     @staticmethod

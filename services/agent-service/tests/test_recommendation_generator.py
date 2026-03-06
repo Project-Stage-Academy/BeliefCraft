@@ -27,6 +27,7 @@ from app.models.responses import (
     Formula,
     Recommendation,
 )
+from app.services.llm_service import LLMService
 from app.services.recommendation_generator import RecommendationGenerator
 
 # ---------------------------------------------------------------------------
@@ -303,6 +304,59 @@ class TestFallbackResponse:
 
 class TestParseFinalAnswer:
     @pytest.mark.asyncio
+    async def test_uses_structured_completion_when_llm_service_is_injected(
+        self,
+        mock_formula_extractor: MagicMock,
+        mock_citation_extractor: MagicMock,
+    ) -> None:
+        class _StructuredOnlyLLM(LLMService):
+            def __init__(self) -> None:  # noqa: D401
+                pass
+
+            async def structured_completion(
+                self,
+                messages: list[dict[str, Any]],
+                schema: Any,
+            ) -> dict[str, Any]:
+                return {
+                    "task": "Structured Task",
+                    "analysis": "Structured analysis",
+                    "algorithm": "Algorithm 2.2",
+                    "recommendations": [
+                        {
+                            "action": "Apply policy",
+                            "priority": "high",
+                            "rationale": "Deterministic extraction",
+                            "expected_outcome": "Lower risk",
+                        }
+                    ],
+                    "confidence": "high",
+                }
+
+            async def chat_completion(  # type: ignore[override]
+                self,
+                messages: list[dict[str, Any]],
+                tools: list[dict[str, Any]] | None = None,
+                tool_choice: str | dict[str, Any] = "auto",
+            ) -> dict[str, Any]:
+                raise AssertionError("chat_completion should not be used in this test")
+
+        gen = RecommendationGenerator(
+            llm=_StructuredOnlyLLM(),
+            formula_extractor=mock_formula_extractor,
+            citation_extractor=mock_citation_extractor,
+        )
+
+        state = _base_agent_state()
+        result = await gen.generate(state)
+
+        assert result.task == "Structured Task"
+        assert result.analysis == "Structured analysis"
+        assert result.algorithm == "Algorithm 2.2"
+        assert len(result.recommendations) == 1
+        assert result.recommendations[0].priority == "high"
+
+    @pytest.mark.asyncio
     async def test_strips_markdown_json_fences(
         self,
         mock_llm: MagicMock,
@@ -418,7 +472,15 @@ class TestFormulaExtraction:
         )
         result = await gen.generate(state)
         assert any(f.latex == "D = \\lambda t" for f in result.formulas)
-        extractor.extract_from_rag_chunks.assert_called_once_with(tool_result["documents"])
+        extractor.extract_from_rag_chunks.assert_called_once()
+        called_documents = extractor.extract_from_rag_chunks.call_args.args[0]
+        assert called_documents == [
+            {
+                "id": "",
+                "content": "D = \\lambda t",
+                "metadata": {"chunk_type": "formula"},
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_formulas_extracted_when_tool_call_has_rag_category(
@@ -446,7 +508,15 @@ class TestFormulaExtraction:
         )
         result = await gen.generate(state)
         assert any(f.latex == "D = \\lambda t" for f in result.formulas)
-        extractor.extract_from_rag_chunks.assert_called_once_with(tool_result["documents"])
+        extractor.extract_from_rag_chunks.assert_called_once()
+        called_documents = extractor.extract_from_rag_chunks.call_args.args[0]
+        assert called_documents == [
+            {
+                "id": "",
+                "content": "D = \\lambda t",
+                "metadata": {"chunk_type": "formula"},
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_non_rag_tools_are_skipped_for_formulas(
@@ -491,7 +561,7 @@ class TestCodeSnippetEnrichment:
         assert "math" in python_snippets[0].dependencies
 
     @pytest.mark.asyncio
-    async def test_extracts_julia_from_rag_algorithm_chunk(
+    async def test_extracts_text_when_rag_algorithm_is_not_valid_python(
         self, generator: RecommendationGenerator
     ) -> None:
         state = _base_agent_state(
@@ -512,10 +582,10 @@ class TestCodeSnippetEnrichment:
         )
         result = await generator.generate(state)
 
-        julia_snippets = [s for s in result.code_snippets if s.language == "julia"]
-        assert len(julia_snippets) == 1
-        assert "function POLICY" in julia_snippets[0].code
-        assert julia_snippets[0].description == "Policy Iteration"
+        text_snippets = [s for s in result.code_snippets if s.language == "text"]
+        assert len(text_snippets) == 1
+        assert "function POLICY" in text_snippets[0].code
+        assert text_snippets[0].description == "Policy Iteration"
 
     @pytest.mark.asyncio
     async def test_invalid_python_is_downgraded_to_text(

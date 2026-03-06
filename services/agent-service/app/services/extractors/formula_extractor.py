@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from app.models.responses import Formula
+from app.services.extractors.tool_result_utils import extract_metadata, normalize_document
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -69,33 +70,31 @@ class FormulaExtractor:
         formulas: list[Formula] = []
 
         for chunk in chunks:
-            metadata = self._extract_metadata(chunk)
-            chunk_type = str(
-                metadata.get("type")
-                or metadata.get("chunk_type")
-                or chunk.get("type")
-                or chunk.get("chunk_type")
-                or ""
-            ).lower()
-            content = str(chunk.get("content") or "")
+            document = normalize_document(chunk)
+            if document is None:
+                continue
+
+            metadata = extract_metadata(document)
+            chunk_type = str(metadata.get("type") or metadata.get("chunk_type") or "").lower()
+            content = str(document.get("content") or "")
 
             # treats content as formula even if no $ delimiters
             if chunk_type in self._FORMULA_TYPES and content.strip():
+                latex = (
+                    content.strip()
+                    if chunk_type == "numbered_formula"
+                    else self._clean_latex(content)
+                )
                 formulas.append(
                     Formula(
-                        latex=self._clean_latex(content),
-                        description=self._first_non_empty(
-                            metadata.get("description"),
-                            chunk.get("description"),
-                            metadata.get("section_title"),
-                            metadata.get("subsection_title"),
-                        )
+                        latex=latex,
+                        description=self._first_non_empty(metadata.get("description"))
                         or self._infer_description(content),
-                        variables=self._normalize_variables(
-                            metadata.get("variables") or chunk.get("variables")
-                        ),
                     )
                 )
+                # Numbered formula chunks are already handled as standalone formulas.
+                # Do not run generic embedded-LaTeX extraction on the same content.
+                continue
 
             # also parses embedded LaTeX in all chunk contents
             formulas.extend(self.extract_from_text(content))
@@ -110,22 +109,11 @@ class FormulaExtractor:
         return deduplicated
 
     @staticmethod
-    def _extract_metadata(chunk: dict[str, Any]) -> dict[str, Any]:
-        metadata = chunk.get("metadata")
-        if isinstance(metadata, dict):
-            return metadata
-        return {}
-
-    @staticmethod
     def _clean_latex(raw: str) -> str:
-        latex = raw.strip()
-        # normalizes common math delimiters so formula chunks and text extraction
-        # produces the same canonical form for deduplication.
-        if latex.startswith("$$") and latex.endswith("$$") and len(latex) >= 4:
-            return latex[2:-2].strip()
-        if latex.startswith("$") and latex.endswith("$") and len(latex) >= 2:
-            return latex[1:-1].strip()
-        return latex
+        # Keep delimiters/content intact and only normalize surrounding whitespace.
+        # Delimiter stripping can corrupt multi-line LaTeX blocks that include
+        # repeated $$ lines inside a single formula chunk.
+        return raw.strip()
 
     @staticmethod
     def _is_meaningful_formula(latex: str) -> bool:
@@ -146,13 +134,6 @@ class FormulaExtractor:
             seen.add(key)
             deduplicated.append(formula)
         return deduplicated
-
-    @staticmethod
-    def _normalize_variables(raw_variables: Any) -> dict[str, str] | None:
-        if not isinstance(raw_variables, dict):
-            return None
-        normalized = {str(k): str(v) for k, v in raw_variables.items()}
-        return normalized or None
 
     @staticmethod
     def _first_non_empty(*values: Any) -> str | None:

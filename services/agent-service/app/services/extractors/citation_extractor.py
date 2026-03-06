@@ -15,6 +15,9 @@ from common.logging import get_logger
 
 logger = get_logger(__name__)
 
+CanonicalDocument = dict[str, Any]
+RagResultPayload = dict[str, Any] | list[CanonicalDocument] | None
+
 
 class CitationExtractor:
     """
@@ -23,13 +26,9 @@ class CitationExtractor:
 
     _CHUNK_TYPE_TO_ENTITY_TYPE = {
         "numbered_formula": "formula",
-        "formula": "formula",
         "numbered_table": "table",
-        "table": "table",
         "algorithm": "algorithm",
-        "captioned_image": "figure",
-        "image": "figure",
-        "figure": "figure",
+        "captioned_image": "image",
         "text": "text",
         "example": "example",
         "exercise": "exercise",
@@ -39,16 +38,8 @@ class CitationExtractor:
         "formula": "Formula",
         "table": "Table",
         "algorithm": "Algorithm",
-        "figure": "Figure",
+        "image": "Image",
     }
-
-    def extract_from_rag_results(self, rag_results: dict[str, Any]) -> list[Citation]:
-        """
-        Extract citations from a single RAG result payload.
-        """
-        citations = self._extract_citations(rag_results=rag_results, tool_arguments={})
-        logger.info("citations_extracted_from_rag_results", count=len(citations))
-        return citations
 
     def extract_from_tool_calls(self, tool_calls: list[Any]) -> list[Citation]:
         """
@@ -79,9 +70,17 @@ class CitationExtractor:
 
     def _extract_citations(
         self,
-        rag_results: Any,
+        rag_results: RagResultPayload,
         tool_arguments: dict[str, Any],
     ) -> list[Citation]:
+        """
+        Build citations from a RAG tool payload.
+
+        Supported payload shapes:
+        - envelope dicts (e.g. {"documents": [...]}, {"results": [...]}, {"expanded": [...]})
+        - plain list of document dicts
+        - None
+        """
         documents = self._collect_documents(rag_results)
         citations: list[Citation] = []
 
@@ -92,7 +91,7 @@ class CitationExtractor:
 
         return self._deduplicate(citations)
 
-    def _collect_documents(self, rag_results: Any) -> list[dict[str, Any]]:
+    def _collect_documents(self, rag_results: RagResultPayload) -> list[CanonicalDocument]:
         return collect_result_documents(rag_results)
 
     def _build_citation(
@@ -102,37 +101,32 @@ class CitationExtractor:
     ) -> Citation | None:
         metadata = extract_metadata(document)
 
+        # Canonical RAG metadata resolves entity kind via chunk_type.
+        # Keep minimal compatibility fallbacks.
         raw_entity_type = self._first_non_empty(
+            metadata.get("chunk_type"),
             metadata.get("entity_type"),
             metadata.get("type"),
-            metadata.get("chunk_type"),
-            document.get("entity_type"),
-            document.get("type"),
-            document.get("chunk_type"),
             tool_arguments.get("entity_type"),
         )
         entity_type = self._normalize_entity_type(raw_entity_type)
 
+        # Canonical RAG metadata uses `entity_id` for numbered entities.
+        # Keep compatibility fallbacks for older payloads.
         entity_number = self._first_non_empty(
-            metadata.get("entity_number"),
             metadata.get("entity_id"),
-            document.get("entity_number"),
-            document.get("entity_id"),
-            document.get("number"),
+            metadata.get("link_id"),
+            metadata.get("entity_number"),
             tool_arguments.get("number"),
         )
 
         if not entity_number:
-            link = self._first_non_empty(metadata.get("link"), document.get("link"))
+            link = self._first_non_empty(metadata.get("link_id"))
             if link and entity_type in self._ENTITY_PREFIX_BY_TYPE:
                 entity_number = f"{self._ENTITY_PREFIX_BY_TYPE[entity_type]} {link}"
 
-        chunk_id = self._first_non_empty(
-            document.get("chunk_id"),
-            document.get("id"),
-            metadata.get("chunk_id"),
-            metadata.get("id"),
-        )
+        # Canonical RAG document identity is always provided as `document.id`.
+        chunk_id = self._first_non_empty(document.get("id"))
 
         if not chunk_id and entity_type and entity_number:
             chunk_id = f"{entity_type}:{entity_number}"
@@ -147,7 +141,7 @@ class CitationExtractor:
             entity_type=entity_type,
         )
 
-        page = self._extract_page(metadata=metadata, document=document)
+        page = self._extract_page(metadata=metadata)
 
         return Citation(
             chunk_id=chunk_id,
@@ -164,20 +158,13 @@ class CitationExtractor:
         entity_number: str | None,
         entity_type: str | None,
     ) -> str:
-        title = self._first_non_empty(
+        hierarchy_title = self._join_unique_non_empty(
             metadata.get("section_title"),
             metadata.get("subsection_title"),
-            metadata.get("chapter_title"),
-            metadata.get("algorithm_name"),
-            metadata.get("title"),
-            document.get("section_title"),
-            document.get("subsection_title"),
-            document.get("chapter_title"),
-            document.get("algorithm_name"),
-            document.get("title"),
+            metadata.get("subsubsection_title"),
         )
-        if title:
-            return title
+        if hierarchy_title:
+            return hierarchy_title
 
         if entity_type and entity_number:
             prefix = self._ENTITY_PREFIX_BY_TYPE.get(entity_type, entity_type.capitalize())
@@ -189,13 +176,8 @@ class CitationExtractor:
         return "Unknown section"
 
     @staticmethod
-    def _extract_page(metadata: dict[str, Any], document: dict[str, Any]) -> int | None:
-        raw_page = (
-            metadata.get("page_number")
-            or metadata.get("page")
-            or document.get("page_number")
-            or document.get("page")
-        )
+    def _extract_page(metadata: dict[str, Any]) -> int | None:
+        raw_page = metadata.get("page") or metadata.get("page_number")
         if isinstance(raw_page, int):
             return raw_page if raw_page >= 1 else None
         if isinstance(raw_page, str) and raw_page.isdigit():
@@ -222,14 +204,25 @@ class CitationExtractor:
         return None
 
     @staticmethod
-    def _deduplicate(citations: list[Citation]) -> list[Citation]:
-        seen_chunk_ids: set[str] = set()
-        deduplicated: list[Citation] = []
-
-        for citation in citations:
-            if citation.chunk_id in seen_chunk_ids:
+    def _join_unique_non_empty(*values: Any) -> str | None:
+        parts: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            if not isinstance(value, str):
                 continue
-            seen_chunk_ids.add(citation.chunk_id)
-            deduplicated.append(citation)
+            normalized = value.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            parts.append(normalized)
+        if not parts:
+            return None
+        return " / ".join(parts)
 
-        return deduplicated
+    @staticmethod
+    def _deduplicate(citations: list[Citation]) -> list[Citation]:
+        # Deduplicate by chunk identity while preserving first-seen order.
+        unique_by_chunk_id: dict[str, Citation] = {}
+        for citation in citations:
+            unique_by_chunk_id.setdefault(citation.chunk_id, citation)
+        return list(unique_by_chunk_id.values())

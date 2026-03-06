@@ -24,6 +24,7 @@ from app.services.extractors.tool_result_utils import (
 )
 from app.services.llm_service import LLMService
 from common.logging import get_logger
+from pydantic import BaseModel, ConfigDict
 
 logger = get_logger(__name__)
 
@@ -66,6 +67,25 @@ Return ONLY valid JSON, no other text.
 """
 
 
+class _RecommendationParseModel(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    action: str
+    priority: Literal["high", "medium", "low"]
+    rationale: str
+    expected_outcome: str | None = None
+
+
+class _ParsedFinalAnswerModel(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    task: str
+    analysis: str
+    algorithm: str | None = None
+    recommendations: list[_RecommendationParseModel]
+    confidence: Literal["high", "medium", "low"] | None = None
+
+
 class RecommendationGenerator:
     """
     Generate structured recommendations from agent state.
@@ -85,10 +105,6 @@ class RecommendationGenerator:
         self.formula_extractor = formula_extractor or FormulaExtractor()
         self.citation_extractor = citation_extractor or CitationExtractor()
         self.code_extractor = code_extractor or CodeExtractor()
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     async def generate(self, agent_state: AgentState) -> AgentRecommendationResponse:
         """Generate structured recommendation from agent's final state."""
@@ -152,10 +168,6 @@ class RecommendationGenerator:
         )
         return response
 
-    # ------------------------------------------------------------------
-    # LLM-based answer parsing
-    # ------------------------------------------------------------------
-
     async def _parse_final_answer(self, final_answer: str) -> dict[str, Any]:
         """Use LLM to parse the final answer into a structured dict."""
         messages = [
@@ -166,6 +178,26 @@ class RecommendationGenerator:
             },
         ]
 
+        if isinstance(self.llm, LLMService):
+            try:
+                structured_result = await self.llm.structured_completion(
+                    messages=messages,
+                    schema=_ParsedFinalAnswerModel,
+                )
+                if isinstance(structured_result, _ParsedFinalAnswerModel):
+                    structured = structured_result.model_dump()
+                elif isinstance(structured_result, dict):
+                    structured = structured_result
+                else:
+                    structured = dict(structured_result)
+
+                structured["recommendations"] = [
+                    Recommendation(**rec) for rec in structured.get("recommendations", [])
+                ]
+                return structured
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("final_answer_structured_parsing_failed", error=str(exc))
+
         try:
             response = await self.llm.chat_completion(messages=messages, tools=None)
             content: str = response["message"]["content"]
@@ -175,15 +207,17 @@ class RecommendationGenerator:
             if json_match:
                 content = json_match.group(1)
 
-            structured: dict[str, Any] = json.loads(content)
+            parsed_content: dict[str, Any] = json.loads(content)
 
             # Convert recommendation dicts to Pydantic models
-            if "recommendations" in structured and isinstance(structured["recommendations"], list):
-                structured["recommendations"] = [
-                    Recommendation(**rec) for rec in structured["recommendations"]
+            if "recommendations" in parsed_content and isinstance(
+                parsed_content["recommendations"], list
+            ):
+                parsed_content["recommendations"] = [
+                    Recommendation(**rec) for rec in parsed_content["recommendations"]
                 ]
 
-            return structured
+            return parsed_content
 
         except Exception as exc:  # noqa: BLE001
             logger.warning("final_answer_parsing_failed", error=str(exc))
@@ -198,10 +232,6 @@ class RecommendationGenerator:
                     )
                 ],
             }
-
-    # ------------------------------------------------------------------
-    # Extraction helpers
-    # ------------------------------------------------------------------
 
     def _extract_formulas(self, agent_state: AgentState, final_answer: str) -> list[Formula]:
         """Extract formulas from final answer text and RAG tool results."""
@@ -236,10 +266,6 @@ class RecommendationGenerator:
             tool_calls=agent_state["tool_calls"],
         )
 
-    # ------------------------------------------------------------------
-    # Reasoning trace
-    # ------------------------------------------------------------------
-
     def _build_reasoning_trace(self, agent_state: AgentState) -> list[dict[str, Any]]:
         """Build a concise reasoning trace from thoughts + tool calls."""
         trace: list[dict[str, Any]] = []
@@ -270,10 +296,6 @@ class RecommendationGenerator:
             trace.append(step)
 
         return trace
-
-    # ------------------------------------------------------------------
-    # Warning detection
-    # ------------------------------------------------------------------
 
     def _detect_warnings(self, agent_state: AgentState, structured: dict[str, Any]) -> list[str]:
         """Detect potential issues and limitations."""
@@ -309,10 +331,6 @@ class RecommendationGenerator:
 
         return warnings
 
-    # ------------------------------------------------------------------
-    # Fallback response
-    # ------------------------------------------------------------------
-
     def _generate_fallback_response(self, agent_state: AgentState) -> AgentRecommendationResponse:
         """Generate a minimal response when the agent failed or produced no output."""
         error_message = agent_state.get("error") or "Unknown error"
@@ -337,10 +355,6 @@ class RecommendationGenerator:
             tools_used=[],
             warnings=[error_message],
         )
-
-    # ------------------------------------------------------------------
-    # Utility helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _calc_execution_time(agent_state: AgentState) -> float:

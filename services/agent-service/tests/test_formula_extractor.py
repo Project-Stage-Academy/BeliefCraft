@@ -58,8 +58,7 @@ def test_extract_from_rag_chunks_uses_real_numbered_formula_chunk() -> None:
     formulas = extractor.extract_from_rag_chunks([formula_chunk])
 
     assert len(formulas) == 1
-    assert formulas[0].latex
-    assert "$$" not in formulas[0].latex
+    assert formulas[0].latex == formula_chunk["content"].strip()
     assert formulas[0].description in {
         "Equation",
         "Probability expression",
@@ -91,11 +90,10 @@ def test_extract_from_rag_chunks_supports_nested_metadata_shape_from_real_chunk(
         "metadata": {
             "chunk_type": base_formula_chunk["chunk_type"],
             "description": base_formula_chunk.get("section_title"),
-            "variables": {"x": "state variable"},
         },
     }
 
     formulas = extractor.extract_from_rag_chunks([nested_shape_chunk])
 
     assert len(formulas) == 1
-    assert formulas[0].variables == {"x": "state variable"}
+    assert formulas[0].description == base_formula_chunk["section_title"]
