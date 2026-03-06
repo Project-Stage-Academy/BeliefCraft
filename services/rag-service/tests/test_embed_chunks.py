@@ -2,6 +2,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import weaviate
+from weaviate.collections.classes.config import Configure, ReferenceProperty
+from weaviate.collections.classes.data import DataReference
+from weaviate.collections.classes.filters import Filter
+from weaviate.collections.classes.grpc import QueryReference
+
 from scripts.embed_chunks import (
     COLLECTION_NAME,
     REFERENCE_TYPE_MAP,
@@ -11,10 +16,6 @@ from scripts.embed_chunks import (
     insert_chunks,
     setup_collection,
 )
-from weaviate.collections.classes.config import Configure, ReferenceProperty
-from weaviate.collections.classes.data import DataReference
-from weaviate.collections.classes.filters import Filter
-from weaviate.collections.classes.grpc import QueryReference
 
 
 @pytest.mark.parametrize(
