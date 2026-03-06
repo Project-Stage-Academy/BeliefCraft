@@ -46,7 +46,6 @@ from weaviate.collections import Collection
 from weaviate.collections.classes.data import DataReferenceMulti
 from weaviate.util import generate_uuid5
 
-# Ensure the pipeline package is importable when running from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pipeline.code_processing.python_code_processing.extract_example_refs import (
@@ -60,6 +59,12 @@ from rag_service.constants import (
 )
 
 # ---------------------------------------------------------------------------
+# Types
+# ---------------------------------------------------------------------------
+
+RefList = list[DataReference | DataReferenceMulti]
+
+# ---------------------------------------------------------------------------
 # UUID helpers
 # ---------------------------------------------------------------------------
 
@@ -70,17 +75,12 @@ def uuid_for_schema_id(schema_id: str) -> str:
 
 
 def uuid_for_algorithm_chunk(entity_id: str) -> str:
-    """Deterministic UUID for an algorithm chunk in unified_collection.
-
-    embed_chunks.py generates UUIDs via:
-        generate_uuid5(f'{entity_id}:{chunk_type}')
-    for chunks that have an entity_id. Algorithm chunks have chunk_type='algorithm'.
-    """
+    """Deterministic UUID for an algorithm chunk (chunk_type='algorithm') in unified_collection."""
     return generate_uuid5(f"{entity_id}:algorithm")
 
 
 def uuid_for_example_chunk(entity_id: str) -> str:
-    """Deterministic UUID for an example chunk in unified_collection (chunk_type='example')."""
+    """Deterministic UUID for an example chunk (chunk_type='example') in unified_collection."""
     return generate_uuid5(f"{entity_id}:example")
 
 
@@ -98,119 +98,128 @@ def entity_id_from_example_number(example_number: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def _existing_reference_names(collection: Collection) -> set[str]:
+    return {r.name for r in collection.config.get().references}
+
+
 def _recreate_if_needed(client: weaviate.WeaviateClient, name: str, recreate: bool) -> None:
     if recreate and client.collections.exists(name):
         print(f"Deleting existing collection: {name}")
         client.collections.delete(name)
 
 
-def _existing_reference_names(collection: Collection) -> set[str]:
-    """Return the set of reference property names already on a collection."""
-    cfg = collection.config.get()
-    return {r.name for r in cfg.references}
+def _create_or_use(client: weaviate.WeaviateClient, name: str, **kwargs: Any) -> Collection:
+    if not client.collections.exists(name):
+        print(f"Creating collection: {name}")
+        client.collections.create(name=name, **kwargs)
+    else:
+        print(f"Using existing collection: {name}")
+    return client.collections.use(name)
+
+
+def _common_properties(extra: list[Property] | None = None) -> list[Property]:
+    base = [
+        Property(name="schema_id", data_type=DataType.TEXT, skip_vectorization=True),
+        Property(name="name", data_type=DataType.TEXT, skip_vectorization=True),
+        Property(name="code", data_type=DataType.TEXT, skip_vectorization=True),
+        Property(name="algorithm_number", data_type=DataType.TEXT, skip_vectorization=True),
+    ]
+    return base + (extra or [])
+
+
+def _add_missing_refs(collection: Collection, refs: list[tuple[str, str]]) -> None:
+    existing = _existing_reference_names(collection)
+    for ref_name, target in refs:
+        if ref_name not in existing:
+            collection.config.add_reference(
+                ReferenceProperty(name=ref_name, target_collection=target)
+            )
+
+
+_CROSS_REFS = [
+    ("initialized_classes", CODE_CLASS_COLLECTION),
+    ("used_methods", CODE_METHOD_COLLECTION),
+    ("used_functions", CODE_FUNCTION_COLLECTION),
+]
 
 
 def setup_collections(
     client: weaviate.WeaviateClient, recreate: bool = False
 ) -> tuple[Collection, Collection, Collection]:
-    """Create all three code collections.
-
-    Done in two phases to avoid circular-reference errors:
-      Phase 1 — create each collection with only its non-circular references
-                 (algorithm_ref, class_ref).
-      Phase 2 — add the cross-collection references (initialized_classes,
-                 used_methods, used_functions) once all collections exist.
+    """
+    Create all three code collections in two phases to avoid circular-reference errors:
+      Phase 1 — create each collection with only its non-circular references.
+      Phase 2 — add cross-collection references once all collections exist.
     """
     for name in (CODE_CLASS_COLLECTION, CODE_METHOD_COLLECTION, CODE_FUNCTION_COLLECTION):
         _recreate_if_needed(client, name, recreate)
 
-    # ------------------------------------------------------------------
-    # Phase 1: create collections (no cross-collection refs yet)
-    # ------------------------------------------------------------------
-    if not client.collections.exists(CODE_CLASS_COLLECTION):
-        print(f"Creating collection: {CODE_CLASS_COLLECTION}")
-        client.collections.create(
-            name=CODE_CLASS_COLLECTION,
-            vectorizer_config=Configure.Vectorizer.none(),
-            properties=[
-                Property(name="schema_id", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="name", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="code", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="algorithm_number", data_type=DataType.TEXT, skip_vectorization=True),
-            ],
-            references=[
-                ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME),
-            ],
-        )
-    else:
-        print(f"Using existing collection: {CODE_CLASS_COLLECTION}")
+    no_vectorizer = Configure.Vectorizer.none()
 
-    if not client.collections.exists(CODE_METHOD_COLLECTION):
-        print(f"Creating collection: {CODE_METHOD_COLLECTION}")
-        client.collections.create(
-            name=CODE_METHOD_COLLECTION,
-            vectorizer_config=Configure.Vectorizer.none(),
-            properties=[
-                Property(name="schema_id", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="name", data_type=DataType.TEXT, skip_vectorization=True),
+    cls_col = _create_or_use(
+        client,
+        CODE_CLASS_COLLECTION,
+        vectorizer_config=no_vectorizer,
+        properties=_common_properties(),
+        references=[ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME)],
+    )
+    mth_col = _create_or_use(
+        client,
+        CODE_METHOD_COLLECTION,
+        vectorizer_config=no_vectorizer,
+        properties=_common_properties(
+            [
                 Property(name="qualified_name", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="code", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="algorithm_number", data_type=DataType.TEXT, skip_vectorization=True),
-            ],
-            references=[
-                ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME),
-                ReferenceProperty(name="class_ref", target_collection=CODE_CLASS_COLLECTION),
-            ],
-        )
-    else:
-        print(f"Using existing collection: {CODE_METHOD_COLLECTION}")
+            ]
+        ),
+        references=[
+            ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME),
+            ReferenceProperty(name="class_ref", target_collection=CODE_CLASS_COLLECTION),
+        ],
+    )
+    fn_col = _create_or_use(
+        client,
+        CODE_FUNCTION_COLLECTION,
+        vectorizer_config=no_vectorizer,
+        properties=_common_properties(),
+        references=[ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME)],
+    )
 
-    if not client.collections.exists(CODE_FUNCTION_COLLECTION):
-        print(f"Creating collection: {CODE_FUNCTION_COLLECTION}")
-        client.collections.create(
-            name=CODE_FUNCTION_COLLECTION,
-            vectorizer_config=Configure.Vectorizer.none(),
-            properties=[
-                Property(name="schema_id", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="name", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="code", data_type=DataType.TEXT, skip_vectorization=True),
-                Property(name="algorithm_number", data_type=DataType.TEXT, skip_vectorization=True),
-            ],
-            references=[
-                ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME),
-            ],
-        )
-    else:
-        print(f"Using existing collection: {CODE_FUNCTION_COLLECTION}")
-
-    cls_col = client.collections.use(CODE_CLASS_COLLECTION)
-    mth_col = client.collections.use(CODE_METHOD_COLLECTION)
-    fn_col = client.collections.use(CODE_FUNCTION_COLLECTION)
-
-    # ------------------------------------------------------------------
-    # Phase 2: add cross-collection references now that all three exist
-    # ------------------------------------------------------------------
     print("Adding cross-collection references …")
-
-    existing_mth_refs = _existing_reference_names(mth_col)
-    for ref_name, target in (
-        ("initialized_classes", CODE_CLASS_COLLECTION),
-        ("used_methods", CODE_METHOD_COLLECTION),
-        ("used_functions", CODE_FUNCTION_COLLECTION),
-    ):
-        if ref_name not in existing_mth_refs:
-            mth_col.config.add_reference(ReferenceProperty(name=ref_name, target_collection=target))
-
-    existing_fn_refs = _existing_reference_names(fn_col)
-    for ref_name, target in (
-        ("initialized_classes", CODE_CLASS_COLLECTION),
-        ("used_methods", CODE_METHOD_COLLECTION),
-        ("used_functions", CODE_FUNCTION_COLLECTION),
-    ):
-        if ref_name not in existing_fn_refs:
-            fn_col.config.add_reference(ReferenceProperty(name=ref_name, target_collection=target))
+    _add_missing_refs(mth_col, _CROSS_REFS)
+    _add_missing_refs(fn_col, _CROSS_REFS)
 
     return cls_col, mth_col, fn_col
+
+
+# ---------------------------------------------------------------------------
+# Reference builders
+# ---------------------------------------------------------------------------
+
+
+def _make_ref(from_uuid: str, prop: str, to_uuid: str) -> DataReference:
+    return DataReference(from_uuid=from_uuid, from_property=prop, to_uuid=to_uuid)
+
+
+def _algorithm_ref(from_uuid: str, item: dict[str, Any]) -> DataReference | None:
+    algo_number = str(item.get("algorithm_number", "")).strip()
+    if algo_number:
+        return _make_ref(from_uuid, "algorithm_ref", uuid_for_algorithm_chunk(algo_number))
+    return None
+
+
+def _id_list_refs(from_uuid: str, prop: str, ids: list[str]) -> list[DataReference]:
+    return [_make_ref(from_uuid, prop, uuid_for_schema_id(sid)) for sid in ids]
+
+
+def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
+    refs: RefList = []
+    refs.extend(
+        _id_list_refs(from_uuid, "initialized_classes", item.get("initialized_classes", []))
+    )
+    refs.extend(_id_list_refs(from_uuid, "used_methods", item.get("used_methods", [])))
+    refs.extend(_id_list_refs(from_uuid, "used_functions", item.get("used_functions", [])))
+    return refs
 
 
 # ---------------------------------------------------------------------------
@@ -218,16 +227,9 @@ def setup_collections(
 # ---------------------------------------------------------------------------
 
 
-def _insert_classes(
-    collection: Collection,
-    classes: list[dict[str, Any]],
-) -> list[DataReference | DataReferenceMulti]:
-    """Insert class objects and return algorithm_ref references to add later."""
-    references: list[DataReference | DataReferenceMulti] = []
-
+def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> RefList:
     with collection.batch.dynamic() as batch:
         for cls in classes:
-            uuid = uuid_for_schema_id(cls["id"])
             batch.add_object(
                 properties={
                     "schema_id": cls["id"],
@@ -235,178 +237,69 @@ def _insert_classes(
                     "code": cls["code"],
                     "algorithm_number": str(cls.get("algorithm_number", "")),
                 },
-                uuid=uuid,
+                uuid=uuid_for_schema_id(cls["id"]),
             )
 
-    # Build algorithm_ref references after objects exist
+    refs: RefList = []
     for cls in classes:
-        algo_number = str(cls.get("algorithm_number", "")).strip()
-        if algo_number:
-            from_uuid = uuid_for_schema_id(cls["id"])
-            to_uuid = uuid_for_algorithm_chunk(algo_number)
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="algorithm_ref",
-                    to_uuid=to_uuid,
-                )
-            )
-
-    return references
+        ref = _algorithm_ref(uuid_for_schema_id(cls["id"]), cls)
+        if ref:
+            refs.append(ref)
+    return refs
 
 
-def _insert_methods(
+def _insert_code_entities(
     collection: Collection,
-    methods: list[dict[str, Any]],
-) -> list[DataReference | DataReferenceMulti]:
-    """Insert method objects and return all cross-references to add later."""
-    references: list[DataReference | DataReferenceMulti] = []
-
+    items: list[dict[str, Any]],
+    extra_props: dict[str, Any] | None = None,
+    extra_refs_fn: Any = None,
+) -> RefList:
+    """Generic inserter for methods and functions."""
     with collection.batch.dynamic() as batch:
-        for mth in methods:
-            uuid = uuid_for_schema_id(mth["id"])
-            batch.add_object(
-                properties={
-                    "schema_id": mth["id"],
-                    "name": mth["name"],
-                    "qualified_name": mth["qualified_name"],
-                    "code": mth["code"],
-                    "algorithm_number": str(mth.get("algorithm_number", "")),
-                },
-                uuid=uuid,
-            )
+        for item in items:
+            props = {
+                "schema_id": item["id"],
+                "name": item["name"],
+                "code": item["code"],
+                "algorithm_number": str(item.get("algorithm_number", "")),
+            }
+            if extra_props:
+                for key in extra_props:
+                    props[key] = item.get(key, "")
+            batch.add_object(properties=props, uuid=uuid_for_schema_id(item["id"]))
 
-    # Build all references
-    for mth in methods:
-        from_uuid = uuid_for_schema_id(mth["id"])
+    refs: RefList = []
+    for item in items:
+        from_uuid = uuid_for_schema_id(item["id"])
+        ref = _algorithm_ref(from_uuid, item)
+        if ref:
+            refs.append(ref)
+        if extra_refs_fn:
+            refs.extend(extra_refs_fn(from_uuid, item))
+        refs.extend(_cross_refs(from_uuid, item))
+    return refs
 
-        # algorithm_ref
-        algo_number = str(mth.get("algorithm_number", "")).strip()
-        if algo_number:
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="algorithm_ref",
-                    to_uuid=uuid_for_algorithm_chunk(algo_number),
-                )
-            )
 
-        # class_ref (belongs-to class)
+def _insert_methods(collection: Collection, methods: list[dict[str, Any]]) -> RefList:
+    def _class_ref(from_uuid: str, mth: dict[str, Any]) -> RefList:
         class_schema_id = mth.get("class", "")
         if class_schema_id and not class_schema_id.startswith("external:"):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="class_ref",
-                    to_uuid=uuid_for_schema_id(class_schema_id),
-                )
-            )
+            return [_make_ref(from_uuid, "class_ref", uuid_for_schema_id(class_schema_id))]
+        return []
 
-        # initialized_classes
-        for cls_id in mth.get("initialized_classes", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="initialized_classes",
-                    to_uuid=uuid_for_schema_id(cls_id),
-                )
-            )
-
-        # used_methods
-        for mth_id in mth.get("used_methods", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="used_methods",
-                    to_uuid=uuid_for_schema_id(mth_id),
-                )
-            )
-
-        # used_functions
-        for fn_id in mth.get("used_functions", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="used_functions",
-                    to_uuid=uuid_for_schema_id(fn_id),
-                )
-            )
-
-    return references
+    return _insert_code_entities(
+        collection,
+        methods,
+        extra_props={"qualified_name": None},
+        extra_refs_fn=_class_ref,
+    )
 
 
-def _insert_functions(
-    collection: Collection,
-    functions: list[dict[str, Any]],
-) -> list[DataReference | DataReferenceMulti]:
-    """Insert function objects and return all cross-references to add later."""
-    references: list[DataReference | DataReferenceMulti] = []
-
-    with collection.batch.dynamic() as batch:
-        for fn in functions:
-            uuid = uuid_for_schema_id(fn["id"])
-            batch.add_object(
-                properties={
-                    "schema_id": fn["id"],
-                    "name": fn["name"],
-                    "code": fn["code"],
-                    "algorithm_number": str(fn.get("algorithm_number", "")),
-                },
-                uuid=uuid,
-            )
-
-    # Build all references
-    for fn in functions:
-        from_uuid = uuid_for_schema_id(fn["id"])
-
-        # algorithm_ref
-        algo_number = str(fn.get("algorithm_number", "")).strip()
-        if algo_number:
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="algorithm_ref",
-                    to_uuid=uuid_for_algorithm_chunk(algo_number),
-                )
-            )
-
-        # initialized_classes
-        for cls_id in fn.get("initialized_classes", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="initialized_classes",
-                    to_uuid=uuid_for_schema_id(cls_id),
-                )
-            )
-
-        # used_methods
-        for mth_id in fn.get("used_methods", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="used_methods",
-                    to_uuid=uuid_for_schema_id(mth_id),
-                )
-            )
-
-        # used_functions
-        for fn_id in fn.get("used_functions", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="used_functions",
-                    to_uuid=uuid_for_schema_id(fn_id),
-                )
-            )
-
-    return references
+def _insert_functions(collection: Collection, functions: list[dict[str, Any]]) -> RefList:
+    return _insert_code_entities(collection, functions)
 
 
-def _add_references_safely(
-    collection: Collection, references: list[DataReference | DataReferenceMulti], label: str
-) -> None:
-    """Add references in batch, skipping failures gracefully."""
+def _add_references_safely(collection: Collection, references: RefList, label: str) -> None:
     if not references:
         return
     try:
@@ -420,47 +313,32 @@ def _add_references_safely(
 # Example → code entity references
 # ---------------------------------------------------------------------------
 
-_EXAMPLE_CODE_REFS = (
+_EXAMPLE_CODE_REFS = [
     ("used_classes", CODE_CLASS_COLLECTION),
     ("used_methods", CODE_METHOD_COLLECTION),
     ("used_functions", CODE_FUNCTION_COLLECTION),
-)
+]
+
+_EXAMPLE_REFS_KEY_TO_PROP = {
+    "initialized_classes": "used_classes",
+    "used_methods": "used_methods",
+    "used_functions": "used_functions",
+}
 
 
 def _ensure_example_code_ref_properties(client: weaviate.WeaviateClient) -> None:
-    """Add reference properties to unified_collection so example chunks can point to code entities.
-
-    Properties added (idempotent):
-      - used_classes   -> CodeClass
-      - used_methods   -> CodeMethod
-      - used_functions -> CodeFunction
-    """
     if not client.collections.exists(COLLECTION_NAME):
         print(f"Warning: {COLLECTION_NAME} not found; skipping example-code ref setup.")
         return
-
     unified = client.collections.use(COLLECTION_NAME)
-    existing = _existing_reference_names(unified)
-    for ref_name, target in _EXAMPLE_CODE_REFS:
-        if ref_name not in existing:
-            print(f"  Adding reference '{ref_name}' -> {target} on {COLLECTION_NAME} …")
-            unified.config.add_reference(ReferenceProperty(name=ref_name, target_collection=target))
+    _add_missing_refs(unified, _EXAMPLE_CODE_REFS)
 
 
 def _build_example_code_references(
     examples: list[dict[str, Any]],
     schema: dict[str, Any],
-) -> list[DataReference | DataReferenceMulti]:
-    """Use extract_example_refs to build DataReferences from example chunks to code entities.
-
-    Args:
-        examples: list of example dicts, each with 'example_number' and 'text' fields.
-        schema:   result of build_schema(), used for resolving references.
-
-    Returns:
-        List of DataReference objects ready for reference_add_many on unified_collection.
-    """
-    references: list[DataReference | DataReferenceMulti] = []
+) -> RefList:
+    references: RefList = []
 
     for example in examples:
         example_number = example.get("example_number", "")
@@ -469,37 +347,11 @@ def _build_example_code_references(
             print(f"  Skipping example with unparseable number: {example_number!r}")
             continue
 
-        text = example.get("text", "")
-        refs = extract_example_refs(text, schema)
-
+        refs = extract_example_refs(example.get("text", ""), schema)
         from_uuid = uuid_for_example_chunk(entity_id)
 
-        for schema_id in refs.get("initialized_classes", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="used_classes",
-                    to_uuid=uuid_for_schema_id(schema_id),
-                )
-            )
-
-        for schema_id in refs.get("used_methods", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="used_methods",
-                    to_uuid=uuid_for_schema_id(schema_id),
-                )
-            )
-
-        for schema_id in refs.get("used_functions", []):
-            references.append(
-                DataReference(
-                    from_uuid=from_uuid,
-                    from_property="used_functions",
-                    to_uuid=uuid_for_schema_id(schema_id),
-                )
-            )
+        for ref_key, prop in _EXAMPLE_REFS_KEY_TO_PROP.items():
+            references.extend(_id_list_refs(from_uuid, prop, refs.get(ref_key, [])))
 
     return references
 
@@ -515,12 +367,11 @@ def main() -> None:
             "Build and embed code schema (classes, methods, functions) from translated "
             "algorithms JSON into Weaviate. Creates three collections: "
             f"{CODE_CLASS_COLLECTION}, {CODE_METHOD_COLLECTION}, {CODE_FUNCTION_COLLECTION}. "
-            "Each entity stores its code (embedded via Bedrock), metadata, and cross-references "
-            "to related code entities and to the originating algorithm chunk in the "
-            f"{COLLECTION_NAME} collection."
+            "Each entity stores its code, metadata, and cross-references to related code entities "
+            f"and to the originating algorithm chunk in {COLLECTION_NAME}."
         )
     )
-    parser.add_argument(  # TODO: make it positional
+    parser.add_argument(
         "--file_path",
         default="translated_algorithms.json",
         help="Path to the translated_algorithms.json file.",
@@ -529,8 +380,7 @@ def main() -> None:
     parser.add_argument(
         "--examples_file_path",
         default="translated_examples.json",
-        help="Path to the translated_examples.json file. When provided, adds references from "
-        "example chunks in unified_collection to code entities (classes, methods, functions).",
+        help="Path to the translated_examples.json file.",
         type=Path,
     )
     parser.add_argument(
@@ -544,7 +394,7 @@ def main() -> None:
         with args.file_path.open() as f:
             algorithms = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError) as exc:
-        print(f"Failed to load JSON file: {exc}")
+        print(f"Failed to load algorithms JSON: {exc}")
         return
 
     examples: list[dict[str, Any]] = []
@@ -554,50 +404,37 @@ def main() -> None:
                 examples = json.load(f)
             print(f"Loaded {len(examples)} examples from {args.examples_file_path}")
         except (FileNotFoundError, json.JSONDecodeError) as exc:
-            print(f"Failed to load examples JSON file: {exc}")
+            print(f"Failed to load examples JSON: {exc}")
             return
 
-    print("Building code schema from translated algorithms …")
-    code_schema = build_code_schema(algorithms)
-
-    classes = code_schema["classes"]
-    methods = code_schema["methods"]
-    functions = code_schema["functions"]
-
-    print(f"  Classes:   {len(classes)}")
-    print(f"  Methods:   {len(methods)}")
-    print(f"  Functions: {len(functions)}")
+    print("Building code schema …")
+    schema = build_code_schema(algorithms)
+    classes, methods, functions = schema["classes"], schema["methods"], schema["functions"]
+    print(f"  Classes: {len(classes)}  Methods: {len(methods)}  Functions: {len(functions)}")
 
     with weaviate.connect_to_local() as client:
         cls_col, mth_col, fn_col = setup_collections(client, recreate=args.recreate)
 
         print("Inserting classes …")
-        cls_refs = _insert_classes(cls_col, classes)
-        _add_references_safely(cls_col, cls_refs, CODE_CLASS_COLLECTION)
+        _add_references_safely(cls_col, _insert_classes(cls_col, classes), CODE_CLASS_COLLECTION)
 
         print("Inserting methods …")
-        mth_refs = _insert_methods(mth_col, methods)
-        # Split references by target collection so we call reference_add_many on the right
-        # collection object (Weaviate v4 client resolves the from_property automatically,
-        # but we still call it on the collection that owns the from-object).
-        _add_references_safely(mth_col, mth_refs, CODE_METHOD_COLLECTION)
+        _add_references_safely(mth_col, _insert_methods(mth_col, methods), CODE_METHOD_COLLECTION)
 
         print("Inserting functions …")
-        fn_refs = _insert_functions(fn_col, functions)
-        _add_references_safely(fn_col, fn_refs, CODE_FUNCTION_COLLECTION)
+        _add_references_safely(
+            fn_col, _insert_functions(fn_col, functions), CODE_FUNCTION_COLLECTION
+        )
 
         if examples:
             print("Adding example → code entity references …")
             _ensure_example_code_ref_properties(client)
-            example_refs = _build_example_code_references(examples, code_schema)
+            example_refs = _build_example_code_references(examples, schema)
             unified_col = client.collections.use(COLLECTION_NAME)
             _add_references_safely(unified_col, example_refs, f"{COLLECTION_NAME} (examples)")
             print(f"  Processed {len(examples)} examples.")
 
-    print("Done.")
-    print(
-        f"  Processed {len(classes)} classes, {len(methods)} methods, {len(functions)} functions."
-    )
+    print(f"Done. {len(classes)} classes, {len(methods)} methods, {len(functions)} functions.")
 
 
 if __name__ == "__main__":

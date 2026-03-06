@@ -1,13 +1,13 @@
 """
 extract_example_refs.py
 -----------------------
-Витягує посилання на класи, методи та функції з "прикладів" —
-фрагментів що містять звичайний текст з вбудованими ```python блоками.
+Extracts references to classes, methods, and functions from "examples" —
+fragments containing plain text with embedded ```python blocks.
 
-На відміну від code_analyzer, тут ми НЕ реєструємо нові визначення,
-а лише збираємо виклики і резолвимо їх проти вже відомої схеми.
+Unlike code_analyzer, no new definitions are registered here;
+we only collect calls and resolve them against an already-known schema.
 
-Результат:
+Result:
   {
     "initialized_classes": ["cls:X", ...],
     "used_functions":      ["fn:foo", ...],
@@ -20,29 +20,28 @@ import re
 from collections import defaultdict
 
 from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
-from pipeline.code_processing.python_code_processing.code_analyzer import (
-    EXTERNAL_MODULES,
-)
+from pipeline.code_processing.python_code_processing.code_analyzer import EXTERNAL_MODULES
 
 # ------------------------------------------------------------------ #
-# Extract python code blocks from markdown/prose text
+# Regex patterns
 # ------------------------------------------------------------------ #
 
 _CODE_BLOCK_RE = re.compile(r"```python\s*\n(.*?)```", re.DOTALL)
-_MATH_BLOCK_RE = re.compile(r"\$\$.*?\$\$", re.DOTALL)  # strip LaTeX blocks
-_MATH_INLINE_RE = re.compile(r"\$[^$]+\$")  # strip inline LaTeX
+_MATH_BLOCK_RE = re.compile(r"\$\$.*?\$\$", re.DOTALL)
+_MATH_INLINE_RE = re.compile(r"\$[^$]+\$")
+_INLINE_ASSIGN_RE = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*\(")
+
+
+# ------------------------------------------------------------------ #
+# Code block extraction
+# ------------------------------------------------------------------ #
 
 
 def _is_code_line(line: str) -> bool:
-    """
-    Евристика: чи виглядає рядок як Python-код, а не як звичайний текст.
-    Перевіряємо чи парситься як валідний Python вираз/Statement.
-    """
+    """Heuristic: does this line look like Python code rather than prose."""
     stripped = line.strip()
     if not stripped:
         return False
-    # Явні ознаки тексту: починається з великої літери і не містить '=' чи '('
-    # (заголовки, речення тощо) — пропускаємо швидко
     if stripped[0].isupper() and "=" not in stripped and "(" not in stripped:
         return False
     try:
@@ -52,60 +51,49 @@ def _is_code_line(line: str) -> bool:
         return False
 
 
-_INLINE_ASSIGN_RE = re.compile(
-    r"\b([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*\(",
-)
+def _extract_fenced_blocks(text: str) -> list[str]:
+    return [m.group(1) for m in _CODE_BLOCK_RE.finditer(text)]
 
 
-def _extract_inline_code_snippets(text: str) -> list[str]:
-    """
-    Третій етап: витягує inline згадки коду з прози за патерном
-    'var = func(' або просто 'func(' всередині речення.
+def _strip_non_code(text: str) -> str:
+    text = _CODE_BLOCK_RE.sub("\n", text)
+    text = _MATH_BLOCK_RE.sub(" ", text)
+    return _MATH_INLINE_RE.sub(" ", text)
 
-    Повертає список мінімальних Python-рядків виду 'var = func(...)'.
-    Аргументи не парсимо — просто замінюємо на () щоб отримати валідний AST.
-    """
-    snippets = []
-    for m in _INLINE_ASSIGN_RE.finditer(text):
-        var, func = m.group(1), m.group(2)
-        snippets.append(f"{var} = {func}()")
-    return snippets
+
+def _extract_consecutive_code_lines(text: str) -> list[str]:
+    blocks, current = [], []
+    for line in text.splitlines():
+        if _is_code_line(line):
+            current.append(line.strip())
+        else:
+            if current:
+                blocks.append("\n".join(current))
+                current = []
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
+
+
+def _extract_inline_assignments(text: str) -> list[str]:
+    """Extract inline 'var = func(' patterns from prose and return minimal valid snippets."""
+    return [f"{m.group(1)} = {m.group(2)}()" for m in _INLINE_ASSIGN_RE.finditer(text)]
 
 
 def extract_code_blocks(text: str) -> list[str]:
     """
-    Витягує Python-код з тексту трьома способами:
-    1. Явні ```python ... ``` блоки
-    2. Рядки поза блоками, які парсяться як валідний Python
-    3. Inline патерни виду 'var = func(' всередині прозового тексту
+    Extract Python code from text in three passes:
+    1. Explicit ```python ... ``` fenced blocks.
+    2. Consecutive lines outside blocks that parse as valid Python.
+    3. Inline 'var = func(' patterns in prose.
     """
-    blocks: list[str] = []
+    blocks = _extract_fenced_blocks(text)
 
-    # --- Крок 1: явні ```python``` блоки ---
-    for m in _CODE_BLOCK_RE.finditer(text):
-        blocks.append(m.group(1))
+    bare_text = _strip_non_code(text)
+    blocks.extend(_extract_consecutive_code_lines(bare_text))
 
-    # --- Прибираємо явні блоки і LaTeX перед кроками 2 і 3 ---
-    bare_text = _CODE_BLOCK_RE.sub("\n", text)
-    bare_text = _MATH_BLOCK_RE.sub(" ", bare_text)
-    bare_text = _MATH_INLINE_RE.sub(" ", bare_text)
-
-    # --- Крок 2: consecutive рядки що парсяться як Python ---
-    current_block: list[str] = []
-    for line in bare_text.splitlines():
-        if _is_code_line(line):
-            current_block.append(line.strip())
-        else:
-            if current_block:
-                blocks.append("\n".join(current_block))
-                current_block = []
-    if current_block:
-        blocks.append("\n".join(current_block))
-
-    # --- Крок 3: inline 'var = func(' патерни з прозових рядків ---
     prose_lines = [line for line in bare_text.splitlines() if not _is_code_line(line)]
-    prose = "\n".join(prose_lines)
-    inline = _extract_inline_code_snippets(prose)
+    inline = _extract_inline_assignments("\n".join(prose_lines))
     if inline:
         blocks.append("\n".join(inline))
 
@@ -118,24 +106,17 @@ def extract_code_blocks(text: str) -> list[str]:
 
 
 class _CallCollector(ast.NodeVisitor):
-    """
-    Обходить AST і збирає всі виклики функцій/методів/класів.
-    Не реєструє жодних визначень.
-    """
+    """Traverse AST and collect all function/method/class calls without registering definitions."""
 
     def __init__(self, local_types: dict[str, str] | None = None):
-        # var_name -> type_name, заповнюється з присвоєнь у коді прикладу
         self.local_types: dict[str, str] = local_types or {}
-        # список (call_name, kind) де kind = "bare" | "method"
         self.calls: list[tuple[str, str]] = []
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        """Трекаємо x = SomeClass(...) щоб потім резолвити x.method()."""
         if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            var = node.targets[0].id
             typ = self._infer_type(node.value)
             if typ:
-                self.local_types[var] = typ
+                self.local_types[node.targets[0].id] = typ
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
@@ -152,25 +133,22 @@ class _CallCollector(ast.NodeVisitor):
     def _resolve(self, node: ast.expr) -> tuple[str | None, str]:
         if isinstance(node, ast.Name):
             return node.id, "bare"
-
         if isinstance(node, ast.Attribute):
-            method = node.attr
-            if isinstance(node.value, ast.Name):
-                obj = node.value.id
-                if obj in EXTERNAL_MODULES:
-                    return None, "unknown"
-                typ = self.local_types.get(obj)
-                if typ:
-                    return f"{typ}.{method}", "method"
-                return method, "method"
-
-            # deeper chain — find root
-            root = self._chain_root(node.value)
-            if root in EXTERNAL_MODULES:
-                return None, "unknown"
-            return method, "method"
-
+            return self._resolve_attribute(node)
         return None, "unknown"
+
+    def _resolve_attribute(self, node: ast.Attribute) -> tuple[str | None, str]:
+        method = node.attr
+        if isinstance(node.value, ast.Name):
+            obj = node.value.id
+            if obj in EXTERNAL_MODULES:
+                return None, "unknown"
+            typ = self.local_types.get(obj)
+            return (f"{typ}.{method}" if typ else method), "method"
+        root = self._chain_root(node.value)
+        if root in EXTERNAL_MODULES:
+            return None, "unknown"
+        return method, "method"
 
     def _chain_root(self, node: ast.expr) -> str | None:
         if isinstance(node, ast.Name):
@@ -185,6 +163,48 @@ class _CallCollector(ast.NodeVisitor):
 # ------------------------------------------------------------------ #
 
 
+def _build_method_index(known_methods: set[object]) -> dict[str, list[str]]:
+    index: dict[str, list[str]] = defaultdict(list)
+    for m in known_methods:
+        index[str(m).split(".")[-1]].append(str(m))
+    return index
+
+
+def _resolve_qualified_call(
+    call_name: str,
+    known_methods: set[object],
+    method_index: dict[str, list[str]],
+) -> list[str]:
+    cls_name, method_name = call_name.split(".", 1)
+    if call_name in known_methods:
+        return [f"mth:{call_name}"]
+    candidates = [m for m in method_index.get(method_name, []) if m.split(".")[0] == cls_name]
+    return [f"mth:{c}" for c in candidates]
+
+
+def _resolve_bare_call(
+    call_name: str,
+    raw_kind: str,
+    known_classes: set[object],
+    known_functions: set[object],
+    method_index: dict[str, list[str]],
+    local_definitions: set[str],
+) -> tuple[str | None, str | None, str | None]:
+    """Return (cls_ref, fn_ref, mth_ref) — at most one will be set."""
+    short = call_name.split(".")[-1]
+    if short in local_definitions:
+        return None, None, None
+    if short in known_classes:
+        return f"cls:{short}", None, None
+    if short in known_functions:
+        return None, f"fn:{short}", None
+    if raw_kind == "method":
+        candidates = method_index.get(short, [])
+        if len(candidates) == 1:
+            return None, None, f"mth:{candidates[0]}"
+    return None, None, None
+
+
 def _resolve_calls(
     calls: list[tuple[str, str]],
     known_classes: set[object],
@@ -192,54 +212,24 @@ def _resolve_calls(
     known_methods: set[object],
     local_definitions: set[str],
 ) -> dict[str, list[str]]:
-    """
-    Резолвить список (call_name, kind) проти відомих визначень.
-    Повертає словник з трьома списками ID.
-    """
-    # Short-name index for methods: "normalize" -> ["Factor.normalize", ...]
-    method_index: dict[str, list[str]] = defaultdict(list)
-    for m in known_methods:
-        short = str(m).split(".")[-1]
-        method_index[short].append(str(m))
-
+    method_index = _build_method_index(known_methods)
     inits: set[str] = set()
     funcs: set[str] = set()
     meths: set[str] = set()
 
     for call_name, raw_kind in calls:
-        parts = call_name.split(".")
-
-        if len(parts) == 2:
-            # Qualified: "TypeName.method"
-            cls_name, method_name = parts
-            qualified = call_name
-            if qualified in known_methods:
-                meths.add(f"mth:{qualified}")
-            else:
-                # Try index match
-                candidates = [
-                    m for m in method_index.get(method_name, []) if m.split(".")[0] == cls_name
-                ]
-                for c in candidates:
-                    meths.add(f"mth:{c}")
-
+        if len(call_name.split(".")) == 2:
+            meths.update(_resolve_qualified_call(call_name, known_methods, method_index))
         else:
-            # Bare name
-            short = parts[-1]
-
-            # Skip locally shadowed names
-            if short in local_definitions:
-                continue
-
-            if short in known_classes:
-                inits.add(f"cls:{short}")
-            elif short in known_functions:
-                funcs.add(f"fn:{short}")
-            elif raw_kind == "method":
-                candidates = method_index.get(short, [])
-                if len(candidates) == 1:
-                    meths.add(f"mth:{candidates[0]}")
-            # else: ambiguous or unknown — skip
+            cls_ref, fn_ref, mth_ref = _resolve_bare_call(
+                call_name, raw_kind, known_classes, known_functions, method_index, local_definitions
+            )
+            if cls_ref:
+                inits.add(cls_ref)
+            if fn_ref:
+                funcs.add(fn_ref)
+            if mth_ref:
+                meths.add(mth_ref)
 
     return {
         "initialized_classes": sorted(inits),
@@ -257,11 +247,11 @@ def extract_example_refs(
     text: str, schema: dict[str, list[dict[str, object]]]
 ) -> dict[str, list[str]]:
     """
-    Витягує посилання на відомі визначення з тексту прикладу.
+    Extract references to known definitions from an example text.
 
     Args:
-        text:   рядок з текстом (може містити ```python блоки або bare код)
-        schema: результат build_schema() —
+        text:   string with text (may contain ```python blocks or bare code)
+        schema: result of build_code_schema() —
                 {"classes": [...], "methods": [...], "functions": [...]}
 
     Returns:
@@ -275,8 +265,6 @@ def extract_example_refs(
     if not blocks:
         return {"initialized_classes": [], "used_functions": [], "used_methods": []}
 
-    # Збираємо всі виклики з усіх блоків,
-    # шерячи local_types між блоками одного прикладу
     collector = _CallCollector()
     local_definitions: set[str] = set()
 
@@ -285,21 +273,13 @@ def extract_example_refs(
             tree = ast.parse(block)
         except SyntaxError:
             continue
-
-        # Збираємо імена функцій/класів визначених прямо в прикладі
-        # (щоб не матчити їх проти глобальних визначень)
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
                 local_definitions.add(node.name)
-
         collector.visit(tree)
 
     return _resolve_calls(
-        collector.calls,
-        known_classes,
-        known_functions,
-        known_methods,
-        local_definitions,
+        collector.calls, known_classes, known_functions, known_methods, local_definitions
     )
 
 
@@ -317,31 +297,25 @@ if __name__ == "__main__":
 
     with Path(algorithms_path).open() as f:
         algorithms = json.load(f)
-
     with Path(examples_path).open() as f:
         examples = json.load(f)
 
-    # Будуємо схему з алгоритмів — кожен має "code" і "algorithm_number"
-    code_schema = build_code_schema(algorithms)
+    schema = build_code_schema(algorithms)
     print(
-        f"Schema: {len(code_schema['classes'])} classes, "
-        f"{len(code_schema['methods'])} methods, "
-        f"{len(code_schema['functions'])} functions\n"
+        f"Schema: {len(schema['classes'])} classes, "
+        f"{len(schema['methods'])} methods, "
+        f"{len(schema['functions'])} functions\n"
     )
 
-    # Обробляємо кожен приклад
     for example in examples:
         example_number = example.get("example_number", "?")
         text = example.get("text", "")
+        refs = extract_example_refs(text, schema)
 
-        blocks = extract_code_blocks(text)
-        refs = extract_example_refs(text, code_schema)
-
-        # Виводимо тільки якщо є хоч якісь посилання
         if any(refs[k] for k in refs):
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             print(f"Example: {example_number}")
-            print(f"  Blocks found: {len(blocks)}")
+            print(f"  Blocks found:        {len(extract_code_blocks(text))}")
             print(f"  initialized_classes: {refs['initialized_classes']}")
             print(f"  used_functions:      {refs['used_functions']}")
             print(f"  used_methods:        {refs['used_methods']}")
