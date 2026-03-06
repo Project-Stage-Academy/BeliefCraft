@@ -243,3 +243,31 @@ def test_id_generation_logic(mock_data_env):
 
     assert id1 != id2
     assert len(id1) > 0
+
+
+def test_visual_object_image_index_builds_link(mock_data_env, monkeypatch):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+        figures_bucket_url="https://cdn.example.com/",
+    )
+    assembler.image_map = {
+        1: [
+            {
+                "chunk_type": "captioned_image",
+                "entity_id": "1.1",
+                "content": "Fig 1",
+                "image_index": 7,
+            }
+        ]
+    }
+
+    assembler._handle_visual_objects(1, [])
+
+    assert assembler.final_chunks
+    assert assembler.final_chunks[0]["image_links"] == [
+        "https://cdn.example.com/figures/figure_7.png"
+    ]
