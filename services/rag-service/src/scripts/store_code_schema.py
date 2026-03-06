@@ -188,11 +188,6 @@ def setup_collections(
     return cls_col, mth_col, fn_col
 
 
-# ---------------------------------------------------------------------------
-# Reference builders
-# ---------------------------------------------------------------------------
-
-
 def _make_ref(from_uuid: str, prop: str, to_uuid: str) -> DataReference:
     return DataReference(from_uuid=from_uuid, from_property=prop, to_uuid=to_uuid)
 
@@ -216,11 +211,6 @@ def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
     refs.extend(_id_list_refs(from_uuid, "used_methods", item.get("used_methods", [])))
     refs.extend(_id_list_refs(from_uuid, "used_functions", item.get("used_functions", [])))
     return refs
-
-
-# ---------------------------------------------------------------------------
-# Insertion helpers
-# ---------------------------------------------------------------------------
 
 
 def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> RefList:
@@ -305,10 +295,6 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
         logger.warning("Some references for %s could not be added: %s", label, exc)
 
 
-# ---------------------------------------------------------------------------
-# Example → code entity references
-# ---------------------------------------------------------------------------
-
 _EXAMPLE_CODE_REFS = [
     ("used_classes", CODE_CLASS_COLLECTION),
     ("used_methods", CODE_METHOD_COLLECTION),
@@ -350,11 +336,6 @@ def _build_example_code_references(
             references.extend(_id_list_refs(from_uuid, prop, refs.get(ref_key, [])))
 
     return references
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

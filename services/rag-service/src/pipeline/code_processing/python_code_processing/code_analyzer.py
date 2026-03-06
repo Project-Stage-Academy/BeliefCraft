@@ -9,10 +9,6 @@ from common.logging import get_logger
 
 logger = get_logger(__name__)
 
-# ------------------------------------------------------------------ #
-# External modules to ignore during call resolution
-# ------------------------------------------------------------------ #
-
 EXTERNAL_MODULES = {
     "np",
     "numpy",

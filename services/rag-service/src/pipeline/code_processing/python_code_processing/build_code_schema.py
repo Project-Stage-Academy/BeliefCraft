@@ -1,9 +1,9 @@
 """
 build_code_schema.py
----------------
-Будує повну схему коду на основі CodeAnalyzer.
+--------------------
+Builds a complete code schema based on CodeAnalyzer.
 
-Результат — словник з трьома списками:
+Returns a dict with three lists:
   {
     "classes":   [ClassRecord, ...],
     "methods":   [MethodRecord, ...],
@@ -14,7 +14,7 @@ ClassRecord:
   {
     "id":   "cls:ClassName",
     "name": "ClassName",
-    "code": "<тільки __init__ + рядок class ...>",  # або весь клас якщо немає __init__
+    "code": "<class header + __init__ only>",  # or full class if no __init__
   }
 
 MethodRecord:
@@ -61,10 +61,6 @@ from pipeline.code_processing.python_code_processing.code_analyzer import (
 
 logger = get_logger(__name__)
 
-# ------------------------------------------------------------------ #
-# ID helpers
-# ------------------------------------------------------------------ #
-
 
 def class_id(name: str) -> str:
     return f"cls:{name}"
@@ -76,11 +72,6 @@ def method_id(qualified: str) -> str:
 
 def function_id(name: str) -> str:
     return f"fn:{name}"
-
-
-# ------------------------------------------------------------------ #
-# Source extraction
-# ------------------------------------------------------------------ #
 
 
 def _node_source(node: ast.AST) -> str:
@@ -124,11 +115,6 @@ def _find_init(body: list[ast.stmt]) -> ast.FunctionDef | None:
     )
 
 
-# ------------------------------------------------------------------ #
-# Reference resolution
-# ------------------------------------------------------------------ #
-
-
 def _collect_known_ids(analyzer: CodeAnalyzer) -> tuple[set[str], set[str], set[str]]:
     return (
         {class_id(n) for n in analyzer.classes},
@@ -166,11 +152,6 @@ def _refs_from_edges(
     return sorted(inits), sorted(funcs), sorted(meths)
 
 
-# ------------------------------------------------------------------ #
-# Fragment origin
-# ------------------------------------------------------------------ #
-
-
 def _algorithm_number(raw: object) -> object:
     return extract_entity_id_from_number(str(raw))
 
@@ -181,11 +162,6 @@ def _fragment_alg_num(
     raw = analyzer._class_init_fragment.get(key) if class_init_key else None
     raw = raw if raw is not None else analyzer.fragment_idx.get(key)
     return _algorithm_number(raw)
-
-
-# ------------------------------------------------------------------ #
-# Schema section builders
-# ------------------------------------------------------------------ #
 
 
 def _build_classes(analyzer: CodeAnalyzer) -> list[dict[str, Any]]:
@@ -262,11 +238,6 @@ def _build_functions(
     return result
 
 
-# ------------------------------------------------------------------ #
-# Public API
-# ------------------------------------------------------------------ #
-
-
 def build_code_schema(fragments: Sequence[object]) -> dict[str, list[dict[str, Any]]]:
     """
     Analyze a list of code fragments or algorithm objects and return a full
@@ -290,10 +261,6 @@ def build_code_schema(fragments: Sequence[object]) -> dict[str, list[dict[str, A
         "functions": _build_functions(analyzer, *ref_args),
     }
 
-
-# ------------------------------------------------------------------ #
-# Entry point
-# ------------------------------------------------------------------ #
 
 if __name__ == "__main__":
     import sys

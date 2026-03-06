@@ -104,7 +104,7 @@ def extract_code_blocks(text: str) -> list[str]:
 
 
 # ------------------------------------------------------------------ #
-# Lightweight call collector (no definition registration)
+# Lightweight call collector
 # ------------------------------------------------------------------ #
 
 
@@ -285,10 +285,6 @@ def extract_example_refs(
         collector.calls, known_classes, known_functions, known_methods, local_definitions
     )
 
-
-# ------------------------------------------------------------------ #
-# Entry point
-# ------------------------------------------------------------------ #
 
 if __name__ == "__main__":
     import json
