@@ -19,7 +19,7 @@ import ast
 import re
 from collections import defaultdict
 
-from pipeline.julia_code_translation.code_analyzer import (
+from pipeline.code_processing.python_code_processing.code_analyzer import (
     EXTERNAL_MODULES,
 )
 
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     import sys
     from pathlib import Path
 
-    from pipeline.julia_code_translation.build_schema import build_schema
+    from pipeline.code_processing.python_code_processing.build_schema import build_schema
 
     algorithms_path = sys.argv[1] if len(sys.argv) > 1 else "./translated_algorithms.json"
     examples_path = sys.argv[2] if len(sys.argv) > 2 else "./translated_examples.json"

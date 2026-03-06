@@ -1,4 +1,4 @@
-from pipeline.julia_code_translation.process_book_code import UsageIndexBuilder
+from pipeline.code_processing.julia_code_translation.process_julia_code import UsageIndexBuilder
 
 
 def test_usage_index_skips_defined_functions_and_tracks_struct_usage():

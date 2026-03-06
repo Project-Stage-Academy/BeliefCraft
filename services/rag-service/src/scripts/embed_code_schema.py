@@ -48,8 +48,10 @@ from weaviate.util import generate_uuid5
 # Ensure the pipeline package is importable when running from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pipeline.julia_code_translation.build_schema import build_schema
-from pipeline.julia_code_translation.extract_example_refs import extract_example_refs
+from pipeline.code_processing.python_code_processing.build_schema import build_schema
+from pipeline.code_processing.python_code_processing.extract_example_refs import (
+    extract_example_refs,
+)
 from rag_service.constants import (
     CODE_CLASS_COLLECTION,
     CODE_FUNCTION_COLLECTION,

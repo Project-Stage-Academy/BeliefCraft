@@ -1,4 +1,4 @@
-from pipeline.julia_code_translation.signature_stripper import strip_to_signatures
+from pipeline.code_processing.python_code_processing.signature_stripper import strip_to_signatures
 
 
 def test_strip_to_signatures_keeps_only_method_returns():

@@ -57,7 +57,7 @@ The prompt builder and processors add useful context and normalize data before p
 From the repo root:
 
 ```bash
-uv run services/rag-service/src/pipeline/julia_code_translation/translate.py \
+uv run services/rag-service/src/pipeline/code_processing/translate.py \
   --pdf-path dm.pdf \
   --paddle-ocr-dir ocr_jsons \
   --prompts-dir prompts \
@@ -96,7 +96,7 @@ Running `translate.py` will produce or update:
 Prompts are always saved when you run `translate.py`. If you only want to generate prompts without sending them to the LLM, run:
 
 ```bash
-uv run services/rag-service/src/pipeline/julia_code_translation/build_prompts.py \
+uv run services/rag-service/src/pipeline/code_processing/build_prompts.py \
   --pdf-path dm.pdf \
   --paddle-ocr-dir ocr_jsons \
   --prompts-dir prompts \
@@ -112,7 +112,7 @@ This writes the same prompt files to `prompts/` without making any model calls.
 From the repo root:
 
 ```bash
-uv run services/rag-service/src/pipeline/julia_code_translation/update_chunks_with_translated_code.py \
+uv run services/rag-service/src/pipeline/code_processing/update_chunks_with_translated_code.py \
   --pdf-path dm.pdf \
   --paddle-ocr-dir ocr_jsons \
   --chunks ULTIMATE_BOOK_DATA.json \

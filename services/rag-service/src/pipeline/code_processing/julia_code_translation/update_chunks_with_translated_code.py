@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from common.logging import get_logger
-from pipeline.julia_code_translation.translation_types import (
+from pipeline.code_processing.julia_code_translation.translation_types import (
     Chunk,
     TranslatedAlgorithm,
     TranslatedExample,
