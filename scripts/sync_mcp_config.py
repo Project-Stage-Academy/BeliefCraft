@@ -60,10 +60,12 @@ class ConfigSynchronizer:
 
         Returns:
             True if any changes were made, False otherwise.
+
+        Raises:
+            FileNotFoundError: If the source `.mcp.json` file does not exist.
         """
         if not self.source_path.exists():
-            print(f"Error: Source of truth {self.source_path} not found.")
-            return False
+            raise FileNotFoundError(f"Source of truth '{self.source_path}' not found.")
 
         with self.source_path.open() as f:
             mcp_data = json.load(f)
@@ -92,11 +94,14 @@ def main():
     """CLI entry point."""
     root = Path(__file__).parent.parent
     synchronizer = ConfigSynchronizer(root)
-    if synchronizer.sync():
-        print("Configurations synchronized successfully.")
-        sys.exit(0)
-    else:
-        print("All configurations are already up to date.")
+    try:
+        if synchronizer.sync():
+            print("Configurations synchronized successfully.")
+        else:
+            print("All configurations are already up to date.")
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

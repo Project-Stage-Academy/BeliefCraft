@@ -80,6 +80,13 @@ def test_synchronizer_skips_if_no_changes(tmp_path, mcp_data):
     assert changed is False
 
 
+def test_synchronizer_raises_if_source_missing(tmp_path):
+    synchronizer = ConfigSynchronizer(tmp_path)
+
+    with pytest.raises(FileNotFoundError, match="not found"):
+        synchronizer.sync()
+
+
 def test_synchronizer_creates_missing_directories(tmp_path, mcp_data):
     source_file = tmp_path / ".mcp.json"
     source_file.write_text(json.dumps(mcp_data))
