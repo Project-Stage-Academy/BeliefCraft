@@ -1,4 +1,4 @@
-"""Prompt prompt_templates and formatting utilities for the ReAct agent."""
+"""Prompt templates and formatting utilities for the ReAct agent."""
 
 from .system_prompts import (
     REACT_LOOP_PROMPT,
