@@ -228,7 +228,6 @@ def test_assembler_simple_helpers(mock_data_env):
 
 
 def test_id_generation_logic(mock_data_env):
-    from pipeline.parsing.main import DocumentAssembler
 
     assembler = DocumentAssembler(
         mock_data_env["paddle_dir"],
@@ -243,3 +242,98 @@ def test_id_generation_logic(mock_data_env):
 
     assert id1 != id2
     assert len(id1) > 0
+
+
+def test_assembler_markdown_priority(mock_data_env):
+    """Test that Markdown content takes priority over PaddleOCR content."""
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    page_data = {
+        "page_num": 10,
+        "markdown": {"text": "Formula: $E=mc^2$"},
+        "prunedResult": {
+            "parsing_res_list": [
+                {
+                    "block_content": "Formula: E=mc2",
+                    "block_label": "text",
+                    "block_bbox": [0, 0, 10, 10],
+                }
+            ]
+        },
+    }
+
+    assembler._process_page(0, page_data)
+
+    assert len(assembler.final_chunks) == 1
+    assert assembler.final_chunks[0]["content"] == "Formula: $E=mc^2$"
+    assert assembler.final_chunks[0]["page"] == 10
+
+
+def test_handle_visual_objects_overlap(mock_data_env):
+    """
+    Test that overlapping visual objects are handled correctly.
+    Data is provided through mock files to avoid direct state mutation.
+    """
+    mock_block_data = [
+        {
+            "page": 1,
+            "entity_id": "4.4",
+            "bbox": [0, 0, 100, 100],
+            "chunk_type": "example",
+            "caption": "Example 4.4",
+        }
+    ]
+    mock_data_env["blocks"].write_text(json.dumps(mock_block_data), encoding="utf-8")
+
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    blocks_from_paddle = [
+        {
+            "block_content": "Example 4.4 text inside box",
+            "block_bbox": [10, 10, 50, 50],
+            "block_label": "text",
+        },
+        {
+            "block_content": "Normal text outside",
+            "block_bbox": [200, 200, 300, 300],
+            "block_label": "text",
+        },
+    ]
+
+    used = assembler._handle_visual_objects(1, blocks_from_paddle)
+
+    assert 0 in used
+    assert 1 not in used
+    assert any(c["chunk_type"] == "example" for c in assembler.final_chunks)
+    example_chunk = next(c for c in assembler.final_chunks if c["chunk_type"] == "example")
+    assert example_chunk["entity_id"] == "4.4"
+
+
+def test_extract_id_strict_regex(mock_data_env):
+    """Test that ID is extracted correctly with the new fallback logic."""
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    assert assembler._extract_id("Example 4.4") == "4.4"
+    assert assembler._extract_id("Exercise 1.2") == "1.2"
+
+    assert assembler._extract_id("The value is 4.4") == "4.4"
+
+    assert assembler._extract_id("Value is 100") is None
