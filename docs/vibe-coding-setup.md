@@ -31,6 +31,33 @@ Instructions for AI agents are distributed through Markdown files to provide loc
 
 These files are present at the project root and within specific directories to provide "surgical" context depending on where the agent is operating.
 
+## AI Agent Skills
+
+To ensure high instruction adherence and clean context, the development workflow is split into granular, specialized "skills". Each skill corresponds to a specific phase of the Test-Driven Development (TDD) lifecycle.
+
+### Source of Truth for Skills
+- **`.agents/skills/`**: Used by most agents. Contains the source definition for each skill (e.g., `plan`, `test`, `implement`, `refactor`, `document`, `context-engineering`).
+
+### Synchronized Skill Targets
+Skills are synchronized from the source directory to tool-specific locations to ensure all agents use the same instructions:
+- **`.claude/skills/`**: For Claude Code.
+- **`.github/skills/`**: For GitHub Copilot.
+- **`.agent/skills/`**: For Antigravity.
+
+### Skill Activation
+Agents should activate the relevant skill before starting work in a phase:
+- **Gemini CLI**: Uses `activate_skill(name)`.
+- **Other Agents**: Read the `SKILL.md` file within the corresponding skill directory (e.g., `.agents/skills/plan/SKILL.md`).
+
+### Skill Synchronization Hook
+A pre-commit hook automatically runs `scripts/sync_skills.py` to keep all skill directories in sync.
+
+#### Manual Synchronization
+Run:
+```bash
+uv run python scripts/sync_skills.py
+```
+
 ## Adding New MCP Servers
 
 To add a new MCP server:
