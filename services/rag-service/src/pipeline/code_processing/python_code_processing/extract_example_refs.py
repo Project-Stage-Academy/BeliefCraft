@@ -19,8 +19,11 @@ import ast
 import re
 from collections import defaultdict
 
+from common.logging import get_logger
 from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
 from pipeline.code_processing.python_code_processing.code_analyzer import EXTERNAL_MODULES
+
+logger = get_logger(__name__)
 
 # ------------------------------------------------------------------ #
 # Regex patterns
@@ -301,10 +304,11 @@ if __name__ == "__main__":
         examples = json.load(f)
 
     schema = build_code_schema(algorithms)
-    print(
-        f"Schema: {len(schema['classes'])} classes, "
-        f"{len(schema['methods'])} methods, "
-        f"{len(schema['functions'])} functions\n"
+    logger.info(
+        "Schema: %d classes, %d methods, %d functions",
+        len(schema["classes"]),
+        len(schema["methods"]),
+        len(schema["functions"]),
     )
 
     for example in examples:
@@ -313,10 +317,8 @@ if __name__ == "__main__":
         refs = extract_example_refs(text, schema)
 
         if any(refs[k] for k in refs):
-            print(f"{'=' * 60}")
-            print(f"Example: {example_number}")
-            print(f"  Blocks found:        {len(extract_code_blocks(text))}")
-            print(f"  initialized_classes: {refs['initialized_classes']}")
-            print(f"  used_functions:      {refs['used_functions']}")
-            print(f"  used_methods:        {refs['used_methods']}")
-            print()
+            logger.info("Example: %s", example_number)
+            logger.info("  Blocks found:        %d", len(extract_code_blocks(text)))
+            logger.info("  initialized_classes: %s", refs["initialized_classes"])
+            logger.info("  used_functions:      %s", refs["used_functions"])
+            logger.info("  used_methods:        %s", refs["used_methods"])

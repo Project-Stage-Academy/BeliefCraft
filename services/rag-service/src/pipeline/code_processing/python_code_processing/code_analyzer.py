@@ -5,6 +5,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
+from common.logging import get_logger
+
+logger = get_logger(__name__)
+
 # ------------------------------------------------------------------ #
 # External modules to ignore during call resolution
 # ------------------------------------------------------------------ #
@@ -403,19 +407,19 @@ if __name__ == "__main__":
 
     analyzer, graph = analyze_fragments(data)
 
-    print("Definitions:")
+    logger.info("Definitions:")
     for name in analyzer.functions:
-        print("  function:", name)
+        logger.info("  function: %s", name)
     for name in analyzer.methods:
-        print("  method:", name)
+        logger.info("  method: %s", name)
     for name in analyzer.classes:
-        print("  class:", name)
+        logger.info("  class: %s", name)
 
-    print("\nCalls (raw):")
+    logger.info("Calls (raw):")
     for caller, call_list in analyzer.calls.items():
-        print(f"  {caller} -> {call_list}")
+        logger.info("  %s -> %s", caller, call_list)
 
-    print("\nDependency graph:")
+    logger.info("Dependency graph:")
     for caller, edges in graph.items():
         by_kind: defaultdict[str, list[str]] = defaultdict(list)
         for target, kind in edges.items():
@@ -425,4 +429,4 @@ if __name__ == "__main__":
             for k in (KIND_CLASS_INIT, KIND_FUNCTION, KIND_METHOD, KIND_UNKNOWN)
             if k in by_kind
         ]
-        print(f"  {caller} -> {{ {'|'.join(parts_str)} }}")
+        logger.info("  %s -> { %s }", caller, "|".join(parts_str))

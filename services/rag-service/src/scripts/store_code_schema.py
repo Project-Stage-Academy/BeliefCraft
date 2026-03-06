@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import weaviate
+from common.logging import get_logger
 from pipeline.code_processing.julia_code_translation.update_chunks_with_translated_code import (
     extract_entity_id_from_number,
 )
@@ -59,6 +60,8 @@ from rag_service.constants import (
     CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
 )
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Types
@@ -97,16 +100,16 @@ def _existing_reference_names(collection: Collection) -> set[str]:
 
 def _recreate_if_needed(client: weaviate.WeaviateClient, name: str, recreate: bool) -> None:
     if recreate and client.collections.exists(name):
-        print(f"Deleting existing collection: {name}")
+        logger.info("Deleting existing collection: %s", name)
         client.collections.delete(name)
 
 
 def _create_or_use(client: weaviate.WeaviateClient, name: str, **kwargs: Any) -> Collection:
     if not client.collections.exists(name):
-        print(f"Creating collection: {name}")
+        logger.info("Creating collection: %s", name)
         client.collections.create(name=name, **kwargs)
     else:
-        print(f"Using existing collection: {name}")
+        logger.info("Using existing collection: %s", name)
     return client.collections.use(name)
 
 
@@ -178,7 +181,7 @@ def setup_collections(
         references=[ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME)],
     )
 
-    print("Adding cross-collection references …")
+    logger.info("Adding cross-collection references …")
     _add_missing_refs(mth_col, _CROSS_REFS)
     _add_missing_refs(fn_col, _CROSS_REFS)
 
@@ -297,9 +300,9 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
         return
     try:
         collection.data.reference_add_many(references)
-        print(f"  Added {len(references)} references for {label}.")
+        logger.info("Added %d references for %s.", len(references), label)
     except Exception as exc:  # noqa: BLE001
-        print(f"  Warning: some references for {label} could not be added: {exc}")
+        logger.warning("Some references for %s could not be added: %s", label, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +324,7 @@ _EXAMPLE_REFS_KEY_TO_PROP = {
 
 def _ensure_example_code_ref_properties(client: weaviate.WeaviateClient) -> None:
     if not client.collections.exists(COLLECTION_NAME):
-        print(f"Warning: {COLLECTION_NAME} not found; skipping example-code ref setup.")
+        logger.warning("%s not found; skipping example-code ref setup.", COLLECTION_NAME)
         return
     unified = client.collections.use(COLLECTION_NAME)
     _add_missing_refs(unified, _EXAMPLE_CODE_REFS)
@@ -337,7 +340,7 @@ def _build_example_code_references(
         example_number = example.get("example_number", "")
         entity_id = extract_entity_id_from_number(example_number)
         if not entity_id:
-            print(f"  Skipping example with unparseable number: {example_number!r}")
+            logger.warning("Skipping example with unparseable number: %r", example_number)
             continue
 
         refs = extract_example_refs(example.get("text", ""), schema)
@@ -389,7 +392,7 @@ def _load_json(path: Path, label: str) -> list[dict[str, Any]] | None:
         with path.open() as f:
             return cast(list[dict[str, Any]], json.load(f))
     except (FileNotFoundError, json.JSONDecodeError) as exc:
-        print(f"Failed to load {label} JSON: {exc}")
+        logger.error("Failed to load %s JSON: %s", label, exc)
         return None
 
 
@@ -401,13 +404,13 @@ def _store_schema(
     classes, methods, functions = schema["classes"], schema["methods"], schema["functions"]
     cls_col, mth_col, fn_col = setup_collections(client, recreate=recreate)
 
-    print("Inserting classes …")
+    logger.info("Inserting classes …")
     _add_references_safely(cls_col, _insert_classes(cls_col, classes), CODE_CLASS_COLLECTION)
 
-    print("Inserting methods …")
+    logger.info("Inserting methods …")
     _add_references_safely(mth_col, _insert_methods(mth_col, methods), CODE_METHOD_COLLECTION)
 
-    print("Inserting functions …")
+    logger.info("Inserting functions …")
     _add_references_safely(fn_col, _insert_functions(fn_col, functions), CODE_FUNCTION_COLLECTION)
 
 
@@ -416,12 +419,12 @@ def _store_example_refs(
     examples: list[dict[str, Any]],
     schema: dict[str, Any],
 ) -> None:
-    print("Adding example → code entity references …")
+    logger.info("Adding example → code entity references …")
     _ensure_example_code_ref_properties(client)
     example_refs = _build_example_code_references(examples, schema)
     unified_col = client.collections.use(COLLECTION_NAME)
     _add_references_safely(unified_col, example_refs, f"{COLLECTION_NAME} (examples)")
-    print(f"  Processed {len(examples)} examples.")
+    logger.info("Processed %d examples.", len(examples))
 
 
 def main() -> None:
@@ -437,19 +440,23 @@ def main() -> None:
         if loaded is None:
             return
         examples = loaded
-        print(f"Loaded {len(examples)} examples from {args.examples_file_path}")
+        logger.info("Loaded %d examples from %s", len(examples), args.examples_file_path)
 
-    print("Building code schema …")
+    logger.info("Building code schema …")
     schema = build_code_schema(algorithms)
     classes, methods, functions = schema["classes"], schema["methods"], schema["functions"]
-    print(f"  Classes: {len(classes)}  Methods: {len(methods)}  Functions: {len(functions)}")
+    logger.info(
+        "Classes: %d  Methods: %d  Functions: %d", len(classes), len(methods), len(functions)
+    )
 
     with weaviate.connect_to_local() as client:
         _store_schema(client, schema, recreate=args.recreate)
         if examples:
             _store_example_refs(client, examples, schema)
 
-    print(f"Done. {len(classes)} classes, {len(methods)} methods, {len(functions)} functions.")
+    logger.info(
+        "Done. %d classes, %d methods, %d functions.", len(classes), len(methods), len(functions)
+    )
 
 
 if __name__ == "__main__":

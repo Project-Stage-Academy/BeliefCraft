@@ -47,6 +47,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from common.logging import get_logger
 from pipeline.code_processing.julia_code_translation.update_chunks_with_translated_code import (
     extract_entity_id_from_number,
 )
@@ -57,6 +58,8 @@ from pipeline.code_processing.python_code_processing.code_analyzer import (
     CodeAnalyzer,
     analyze_fragments,
 )
+
+logger = get_logger(__name__)
 
 # ------------------------------------------------------------------ #
 # ID helpers
@@ -306,7 +309,7 @@ if __name__ == "__main__":
     with Path(output_path).open("w") as f:
         json.dump(schema, f, indent=2, ensure_ascii=False)
 
-    print(f"Classes:   {len(schema['classes'])}")
-    print(f"Methods:   {len(schema['methods'])}")
-    print(f"Functions: {len(schema['functions'])}")
-    print(f"Saved to:  {output_path}")
+    logger.info("Classes:   %d", len(schema["classes"]))
+    logger.info("Methods:   %d", len(schema["methods"]))
+    logger.info("Functions: %d", len(schema["functions"]))
+    logger.info("Saved to:  %s", output_path)
