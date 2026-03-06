@@ -63,18 +63,22 @@ logger = get_logger(__name__)
 
 
 def class_id(name: str) -> str:
+    """Return the canonical class id for a given class name."""
     return f"cls:{name}"
 
 
 def method_id(qualified: str) -> str:
+    """Return the canonical method id for a given qualified name."""
     return f"mth:{qualified}"
 
 
 def function_id(name: str) -> str:
+    """Return the canonical function id for a given function name."""
     return f"fn:{name}"
 
 
 def _node_source(node: ast.AST) -> str:
+    """Return the dedented source code for an AST node."""
     return textwrap.dedent(ast.unparse(node))
 
 
@@ -101,6 +105,7 @@ def _class_init_source(class_node: ast.ClassDef) -> str:
 
 
 def _leading_docstring(body: list[ast.stmt]) -> ast.Expr | None:
+    """Return the leading docstring node from a body list, or None if absent."""
     if body:
         first = body[0]
         if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
@@ -109,6 +114,7 @@ def _leading_docstring(body: list[ast.stmt]) -> ast.Expr | None:
 
 
 def _find_init(body: list[ast.stmt]) -> ast.FunctionDef | None:
+    """Find and return the __init__ function node in a class body, or None."""
     return next(
         (n for n in body if isinstance(n, ast.FunctionDef) and n.name == "__init__"),
         None,
@@ -116,6 +122,7 @@ def _find_init(body: list[ast.stmt]) -> ast.FunctionDef | None:
 
 
 def _collect_known_ids(analyzer: CodeAnalyzer) -> tuple[set[str], set[str], set[str]]:
+    """Collect sets of known class, method, and function ids from the analyzer."""
     return (
         {class_id(n) for n in analyzer.classes},
         {method_id(n) for n in analyzer.methods},
@@ -152,23 +159,20 @@ def _refs_from_edges(
     return sorted(inits), sorted(funcs), sorted(meths)
 
 
-def _algorithm_number(raw: object) -> object:
-    return extract_entity_id_from_number(str(raw))
-
-
-def _fragment_alg_num(
+def _fragment_algorithm_number(
     analyzer: CodeAnalyzer, key: str, class_init_key: str | None = None
 ) -> object:
-    raw = analyzer._class_init_fragment.get(key) if class_init_key else None
-    raw = raw if raw is not None else analyzer.fragment_idx.get(key)
-    return _algorithm_number(raw)
+    """Return the parsed algorithm identifier for a fragment"""
+    full_number = str(analyzer.fragment_idx.get(key))
+    return extract_entity_id_from_number(full_number)
 
 
 def _build_classes(analyzer: CodeAnalyzer) -> list[dict[str, Any]]:
+    """Build class records (id, algorithm_number, name, code) from the analyzer."""
     return [
         {
             "id": class_id(name),
-            "algorithm_number": _fragment_alg_num(analyzer, name, class_init_key=name),
+            "algorithm_number": _fragment_algorithm_number(analyzer, name),
             "name": name,
             "code": _class_init_source(node),
         }
@@ -183,6 +187,7 @@ def _build_methods(
     known_function_ids: set[str],
     known_method_ids: set[str],
 ) -> list[dict[str, Any]]:
+    """Build method records with cross-references from analyzer and graph."""
     methods = []
     for qualified, node in analyzer.methods.items():
         cls_name, method_name = qualified.split(".", 1)
@@ -199,7 +204,7 @@ def _build_methods(
         methods.append(
             {
                 "id": method_id(qualified),
-                "algorithm_number": _fragment_alg_num(analyzer, qualified),
+                "algorithm_number": _fragment_algorithm_number(analyzer, qualified),
                 "name": method_name,
                 "qualified_name": qualified,
                 "code": ast.unparse(node),
@@ -219,6 +224,7 @@ def _build_functions(
     known_function_ids: set[str],
     known_method_ids: set[str],
 ) -> list[dict[str, Any]]:
+    """Build function records with cross-references from analyzer and graph."""
     result = []
     for name, node in analyzer.functions.items():
         inits, funcs, meths = _refs_from_edges(
@@ -227,7 +233,7 @@ def _build_functions(
         result.append(
             {
                 "id": function_id(name),
-                "algorithm_number": _fragment_alg_num(analyzer, name),
+                "algorithm_number": _fragment_algorithm_number(analyzer, name),
                 "name": name,
                 "code": ast.unparse(node),
                 "initialized_classes": inits,
