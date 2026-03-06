@@ -43,6 +43,7 @@ FunctionRecord:
 import ast
 import json
 import textwrap
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -263,7 +264,7 @@ def _build_functions(
 # ------------------------------------------------------------------ #
 
 
-def build_code_schema(fragments: list[object]) -> dict[str, list[dict[str, Any]]]:
+def build_code_schema(fragments: Sequence[object]) -> dict[str, list[dict[str, Any]]]:
     """
     Analyze a list of code fragments or algorithm objects and return a full
     schema of definitions with cross-references.

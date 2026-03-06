@@ -33,12 +33,14 @@ Usage
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import weaviate
+from pipeline.code_processing.julia_code_translation.update_chunks_with_translated_code import (
+    extract_entity_id_from_number,
+)
 from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
 from weaviate.classes.data import DataReference
@@ -82,15 +84,6 @@ def uuid_for_algorithm_chunk(entity_id: str) -> str:
 def uuid_for_example_chunk(entity_id: str) -> str:
     """Deterministic UUID for an example chunk (chunk_type='example') in unified_collection."""
     return generate_uuid5(f"{entity_id}:example")
-
-
-_EXAMPLE_NUMBER_RE = re.compile(r"[\d]+(?:\.[\d]+)*")
-
-
-def entity_id_from_example_number(example_number: str) -> str | None:
-    """Extract numeric entity_id from a string like 'Example 2.3.' -> '2.3'."""
-    m = _EXAMPLE_NUMBER_RE.search(example_number)
-    return m.group(0) if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -342,7 +335,7 @@ def _build_example_code_references(
 
     for example in examples:
         example_number = example.get("example_number", "")
-        entity_id = entity_id_from_example_number(example_number)
+        entity_id = extract_entity_id_from_number(example_number)
         if not entity_id:
             print(f"  Skipping example with unparseable number: {example_number!r}")
             continue
@@ -361,7 +354,7 @@ def _build_example_code_references(
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Build and embed code schema (classes, methods, functions) from translated "
@@ -388,24 +381,63 @@ def main() -> None:
         action="store_true",
         help="Delete and recreate the code collections before loading.",
     )
-    args = parser.parse_args()
+    return parser
 
+
+def _load_json(path: Path, label: str) -> list[dict[str, Any]] | None:
     try:
-        with args.file_path.open() as f:
-            algorithms = json.load(f)
+        with path.open() as f:
+            return cast(list[dict[str, Any]], json.load(f))
     except (FileNotFoundError, json.JSONDecodeError) as exc:
-        print(f"Failed to load algorithms JSON: {exc}")
+        print(f"Failed to load {label} JSON: {exc}")
+        return None
+
+
+def _embed_schema(
+    client: weaviate.WeaviateClient,
+    schema: dict[str, Any],
+    recreate: bool,
+) -> None:
+    classes, methods, functions = schema["classes"], schema["methods"], schema["functions"]
+    cls_col, mth_col, fn_col = setup_collections(client, recreate=recreate)
+
+    print("Inserting classes …")
+    _add_references_safely(cls_col, _insert_classes(cls_col, classes), CODE_CLASS_COLLECTION)
+
+    print("Inserting methods …")
+    _add_references_safely(mth_col, _insert_methods(mth_col, methods), CODE_METHOD_COLLECTION)
+
+    print("Inserting functions …")
+    _add_references_safely(fn_col, _insert_functions(fn_col, functions), CODE_FUNCTION_COLLECTION)
+
+
+def _embed_example_refs(
+    client: weaviate.WeaviateClient,
+    examples: list[dict[str, Any]],
+    schema: dict[str, Any],
+) -> None:
+    print("Adding example → code entity references …")
+    _ensure_example_code_ref_properties(client)
+    example_refs = _build_example_code_references(examples, schema)
+    unified_col = client.collections.use(COLLECTION_NAME)
+    _add_references_safely(unified_col, example_refs, f"{COLLECTION_NAME} (examples)")
+    print(f"  Processed {len(examples)} examples.")
+
+
+def main() -> None:
+    args = _build_arg_parser().parse_args()
+
+    algorithms = _load_json(args.file_path, "algorithms")
+    if algorithms is None:
         return
 
     examples: list[dict[str, Any]] = []
     if args.examples_file_path is not None:
-        try:
-            with args.examples_file_path.open() as f:
-                examples = json.load(f)
-            print(f"Loaded {len(examples)} examples from {args.examples_file_path}")
-        except (FileNotFoundError, json.JSONDecodeError) as exc:
-            print(f"Failed to load examples JSON: {exc}")
+        loaded = _load_json(args.examples_file_path, "examples")
+        if loaded is None:
             return
+        examples = loaded
+        print(f"Loaded {len(examples)} examples from {args.examples_file_path}")
 
     print("Building code schema …")
     schema = build_code_schema(algorithms)
@@ -413,26 +445,9 @@ def main() -> None:
     print(f"  Classes: {len(classes)}  Methods: {len(methods)}  Functions: {len(functions)}")
 
     with weaviate.connect_to_local() as client:
-        cls_col, mth_col, fn_col = setup_collections(client, recreate=args.recreate)
-
-        print("Inserting classes …")
-        _add_references_safely(cls_col, _insert_classes(cls_col, classes), CODE_CLASS_COLLECTION)
-
-        print("Inserting methods …")
-        _add_references_safely(mth_col, _insert_methods(mth_col, methods), CODE_METHOD_COLLECTION)
-
-        print("Inserting functions …")
-        _add_references_safely(
-            fn_col, _insert_functions(fn_col, functions), CODE_FUNCTION_COLLECTION
-        )
-
+        _embed_schema(client, schema, recreate=args.recreate)
         if examples:
-            print("Adding example → code entity references …")
-            _ensure_example_code_ref_properties(client)
-            example_refs = _build_example_code_references(examples, schema)
-            unified_col = client.collections.use(COLLECTION_NAME)
-            _add_references_safely(unified_col, example_refs, f"{COLLECTION_NAME} (examples)")
-            print(f"  Processed {len(examples)} examples.")
+            _embed_example_refs(client, examples, schema)
 
     print(f"Done. {len(classes)} classes, {len(methods)} methods, {len(functions)} functions.")
 

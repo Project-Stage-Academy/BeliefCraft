@@ -1,6 +1,7 @@
 import ast
 import json
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
@@ -362,7 +363,9 @@ def build_graph(analyzer: CodeAnalyzer) -> dict[str, dict[str, str]]:
 # ------------------------------------------------------------------ #
 
 
-def analyze_fragments(fragments: list[object]) -> tuple[CodeAnalyzer, dict[str, dict[str, str]]]:
+def analyze_fragments(
+    fragments: Sequence[object],
+) -> tuple[CodeAnalyzer, dict[str, dict[str, str]]]:
     """
     Analyze a list of code fragments or algorithm objects.
 
