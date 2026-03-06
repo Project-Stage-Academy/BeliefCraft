@@ -21,7 +21,7 @@ from collections import defaultdict
 
 from common.logging import get_logger
 from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
-from pipeline.code_processing.python_code_processing.code_analyzer import EXTERNAL_MODULES
+from pipeline.code_processing.python_code_processing.constants import EXTERNAL_MODULES
 
 logger = get_logger(__name__)
 

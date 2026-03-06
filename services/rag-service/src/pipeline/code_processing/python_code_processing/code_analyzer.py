@@ -6,49 +6,9 @@ from pathlib import Path
 from typing import cast
 
 from common.logging import get_logger
+from pipeline.code_processing.python_code_processing.constants import EXTERNAL_MODULES
 
 logger = get_logger(__name__)
-
-EXTERNAL_MODULES = {
-    "np",
-    "numpy",
-    "scipy",
-    "sklearn",
-    "torch",
-    "tf",
-    "tensorflow",
-    "pd",
-    "pandas",
-    "plt",
-    "matplotlib",
-    "sns",
-    "seaborn",
-    "os",
-    "sys",
-    "re",
-    "math",
-    "random",
-    "itertools",
-    "functools",
-    "collections",
-    "typing",
-    "abc",
-    "copy",
-    "time",
-    "datetime",
-    "json",
-    "csv",
-    "io",
-    "pathlib",
-    "logging",
-    "warnings",
-    "linalg",
-    "sparse",
-    "stats",
-    "special",
-    "optimize",
-    "signal",
-}
 
 # Edge kind constants
 KIND_CLASS_INIT = "class_init"
