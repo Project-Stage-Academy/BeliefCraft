@@ -78,13 +78,15 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.current_function = prev_function
 
     def _register_definition(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-        if self.current_class:
-            name = f"{self.current_class}.{node.name}"
-            self.methods[name] = cast(ast.FunctionDef, node)
-        else:
-            name = node.name
-            self.functions[name] = cast(ast.FunctionDef, node)
-        self.fragment_idx[name] = self.current_fragment_idx
+        name = f"{self.current_class}.{node.name}" if self.current_class else node.name
+
+        if self.current_function is None:
+            if self.current_class:
+                self.methods[name] = cast(ast.FunctionDef, node)
+            else:
+                self.functions[name] = cast(ast.FunctionDef, node)
+            self.fragment_idx[name] = self.current_fragment_idx
+
         return name
 
     def _track_init_fragment(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
