@@ -90,12 +90,33 @@ def extract_code_blocks(text: str) -> list[str]:
     2. Consecutive lines outside blocks that parse as valid Python.
     3. Inline 'var = func(' patterns in prose.
     """
-    blocks = _extract_fenced_blocks(text)
+    blocks: list[str] = []
 
-    bare_text = _strip_non_code(text)
-    blocks.extend(_extract_consecutive_code_lines(bare_text))
+    # Pass 1: fenced python blocks
+    fenced = _extract_fenced_blocks(text)
+    blocks.extend(fenced)
 
-    prose_lines = [line for line in bare_text.splitlines() if not _is_code_line(line)]
+    # Remove fenced blocks from the working text to avoid overlap with later passes
+    working = _CODE_BLOCK_RE.sub("\n", text)
+
+    # Pass 2: consecutive lines that look like code in the remaining text
+    consecutive = _extract_consecutive_code_lines(working)
+    blocks.extend(consecutive)
+
+    # Remove the consecutive code lines from the working text so inline extraction
+    # won't pick up the same code again. We remove by line (matching stripped form).
+    if consecutive:
+        code_line_set = {line for block in consecutive for line in block.splitlines()}
+        new_lines: list[str] = []
+        for line in working.splitlines():
+            if _is_code_line(line) and line.strip() in code_line_set:
+                new_lines.append("")
+            else:
+                new_lines.append(line)
+        working = "\n".join(new_lines)
+
+    # Pass 3: inline assignments from the remaining prose-only lines
+    prose_lines = [line for line in working.splitlines() if not _is_code_line(line)]
     inline = _extract_inline_assignments("\n".join(prose_lines))
     if inline:
         blocks.append("\n".join(inline))
@@ -116,10 +137,12 @@ class _CallCollector(ast.NodeVisitor):
         self.calls: list[tuple[str, str]] = []
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            typ = self._infer_type(node.value)
-            if typ:
-                self.local_types[node.targets[0].id] = typ
+        if len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name):
+                typ = self._infer_type(node.value)
+                if typ:
+                    self.local_types[target.id] = typ
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
