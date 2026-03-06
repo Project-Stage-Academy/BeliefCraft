@@ -2,25 +2,16 @@
 
 import argparse
 import json
-from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, cast
+from typing import cast
 
 from common.logging import get_logger
-from pipeline.julia_code_translation.process_book_code import (
-    BookCodeProcessor,
-    JuliaEntityExtractor,
-    TranslatedAlgorithmStore,
-    UsageIndexBuilder,
-)
 from pipeline.julia_code_translation.translation_types import (
-    Block,
     Chunk,
     TranslatedAlgorithm,
     TranslatedExample,
 )
-from pipeline.parsing.block_processor import open_block_processor
 
 logger = get_logger(__name__)
 
@@ -57,47 +48,6 @@ def extract_entity_id_from_number(number: str) -> str:
     return parts[1].rstrip(".")
 
 
-def prepare_blocks(
-    book_pdf_path: str,
-    ocr_dir: str,
-    translated_algorithms_path: str | Path,
-) -> list[Block]:
-    """Extract algorithm/example blocks and populate usage metadata."""
-    with open_block_processor(book_pdf_path, ocr_dir) as block_processor:
-        blocks = block_processor.extract_algorithms_and_examples()
-
-    book_processor = BookCodeProcessor(
-        JuliaEntityExtractor(),
-        UsageIndexBuilder(),
-        TranslatedAlgorithmStore(Path(translated_algorithms_path)),
-    )
-    book_processor.extract_block_structs_and_functions(blocks)
-    book_processor.extract_entities_usage(blocks)
-    return cast(list[Block], blocks)
-
-
-def find_used_structs_and_functions(
-    blocks: list[Block], entity_number: str, key: Literal["structs", "functions"]
-) -> dict[str, list[str]]:
-    """Return structs or functions referenced by algorithms or examples that cite the
-    entity number.
-
-    The `key` argument should be either "structs" or "functions" (or any other mapping key present
-    on algorithm blocks). Only inspects blocks labeled as "Algorithm".
-    """
-    if not entity_number:
-        return {}
-
-    used: defaultdict[str, list[str]] = defaultdict(list)
-    for block in blocks:
-        if block.get("block_type") == "Algorithm":
-            for name, usages in block[key].items():
-                if entity_number in usages:
-                    entity_id = extract_entity_id_from_number(block.get("number", ""))
-                    used[name].append(entity_id)
-    return dict(used)
-
-
 def format_translated_content(*parts: str) -> str:
     """Join translated content parts with a consistent double-newline separator."""
     return "\n\n".join(part for part in parts if part)
@@ -111,7 +61,6 @@ def _is_algorithm(item: TranslatedAlgorithm | TranslatedExample) -> bool:
 def _update_chunks(
     chunks: list[Chunk],
     translated_items: Sequence[TranslatedAlgorithm | TranslatedExample],
-    blocks: list[Block],
 ) -> list[Chunk]:
     """
     Merge translated items into chunks in-place, updating content, declarations, and usage metadata.
@@ -122,13 +71,11 @@ def _update_chunks(
             chunk_type = "algorithm"
             entity_number = algo["algorithm_number"]
             content = format_translated_content(algo["description"], algo["code"])
-            declarations: list[str] | None = list(algo["declarations"].values())
         else:
             example = cast(TranslatedExample, item)
             chunk_type = "example"
             entity_number = example["example_number"]
             content = format_translated_content(example["description"], example["text"])
-            declarations = None
 
         entity_id = extract_entity_id_from_number(entity_number)
 
@@ -136,14 +83,6 @@ def _update_chunks(
         for chunk in chunks:
             if chunk.get("chunk_type") == chunk_type and chunk.get("entity_id") == entity_id:
                 chunk["content"] = content
-                if declarations is not None:
-                    chunk["declarations"] = declarations
-                chunk["used_structs"] = find_used_structs_and_functions(
-                    blocks, entity_number, "structs"
-                )
-                chunk["used_functions"] = find_used_structs_and_functions(
-                    blocks, entity_number, "functions"
-                )
                 found = True
                 break
 
@@ -154,35 +93,23 @@ def _update_chunks(
 
 
 def update_algorithms(
-    chunks: list[Chunk], translated_algorithms: list[TranslatedAlgorithm], blocks: list[Block]
+    chunks: list[Chunk], translated_algorithms: list[TranslatedAlgorithm]
 ) -> list[Chunk]:
     """Merge translated algorithm content and usage metadata into chunks."""
-    return _update_chunks(chunks, translated_algorithms, blocks)
+    return _update_chunks(chunks, translated_algorithms)
 
 
 def update_examples(
-    chunks: list[Chunk], translated_examples: list[TranslatedExample], blocks: list[Block]
+    chunks: list[Chunk], translated_examples: list[TranslatedExample]
 ) -> list[Chunk]:
     """Merge translated example content and usage metadata into chunks."""
-    return _update_chunks(chunks, translated_examples, blocks)
+    return _update_chunks(chunks, translated_examples)
 
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for the update script."""
     parser = argparse.ArgumentParser(
         description="Update chunks with translated algorithms/examples and usage metadata."
-    )
-    parser.add_argument(
-        "--pdf-path",
-        dest="book_pdf",
-        required=True,
-        help="Path to the source book PDF.",
-    )
-    parser.add_argument(
-        "--paddle-ocr-dir",
-        dest="ocr_dir",
-        required=True,
-        help="OCR JSON directory name passed to the block processor.",
     )
     parser.add_argument(
         "--chunks",
@@ -211,13 +138,12 @@ def main() -> None:
     """CLI entry point."""
     args = parse_args()
 
-    blocks = prepare_blocks(args.book_pdf, args.ocr_dir, args.translated_algorithms)
     chunks = load_chunks(args.chunks)
     translated_algorithms = load_translated_algorithms(args.translated_algorithms)
     translated_examples = load_translated_examples(args.translated_examples)
 
-    chunks = update_algorithms(chunks, translated_algorithms, blocks)
-    chunks = update_examples(chunks, translated_examples, blocks)
+    chunks = update_algorithms(chunks, translated_algorithms)
+    chunks = update_examples(chunks, translated_examples)
 
     output_path = Path(args.output)
     with output_path.open("w", encoding="utf-8") as f:
