@@ -18,6 +18,7 @@ Result:
 import ast
 import re
 from collections import defaultdict
+from dataclasses import dataclass, field
 
 from common.logging import get_logger
 from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
@@ -33,6 +34,30 @@ _CODE_BLOCK_RE = re.compile(r"```python\s*\n(.*?)```", re.DOTALL)
 _MATH_BLOCK_RE = re.compile(r"\$\$.*?\$\$", re.DOTALL)
 _MATH_INLINE_RE = re.compile(r"\$[^$]+\$")
 _INLINE_ASSIGN_RE = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*\(")
+
+
+# ------------------------------------------------------------------ #
+# Schema index
+# ------------------------------------------------------------------ #
+
+
+@dataclass
+class SchemaIndex:
+    """Pre-built lookup structures derived from a code schema."""
+
+    classes: set[str] = field(default_factory=set)
+    functions: set[str] = field(default_factory=set)
+    methods: set[str] = field(default_factory=set)
+    method_index: dict[str, list[str]] = field(default_factory=dict)
+
+    @classmethod
+    def from_schema(cls, schema: dict[str, list[dict[str, object]]]) -> "SchemaIndex":
+        """Build a SchemaIndex from the result of build_code_schema()."""
+        classes: set[str] = {str(c["name"]) for c in schema["classes"]}
+        functions: set[str] = {str(f["name"]) for f in schema["functions"]}
+        methods: set[str] = {str(m["qualified_name"]) for m in schema["methods"]}
+        method_index = _build_method_index(methods)
+        return cls(classes=classes, functions=functions, methods=methods, method_index=method_index)
 
 
 # ------------------------------------------------------------------ #
@@ -55,16 +80,19 @@ def _is_code_line(line: str) -> bool:
 
 
 def _extract_fenced_blocks(text: str) -> list[str]:
+    """Return the contents of fenced ```python blocks found in the text."""
     return [m.group(1) for m in _CODE_BLOCK_RE.finditer(text)]
 
 
 def _strip_non_code(text: str) -> str:
+    """Remove fenced code and math blocks/inline math from text."""
     text = _CODE_BLOCK_RE.sub("\n", text)
     text = _MATH_BLOCK_RE.sub(" ", text)
     return _MATH_INLINE_RE.sub(" ", text)
 
 
 def _extract_consecutive_code_lines(text: str) -> list[str]:
+    """Collect consecutive lines that look like code into code blocks."""
     blocks, current = [], []
     for line in text.splitlines():
         if _is_code_line(line):
@@ -133,10 +161,12 @@ class _CallCollector(ast.NodeVisitor):
     """Traverse AST and collect all function/method/class calls without registering definitions."""
 
     def __init__(self, local_types: dict[str, str] | None = None):
+        """Initialize collector with optional local type inference mapping."""
         self.local_types: dict[str, str] = local_types or {}
         self.calls: list[tuple[str, str]] = []
 
     def visit_Assign(self, node: ast.Assign) -> None:
+        """Visit assignments and record variable types when inferable."""
         if len(node.targets) == 1:
             target = node.targets[0]
             if isinstance(target, ast.Name):
@@ -146,17 +176,20 @@ class _CallCollector(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
+        """Collect call names and kinds from Call nodes."""
         name, kind = self._resolve(node.func)
         if name:
             self.calls.append((name, kind))
         self.generic_visit(node)
 
     def _infer_type(self, node: ast.expr) -> str | None:
+        """Infer simple types from call expressions (e.g., Foo() -> 'Foo')."""
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             return node.func.id
         return None
 
     def _resolve(self, node: ast.expr) -> tuple[str | None, str]:
+        """Resolve a function expression to a (name, kind) tuple."""
         if isinstance(node, ast.Name):
             return node.id, "bare"
         if isinstance(node, ast.Attribute):
@@ -164,6 +197,7 @@ class _CallCollector(ast.NodeVisitor):
         return None, "unknown"
 
     def _resolve_attribute(self, node: ast.Attribute) -> tuple[str | None, str]:
+        """Resolve attribute expressions to method names while avoiding external modules."""
         method = node.attr
         if isinstance(node.value, ast.Name):
             obj = node.value.id
@@ -177,6 +211,7 @@ class _CallCollector(ast.NodeVisitor):
         return method, "method"
 
     def _chain_root(self, node: ast.expr) -> str | None:
+        """Return the root name of a dotted attribute chain, or None."""
         if isinstance(node, ast.Name):
             return node.id
         if isinstance(node, ast.Attribute):
@@ -189,7 +224,8 @@ class _CallCollector(ast.NodeVisitor):
 # ------------------------------------------------------------------ #
 
 
-def _build_method_index(known_methods: set[object]) -> dict[str, list[str]]:
+def _build_method_index(known_methods: set[str]) -> dict[str, list[str]]:
+    """Build an index mapping unqualified method names to fully-qualified candidates."""
     index: dict[str, list[str]] = defaultdict(list)
     for m in known_methods:
         index[str(m).split(".")[-1]].append(str(m))
@@ -198,34 +234,34 @@ def _build_method_index(known_methods: set[object]) -> dict[str, list[str]]:
 
 def _resolve_qualified_call(
     call_name: str,
-    known_methods: set[object],
-    method_index: dict[str, list[str]],
+    index: SchemaIndex,
 ) -> list[str]:
+    """Resolve a qualified call like 'Class.method' to matching method ids."""
     cls_name, method_name = call_name.split(".", 1)
-    if call_name in known_methods:
+    if call_name in index.methods:
         return [f"mth:{call_name}"]
-    candidates = [m for m in method_index.get(method_name, []) if m.split(".")[0] == cls_name]
+    candidates = [m for m in index.method_index.get(method_name, []) if m.split(".")[0] == cls_name]
     return [f"mth:{c}" for c in candidates]
 
 
 def _resolve_bare_call(
     call_name: str,
     raw_kind: str,
-    known_classes: set[object],
-    known_functions: set[object],
-    method_index: dict[str, list[str]],
+    index: SchemaIndex,
     local_definitions: set[str],
 ) -> tuple[str | None, str | None, str | None]:
     """Return (cls_ref, fn_ref, mth_ref) — at most one will be set."""
-    short = call_name.split(".")[-1]
+    short = call_name.split(".")[
+        -1
+    ]  # for methods (ClassName.method), we want to match against the method name only
     if short in local_definitions:
         return None, None, None
-    if short in known_classes:
+    if short in index.classes:
         return f"cls:{short}", None, None
-    if short in known_functions:
+    if short in index.functions:
         return None, f"fn:{short}", None
     if raw_kind == "method":
-        candidates = method_index.get(short, [])
+        candidates = index.method_index.get(short, [])
         if len(candidates) == 1:
             return None, None, f"mth:{candidates[0]}"
     return None, None, None
@@ -233,22 +269,20 @@ def _resolve_bare_call(
 
 def _resolve_calls(
     calls: list[tuple[str, str]],
-    known_classes: set[object],
-    known_functions: set[object],
-    known_methods: set[object],
+    index: SchemaIndex,
     local_definitions: set[str],
 ) -> dict[str, list[str]]:
-    method_index = _build_method_index(known_methods)
+    """Resolve collected calls against the known schema and return ref lists."""
     inits: set[str] = set()
     funcs: set[str] = set()
     meths: set[str] = set()
 
     for call_name, raw_kind in calls:
         if len(call_name.split(".")) == 2:
-            meths.update(_resolve_qualified_call(call_name, known_methods, method_index))
+            meths.update(_resolve_qualified_call(call_name, index))
         else:
             cls_ref, fn_ref, mth_ref = _resolve_bare_call(
-                call_name, raw_kind, known_classes, known_functions, method_index, local_definitions
+                call_name, raw_kind, index, local_definitions
             )
             if cls_ref:
                 inits.add(cls_ref)
@@ -269,24 +303,14 @@ def _resolve_calls(
 # ------------------------------------------------------------------ #
 
 
-def extract_example_refs(
-    text: str, schema: dict[str, list[dict[str, object]]]
+def extract_example_refs_with_index(
+    text: str,
+    index: SchemaIndex,
 ) -> dict[str, list[str]]:
     """
-    Extract references to known definitions from an example text.
-
-    Args:
-        text:   string with text (may contain ```python blocks or bare code)
-        schema: result of build_code_schema() —
-                {"classes": [...], "methods": [...], "functions": [...]}
-
-    Returns:
-        {"initialized_classes": [...], "used_functions": [...], "used_methods": [...]}
+    Like extract_example_refs, but accepts a pre-built SchemaIndex
+    (from prepare_schema_index) to avoid rebuilding it on every call.
     """
-    known_classes = {c["name"] for c in schema["classes"]}
-    known_functions = {f["name"] for f in schema["functions"]}
-    known_methods = {m["qualified_name"] for m in schema["methods"]}
-
     blocks = extract_code_blocks(text)
     if not blocks:
         return {"initialized_classes": [], "used_functions": [], "used_methods": []}
@@ -304,9 +328,24 @@ def extract_example_refs(
                 local_definitions.add(node.name)
         collector.visit(tree)
 
-    return _resolve_calls(
-        collector.calls, known_classes, known_functions, known_methods, local_definitions
-    )
+    return _resolve_calls(collector.calls, index, local_definitions)
+
+
+def extract_example_refs(
+    text: str, schema: dict[str, list[dict[str, object]]]
+) -> dict[str, list[str]]:
+    """
+    Extract references to known definitions from an example text.
+
+    Args:
+        text:   string with text (may contain ```python blocks or bare code)
+        schema: result of build_code_schema() —
+                {"classes": [...], "methods": [...], "functions": [...]}
+
+    Returns:
+        {"initialized_classes": [...], "used_functions": [...], "used_methods": [...]}
+    """
+    return extract_example_refs_with_index(text, SchemaIndex.from_schema(schema))
 
 
 if __name__ == "__main__":
@@ -330,10 +369,12 @@ if __name__ == "__main__":
         len(schema["functions"]),
     )
 
+    index = SchemaIndex.from_schema(schema)
+
     for example in examples:
         example_number = example.get("example_number", "?")
         text = example.get("text", "")
-        refs = extract_example_refs(text, schema)
+        refs = extract_example_refs_with_index(text, index)
 
         if any(refs[k] for k in refs):
             logger.info("Example: %s", example_number)
