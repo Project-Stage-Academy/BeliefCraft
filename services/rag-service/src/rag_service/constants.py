@@ -28,3 +28,8 @@ REFERENCE_TYPE_MAP: dict[str, str] = {
 
 # Name of the collection in the Weaviate where all chunks are stored.
 COLLECTION_NAME = "unified_collection"
+
+# Names of the code schema collections.
+CODE_CLASS_COLLECTION = "CodeClass"
+CODE_METHOD_COLLECTION = "CodeMethod"
+CODE_FUNCTION_COLLECTION = "CodeFunction"

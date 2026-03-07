@@ -208,9 +208,9 @@ def process_pdf(
 
     with fitz.open(dm_pdf_path) as dm_doc, fitz.open(figures_pdf_path) as figs_doc:
         already_found: set[int] = set()
-        logger.info(f"Processing {len(dm_doc)} pages against {len(figs_doc)} templates...")
+        logger.info(f"Processing {len(dm_doc)} pages against {len(figs_doc)} prompt_templates...")
 
-        for idx, _fig in tqdm(enumerate(figs_doc), desc="Searching templates"):
+        for idx, _fig in tqdm(enumerate(figs_doc), desc="Searching prompt_templates"):
             logger.info("Processing figure page %s of %s", idx + 1, len(figs_doc))
             if idx in already_found:
                 continue

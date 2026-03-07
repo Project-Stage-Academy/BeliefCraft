@@ -8,15 +8,18 @@ from typing import Any, Protocol, cast
 import boto3
 from botocore.config import Config  # type: ignore[import-untyped]
 from common.logging import get_logger
-from pipeline.julia_code_translation.build_prompts import PromptBuilder
-from pipeline.julia_code_translation.constants import TRANSLATED_ALGOS_PATH, PromptConfig
-from pipeline.julia_code_translation.github_code_fetcher import GitHubCodeFetcher
-from pipeline.julia_code_translation.process_book_code import (
+from pipeline.code_processing.julia_code_translation.build_prompts import PromptBuilder
+from pipeline.code_processing.julia_code_translation.constants import (
+    TRANSLATED_ALGOS_PATH,
+    PromptConfig,
+)
+from pipeline.code_processing.julia_code_translation.process_julia_code import (
     BookCodeProcessor,
     JuliaEntityExtractor,
     TranslatedAlgorithmStore,
     UsageIndexBuilder,
 )
+from pipeline.code_processing.python_code_processing.github_code_fetcher import GitHubCodeFetcher
 from pipeline.parsing.block_processor import open_block_processor
 
 logger = get_logger(__name__)
@@ -295,7 +298,7 @@ def build_translator(
 ) -> Translator:
     prompt_store = PromptStore(prompts_dir)
     translation_repo = TranslationRepository(translated_algorithms_json)
-    example_repo = TranslationRepository("translated_examples.json")
+    example_repo = TranslationRepository("../translated_examples.json")
 
     return Translator(
         model_client=model_client,

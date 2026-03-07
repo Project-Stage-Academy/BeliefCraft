@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
-from pipeline.julia_code_translation.build_prompts import PromptBuilder
+from pipeline.code_processing.julia_code_translation.build_prompts import PromptBuilder
 
 
 def test_build_update_descriptions_prompt_includes_sources():
