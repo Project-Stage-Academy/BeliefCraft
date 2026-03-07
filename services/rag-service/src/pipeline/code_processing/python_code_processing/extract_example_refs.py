@@ -158,15 +158,19 @@ def extract_code_blocks(text: str) -> list[str]:
 
 
 class _CallCollector(ast.NodeVisitor):
-    """Traverse AST and collect all function/method/class calls without registering definitions."""
+    """Traverse an AST and collect all function/method/class calls.
+
+    Does not register any definitions — only collects call sites for later
+    resolution against a known schema.
+    """
 
     def __init__(self, local_types: dict[str, str] | None = None):
-        """Initialize collector with optional local type inference mapping."""
+        # Maps variable name -> inferred class name, e.g. {"foo": "Foo"} after `foo = Foo()`.
         self.local_types: dict[str, str] = local_types or {}
         self.calls: list[tuple[str, str]] = []
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        """Visit assignments and record variable types when inferable."""
+        """Record the inferred type of a variable when it is assigned from a constructor call."""
         if len(node.targets) == 1:
             target = node.targets[0]
             if isinstance(target, ast.Name):
@@ -176,20 +180,24 @@ class _CallCollector(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
-        """Collect call names and kinds from Call nodes."""
+        """Collect (name, kind) for every Call node in the tree."""
         name, kind = self._resolve(node.func)
         if name:
             self.calls.append((name, kind))
         self.generic_visit(node)
 
     def _infer_type(self, node: ast.expr) -> str | None:
-        """Infer simple types from call expressions (e.g., Foo() -> 'Foo')."""
+        """Return the called class name for a bare constructor call, e.g. ``Foo()`` → ``'Foo'``."""
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             return node.func.id
         return None
 
     def _resolve(self, node: ast.expr) -> tuple[str | None, str]:
-        """Resolve a function expression to a (name, kind) tuple."""
+        """Resolve a call target expression to a (name, kind) pair.
+
+        kind is one of ``"bare"`` (plain name) or ``"method"`` (attribute access).
+        Returns ``(None, "unknown")`` for unresolvable nodes.
+        """
         if isinstance(node, ast.Name):
             return node.id, "bare"
         if isinstance(node, ast.Attribute):
@@ -197,7 +205,17 @@ class _CallCollector(ast.NodeVisitor):
         return None, "unknown"
 
     def _resolve_attribute(self, node: ast.Attribute) -> tuple[str | None, str]:
-        """Resolve attribute expressions to method names while avoiding external modules."""
+        """Resolve an attribute call to a method name, qualifying it when the receiver type is known
+
+        Calls on known external modules (e.g. ``np.array``) are ignored and
+        return ``(None, "unknown")``.
+
+        Examples::
+
+            foo.bar()          # local_types has no entry for foo  →  ("bar",       "method")
+            foo.bar()          # local_types["foo"] == "Foo"       →  ("Foo.bar",   "method")
+            np.array()         # np in EXTERNAL_MODULES            →  (None,        "unknown")
+        """
         method = node.attr
         if isinstance(node.value, ast.Name):
             obj = node.value.id
@@ -211,7 +229,7 @@ class _CallCollector(ast.NodeVisitor):
         return method, "method"
 
     def _chain_root(self, node: ast.expr) -> str | None:
-        """Return the root name of a dotted attribute chain, or None."""
+        """Return the leftmost name in a dotted chain (``a.b.c`` → ``"a"``), or ``None``."""
         if isinstance(node, ast.Name):
             return node.id
         if isinstance(node, ast.Attribute):
@@ -225,18 +243,22 @@ class _CallCollector(ast.NodeVisitor):
 
 
 def _build_method_index(known_methods: set[str]) -> dict[str, list[str]]:
-    """Build an index mapping unqualified method names to fully-qualified candidates."""
+    """Build an index mapping unqualified method names to fully-qualified candidates.
+
+    Example: ``{"baz": ["Bar.baz", "Qux.baz"]}``
+    """
     index: dict[str, list[str]] = defaultdict(list)
     for m in known_methods:
         index[str(m).split(".")[-1]].append(str(m))
     return index
 
 
-def _resolve_qualified_call(
-    call_name: str,
-    index: SchemaIndex,
-) -> list[str]:
-    """Resolve a qualified call like 'Class.method' to matching method ids."""
+def _resolve_dotted_method_call(call_name: str, index: SchemaIndex) -> list[str]:
+    """Resolve a ``Class.method`` call string to a list of matching ``mth:`` refs.
+
+    First tries an exact match in the schema; if that fails, falls back to
+    candidates where the class name prefix matches.
+    """
     cls_name, method_name = call_name.split(".", 1)
     if call_name in index.methods:
         return [f"mth:{call_name}"]
@@ -244,27 +266,33 @@ def _resolve_qualified_call(
     return [f"mth:{c}" for c in candidates]
 
 
-def _resolve_bare_call(
+def _resolve_unqualified_call(
     call_name: str,
-    raw_kind: str,
+    kind: str,
     index: SchemaIndex,
     local_definitions: set[str],
-) -> tuple[str | None, str | None, str | None]:
-    """Return (cls_ref, fn_ref, mth_ref) — at most one will be set."""
-    short = call_name.split(".")[
-        -1
-    ]  # for methods (ClassName.method), we want to match against the method name only
-    if short in local_definitions:
-        return None, None, None
-    if short in index.classes:
-        return f"cls:{short}", None, None
-    if short in index.functions:
-        return None, f"fn:{short}", None
-    if raw_kind == "method":
-        candidates = index.method_index.get(short, [])
+) -> str | None:
+    """Map a single unqualified call to a schema ref string, or ``None`` if unrecognised.
+
+    Resolution priority:
+    1. Skip names defined locally in the same code block.
+    2. Class instantiation  → ``"cls:<name>"``
+    3. Module-level function → ``"fn:<name>"``
+    4. Unqualified method (``kind == "method"``) with exactly one candidate → ``"mth:<Class.name>"``
+
+    Returns ``None`` when the call cannot be mapped to any known definition.
+    """
+    if call_name in local_definitions:
+        return None
+    if call_name in index.classes:
+        return f"cls:{call_name}"
+    if call_name in index.functions:
+        return f"fn:{call_name}"
+    if kind == "method":
+        candidates = index.method_index.get(call_name, [])
         if len(candidates) == 1:
-            return None, None, f"mth:{candidates[0]}"
-    return None, None, None
+            return f"mth:{candidates[0]}"
+    return None
 
 
 def _resolve_calls(
@@ -272,24 +300,33 @@ def _resolve_calls(
     index: SchemaIndex,
     local_definitions: set[str],
 ) -> dict[str, list[str]]:
-    """Resolve collected calls against the known schema and return ref lists."""
+    """Resolve collected (name, kind) call pairs against the known schema.
+
+    Returns a dict with three sorted lists of ref strings::
+
+        {
+            "initialized_classes": ["cls:Foo", ...],
+            "used_functions":      ["fn:bar", ...],
+            "used_methods":        ["mth:Baz.qux", ...],
+        }
+    """
     inits: set[str] = set()
     funcs: set[str] = set()
     meths: set[str] = set()
 
-    for call_name, raw_kind in calls:
-        if len(call_name.split(".")) == 2:
-            meths.update(_resolve_qualified_call(call_name, index))
+    for call_name, kind in calls:
+        if "." in call_name:
+            meths.update(_resolve_dotted_method_call(call_name, index))
         else:
-            cls_ref, fn_ref, mth_ref = _resolve_bare_call(
-                call_name, raw_kind, index, local_definitions
-            )
-            if cls_ref:
-                inits.add(cls_ref)
-            if fn_ref:
-                funcs.add(fn_ref)
-            if mth_ref:
-                meths.add(mth_ref)
+            ref = _resolve_unqualified_call(call_name, kind, index, local_definitions)
+            if ref is None:
+                pass
+            elif ref.startswith("cls:"):
+                inits.add(ref)
+            elif ref.startswith("fn:"):
+                funcs.add(ref)
+            elif ref.startswith("mth:"):
+                meths.add(ref)
 
     return {
         "initialized_classes": sorted(inits),
@@ -307,9 +344,10 @@ def extract_example_refs_with_index(
     text: str,
     index: SchemaIndex,
 ) -> dict[str, list[str]]:
-    """
-    Like extract_example_refs, but accepts a pre-built SchemaIndex
-    (from prepare_schema_index) to avoid rebuilding it on every call.
+    """Extract schema refs from *text* using a pre-built ``SchemaIndex``.
+
+    Prefer this over :func:`extract_example_refs` in hot paths where the same
+    schema is reused across many examples.
     """
     blocks = extract_code_blocks(text)
     if not blocks:
@@ -334,16 +372,19 @@ def extract_example_refs_with_index(
 def extract_example_refs(
     text: str, schema: dict[str, list[dict[str, object]]]
 ) -> dict[str, list[str]]:
-    """
-    Extract references to known definitions from an example text.
+    """Extract references to known definitions from an example text.
+
+    Builds a :class:`SchemaIndex` from *schema* on every call. When processing
+    many examples against the same schema, use
+    :func:`extract_example_refs_with_index` with a shared index instead.
 
     Args:
-        text:   string with text (may contain ```python blocks or bare code)
-        schema: result of build_code_schema() —
-                {"classes": [...], "methods": [...], "functions": [...]}
+        text:   String with prose and optional ``python`` code blocks.
+        schema: Result of ``build_code_schema()`` —
+                ``{"classes": [...], "methods": [...], "functions": [...]}``.
 
     Returns:
-        {"initialized_classes": [...], "used_functions": [...], "used_methods": [...]}
+        ``{"initialized_classes": [...], "used_functions": [...], "used_methods": [...]}``.
     """
     return extract_example_refs_with_index(text, SchemaIndex.from_schema(schema))
 
