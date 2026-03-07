@@ -149,7 +149,8 @@ class CodeAnalyzer(ast.NodeVisitor):
         if not typ:
             return
         if isinstance(target, ast.Name):
-            self._local_vars[self.current_function][target.id] = typ  # type: ignore[index]
+            if self.current_function:
+                self._local_vars[self.current_function][target.id] = typ
         elif (
             isinstance(target, ast.Attribute)
             and isinstance(target.value, ast.Name)
