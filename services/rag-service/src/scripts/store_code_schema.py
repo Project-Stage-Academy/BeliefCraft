@@ -75,17 +75,19 @@ RefList = list[DataReference | DataReferenceMulti]
 
 
 def uuid_for_schema_id(schema_id: str) -> str:
-    """Deterministic UUID derived from a schema id string like 'cls:Foo' or 'fn:bar'."""
+    """Deterministic UUID derived from a schema id string like ``'cls:Foo'`` or ``'fn:bar'``."""
     return generate_uuid5(schema_id)
 
 
 def uuid_for_algorithm_chunk(entity_id: str) -> str:
-    """Deterministic UUID for an algorithm chunk (chunk_type='algorithm') in unified_collection."""
+    """
+    Deterministic UUID for an algorithm chunk (``chunk_type='algorithm'``) in unified_collection.
+    """
     return generate_uuid5(f"{entity_id}:algorithm")
 
 
 def uuid_for_example_chunk(entity_id: str) -> str:
-    """Deterministic UUID for an example chunk (chunk_type='example') in unified_collection."""
+    """Deterministic UUID for an example chunk (``chunk_type='example'``) in unified_collection."""
     return generate_uuid5(f"{entity_id}:example")
 
 
@@ -95,16 +97,19 @@ def uuid_for_example_chunk(entity_id: str) -> str:
 
 
 def _existing_reference_names(collection: Collection) -> set[str]:
+    """Return the set of reference property names already configured on *collection*."""
     return {r.name for r in collection.config.get().references}
 
 
 def _recreate_if_needed(client: weaviate.WeaviateClient, name: str, recreate: bool) -> None:
+    """Delete collection *name* when *recreate* is True and it already exists."""
     if recreate and client.collections.exists(name):
         logger.info("Deleting existing collection: %s", name)
         client.collections.delete(name)
 
 
 def _create_or_use(client: weaviate.WeaviateClient, name: str, **kwargs: Any) -> Collection:
+    """Create collection *name* if absent, then return a handle to it."""
     if not client.collections.exists(name):
         logger.info("Creating collection: %s", name)
         client.collections.create(name=name, **kwargs)
@@ -114,6 +119,7 @@ def _create_or_use(client: weaviate.WeaviateClient, name: str, **kwargs: Any) ->
 
 
 def _common_properties(extra: list[Property] | None = None) -> list[Property]:
+    """Return the base property list shared by all three code collections, plus any *extra* ones."""
     base = [
         Property(name="schema_id", data_type=DataType.TEXT, skip_vectorization=True),
         Property(name="name", data_type=DataType.TEXT, skip_vectorization=True),
@@ -124,6 +130,7 @@ def _common_properties(extra: list[Property] | None = None) -> list[Property]:
 
 
 def _add_missing_refs(collection: Collection, refs: list[tuple[str, str]]) -> None:
+    """Add reference properties to *collection* that are not yet configured."""
     existing = _existing_reference_names(collection)
     for ref_name, target in refs:
         if ref_name not in existing:
@@ -132,6 +139,7 @@ def _add_missing_refs(collection: Collection, refs: list[tuple[str, str]]) -> No
             )
 
 
+# Cross-collection references shared by both CodeMethod and CodeFunction.
 _CROSS_REFS = [
     ("initialized_classes", CODE_CLASS_COLLECTION),
     ("used_methods", CODE_METHOD_COLLECTION),
@@ -142,10 +150,11 @@ _CROSS_REFS = [
 def setup_collections(
     client: weaviate.WeaviateClient, recreate: bool = False
 ) -> tuple[Collection, Collection, Collection]:
-    """
-    Create all three code collections in two phases to avoid circular-reference errors:
-      Phase 1 — create each collection with only its non-circular references.
-      Phase 2 — add cross-collection references once all collections exist.
+    """Create all three code collections and return ``(cls_col, mth_col, fn_col)``.
+
+    Uses two phases to avoid circular-reference errors:
+    - Phase 1: create each collection with only its non-circular references.
+    - Phase 2: add cross-collection references once all collections exist.
     """
     for name in (CODE_CLASS_COLLECTION, CODE_METHOD_COLLECTION, CODE_FUNCTION_COLLECTION):
         _recreate_if_needed(client, name, recreate)
@@ -164,9 +173,7 @@ def setup_collections(
         CODE_METHOD_COLLECTION,
         vectorizer_config=no_vectorizer,
         properties=_common_properties(
-            [
-                Property(name="qualified_name", data_type=DataType.TEXT, skip_vectorization=True),
-            ]
+            [Property(name="qualified_name", data_type=DataType.TEXT, skip_vectorization=True)]
         ),
         references=[
             ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME),
@@ -188,11 +195,20 @@ def setup_collections(
     return cls_col, mth_col, fn_col
 
 
+# ---------------------------------------------------------------------------
+# Reference builders
+# ---------------------------------------------------------------------------
+
+
 def _make_ref(from_uuid: str, prop: str, to_uuid: str) -> DataReference:
+    """Build a single ``DataReference`` between two objects."""
     return DataReference(from_uuid=from_uuid, from_property=prop, to_uuid=to_uuid)
 
 
 def _algorithm_ref(from_uuid: str, item: dict[str, Any]) -> DataReference | None:
+    """
+    Return an ``algorithm_ref`` ``DataReference`` for *item*, or ``None`` if the number is absent.
+    """
     algo_number = str(item.get("algorithm_number", "")).strip()
     if algo_number:
         return _make_ref(from_uuid, "algorithm_ref", uuid_for_algorithm_chunk(algo_number))
@@ -200,10 +216,14 @@ def _algorithm_ref(from_uuid: str, item: dict[str, Any]) -> DataReference | None
 
 
 def _id_list_refs(from_uuid: str, prop: str, ids: list[str]) -> list[DataReference]:
+    """Return one ``DataReference`` per schema id in *ids*, all pointing from *from_uuid*.*prop*."""
     return [_make_ref(from_uuid, prop, uuid_for_schema_id(sid)) for sid in ids]
 
 
 def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
+    """
+    Build the three shared cross-references (initialized_classes, used_methods, used_functions).
+    """
     refs: RefList = []
     refs.extend(
         _id_list_refs(from_uuid, "initialized_classes", item.get("initialized_classes", []))
@@ -213,7 +233,13 @@ def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
     return refs
 
 
+# ---------------------------------------------------------------------------
+# Insertion helpers
+# ---------------------------------------------------------------------------
+
+
 def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> RefList:
+    """Batch-insert class objects and return their ``algorithm_ref`` references."""
     with collection.batch.dynamic() as batch:
         for cls in classes:
             batch.add_object(
@@ -226,32 +252,38 @@ def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> Re
                 uuid=uuid_for_schema_id(cls["id"]),
             )
 
-    refs: RefList = []
-    for cls in classes:
-        ref = _algorithm_ref(uuid_for_schema_id(cls["id"]), cls)
-        if ref:
-            refs.append(ref)
-    return refs
+    return [
+        ref
+        for cls in classes
+        if (ref := _algorithm_ref(uuid_for_schema_id(cls["id"]), cls)) is not None
+    ]
 
 
 def _insert_code_entities(
     collection: Collection,
     items: list[dict[str, Any]],
-    extra_props: dict[str, Any] | None = None,
+    extra_prop_keys: list[str] | None = None,
     extra_refs_fn: Any = None,
 ) -> RefList:
-    """Generic inserter for methods and functions."""
+    """Batch-insert method or function objects and return all their references.
+
+    Args:
+        collection:     Target Weaviate collection.
+        items:          List of schema records to insert.
+        extra_prop_keys: Additional property keys to copy from each item
+                         (e.g. ``["qualified_name"]``).
+        extra_refs_fn:  Optional ``(from_uuid, item) -> RefList`` called per item for extra refs.
+    """
     with collection.batch.dynamic() as batch:
         for item in items:
-            props = {
+            props: dict[str, Any] = {
                 "schema_id": item["id"],
                 "name": item["name"],
                 "code": item["code"],
                 "algorithm_number": str(item.get("algorithm_number", "")),
             }
-            if extra_props:
-                for key in extra_props:
-                    props[key] = item.get(key, "")
+            for key in extra_prop_keys or []:
+                props[key] = item.get(key, "")
             batch.add_object(properties=props, uuid=uuid_for_schema_id(item["id"]))
 
     refs: RefList = []
@@ -267,6 +299,8 @@ def _insert_code_entities(
 
 
 def _insert_methods(collection: Collection, methods: list[dict[str, Any]]) -> RefList:
+    """Batch-insert method objects and return all their references."""
+
     def _class_ref(from_uuid: str, mth: dict[str, Any]) -> RefList:
         class_schema_id = mth.get("class", "")
         if class_schema_id and not class_schema_id.startswith("external:"):
@@ -276,16 +310,18 @@ def _insert_methods(collection: Collection, methods: list[dict[str, Any]]) -> Re
     return _insert_code_entities(
         collection,
         methods,
-        extra_props={"qualified_name": None},
+        extra_prop_keys=["qualified_name"],
         extra_refs_fn=_class_ref,
     )
 
 
 def _insert_functions(collection: Collection, functions: list[dict[str, Any]]) -> RefList:
+    """Batch-insert function objects and return all their references."""
     return _insert_code_entities(collection, functions)
 
 
 def _add_references_safely(collection: Collection, references: RefList, label: str) -> None:
+    """Call ``reference_add_many`` and log a warning instead of raising on failure."""
     if not references:
         return
     try:
@@ -294,6 +330,10 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
     except Exception as exc:  # noqa: BLE001
         logger.warning("Some references for %s could not be added: %s", label, exc)
 
+
+# ---------------------------------------------------------------------------
+# Example → code entity references
+# ---------------------------------------------------------------------------
 
 _EXAMPLE_CODE_REFS = [
     ("used_classes", CODE_CLASS_COLLECTION),
@@ -309,6 +349,7 @@ _EXAMPLE_REFS_KEY_TO_PROP = {
 
 
 def _ensure_example_code_ref_properties(client: weaviate.WeaviateClient) -> None:
+    """Add the example → code reference properties to unified_collection if missing."""
     if not client.collections.exists(COLLECTION_NAME):
         logger.warning("%s not found; skipping example-code ref setup.", COLLECTION_NAME)
         return
@@ -320,6 +361,9 @@ def _build_example_code_references(
     examples: list[dict[str, Any]],
     schema: dict[str, Any],
 ) -> RefList:
+    """
+    Extract code refs from each example's text and return the corresponding ``DataReference`` list.
+    """
     references: RefList = []
 
     for example in examples:
@@ -336,6 +380,11 @@ def _build_example_code_references(
             references.extend(_id_list_refs(from_uuid, prop, refs.get(ref_key, [])))
 
     return references
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -369,6 +418,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _load_json(path: Path, label: str) -> list[dict[str, Any]] | None:
+    """Load and return a JSON file as a list, or log an error and return ``None``."""
     try:
         with path.open() as f:
             return cast(list[dict[str, Any]], json.load(f))
@@ -389,10 +439,10 @@ def store_schema(
 
     Args:
         client:   Active Weaviate client.
-        schema:   Result of build_code_schema() with keys "classes", "methods", "functions".
+        schema:   Result of ``build_code_schema()`` with keys
+                                                    ``"classes"``, ``"methods"``, ``"functions"``.
         recreate: If True, drops and recreates the collections before inserting.
     """
-
     classes, methods, functions = schema["classes"], schema["methods"], schema["functions"]
     cls_col, mth_col, fn_col = setup_collections(client, recreate=recreate)
 
@@ -418,14 +468,12 @@ def store_example_refs(
 
     Args:
         client:   Active Weaviate client.
-        examples: List of example dicts, each with "example_number" and "text" fields.
-        schema:   Result of build_code_schema(), used to resolve named references.
+        examples: List of example dicts, each with ``"example_number"`` and ``"text"`` fields.
+        schema:   Result of ``build_code_schema()``, used to resolve named references.
     """
-
     logger.info("Adding example → code entity references …")
     _ensure_example_code_ref_properties(client)
 
-    # If the unified collection does not exist, skip adding example references.
     if not client.collections.exists(COLLECTION_NAME):
         logger.warning(
             "Collection %s does not exist; skipping example → code entity references.",
