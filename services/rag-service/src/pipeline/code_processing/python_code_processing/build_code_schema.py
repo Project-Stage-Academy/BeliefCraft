@@ -42,8 +42,8 @@ FunctionRecord:
 
 import ast
 import json
-import textwrap
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -77,9 +77,9 @@ def function_id(name: str) -> str:
     return f"fn:{name}"
 
 
-def _node_source(node: ast.AST) -> str:
-    """Return the dedented source code for an AST node."""
-    return textwrap.dedent(ast.unparse(node))
+# ------------------------------------------------------------------ #
+# AST helpers
+# ------------------------------------------------------------------ #
 
 
 def _class_init_source(class_node: ast.ClassDef) -> str:
@@ -114,55 +114,74 @@ def _leading_docstring(body: list[ast.stmt]) -> ast.Expr | None:
 
 
 def _find_init(body: list[ast.stmt]) -> ast.FunctionDef | None:
-    """Find and return the __init__ function node in a class body, or None."""
+    """Find and return the ``__init__`` node in a class body, or None."""
     return next(
         (n for n in body if isinstance(n, ast.FunctionDef) and n.name == "__init__"),
         None,
     )
 
 
-def _collect_known_ids(analyzer: CodeAnalyzer) -> tuple[set[str], set[str], set[str]]:
-    """Collect sets of known class, method, and function ids from the analyzer."""
-    return (
-        {class_id(n) for n in analyzer.classes},
-        {method_id(n) for n in analyzer.methods},
-        {function_id(n) for n in analyzer.functions},
-    )
+# ------------------------------------------------------------------ #
+# Known-id index
+# ------------------------------------------------------------------ #
+
+
+@dataclass(frozen=True)
+class _KnownIds:
+    """Sets of canonical ref strings for all known definitions."""
+
+    classes: frozenset[str]
+    functions: frozenset[str]
+    methods: frozenset[str]
+
+    @classmethod
+    def from_analyzer(cls, analyzer: CodeAnalyzer) -> "_KnownIds":
+        return cls(
+            classes=frozenset(class_id(n) for n in analyzer.classes),
+            functions=frozenset(function_id(n) for n in analyzer.functions),
+            methods=frozenset(method_id(n) for n in analyzer.methods),
+        )
+
+
+# ------------------------------------------------------------------ #
+# Cross-reference resolution
+# ------------------------------------------------------------------ #
 
 
 def _refs_from_edges(
     caller: str,
     graph: dict[str, dict[str, str]],
-    known_class_ids: set[str],
-    known_function_ids: set[str],
-    known_method_ids: set[str],
+    known: _KnownIds,
 ) -> tuple[list[str], list[str], list[str]]:
-    """Return (initialized_classes, used_functions, used_methods) for a caller node."""
-    kind_to_id = {
-        KIND_CLASS_INIT: (class_id, known_class_ids),
-        KIND_FUNCTION: (function_id, known_function_ids),
-        KIND_METHOD: (method_id, known_method_ids),
-    }
+    """Return ``(initialized_classes, used_functions, used_methods)`` for *caller*."""
     inits: list[str] = []
     funcs: list[str] = []
     meths: list[str] = []
-    buckets = {KIND_CLASS_INIT: inits, KIND_FUNCTION: funcs, KIND_METHOD: meths}
 
     for target, kind in graph.get(caller, {}).items():
-        if kind not in kind_to_id:
-            continue
-        id_fn, known = kind_to_id[kind]
-        ref = id_fn(target)
-        if ref in known:
-            buckets[kind].append(ref)
+        if kind == KIND_CLASS_INIT:
+            ref = class_id(target)
+            if ref in known.classes:
+                inits.append(ref)
+        elif kind == KIND_FUNCTION:
+            ref = function_id(target)
+            if ref in known.functions:
+                funcs.append(ref)
+        elif kind == KIND_METHOD:
+            ref = method_id(target)
+            if ref in known.methods:
+                meths.append(ref)
 
     return sorted(inits), sorted(funcs), sorted(meths)
 
 
-def _fragment_algorithm_number(
-    analyzer: CodeAnalyzer, key: str, class_init_key: str | None = None
-) -> object:
-    """Return the parsed algorithm identifier for a fragment"""
+# ------------------------------------------------------------------ #
+# Record builders
+# ------------------------------------------------------------------ #
+
+
+def _fragment_algorithm_number(analyzer: CodeAnalyzer, key: str) -> object:
+    """Return the parsed algorithm identifier for the fragment that defines *key*."""
     full_number = str(analyzer.fragment_idx.get(key))
     return extract_entity_id_from_number(full_number)
 
@@ -183,9 +202,7 @@ def _build_classes(analyzer: CodeAnalyzer) -> list[dict[str, Any]]:
 def _build_methods(
     analyzer: CodeAnalyzer,
     graph: dict[str, dict[str, str]],
-    known_class_ids: set[str],
-    known_function_ids: set[str],
-    known_method_ids: set[str],
+    known: _KnownIds,
 ) -> list[dict[str, Any]]:
     """Build method records with cross-references from analyzer and graph."""
     methods = []
@@ -194,11 +211,9 @@ def _build_methods(
         if method_name == "__init__":
             continue  # already captured inside the class code
 
-        inits, funcs, meths = _refs_from_edges(
-            qualified, graph, known_class_ids, known_function_ids, known_method_ids
-        )
+        inits, funcs, meths = _refs_from_edges(qualified, graph, known)
         cls_ref = (
-            class_id(cls_name) if class_id(cls_name) in known_class_ids else f"external:{cls_name}"
+            class_id(cls_name) if class_id(cls_name) in known.classes else f"external:{cls_name}"
         )
 
         methods.append(
@@ -220,16 +235,12 @@ def _build_methods(
 def _build_functions(
     analyzer: CodeAnalyzer,
     graph: dict[str, dict[str, str]],
-    known_class_ids: set[str],
-    known_function_ids: set[str],
-    known_method_ids: set[str],
+    known: _KnownIds,
 ) -> list[dict[str, Any]]:
     """Build function records with cross-references from analyzer and graph."""
     result = []
     for name, node in analyzer.functions.items():
-        inits, funcs, meths = _refs_from_edges(
-            name, graph, known_class_ids, known_function_ids, known_method_ids
-        )
+        inits, funcs, meths = _refs_from_edges(name, graph, known)
         result.append(
             {
                 "id": function_id(name),
@@ -244,27 +255,28 @@ def _build_functions(
     return result
 
 
+# ------------------------------------------------------------------ #
+# Public entry point
+# ------------------------------------------------------------------ #
+
+
 def build_code_schema(fragments: Sequence[object]) -> dict[str, list[dict[str, Any]]]:
-    """
-    Analyze a list of code fragments or algorithm objects and return a full
-    schema of definitions with cross-references.
+    """Analyze code fragments and return a schema of definitions with cross-references.
 
     Args:
-        fragments: List of Python code strings or algorithm objects
-                   (each may contain "code" and optional "algorithm_number").
+        fragments: Python source strings or dicts with ``"code"`` and optional
+                   ``"algorithm_number"`` keys.
 
     Returns:
-        Dict with keys "classes", "methods", and "functions".
+        Dict with keys ``"classes"``, ``"methods"``, and ``"functions"``.
     """
     analyzer, graph = analyze_fragments(fragments)
-    known_class_ids, known_method_ids, known_function_ids = _collect_known_ids(analyzer)
-
-    ref_args = (graph, known_class_ids, known_function_ids, known_method_ids)
+    known = _KnownIds.from_analyzer(analyzer)
 
     return {
         "classes": _build_classes(analyzer),
-        "methods": _build_methods(analyzer, *ref_args),
-        "functions": _build_functions(analyzer, *ref_args),
+        "methods": _build_methods(analyzer, graph, known),
+        "functions": _build_functions(analyzer, graph, known),
     }
 
 
