@@ -161,6 +161,7 @@ dependencies = [
     { name = "beliefcraft-rag-service" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "respx" },
 ]
 
 [package.dev-dependencies]
@@ -191,6 +192,7 @@ requires-dist = [
     { name = "beliefcraft-rag-service", editable = "services/rag-service" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.0" },
+    { name = "respx", specifier = ">=0.22.0" },
 ]
 
 [package.metadata.requires-dev]
