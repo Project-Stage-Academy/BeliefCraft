@@ -1,7 +1,8 @@
-import yaml
 from pathlib import Path
 
+import yaml
 from environment_api.main import app
+
 
 def generate_openapi():
     schema = app.openapi()
@@ -11,7 +12,7 @@ def generate_openapi():
 
     out_file = out_dir / "environment-openapi.yaml"
 
-    with open(out_file, "w", encoding="utf-8") as f:
+    with Path.open(out_file, "w", encoding="utf-8") as f:
         yaml.dump(schema, f, sort_keys=False, allow_unicode=True)
 
 

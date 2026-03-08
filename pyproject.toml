@@ -37,6 +37,7 @@ dev = [
     "sqlalchemy>=2.0.46",
     "beautifulsoup4>=4.14.3",
     "opencv-python>=4.13.0.92",
+    "pact-python>=3.2.1"
 ]
 
 [tool.uv.workspace]
