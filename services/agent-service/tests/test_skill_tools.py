@@ -189,7 +189,7 @@ class TestReadSkillFilesTool:
     """Test ReadSkillFilesTool batch functionality."""
 
     def test_get_metadata(self, skill_store: SkillStore) -> None:
-        """Test that metadata includes skill list and max batch size."""
+        """Test that metadata includes proper schema."""
         tool = ReadSkillFilesTool(skill_store)
         metadata = tool.get_metadata()
 
@@ -199,19 +199,16 @@ class TestReadSkillFilesTool:
         assert metadata.cache_ttl == 86400  # 24 hours
         assert metadata.skip_cache is False
 
-        # Description should mention files and batch size
+        # Description should mention files
         assert "supporting files" in metadata.description.lower()
-        assert str(ReadSkillFilesTool.MAX_FILES_PER_BATCH) in metadata.description
 
         # Parameters schema
         assert metadata.parameters["type"] == "object"
         assert "skill_name" in metadata.parameters["properties"]
         assert "filenames" in metadata.parameters["properties"]
         assert metadata.parameters["properties"]["filenames"]["type"] == "array"
-        assert (
-            metadata.parameters["properties"]["filenames"]["maxItems"]
-            == ReadSkillFilesTool.MAX_FILES_PER_BATCH
-        )
+        assert metadata.parameters["properties"]["filenames"]["minItems"] == 1
+        # No maxItems limit - agent can request as many as needed
 
     @pytest.mark.asyncio
     async def test_read_multiple_files_success(self, skill_store: SkillStore) -> None:
@@ -281,21 +278,6 @@ class TestReadSkillFilesTool:
         assert "success" not in result
         assert "errors" in result
         assert len(result["errors"]) == 2
-
-    @pytest.mark.asyncio
-    async def test_read_files_exceeds_max_batch(self, skill_store: SkillStore) -> None:
-        """Test error when requesting too many files."""
-        tool = ReadSkillFilesTool(skill_store)
-
-        result = await tool.execute(
-            skill_name="test-diagnostic-skill",
-            filenames=["f1.md", "f2.md", "f3.md", "f4.md", "f5.md", "f6.md"],  # 6 files > max 5
-        )
-
-        assert "error" in result
-        assert "too many" in result["error"].lower()
-        assert "max_batch_size" in result
-        assert result["max_batch_size"] == ReadSkillFilesTool.MAX_FILES_PER_BATCH
 
     @pytest.mark.asyncio
     async def test_read_files_empty_list(self, skill_store: SkillStore) -> None:

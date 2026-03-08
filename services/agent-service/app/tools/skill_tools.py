@@ -146,11 +146,7 @@ class ReadSkillFilesTool(BaseTool):
 
     Efficiently retrieve one or more reference documents in a single call.
     Returns partial results if some files fail.
-
-    Supports up to 5 files per batch to balance context size and iteration count.
     """
-
-    MAX_FILES_PER_BATCH = 5
 
     def __init__(self, store: SkillStore) -> None:
         """
@@ -171,8 +167,8 @@ class ReadSkillFilesTool(BaseTool):
             name="read_skill_files",
             description=(
                 "Read supporting files from a skill's directory. "
-                "Returns partial results if some files are not found. "
-                f"Supports 1-{self.MAX_FILES_PER_BATCH} files per call."
+                "Can read single or multiple files in one call. "
+                "Returns partial results if some files are not found."
             ),
             parameters={
                 "type": "object",
@@ -192,7 +188,6 @@ class ReadSkillFilesTool(BaseTool):
                             "Example: ['ALGORITHMS.md'] or ['GUIDE.md', 'CHECKLIST.md']"
                         ),
                         "minItems": 1,
-                        "maxItems": self.MAX_FILES_PER_BATCH,
                     },
                 },
                 "required": ["skill_name", "filenames"],
@@ -228,16 +223,6 @@ class ReadSkillFilesTool(BaseTool):
         )
 
         # Validate batch size
-        if len(filenames) > self.MAX_FILES_PER_BATCH:
-            return {
-                "error": f"Too many files requested: {len(filenames)}",
-                "message": (
-                    f"Maximum {self.MAX_FILES_PER_BATCH} files per batch. "
-                    f"You requested {len(filenames)} files. Split into multiple calls."
-                ),
-                "max_batch_size": self.MAX_FILES_PER_BATCH,
-            }
-
         if not filenames:
             return {
                 "error": "Empty filenames list",

@@ -16,10 +16,12 @@ Security:
 - SkillStore is anchored to a configured root dir.
 - Supporting file reads prevent directory traversal and absolute paths.
 
-Caching:
-- SkillStore provides in-process memory caching for fast repeated access.
-- Skills are static files that rarely change, making memory cache sufficient.
-- Tool layer applies Redis caching via tool registry's cache_ttl mechanism.
+Caching (two-tier strategy):
+- **Tier 1 (in-process)**: SkillStore caches parsed metadata/content objects in memory.
+  Used by get_metadata() for dynamic tool parameter generation (not cached in Redis).
+  Fast repeated access within same process, cleared on invalidate().
+- **Tier 2 (Redis)**: CachedTool wrapper caches execute() JSON results across requests.
+  24-hour TTL, shared between processes. Applied automatically by tool registry.
 """
 
 from __future__ import annotations
