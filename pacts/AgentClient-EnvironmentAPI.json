@@ -4,11 +4,476 @@
   },
   "interactions": [
     {
-      "description": "A request to list suppliers",
+      "description": "Request PO lines",
       "pending": false,
       "providerStates": [
         {
-          "name": "Suppliers exist"
+          "name": "PO lines exist"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/procurement/po-lines",
+        "query": {
+          "purchase_order_id": [
+            "po-123"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": {
+              "po_lines": [
+                {
+                  "category": "Electronics",
+                  "id": "line-1",
+                  "product_id": "prod-1",
+                  "product_name": "Gadget",
+                  "purchase_order_id": "po-123",
+                  "qty_ordered": 100.0,
+                  "qty_received": 20.0,
+                  "remaining_qty": 80.0,
+                  "sku": "sku-999"
+                }
+              ]
+            },
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request at-risk orders",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "At-risk orders data exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/orders/at-risk",
+        "query": {
+          "horizon_hours": [
+            "48"
+          ],
+          "limit": [
+            "50"
+          ],
+          "min_sla_priority": [
+            "0.7"
+          ],
+          "offset": [
+            "0"
+          ],
+          "top_missing_skus_limit": [
+            "5"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": [
+              {
+                "order_id": "ord-777",
+                "promised_at": "2023-10-15T00:00:00",
+                "sla_priority": 0.88,
+                "status": "open",
+                "top_missing_skus": [
+                  "sku-999"
+                ],
+                "total_lines": 2,
+                "total_open_qty": 10.0,
+                "total_penalty_exposure": 500.0
+              }
+            ],
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request balance comparison",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "Balance comparison data exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/observations/compare-balances",
+        "query": {
+          "limit": [
+            "50"
+          ],
+          "observed_from": [
+            "2023-01-01T00:00:00"
+          ],
+          "observed_to": [
+            "2023-01-31T23:59:59"
+          ],
+          "offset": [
+            "0"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": [
+              {
+                "available": 1500.0,
+                "avg_confidence": 0.9,
+                "discrepancy": -5.0,
+                "location_id": "loc-1",
+                "obs_count": 1,
+                "observed_estimate": 1495.0,
+                "on_hand": 1500.0,
+                "product_id": "prod-1",
+                "reserved": 0.0,
+                "sku": "sku-999",
+                "warehouse_id": "wh-01"
+              }
+            ],
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request current inventory",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "Inventory data exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/inventory/current",
+        "query": {
+          "limit": [
+            "50"
+          ],
+          "offset": [
+            "0"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": [
+              {
+                "available": 1500.0,
+                "last_count_at": "2023-10-01T00:00:00",
+                "location_code": "A1",
+                "location_id": "loc-1",
+                "on_hand": 1500.0,
+                "product_id": "prod-1",
+                "quality_status": "good",
+                "reserved": 0.0,
+                "sku": "sku-999",
+                "warehouse_id": "wh-01"
+              }
+            ],
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request delay summary",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "Delay summary data exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/shipments/delay-summary",
+        "query": {
+          "date_from": [
+            "2023-01-01T00:00:00"
+          ],
+          "date_to": [
+            "2023-01-31T23:59:59"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": {
+              "avg_transit_hours": 50.0,
+              "delayed_count": 1,
+              "delayed_shipments": [
+                {
+                  "arrived_at": null,
+                  "delayed_reason": "In transit over 48 hours",
+                  "destination_warehouse_id": "wh-02",
+                  "origin_warehouse_id": "wh-01",
+                  "route_id": "rt-55",
+                  "shipment_id": "ship-1",
+                  "shipped_at": "2023-01-01T00:00:00",
+                  "status": "delayed",
+                  "transit_hours": 50.0
+                }
+              ],
+              "delivered_count": 0,
+              "in_transit_count": 1,
+              "total_shipments": 1
+            },
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request pipeline summary",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "Pipeline summary data exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/procurement/pipeline-summary",
+        "query": {
+          "group_by": [
+            "warehouse_supplier"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": {
+              "rows": [
+                {
+                  "destination_warehouse_id": "wh-01",
+                  "last_created_at": "2023-10-01T00:00:00",
+                  "next_expected_at": "2023-10-15T00:00:00",
+                  "po_count": 5,
+                  "supplier_id": "sup-123",
+                  "supplier_name": "Acme Corp",
+                  "total_qty_ordered": 500.0,
+                  "total_qty_received": 100.0,
+                  "total_qty_remaining": 400.0,
+                  "warehouse_name": "Central Hub"
+                }
+              ]
+            },
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request single PO",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "Purchase order po-123 exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/procurement/purchase-orders/po-123"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": {
+              "purchase_order": {
+                "created_at": "2023-10-01T00:00:00",
+                "destination_warehouse_id": "wh-01",
+                "expected_at": "2023-10-15T00:00:00",
+                "id": "po-123",
+                "leadtime_model_id": "lt-1",
+                "status": "submitted",
+                "supplier_id": "sup-123",
+                "supplier_name": "Acme Corp",
+                "warehouse_name": "Central Hub"
+              }
+            },
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request single supplier",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "Supplier sup-123 exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/procurement/suppliers/sup-123"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": {
+              "supplier": {
+                "id": "sup-123",
+                "name": "Acme Corp",
+                "region": "NA",
+                "reliability_score": 0.95
+              }
+            },
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request to list POs",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "Purchase orders list exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/smart-query/procurement/purchase-orders",
+        "query": {
+          "limit": [
+            "100"
+          ],
+          "offset": [
+            "0"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "content": {
+            "data": {
+              "purchase_orders": [
+                {
+                  "created_at": "2023-10-01T00:00:00",
+                  "destination_warehouse_id": "wh-01",
+                  "expected_at": "2023-10-15T00:00:00",
+                  "id": "po-123",
+                  "leadtime_model_id": "lt-1",
+                  "status": "submitted",
+                  "supplier_id": "sup-123",
+                  "supplier_name": "Acme Corp",
+                  "warehouse_name": "Central Hub"
+                }
+              ]
+            },
+            "message": "Success",
+            "meta": {}
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "Request to list suppliers",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "Supplier list exists"
         }
       ],
       "request": {
@@ -26,15 +491,18 @@
       "response": {
         "body": {
           "content": {
-            "data": [
-              {
-                "id": "sup-123",
-                "name": "Acme Corp",
-                "region": "NA",
-                "reliability": 0.95
-              }
-            ],
-            "message": "Success"
+            "data": {
+              "suppliers": [
+                {
+                  "id": "sup-123",
+                  "name": "Acme Corp",
+                  "region": "NA",
+                  "reliability_score": 0.95
+                }
+              ]
+            },
+            "message": "Success",
+            "meta": {}
           },
           "contentType": "application/json",
           "encoded": false
