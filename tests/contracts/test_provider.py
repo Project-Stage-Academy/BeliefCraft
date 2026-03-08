@@ -1,6 +1,21 @@
 """
-Provider Contract Verification Tests.
-Mocks the exact import paths used in your FastAPI routers.
+Provider Contract Verification Tests for EnvironmentAPI.
+
+This module validates that the FastAPI backend (Provider) strictly adheres
+to the data structures and HTTP expectations defined by the AgentClient (Consumer).
+
+Mechanism:
+1. It reads the Consumer-generated JSON contract from the `pacts/` directory.
+2. It mocks the internal database "tool" functions to return deterministic fixture data.
+3. It spins up a live, isolated FastAPI server using `multiprocessing`.
+4. It uses the Pact Verifier to replay the Consumer's recorded HTTP requests
+   against the live server and asserts that the actual Pydantic-serialized
+   responses match the contract exactly.
+
+By mocking the database layer, these tests isolate the HTTP/serialization
+boundary. This ensures tests only fail when a true contract violation occurs
+(e.g., a renamed JSON key or altered data type), completely eliminating
+flakiness caused by changing local database states.
 """
 
 import multiprocessing
@@ -29,9 +44,21 @@ from .fixtures import (
 
 
 def run_server():
+    """
+    Boots the FastAPI application in a dedicated background process.
+
+    Configuration details:
+    - `ws="none"`: Disables websocket support. This prevents `DeprecationWarning`
+      and unclosed async event loop crashes during the aggressive process termination.
+    - `log_level="error"`: Suppresses standard access logs to keep test output readable.
+    """
     uvicorn.run(main_app, host="127.0.0.1", port=8001, log_level="error", ws="none")
 
 
+# The decorators patch the functions exactly where they are imported and executed
+# inside the FastAPI router files, not where they are originally defined.
+# Note: Python applies multiple decorators from bottom to top, which dictates
+# the parameter order in the test function signature.
 @patch("environment_api.api.smart_query_routes.procurement.list_suppliers")
 @patch("environment_api.api.smart_query_routes.procurement.get_supplier")
 @patch("environment_api.api.smart_query_routes.procurement.list_purchase_orders")
@@ -54,6 +81,17 @@ def test_provider_complies_with_contract(
     mock_get_supplier,
     mock_list_suppliers,
 ):
+    """
+    Executes the Pact verification suite against the mocked FastAPI server.
+
+    Execution Flow:
+    1. Validates the existence of the consumer contract file to prevent false passes.
+    2. Overrides the return values of all data-fetching tools with strict `ToolResult`
+       wrappers containing the predefined JSON fixtures.
+    3. Starts the Uvicorn server and yields control to the Rust FFI `Verifier`.
+    4. Guarantees server termination in a `finally` block to prevent zombie
+    processes/port collisions.
+    """
     pact_dir = Path.cwd() / "pacts"
     if not pact_dir.exists() or not list(pact_dir.glob("*.json")):
         pytest.fail("No contract files found. Run consumer test first!")
