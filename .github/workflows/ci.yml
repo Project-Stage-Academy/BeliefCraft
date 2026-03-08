@@ -38,12 +38,11 @@ jobs:
 
       - name: Check for breaking API changes
         if: github.event_name == 'pull_request'
-        uses: tufin/oasdiff-action@v3
+        uses: oasdiff/oasdiff-action/breaking@main
         with:
           base: 'origin/${{ github.base_ref }}:docs/api/environment-openapi.yaml'
           revision: 'docs/api/environment-openapi.yaml'
-          fail-on-diff: false
-          fail-on-breaking: true
+          fail-on: ERR
 
       - name: Run pre-commit (lint/format/typecheck)
         id: precommit
