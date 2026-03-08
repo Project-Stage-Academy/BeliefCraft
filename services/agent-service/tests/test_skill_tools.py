@@ -1,7 +1,7 @@
 """
 Unit tests for skill management tools.
 
-Tests LoadSkillTool, ReadSkillFileTool, and ReadSkillFilesTool functionality.
+Tests LoadSkillTool and ReadSkillFilesTool functionality.
 """
 
 import tempfile
@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from app.services.skill_store import SkillStore
 from app.tools.base import ToolMetadata
-from app.tools.skill_tools import LoadSkillTool, ReadSkillFilesTool, ReadSkillFileTool
+from app.tools.skill_tools import LoadSkillTool, ReadSkillFilesTool
 
 
 @pytest.fixture
@@ -82,7 +82,7 @@ class TestLoadSkillTool:
     """Test LoadSkillTool functionality."""
 
     def test_get_metadata(self, skill_store: SkillStore) -> None:
-        """Test that metadata includes skill list."""
+        """Test that metadata includes skill list in parameter description."""
         tool = LoadSkillTool(skill_store)
         metadata = tool.get_metadata()
 
@@ -92,9 +92,10 @@ class TestLoadSkillTool:
         assert metadata.cache_ttl == 86400  # 24 hours
         assert metadata.skip_cache is False
 
-        # Description should include available skills
-        assert "another-skill" in metadata.description
-        assert "test-diagnostic-skill" in metadata.description
+        # Skill names should be in parameter description, not tool description
+        param_desc = metadata.parameters["properties"]["skill_name"]["description"]
+        assert "another-skill" in param_desc
+        assert "test-diagnostic-skill" in param_desc
 
         # Parameters schema
         assert metadata.parameters["type"] == "object"
@@ -155,7 +156,8 @@ class TestLoadSkillTool:
         tool = LoadSkillTool(store)
 
         metadata_before = tool.get_metadata()
-        assert "test-diagnostic-skill" in metadata_before.description
+        param_desc_before = metadata_before.parameters["properties"]["skill_name"]["description"]
+        assert "test-diagnostic-skill" in param_desc_before
 
         # Add new skill
         new_skill_dir = temp_skills_dir / "new-skill"
@@ -178,111 +180,9 @@ description: Newly added skill
         # Create new tool instance
         tool_after = LoadSkillTool(store)
         metadata_after = tool_after.get_metadata()
+        param_desc_after = metadata_after.parameters["properties"]["skill_name"]["description"]
 
-        assert "new-skill" in metadata_after.description
-
-
-class TestReadSkillFileTool:
-    """Test ReadSkillFileTool functionality."""
-
-    def test_get_metadata(self, skill_store: SkillStore) -> None:
-        """Test that metadata includes skill list."""
-        tool = ReadSkillFileTool(skill_store)
-        metadata = tool.get_metadata()
-
-        assert isinstance(metadata, ToolMetadata)
-        assert metadata.name == "read_skill_file"
-        assert metadata.category == "skill"
-        assert metadata.cache_ttl == 86400  # 24 hours
-        assert metadata.skip_cache is False
-
-        # Description should include available skills
-        assert "another-skill" in metadata.description
-        assert "test-diagnostic-skill" in metadata.description
-
-        # Parameters schema
-        assert metadata.parameters["type"] == "object"
-        assert "skill_name" in metadata.parameters["properties"]
-        assert "filename" in metadata.parameters["properties"]
-        assert "skill_name" in metadata.parameters["required"]
-        assert "filename" in metadata.parameters["required"]
-
-    @pytest.mark.asyncio
-    async def test_execute_success(self, skill_store: SkillStore) -> None:
-        """Test successful file reading."""
-        tool = ReadSkillFileTool(skill_store)
-
-        result = await tool.execute(skill_name="test-diagnostic-skill", filename="CHECKLIST.md")
-
-        assert isinstance(result, dict)
-        assert result["skill_name"] == "test-diagnostic-skill"
-        assert result["filename"] == "CHECKLIST.md"
-        assert "# Checklist" in result["content"]
-        assert "- Item 1" in result["content"]
-        assert "- Item 2" in result["content"]
-
-    @pytest.mark.asyncio
-    async def test_execute_file_not_found(self, skill_store: SkillStore) -> None:
-        """Test reading non-existent file."""
-        tool = ReadSkillFileTool(skill_store)
-
-        result = await tool.execute(skill_name="test-diagnostic-skill", filename="NONEXISTENT.md")
-
-        assert isinstance(result, dict)
-        assert "error" in result
-        assert "NONEXISTENT.md" not in result.get("content", "")
-        assert "available_files" in result
-        assert isinstance(result["available_files"], list)
-        assert "CHECKLIST.md" in result["available_files"]
-        assert "message" in result
-
-    @pytest.mark.asyncio
-    async def test_execute_skill_not_found(self, skill_store: SkillStore) -> None:
-        """Test reading file from non-existent skill."""
-        tool = ReadSkillFileTool(skill_store)
-
-        result = await tool.execute(skill_name="nonexistent-skill", filename="GUIDE.md")
-
-        assert isinstance(result, dict)
-        assert "error" in result
-        assert "nonexistent-skill" not in result.get("content", "")
-
-    @pytest.mark.asyncio
-    async def test_execute_prevents_directory_traversal(self, skill_store: SkillStore) -> None:
-        """Test that directory traversal is prevented."""
-        tool = ReadSkillFileTool(skill_store)
-
-        result = await tool.execute(
-            skill_name="test-diagnostic-skill", filename="../another-skill/SKILL.md"
-        )
-
-        assert isinstance(result, dict)
-        assert "error" in result
-        assert "invalid" in result["error"].lower() or "security" in result["message"].lower()
-
-    @pytest.mark.asyncio
-    async def test_execute_prevents_absolute_paths(self, skill_store: SkillStore) -> None:
-        """Test that absolute paths are rejected."""
-        tool = ReadSkillFileTool(skill_store)
-
-        result = await tool.execute(skill_name="test-diagnostic-skill", filename="/etc/passwd")
-
-        assert isinstance(result, dict)
-        assert "error" in result
-
-    @pytest.mark.asyncio
-    async def test_execute_with_extra_kwargs(self, skill_store: SkillStore) -> None:
-        """Test that extra kwargs are ignored."""
-        tool = ReadSkillFileTool(skill_store)
-
-        result = await tool.execute(
-            skill_name="test-diagnostic-skill",
-            filename="CHECKLIST.md",
-            extra_param="ignored",
-        )
-
-        assert "error" not in result
-        assert "# Checklist" in result["content"]
+        assert "new-skill" in param_desc_after
 
 
 class TestReadSkillFilesTool:
@@ -299,8 +199,8 @@ class TestReadSkillFilesTool:
         assert metadata.cache_ttl == 86400  # 24 hours
         assert metadata.skip_cache is False
 
-        # Description should mention batch and max files
-        assert "multiple" in metadata.description.lower()
+        # Description should mention files and batch size
+        assert "supporting files" in metadata.description.lower()
         assert str(ReadSkillFilesTool.MAX_FILES_PER_BATCH) in metadata.description
 
         # Parameters schema
@@ -389,7 +289,7 @@ class TestReadSkillFilesTool:
 
         result = await tool.execute(
             skill_name="test-diagnostic-skill",
-            filenames=["file1.md", "file2.md", "file3.md", "file4.md"],  # 4 files > max 3
+            filenames=["f1.md", "f2.md", "f3.md", "f4.md", "f5.md", "f6.md"],  # 6 files > max 5
         )
 
         assert "error" in result
@@ -472,13 +372,13 @@ class TestReadSkillFilesTool:
 
 
 class TestSkillToolsIntegration:
-    """Test integration between LoadSkillTool and ReadSkillFileTool."""
+    """Test integration between LoadSkillTool and ReadSkillFilesTool."""
 
     @pytest.mark.asyncio
     async def test_workflow_load_then_read(self, skill_store: SkillStore) -> None:
-        """Test typical workflow: load skill, then read supporting file."""
+        """Test typical workflow: load skill, then read supporting files."""
         load_tool = LoadSkillTool(skill_store)
-        read_tool = ReadSkillFileTool(skill_store)
+        read_tool = ReadSkillFilesTool(skill_store)
 
         # Step 1: Load skill
         load_result = await load_tool.execute(skill_name="test-diagnostic-skill")
@@ -488,10 +388,13 @@ class TestSkillToolsIntegration:
 
         # Step 2: Read supporting file from available_files
         filename = load_result["available_files"][0]
-        read_result = await read_tool.execute(skill_name="test-diagnostic-skill", filename=filename)
+        read_result = await read_tool.execute(
+            skill_name="test-diagnostic-skill", filenames=[filename]
+        )
 
-        assert read_result["filename"] == filename
-        assert "content" in read_result
+        assert read_result["files_success"] == 1
+        assert filename in read_result["success"]
+        assert len(read_result["success"][filename]) > 0  # Has non-empty content
 
     @pytest.mark.asyncio
     async def test_multiple_skills_isolation(self, skill_store: SkillStore) -> None:
@@ -524,7 +427,9 @@ class TestSkillToolsWithEmptyStore:
         tool = LoadSkillTool(empty_store)
         metadata = tool.get_metadata()
 
-        assert "none" in metadata.description.lower() or metadata.description == ""
+        # Skill list should be in parameter description
+        param_desc = metadata.parameters["properties"]["skill_name"]["description"]
+        assert "none" in param_desc.lower()
 
     @pytest.mark.asyncio
     async def test_load_tool_execute_with_no_skills(self, empty_store: SkillStore) -> None:

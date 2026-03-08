@@ -14,7 +14,7 @@ These tools operate on local file system (no HTTP), unlike environment tools.
 import time
 from typing import Any
 
-from app.core.constants import CACHE_TTL_RAG_TOOLS
+from app.core.constants import CACHE_TTL_SKILLS
 from app.services.skill_store import SkillStore
 from app.tools.base import BaseTool, ToolMetadata
 from common.logging import get_logger
@@ -52,11 +52,8 @@ class LoadSkillTool(BaseTool):
         return ToolMetadata(
             name="load_skill",
             description=(
-                f"Load expert diagnostic workflow for a domain-specific task. "
-                f"Returns JSON with full instructions and list of supporting files.\n\n"
-                f"Available skills: {available}\n\n"
-                f"Use this when the user's query matches a skill's domain "
-                f"(e.g., inventory discrepancies, procurement risk, capacity issues)."
+                "Load expert diagnostic workflow for a domain-specific task. "
+                "Returns JSON with full instructions and list of supporting files."
             ),
             parameters={
                 "type": "object",
@@ -71,7 +68,7 @@ class LoadSkillTool(BaseTool):
                 "required": ["skill_name"],
             },
             category="skill",
-            cache_ttl=CACHE_TTL_RAG_TOOLS,  # 24 hours - skills are static knowledge
+            cache_ttl=CACHE_TTL_SKILLS,
             skip_cache=False,
         )
 
@@ -143,184 +140,17 @@ class LoadSkillTool(BaseTool):
         }
 
 
-class ReadSkillFileTool(BaseTool):
-    """
-    Read a supporting file from a skill directory.
-
-    Use this for deep-dive reference material like checklists, algorithms,
-    or data schemas referenced in the main SKILL.md instructions.
-
-    Security: Validates filenames to prevent directory traversal attacks.
-    """
-
-    def __init__(self, store: SkillStore) -> None:
-        """
-        Initialize tool with a SkillStore instance.
-
-        Args:
-            store: SkillStore configured with skills directory
-        """
-        self.store = store
-        super().__init__()
-
-    def get_metadata(self) -> ToolMetadata:
-        """Generate metadata with dynamic skill list in description."""
-        skill_names = self.store.get_skill_names()
-        available = ", ".join(skill_names) if skill_names else "none"
-
-        return ToolMetadata(
-            name="read_skill_file",
-            description=(
-                f"Read a supporting file from a skill's directory. "
-                f"Use this to access detailed reference documents listed in "
-                f"the 'available_files' field of a loaded skill.\n\n"
-                f"Available skills: {available}\n\n"
-                f"Example: After loading 'inventory-discrepancy-audit', "
-                f"you can read 'SENSOR_CALIBRATION_CHECKLIST.md' for detailed procedures."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "skill_name": {
-                        "type": "string",
-                        "description": (
-                            f"Name of the skill that owns the file. " f"Must be one of: {available}"
-                        ),
-                    },
-                    "filename": {
-                        "type": "string",
-                        "description": (
-                            "Relative filename from the skill's 'available_files' list. "
-                            "Example: 'ALGORITHMS.md' or 'examples/scenario1.md'"
-                        ),
-                    },
-                },
-                "required": ["skill_name", "filename"],
-            },
-            category="skill",
-            cache_ttl=CACHE_TTL_RAG_TOOLS,  # 24 hours
-            skip_cache=False,
-        )
-
-    async def execute(  # type: ignore[override]
-        self, skill_name: str, filename: str, **kwargs: Any
-    ) -> dict[str, Any]:
-        """
-        Read a supporting file from a skill directory.
-
-        Args:
-            skill_name: Name of the skill (directory name)
-            filename: Relative path to file within skill directory
-            **kwargs: Additional parameters (ignored)
-
-        Returns:
-            Dict with skill_name, filename, and content.
-            On error, returns dict with 'error' key.
-        """
-        start = time.perf_counter()
-
-        logger.info(
-            "read_skill_file_requested",
-            tier=3,
-            skill=skill_name,
-            file=filename,
-        )
-
-        try:
-            # Sync operation (SkillStore is sync)
-            content = self.store.read_supporting_file(skill_name, filename)
-            duration_ms = int((time.perf_counter() - start) * 1000)
-
-            logger.info(
-                "read_skill_file_success",
-                tier=3,
-                skill=skill_name,
-                file=filename,
-                duration_ms=duration_ms,
-                content_length=len(content),
-            )
-
-            return {
-                "skill_name": skill_name,
-                "filename": filename,
-                "content": content,
-            }
-
-        except FileNotFoundError as e:
-            duration_ms = int((time.perf_counter() - start) * 1000)
-
-            logger.warning(
-                "read_skill_file_not_found",
-                tier=3,
-                skill=skill_name,
-                file=filename,
-                duration_ms=duration_ms,
-                error=str(e),
-            )
-
-            # List available files to help LLM self-correct
-            available_files = self.store.list_supporting_files(skill_name)
-
-            return {
-                "error": f"File not found: {skill_name}/{filename}",
-                "available_files": available_files,
-                "message": (
-                    f"The file '{filename}' does not exist in skill '{skill_name}'. "
-                    f"Available files: {', '.join(available_files) if available_files else 'none'}"
-                ),
-            }
-
-        except ValueError as e:
-            duration_ms = int((time.perf_counter() - start) * 1000)
-
-            logger.error(
-                "read_skill_file_invalid",
-                tier=3,
-                skill=skill_name,
-                file=filename,
-                duration_ms=duration_ms,
-                error=str(e),
-            )
-
-            return {
-                "error": f"Invalid file path: {str(e)}",
-                "message": (
-                    f"The filename '{filename}' is invalid (security check failed). "
-                    f"Use relative paths only, without '..' or absolute paths."
-                ),
-            }
-
-        except Exception as e:
-            duration_ms = int((time.perf_counter() - start) * 1000)
-
-            logger.error(
-                "read_skill_file_error",
-                tier=3,
-                skill=skill_name,
-                file=filename,
-                duration_ms=duration_ms,
-                error=str(e),
-                error_type=type(e).__name__,
-                exc_info=True,
-            )
-
-            return {
-                "error": f"Error reading file: {str(e)}",
-                "message": f"Unexpected error while reading '{filename}' from '{skill_name}'.",
-            }
-
-
 class ReadSkillFilesTool(BaseTool):
     """
-    Read multiple supporting files from a skill directory in one call.
+    Read supporting files from a skill directory.
 
-    Use this to efficiently retrieve several reference documents at once,
-    reducing ReAct loop iterations. Returns partial results if some files fail.
+    Efficiently retrieve one or more reference documents in a single call.
+    Returns partial results if some files fail.
 
-    Max 3 files per call to prevent excessive token usage.
+    Supports up to 5 files per batch to balance context size and iteration count.
     """
 
-    MAX_FILES_PER_BATCH = 3
+    MAX_FILES_PER_BATCH = 5
 
     def __init__(self, store: SkillStore) -> None:
         """
@@ -340,12 +170,9 @@ class ReadSkillFilesTool(BaseTool):
         return ToolMetadata(
             name="read_skill_files",
             description=(
-                f"Read multiple supporting files from a skill's directory in one call. "
-                f"More efficient than calling read_skill_file multiple times. "
-                f"Returns partial results if some files are not found.\n\n"
-                f"Available skills: {available}\n\n"
-                f"Max {self.MAX_FILES_PER_BATCH} files per batch. "
-                f"Example: Read ['GUIDE.md', 'CHECKLIST.md', 'formulas.txt'] at once."
+                "Read supporting files from a skill's directory. "
+                "Returns partial results if some files are not found. "
+                f"Supports 1-{self.MAX_FILES_PER_BATCH} files per call."
             ),
             parameters={
                 "type": "object",
@@ -361,8 +188,8 @@ class ReadSkillFilesTool(BaseTool):
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
-                            f"List of relative filenames to read (max {self.MAX_FILES_PER_BATCH}). "
-                            f"Example: ['ALGORITHMS.md', 'examples/scenario1.md']"
+                            "List of relative filenames from 'available_files'. "
+                            "Example: ['ALGORITHMS.md'] or ['GUIDE.md', 'CHECKLIST.md']"
                         ),
                         "minItems": 1,
                         "maxItems": self.MAX_FILES_PER_BATCH,
@@ -371,7 +198,7 @@ class ReadSkillFilesTool(BaseTool):
                 "required": ["skill_name", "filenames"],
             },
             category="skill",
-            cache_ttl=CACHE_TTL_RAG_TOOLS,  # 24 hours
+            cache_ttl=CACHE_TTL_SKILLS,
             skip_cache=False,
         )
 
@@ -406,8 +233,7 @@ class ReadSkillFilesTool(BaseTool):
                 "error": f"Too many files requested: {len(filenames)}",
                 "message": (
                     f"Maximum {self.MAX_FILES_PER_BATCH} files per batch. "
-                    f"You requested {len(filenames)} files. "
-                    f"Split into multiple calls or use read_skill_file for single files."
+                    f"You requested {len(filenames)} files. Split into multiple calls."
                 ),
                 "max_batch_size": self.MAX_FILES_PER_BATCH,
             }

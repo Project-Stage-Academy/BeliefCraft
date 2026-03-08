@@ -78,9 +78,9 @@ decision-making frameworks for complex warehouse operations problems.
 </skills_catalog>
 
 When to use skills:
-- User asks about specific operational issues (e.g., inventory discrepancies, procurement risks)
-- Investigation requires multi-step diagnostic procedure
-- Domain expertise beyond general reasoning is needed
+- The task requires domain expertise not covered by general reasoning or available tools
+- The skill's description matches the user's query or investigation needs
+- You need specialized procedures, frameworks, or decision-making workflows
 
 After loading a skill, follow its instructions precisely, including tool call sequences \
 and decision points.

@@ -17,8 +17,9 @@ Security:
 - Supporting file reads prevent directory traversal and absolute paths.
 
 Caching:
-- SkillStore does only in-process caching (metadata + loaded skill bodies).
-- Redis caching should be applied at the tool layer via CachedTool wrapper.
+- SkillStore provides in-process memory caching for fast repeated access.
+- Skills are static files that rarely change, making memory cache sufficient.
+- Tool layer applies Redis caching via tool registry's cache_ttl mechanism.
 """
 
 from __future__ import annotations
@@ -57,11 +58,18 @@ class SkillMetadata:
     tags: tuple[str, ...] = ()
     dependencies: tuple[str, ...] = ()
     path: Path | None = None  # absolute path to SKILL.md
+    extra: dict[str, Any] | None = None  # non-standard YAML fields
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, path: Path | None) -> SkillMetadata:
+        # Extract standard fields
+        standard_fields = {"name", "description", "version", "tags", "dependencies"}
         tags = data.get("tags") or []
         dependencies = data.get("dependencies") or []
+
+        # Collect non-standard fields
+        extra = {k: v for k, v in data.items() if k not in standard_fields}
+
         return cls(
             name=str(data.get("name") or "").strip(),
             description=str(data.get("description") or "").strip(),
@@ -69,6 +77,7 @@ class SkillMetadata:
             tags=tuple(str(t).strip() for t in tags if str(t).strip()),
             dependencies=tuple(str(d).strip() for d in dependencies if str(d).strip()),
             path=path,
+            extra=extra if extra else None,
         )
 
 
@@ -177,8 +186,9 @@ class SkillStore:
     """Skill registry with progressive disclosure and in-process caching.
 
     Notes:
-    - The store is intentionally synchronous (disk IO). Call from a threadpool if needed.
-    - Redis caching should be applied at the tool layer (CachedTool wrapper).
+    - Intentionally synchronous for simplicity. Local file I/O is fast (<1ms per skill),
+      and async overhead would add complexity without measurable performance benefit.
+    - If blocking is a concern, wrap calls in asyncio.to_thread() at the tool layer.
     """
 
     def __init__(

@@ -76,7 +76,7 @@ from app.tools.environment_tools import (
 from app.tools.mcp_loader import MCPToolLoader
 from app.tools.mcp_tool import MCPClientProtocol
 from app.tools.registry import ToolRegistry, tool_registry
-from app.tools.skill_tools import LoadSkillTool, ReadSkillFilesTool, ReadSkillFileTool
+from app.tools.skill_tools import LoadSkillTool, ReadSkillFilesTool
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -253,7 +253,7 @@ def register_skill_tools(skills_dir: str) -> None:
     This function:
     1. Creates a SkillStore instance from the skills directory
     2. Scans for available skills (Tier 1: Discovery)
-    3. Registers load_skill, read_skill_file, and read_skill_files tools
+    3. Registers load_skill and read_skill_files tools (2 tools)
     4. Wraps tools in CachedTool (24 hour TTL)
     5. Stores SkillStore instance globally for access via get_skill_store()
 
@@ -304,7 +304,6 @@ def register_skill_tools(skills_dir: str) -> None:
 
     # Register skill tools with caching (24h TTL for static knowledge)
     tool_registry.register(CachedTool(LoadSkillTool(store)))
-    tool_registry.register(CachedTool(ReadSkillFileTool(store)))
     tool_registry.register(CachedTool(ReadSkillFilesTool(store)))
 
     skill_count = sum(

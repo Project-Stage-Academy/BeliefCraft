@@ -220,7 +220,7 @@ class TestSkillToolsRegistration:
     def cleanup_skill_tools(self) -> Generator[None, None, None]:
         """Remove skill tools from registry before each test to prevent registration conflicts."""
         # Remove skill tools if they exist
-        skill_tool_names = ["load_skill", "read_skill_file", "read_skill_files"]
+        skill_tool_names = ["load_skill", "read_skill_files"]
         for name in skill_tool_names:
             if name in tool_registry.tools:
                 del tool_registry.tools[name]
@@ -270,13 +270,12 @@ Content here.
         # Register skill tools
         register_skill_tools(str(temp_skills_dir))
 
-        # Should add 3 tools: load_skill, read_skill_file, read_skill_files
+        # Should add 2 tools: load_skill, read_skill_files
         tools_after = len(tool_registry.tools)
-        assert tools_after == tools_before + 3
+        assert tools_after == tools_before + 2
 
         # Verify skill tools are registered
         assert "load_skill" in tool_registry.tools
-        assert "read_skill_file" in tool_registry.tools
         assert "read_skill_files" in tool_registry.tools
 
     def test_skill_tools_are_cached(self, temp_skills_dir: Path) -> None:
@@ -284,11 +283,9 @@ Content here.
         register_skill_tools(str(temp_skills_dir))
 
         load_tool = tool_registry.get_tool("load_skill")
-        read_tool = tool_registry.get_tool("read_skill_file")
         read_batch_tool = tool_registry.get_tool("read_skill_files")
 
         assert isinstance(load_tool, CachedTool)
-        assert isinstance(read_tool, CachedTool)
         assert isinstance(read_batch_tool, CachedTool)
 
     def test_skill_tools_have_correct_category(self, temp_skills_dir: Path) -> None:
@@ -296,11 +293,9 @@ Content here.
         register_skill_tools(str(temp_skills_dir))
 
         load_tool = tool_registry.get_tool("load_skill")
-        read_tool = tool_registry.get_tool("read_skill_file")
         read_batch_tool = tool_registry.get_tool("read_skill_files")
 
         assert load_tool.get_metadata().category == "skill"
-        assert read_tool.get_metadata().category == "skill"
         assert read_batch_tool.get_metadata().category == "skill"
 
     def test_skill_tools_have_24h_ttl(self, temp_skills_dir: Path) -> None:
@@ -308,11 +303,9 @@ Content here.
         register_skill_tools(str(temp_skills_dir))
 
         load_tool = tool_registry.get_tool("load_skill")
-        read_tool = tool_registry.get_tool("read_skill_file")
         read_batch_tool = tool_registry.get_tool("read_skill_files")
 
         assert load_tool.get_metadata().cache_ttl == 86400  # 24 hours
-        assert read_tool.get_metadata().cache_ttl == 86400
         assert read_batch_tool.get_metadata().cache_ttl == 86400
 
     def test_skill_tools_dont_skip_cache(self, temp_skills_dir: Path) -> None:
@@ -320,11 +313,9 @@ Content here.
         register_skill_tools(str(temp_skills_dir))
 
         load_tool = tool_registry.get_tool("load_skill")
-        read_tool = tool_registry.get_tool("read_skill_file")
         read_batch_tool = tool_registry.get_tool("read_skill_files")
 
         assert load_tool.get_metadata().skip_cache is False
-        assert read_tool.get_metadata().skip_cache is False
         assert read_batch_tool.get_metadata().skip_cache is False
 
     def test_skill_tools_include_in_openai_functions(self, temp_skills_dir: Path) -> None:
@@ -335,7 +326,6 @@ Content here.
         function_names = {f["function"]["name"] for f in functions}
 
         assert "load_skill" in function_names
-        assert "read_skill_file" in function_names
         assert "read_skill_files" in function_names
 
     def test_filter_skill_tools_by_category(self, temp_skills_dir: Path) -> None:
@@ -344,9 +334,9 @@ Content here.
 
         skill_functions = tool_registry.get_openai_functions(categories=["skill"])
 
-        assert len(skill_functions) == 3
+        assert len(skill_functions) == 2
         function_names = {f["function"]["name"] for f in skill_functions}
-        assert function_names == {"load_skill", "read_skill_file", "read_skill_files"}
+        assert function_names == {"load_skill", "read_skill_files"}
 
     def test_register_skill_tools_with_empty_directory(self) -> None:
         """Test registering skill tools with empty skills directory."""
@@ -356,14 +346,15 @@ Content here.
 
             register_skill_tools(tmpdir)
 
-            # Should still register tools (they just won't find any skills)
+            # Should still register 2 tools (they just won't find any skills)
             tools_after = len(tool_registry.tools)
-            assert tools_after == tools_before + 3
+            assert tools_after == tools_before + 2
 
             # Verify tools exist but report no skills
             load_tool = tool_registry.get_tool("load_skill")
             metadata = load_tool.get_metadata()
-            assert "none" in metadata.description.lower() or metadata.description == ""
+            param_desc = metadata.parameters["properties"]["skill_name"]["description"]
+            assert "none" in param_desc.lower()
 
     @pytest.mark.asyncio
     async def test_execute_load_skill_tool(self, temp_skills_dir: Path) -> None:
@@ -377,14 +368,14 @@ Content here.
         assert result.data["skill_name"] == "test-skill"
 
     @pytest.mark.asyncio
-    async def test_execute_read_skill_file_tool_error(self, temp_skills_dir: Path) -> None:
-        """Test executing read_skill_file tool with non-existent file."""
+    async def test_execute_read_skill_files_tool_error(self, temp_skills_dir: Path) -> None:
+        """Test executing read_skill_files tool with non-existent file."""
         register_skill_tools(str(temp_skills_dir))
 
         result = await tool_registry.execute_tool(
-            "read_skill_file", {"skill_name": "test-skill", "filename": "NONEXISTENT.md"}
+            "read_skill_files", {"skill_name": "test-skill", "filenames": ["NONEXISTENT.md"]}
         )
 
         # Tool handles error gracefully
         assert result.success is True
-        assert "error" in result.data
+        assert "errors" in result.data

@@ -1,6 +1,6 @@
 ---
 name: inventory-discrepancy-audit
-description: Diagnostic workflow for investigating inventory shrinkage, counting errors, and sensor data quality issues in warehouse operations
+description: "Expert diagnostic workflow for investigating inventory discrepancies: shrinkage, counting errors, sensor data quality issues. Use when analyzing unexplained stock losses, mismatches between expected and observed inventory, counting accuracy problems, or questions like 'Why is my inventory count wrong?' or 'How can I trace inventory discrepancies?'"
 version: "1.0"
 tags: [inventory, audit, discrepancy, shrinkage, quality-control]
 dependencies: []
