@@ -48,6 +48,7 @@ class MCPToolLoader:
         tool_registry: ToolRegistry,
         wrap_with_cache: bool = True,
         cache_ttl: int = CACHE_TTL_RAG_TOOLS,
+        category_override: str | None = None,
     ) -> None:
         """
         Initialize MCP tool loader with dependencies.
@@ -57,6 +58,7 @@ class MCPToolLoader:
             tool_registry: Registry to register discovered tools in
             wrap_with_cache: Whether to wrap tools in CachedTool (default: True)
             cache_ttl: Cache TTL in seconds (default: 86400 = 24 hours)
+            category_override: Optional category applied to all loaded tools
 
         Raises:
             ValueError: If dependencies are invalid
@@ -70,6 +72,7 @@ class MCPToolLoader:
         self.tool_registry = tool_registry
         self.wrap_with_cache = wrap_with_cache
         self.cache_ttl = cache_ttl
+        self.category_override = category_override
 
     async def load_tools(self) -> int:
         """
@@ -101,7 +104,9 @@ class MCPToolLoader:
                     # Extract tool metadata from MCP schema
                     tool_name = tool_schema.get("name")
                     tool_description = tool_schema.get("description", "")
-                    tool_parameters = tool_schema.get("inputSchema", {})
+                    tool_parameters = tool_schema.get("parameters") or tool_schema.get(
+                        "inputSchema", {}
+                    )
 
                     # Validate required fields
                     if not tool_name:
@@ -199,6 +204,9 @@ class MCPToolLoader:
         # Check for explicit category in schema
         if "category" in tool_schema:
             return str(tool_schema["category"])
+
+        if self.category_override:
+            return self.category_override
 
         # Infer from tool name patterns
         name_lower = tool_name.lower()
