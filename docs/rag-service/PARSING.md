@@ -61,6 +61,8 @@ To correctly generate image links in the output JSON, ensure the following varia
 
 ## Running the Parser
 
+FIGURES_BUCKET_URL environment variable is required and must not be empty. It defines the base URL for generating figure image links.
+
 To execute the full processing cycle (assembling the final JSON), run:
 
 ```bash
@@ -82,3 +84,4 @@ uv run python -m services.rag_service.src.rag_service.image_processor
 
 # Process formulas and tabels only
 uv run python -m services.rag_service.src.rag_service.math_table_engine
+```

@@ -6,7 +6,10 @@ from typing import Any, Literal, cast
 
 from app.core.exceptions import AgentExecutionError
 from app.models.agent_state import AgentState, ThoughtStep, ToolCall, create_initial_state
-from app.prompts.system_prompts import WAREHOUSE_ADVISOR_SYSTEM_PROMPT, format_react_prompt
+from app.prompts.system_prompts import (
+    WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
+    format_react_prompt,
+)
 from app.services.llm_service import LLMService
 from app.tools.registry import tool_registry
 from common.logging import get_logger
@@ -19,8 +22,16 @@ logger = get_logger(__name__)
 class ReActAgent:
     """ReAct loop implementation using LangGraph for AWS Bedrock/Claude."""
 
-    def __init__(self) -> None:
+    def __init__(self, system_prompt: str | None = None) -> None:
+        """
+        Initialize ReAct agent with optional custom system prompt.
+
+        Args:
+            system_prompt: Custom system prompt. If None, uses default
+                          WAREHOUSE_ADVISOR_SYSTEM_PROMPT.
+        """
         self.llm: LLMService = LLMService()
+        self.system_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
         self.graph = self._build_graph()
 
     def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:
@@ -91,7 +102,7 @@ class ReActAgent:
             List of messages for LLM consumption.
         """
         return [
-            {"role": "system", "content": WAREHOUSE_ADVISOR_SYSTEM_PROMPT},
+            {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": format_react_prompt(state)},  # type: ignore[arg-type]
         ]
 
@@ -215,6 +226,7 @@ class ReActAgent:
             func_name = tool_call["function"]["name"]
             tool_call_id = tool_call["id"]
             func_args = self._parse_tool_arguments(tool_call["function"]["arguments"])
+            tool_category = self._get_tool_category(func_name)
 
             logger.info(
                 "executing_tool",
@@ -237,6 +249,7 @@ class ReActAgent:
                 new_tool_calls.append(
                     ToolCall(
                         tool_name=func_name,
+                        category=tool_category,
                         arguments=func_args,
                         error=error_msg,
                     )
@@ -261,6 +274,7 @@ class ReActAgent:
                 new_tool_calls.append(
                     ToolCall(
                         tool_name=func_name,
+                        category=tool_category,
                         arguments=func_args,
                         result=tool_data,
                     )
@@ -296,6 +310,14 @@ class ReActAgent:
             "tool_calls": state["tool_calls"] + new_tool_calls,
             "iteration": state["iteration"] + 1,
         }
+
+    @staticmethod
+    def _get_tool_category(tool_name: str) -> str | None:
+        """Resolve category from the registered tool metadata when available."""
+        try:
+            return tool_registry.get_tool(tool_name).get_metadata().category
+        except Exception:  # noqa: BLE001
+            return None
 
     @staticmethod
     def _parse_tool_arguments(raw_args: str | dict[str, Any]) -> dict[str, Any]:

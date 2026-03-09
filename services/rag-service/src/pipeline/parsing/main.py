@@ -1,10 +1,12 @@
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 from common.logging import configure_logging, get_logger
+from dotenv import load_dotenv
 
 try:
     from .metadata_extractor import MetadataExtractor
@@ -25,6 +27,12 @@ BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
 
 
+def load_bucket_url_from_env() -> str | None:
+    """Load environment variables explicitly for parsing runtime configuration."""
+    load_dotenv()
+    return os.getenv("FIGURES_BUCKET_URL")
+
+
 class DocumentAssembler:
     def __init__(
         self,
@@ -33,6 +41,7 @@ class DocumentAssembler:
         blocks_json: str | Path,
         tables_json: str | Path,
         formulas_json: str | Path,
+        figures_bucket_url: str | None = None,
     ) -> None:
         logger.info("[*] Assembler Initialization: Validating Sources...")
         self.paddle_dir = Path(paddle_dir)
@@ -53,6 +62,13 @@ class DocumentAssembler:
 
         self.meta_extractor = MetadataExtractor()
         self.final_chunks: list[dict[str, Any]] = []
+
+        self.figures_bucket_url: str | None = None
+
+        if figures_bucket_url:
+            self.figures_bucket_url = figures_bucket_url
+        else:
+            self.figures_bucket_url = load_bucket_url_from_env()
 
     def _validate_files(self, file_paths: list[Path]) -> None:
         for path in file_paths:

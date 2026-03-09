@@ -240,3 +240,49 @@ class LLMService:
         """Extract reasoning from LLM without tools (pure text generation)."""
         response = await self.chat_completion(messages=messages, tools=None)
         return str(response["message"]["content"])
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(LLMServiceError),
+        reraise=True,
+    )
+    async def structured_completion(
+        self,
+        messages: list[dict[str, Any]],
+        schema: Any,
+    ) -> Any:
+        """
+        Invoke model with native structured output enforcement.
+
+        Args:
+            messages: Chat history as list of dicts.
+            schema: Pydantic model class or JSON schema dict for structured output.
+
+        Returns:
+            Parsed structured result produced by LangChain.
+        """
+        try:
+            logger.info(
+                "llm_structured_request",
+                model=self.llm.model_id,
+                message_count=len(messages),
+            )
+
+            lc_messages = self._convert_messages_to_langchain(messages)
+            chain = self.llm.with_structured_output(schema)
+            result = await chain.ainvoke(lc_messages)
+
+            logger.info("llm_structured_response")
+            return result
+
+        except LLMServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                "llm_structured_error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                exc_info=True,
+            )
+            raise LLMServiceError(f"Bedrock structured LLM call failed: {e}") from e
