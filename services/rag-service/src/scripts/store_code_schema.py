@@ -10,21 +10,26 @@ Three new collections are created alongside the existing unified_collection:
 
 Cross-references
 ~~~~~~~~~~~~~~~~
-CodeClass
-  algorithm_ref  -> unified_collection  (chunk_type="algorithm", entity_id=algorithm_number)
-
 CodeMethod
-  algorithm_ref        -> unified_collection  (algorithm chunk)
-  class_ref            -> CodeClass           (the class this method belongs to)
-  initialized_classes  -> CodeClass           (classes instantiated inside the method)
-  used_methods         -> CodeMethod          (methods called inside the method)
-  used_functions       -> CodeFunction        (functions called inside the method)
+  class_ref             -> CodeClass           (the class this method belongs to)
+  initialized_classes   -> CodeClass           (classes instantiated inside the method)
+  referenced_methods    -> CodeMethod          (methods called inside the method)
+  referenced_functions  -> CodeFunction        (functions called inside the method)
 
 CodeFunction
-  algorithm_ref        -> unified_collection  (algorithm chunk)
-  initialized_classes  -> CodeClass
-  used_methods         -> CodeMethod
-  used_functions       -> CodeFunction
+  initialized_classes   -> CodeClass
+  referenced_methods    -> CodeMethod
+  referenced_functions  -> CodeFunction
+
+unified_collection (algorithm chunks)
+  defined_classes       -> CodeClass           (classes introduced in the algorithm)
+  defined_methods       -> CodeMethod          (methods introduced in the algorithm)
+  defined_functions     -> CodeFunction        (functions introduced in the algorithm)
+
+unified_collection (example chunks)
+  referenced_classes    -> CodeClass           (classes used in the example)
+  referenced_methods    -> CodeMethod          (methods used in the example)
+  referenced_functions  -> CodeFunction        (functions used in the example)
 
 Usage
 -----
@@ -142,8 +147,8 @@ def _add_missing_refs(collection: Collection, refs: list[tuple[str, str]]) -> No
 # Cross-collection references shared by both CodeMethod and CodeFunction.
 _CROSS_REFS = [
     ("initialized_classes", CODE_CLASS_COLLECTION),
-    ("used_methods", CODE_METHOD_COLLECTION),
-    ("used_functions", CODE_FUNCTION_COLLECTION),
+    ("referenced_methods", CODE_METHOD_COLLECTION),
+    ("referenced_functions", CODE_FUNCTION_COLLECTION),
 ]
 
 
@@ -166,7 +171,7 @@ def setup_collections(
         CODE_CLASS_COLLECTION,
         vectorizer_config=no_vectorizer,
         properties=_common_properties(),
-        references=[ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME)],
+        references=[],
     )
     mth_col = _create_or_use(
         client,
@@ -176,7 +181,6 @@ def setup_collections(
             [Property(name="qualified_name", data_type=DataType.TEXT, skip_vectorization=True)]
         ),
         references=[
-            ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME),
             ReferenceProperty(name="class_ref", target_collection=CODE_CLASS_COLLECTION),
         ],
     )
@@ -185,7 +189,7 @@ def setup_collections(
         CODE_FUNCTION_COLLECTION,
         vectorizer_config=no_vectorizer,
         properties=_common_properties(),
-        references=[ReferenceProperty(name="algorithm_ref", target_collection=COLLECTION_NAME)],
+        references=[],
     )
 
     logger.info("Adding cross-collection references …")
@@ -200,16 +204,6 @@ def setup_collections(
 # ---------------------------------------------------------------------------
 
 
-def _algorithm_ref(from_uuid: str, item: dict[str, Any]) -> DataReference | None:
-    """
-    Return an ``algorithm_ref`` ``DataReference`` for *item*, or ``None`` if the number is absent.
-    """
-    algo_number = str(item.get("algorithm_number", "")).strip()
-    if algo_number:
-        return DataReference(from_uuid, "algorithm_ref", uuid_for_algorithm_chunk(algo_number))
-    return None
-
-
 def _id_list_refs(from_uuid: str, prop: str, ids: list[str]) -> list[DataReference]:
     """Return one ``DataReference`` per schema id in *ids*, all pointing from *from_uuid*.*prop*."""
     return [DataReference(from_uuid, prop, uuid_for_schema_id(sid)) for sid in ids]
@@ -217,14 +211,17 @@ def _id_list_refs(from_uuid: str, prop: str, ids: list[str]) -> list[DataReferen
 
 def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
     """
-    Build the three shared cross-references (initialized_classes, used_methods, used_functions).
+    Build the three shared cross-references (initialized_classes, referenced_methods,
+    referenced_functions).
     """
     refs: RefList = []
     refs.extend(
         _id_list_refs(from_uuid, "initialized_classes", item.get("initialized_classes", []))
     )
-    refs.extend(_id_list_refs(from_uuid, "used_methods", item.get("used_methods", [])))
-    refs.extend(_id_list_refs(from_uuid, "used_functions", item.get("used_functions", [])))
+    refs.extend(_id_list_refs(from_uuid, "referenced_methods", item.get("referenced_methods", [])))
+    refs.extend(
+        _id_list_refs(from_uuid, "referenced_functions", item.get("referenced_functions", []))
+    )
     return refs
 
 
@@ -234,7 +231,7 @@ def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
 
 
 def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> RefList:
-    """Batch-insert class objects and return their ``algorithm_ref`` references."""
+    """Batch-insert class objects. No algorithm-level back-references are stored here."""
     with collection.batch.dynamic() as batch:
         for cls in classes:
             batch.add_object(
@@ -246,12 +243,7 @@ def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> Re
                 },
                 uuid=uuid_for_schema_id(cls["id"]),
             )
-
-    return [
-        ref
-        for cls in classes
-        if (ref := _algorithm_ref(uuid_for_schema_id(cls["id"]), cls)) is not None
-    ]
+    return []
 
 
 def _insert_code_entities(
@@ -284,9 +276,6 @@ def _insert_code_entities(
     refs: RefList = []
     for item in items:
         from_uuid = uuid_for_schema_id(item["id"])
-        ref = _algorithm_ref(from_uuid, item)
-        if ref:
-            refs.append(ref)
         if extra_refs_fn:
             refs.extend(extra_refs_fn(from_uuid, item))
         refs.extend(_cross_refs(from_uuid, item))
@@ -327,19 +316,72 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
 
 
 # ---------------------------------------------------------------------------
+# Algorithm → code entity references (defined_classes/methods/functions)
+# ---------------------------------------------------------------------------
+
+_ALGORITHM_CODE_REFS = [
+    ("defined_classes", CODE_CLASS_COLLECTION),
+    ("defined_methods", CODE_METHOD_COLLECTION),
+    ("defined_functions", CODE_FUNCTION_COLLECTION),
+]
+
+
+def _ensure_algorithm_code_ref_properties(client: weaviate.WeaviateClient) -> None:
+    """Add the algorithm → code reference properties to unified_collection if missing."""
+    if not client.collections.exists(COLLECTION_NAME):
+        logger.warning("%s not found; skipping algorithm-code ref setup.", COLLECTION_NAME)
+        return
+    unified = client.collections.use(COLLECTION_NAME)
+    _add_missing_refs(unified, _ALGORITHM_CODE_REFS)
+
+
+def _build_algorithm_code_references(
+    schema: dict[str, Any],
+) -> RefList:
+    """
+    Build ``defined_classes``, ``defined_methods``, and ``defined_functions`` references from
+    each code entity back to the algorithm chunk that introduced it.
+    """
+    references: RefList = []
+
+    for cls in schema.get("classes", []):
+        algo_number = str(cls.get("algorithm_number", "")).strip()
+        if not algo_number:
+            continue
+        from_uuid = uuid_for_algorithm_chunk(algo_number)
+        references.extend(_id_list_refs(from_uuid, "defined_classes", [cls["id"]]))
+
+    for mth in schema.get("methods", []):
+        algo_number = str(mth.get("algorithm_number", "")).strip()
+        if not algo_number:
+            continue
+        from_uuid = uuid_for_algorithm_chunk(algo_number)
+        references.extend(_id_list_refs(from_uuid, "defined_methods", [mth["id"]]))
+
+    for fn in schema.get("functions", []):
+        algo_number = str(fn.get("algorithm_number", "")).strip()
+        if not algo_number:
+            continue
+        from_uuid = uuid_for_algorithm_chunk(algo_number)
+        references.extend(_id_list_refs(from_uuid, "defined_functions", [fn["id"]]))
+
+    return references
+
+
+# ---------------------------------------------------------------------------
 # Example → code entity references
 # ---------------------------------------------------------------------------
 
 _EXAMPLE_CODE_REFS = [
-    ("used_classes", CODE_CLASS_COLLECTION),
-    ("used_methods", CODE_METHOD_COLLECTION),
-    ("used_functions", CODE_FUNCTION_COLLECTION),
+    ("referenced_classes", CODE_CLASS_COLLECTION),
+    ("referenced_methods", CODE_METHOD_COLLECTION),
+    ("referenced_functions", CODE_FUNCTION_COLLECTION),
 ]
 
 _EXAMPLE_REFS_KEY_TO_PROP = {
-    "initialized_classes": "used_classes",
-    "used_methods": "used_methods",
-    "used_functions": "used_functions",
+    "initialized_classes": "referenced_classes",
+    "referenced_methods": "referenced_methods",
+    "referenced_functions": "referenced_functions",
 }
 
 
@@ -388,12 +430,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "Build and store code schema (classes, methods, functions) from translated "
             "algorithms JSON into Weaviate. Creates three collections: "
             f"{CODE_CLASS_COLLECTION}, {CODE_METHOD_COLLECTION}, {CODE_FUNCTION_COLLECTION}. "
-            "Each entity stores its code, metadata, and cross-references to related code entities "
-            f"and to the originating algorithm chunk in {COLLECTION_NAME}."
+            "Each entity stores its code, metadata, and cross-references to related code entities. "
+            f"Algorithm chunks in {COLLECTION_NAME} receive defined_classes/methods/functions "
+            "references, and example chunks receive referenced_classes/methods/functions links."
         )
     )
     parser.add_argument(
-        "--file_path",
+        "--algorithms_file_path",
         default="translated_algorithms.json",
         help="Path to the translated_algorithms.json file.",
         type=Path,
@@ -430,12 +473,14 @@ def store_schema(
     """Store all code schema entities (classes, methods, functions) in Weaviate.
 
     Sets up the three code collections, inserts all objects, and adds
-    cross-references between them and their originating algorithm chunks.
+    cross-references between them. Also adds ``defined_classes``,
+    ``defined_methods``, and ``defined_functions`` references on algorithm chunks
+    in ``unified_collection``.
 
     Args:
         client:   Active Weaviate client.
         schema:   Result of ``build_code_schema()`` with keys
-                                                    ``"classes"``, ``"methods"``, ``"functions"``.
+                  ``"classes"``, ``"methods"``, ``"functions"``.
         recreate: If True, drops and recreates the collections before inserting.
     """
     classes, methods, functions = schema["classes"], schema["methods"], schema["functions"]
@@ -449,6 +494,13 @@ def store_schema(
 
     logger.info("Inserting functions …")
     _add_references_safely(fn_col, _insert_functions(fn_col, functions), CODE_FUNCTION_COLLECTION)
+
+    logger.info("Adding algorithm → code entity references …")
+    _ensure_algorithm_code_ref_properties(client)
+    if client.collections.exists(COLLECTION_NAME):
+        algo_refs = _build_algorithm_code_references(schema)
+        unified_col = client.collections.use(COLLECTION_NAME)
+        _add_references_safely(unified_col, algo_refs, f"{COLLECTION_NAME} (algorithms)")
 
 
 def store_example_refs(
@@ -484,7 +536,7 @@ def store_example_refs(
 def main() -> None:
     args = _build_arg_parser().parse_args()
 
-    algorithms = _load_json(args.file_path, "algorithms")
+    algorithms = _load_json(args.algorithms_file_path, "algorithms")
     if algorithms is None:
         return
 

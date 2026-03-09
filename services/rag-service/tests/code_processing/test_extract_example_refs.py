@@ -214,20 +214,20 @@ _SAMPLE_SCHEMA = {
 
 def test_extract_example_refs_required_keys():
     refs = extract_example_refs("no code here at all.", _SAMPLE_SCHEMA)
-    assert set(refs.keys()) == {"initialized_classes", "used_functions", "used_methods"}
+    assert set(refs.keys()) == {"initialized_classes", "referenced_functions", "referenced_methods"}
 
 
 def test_extract_example_refs_empty_text():
     refs = extract_example_refs("", _SAMPLE_SCHEMA)
     assert refs["initialized_classes"] == []
-    assert refs["used_functions"] == []
-    assert refs["used_methods"] == []
+    assert refs["referenced_functions"] == []
+    assert refs["referenced_methods"] == []
 
 
 def test_extract_example_refs_detects_function_call():
     text = "```python\ncompute()\n```"
     refs = extract_example_refs(text, _SAMPLE_SCHEMA)
-    assert "fn:compute" in refs["used_functions"]
+    assert "fn:compute" in refs["referenced_functions"]
 
 
 def test_extract_example_refs_detects_class_instantiation():
@@ -239,39 +239,39 @@ def test_extract_example_refs_detects_class_instantiation():
 def test_extract_example_refs_detects_method_call():
     text = "```python\ne = Engine()\ne.start()\n```"
     refs = extract_example_refs(text, _SAMPLE_SCHEMA)
-    assert "mth:Engine.start" in refs["used_methods"]
+    assert "mth:Engine.start" in refs["referenced_methods"]
 
 
 def test_extract_example_refs_unknown_call_not_in_refs():
     text = "```python\nunknown_func()\n```"
     refs = extract_example_refs(text, _SAMPLE_SCHEMA)
-    assert "fn:unknown_func" not in refs["used_functions"]
+    assert "fn:unknown_func" not in refs["referenced_functions"]
 
 
 def test_extract_example_refs_sorted_output():
     text = "```python\ncompute()\nhelper()\n```"
     refs = extract_example_refs(text, _SAMPLE_SCHEMA)
-    assert refs["used_functions"] == sorted(refs["used_functions"])
+    assert refs["referenced_functions"] == sorted(refs["referenced_functions"])
 
 
 def test_extract_example_refs_locally_defined_not_counted():
     """Functions defined inside the example block should not appear as external refs."""
     text = "```python\ndef compute(): pass\ncompute()\n```"
     refs = extract_example_refs(text, _SAMPLE_SCHEMA)
-    assert "fn:compute" not in refs["used_functions"]
+    assert "fn:compute" not in refs["referenced_functions"]
 
 
 def test_extract_example_refs_multiple_method_calls():
     text = "```python\n" "e = Engine()\n" "e.start()\n" "e.stop()\n" "```"
     refs = extract_example_refs(text, _SAMPLE_SCHEMA)
-    assert "mth:Engine.start" in refs["used_methods"]
-    assert "mth:Engine.stop" in refs["used_methods"]
+    assert "mth:Engine.start" in refs["referenced_methods"]
+    assert "mth:Engine.stop" in refs["referenced_methods"]
 
 
 def test_extract_example_refs_no_duplicates():
     text = "```python\n" "compute()\n" "compute()\n" "```"
     refs = extract_example_refs(text, _SAMPLE_SCHEMA)
-    assert len(refs["used_functions"]) == len(set(refs["used_functions"]))
+    assert len(refs["referenced_functions"]) == len(set(refs["referenced_functions"]))
 
 
 def test_extract_example_refs_empty_schema():
@@ -279,11 +279,11 @@ def test_extract_example_refs_empty_schema():
     text = "```python\ncompute()\n```"
     refs = extract_example_refs(text, schema)
     assert refs["initialized_classes"] == []
-    assert refs["used_functions"] == []
-    assert refs["used_methods"] == []
+    assert refs["referenced_functions"] == []
+    assert refs["referenced_methods"] == []
 
 
 def test_extract_example_refs_prose_with_inline_assignment_no_crash():
     text = "We can write result = compute( to get started."
     refs = extract_example_refs(text, _SAMPLE_SCHEMA)
-    assert isinstance(refs["used_functions"], list)
+    assert isinstance(refs["referenced_functions"], list)

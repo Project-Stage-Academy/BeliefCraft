@@ -9,9 +9,9 @@ we only collect calls and resolve them against an already-known schema.
 
 Result:
   {
-    "initialized_classes": ["cls:X", ...],
-    "used_functions":      ["fn:foo", ...],
-    "used_methods":        ["mth:Bar.baz", ...],
+    "initialized_classes":  ["cls:X", ...],
+    "referenced_functions": ["fn:foo", ...],
+    "referenced_methods":   ["mth:Bar.baz", ...],
   }
 """
 
@@ -305,9 +305,9 @@ def _resolve_calls(
     Returns a dict with three sorted lists of ref strings::
 
         {
-            "initialized_classes": ["cls:Foo", ...],
-            "used_functions":      ["fn:bar", ...],
-            "used_methods":        ["mth:Baz.qux", ...],
+            "initialized_classes":  ["cls:Foo", ...],
+            "referenced_functions": ["fn:bar", ...],
+            "referenced_methods":   ["mth:Baz.qux", ...],
         }
     """
     inits: set[str] = set()
@@ -330,8 +330,8 @@ def _resolve_calls(
 
     return {
         "initialized_classes": sorted(inits),
-        "used_functions": sorted(funcs),
-        "used_methods": sorted(meths),
+        "referenced_functions": sorted(funcs),
+        "referenced_methods": sorted(meths),
     }
 
 
@@ -351,7 +351,7 @@ def extract_example_refs_with_index(
     """
     blocks = extract_code_blocks(text)
     if not blocks:
-        return {"initialized_classes": [], "used_functions": [], "used_methods": []}
+        return {"initialized_classes": [], "referenced_functions": [], "referenced_methods": []}
 
     collector = _CallCollector()
     local_definitions: set[str] = set()
@@ -384,7 +384,8 @@ def extract_example_refs(
                 ``{"classes": [...], "methods": [...], "functions": [...]}``.
 
     Returns:
-        ``{"initialized_classes": [...], "used_functions": [...], "used_methods": [...]}``.
+        ``{"initialized_classes": [...], "referenced_functions": [...],
+        "referenced_methods": [...]}``.
     """
     return extract_example_refs_with_index(text, SchemaIndex.from_schema(schema))
 
@@ -419,7 +420,7 @@ if __name__ == "__main__":
 
         if any(refs[k] for k in refs):
             logger.info("Example: %s", example_number)
-            logger.info("  Blocks found:        %d", len(extract_code_blocks(text)))
-            logger.info("  initialized_classes: %s", refs["initialized_classes"])
-            logger.info("  used_functions:      %s", refs["used_functions"])
-            logger.info("  used_methods:        %s", refs["used_methods"])
+            logger.info("  Blocks found:           %d", len(extract_code_blocks(text)))
+            logger.info("  initialized_classes:    %s", refs["initialized_classes"])
+            logger.info("  referenced_functions:   %s", refs["referenced_functions"])
+            logger.info("  referenced_methods:     %s", refs["referenced_methods"])

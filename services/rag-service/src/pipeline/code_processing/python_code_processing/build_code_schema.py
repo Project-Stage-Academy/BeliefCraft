@@ -19,24 +19,24 @@ ClassRecord:
 
 MethodRecord:
   {
-    "id":                  "mth:ClassName.method_name",
-    "name":                "method_name",
-    "qualified_name":      "ClassName.method_name",
-    "code":                "<source of the method>",
-    "class":               "cls:ClassName",          # ref -> ClassRecord.id
-    "initialized_classes": ["cls:X", ...],
-    "used_functions":      ["fn:foo", ...],
-    "used_methods":        ["mth:Bar.baz", ...],
+    "id":                   "mth:ClassName.method_name",
+    "name":                 "method_name",
+    "qualified_name":       "ClassName.method_name",
+    "code":                 "<source of the method>",
+    "class":                "cls:ClassName",          # ref -> ClassRecord.id
+    "initialized_classes":  ["cls:X", ...],
+    "referenced_functions": ["fn:foo", ...],
+    "referenced_methods":   ["mth:Bar.baz", ...],
   }
 
 FunctionRecord:
   {
-    "id":                  "fn:function_name",
-    "name":                "function_name",
-    "code":                "<source of the function>",
-    "initialized_classes": ["cls:X", ...],
-    "used_functions":      ["fn:foo", ...],
-    "used_methods":        ["mth:Bar.baz", ...],
+    "id":                   "fn:function_name",
+    "name":                 "function_name",
+    "code":                 "<source of the function>",
+    "initialized_classes":  ["cls:X", ...],
+    "referenced_functions": ["fn:foo", ...],
+    "referenced_methods":   ["mth:Bar.baz", ...],
   }
 """
 
@@ -153,7 +153,7 @@ def _refs_from_edges(
     graph: dict[str, dict[str, str]],
     known: _KnownIds,
 ) -> tuple[list[str], list[str], list[str]]:
-    """Return ``(initialized_classes, used_functions, used_methods)`` for *caller*."""
+    """Return ``(initialized_classes, referenced_functions, referenced_methods)`` for *caller*."""
     inits: list[str] = []
     funcs: list[str] = []
     meths: list[str] = []
@@ -225,8 +225,8 @@ def _build_methods(
                 "code": ast.unparse(node),
                 "class": cls_ref,
                 "initialized_classes": inits,
-                "used_functions": funcs,
-                "used_methods": meths,
+                "referenced_functions": funcs,
+                "referenced_methods": meths,
             }
         )
     return methods
@@ -248,8 +248,8 @@ def _build_functions(
                 "name": name,
                 "code": ast.unparse(node),
                 "initialized_classes": inits,
-                "used_functions": funcs,
-                "used_methods": meths,
+                "referenced_functions": funcs,
+                "referenced_methods": meths,
             }
         )
     return result

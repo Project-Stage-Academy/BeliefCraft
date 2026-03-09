@@ -30,8 +30,8 @@ def test_function_record_has_required_fields():
     assert "name" in record
     assert "code" in record
     assert "initialized_classes" in record
-    assert "used_functions" in record
-    assert "used_methods" in record
+    assert "referenced_functions" in record
+    assert "referenced_methods" in record
 
 
 def test_class_record_has_required_fields():
@@ -52,8 +52,8 @@ def test_method_record_has_required_fields():
     assert "code" in record
     assert "class" in record
     assert "initialized_classes" in record
-    assert "used_functions" in record
-    assert "used_methods" in record
+    assert "referenced_functions" in record
+    assert "referenced_methods" in record
 
 
 # ------------------------------------------------------------------ #
@@ -83,7 +83,7 @@ def test_function_used_functions_reference():
     ]
     schema = build_code_schema(fragments)
     caller = next(f for f in schema["functions"] if f["name"] == "caller")
-    assert "fn:helper" in caller["used_functions"]
+    assert "fn:helper" in caller["referenced_functions"]
 
 
 def test_function_initialized_classes_reference():
@@ -169,7 +169,7 @@ def test_method_used_methods_cross_reference():
     )
     schema = build_code_schema([code])
     second = next(m for m in schema["methods"] if m["name"] == "second")
-    assert "mth:A.first" in second["used_methods"]
+    assert "mth:A.first" in second["referenced_methods"]
 
 
 def test_method_initialized_classes_reference():
@@ -201,7 +201,7 @@ def test_function_references_function_in_another_fragment():
     ]
     schema = build_code_schema(fragments)
     run = next(f for f in schema["functions"] if f["name"] == "run")
-    assert "fn:compute" in run["used_functions"]
+    assert "fn:compute" in run["referenced_functions"]
 
 
 def test_algorithm_number_field_present():
@@ -225,4 +225,4 @@ def test_no_duplicate_refs():
     ]
     schema = build_code_schema(fragments)
     caller = next(f for f in schema["functions"] if f["name"] == "caller")
-    assert caller["used_functions"].count("fn:helper") == 1
+    assert caller["referenced_functions"].count("fn:helper") == 1

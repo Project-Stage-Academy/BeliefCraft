@@ -124,7 +124,7 @@ def test_main_runs_without_error(mock_build_schema, mock_connect, tmp_path):
         "sys.argv",
         [
             "store_code_schema.py",
-            "--file_path",
+            "--algorithms_file_path",
             str(alg_file),
             "--examples_file_path",
             str(ex_file),
@@ -140,7 +140,10 @@ def test_main_exits_gracefully_on_bad_algorithms_file(
 ):
     with (
         caplog.at_level(logging.ERROR),
-        patch("sys.argv", ["store_code_schema.py", "--file_path", str(tmp_path / "missing.json")]),
+        patch(
+            "sys.argv",
+            ["store_code_schema.py", "--algorithms_file_path", str(tmp_path / "missing.json")],
+        ),
     ):
         main()
 
@@ -163,7 +166,7 @@ def test_main_exits_gracefully_on_bad_examples_file(
             "sys.argv",
             [
                 "store_code_schema.py",
-                "--file_path",
+                "--algorithms_file_path",
                 str(alg_file),
                 "--examples_file_path",
                 str(tmp_path / "missing.json"),
@@ -198,7 +201,7 @@ def test_main_skips_example_refs_when_examples_list_is_empty(
         "sys.argv",
         [
             "store_code_schema.py",
-            "--file_path",
+            "--algorithms_file_path",
             str(alg_file),
             "--examples_file_path",
             str(ex_file),
