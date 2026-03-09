@@ -6,24 +6,28 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-#"device_type", ("camera", "rfid_reader", "weight_sensor", "scanner")
+
+# "device_type", ("camera", "rfid_reader", "weight_sensor", "scanner")
 class DeviceType(StrEnum):
     CAMERA = "camera"
     RFID_READER = "rfid_reader"
     WEIGHT_SENSOR = "weight_sensor"
     SCANNER = "scanner"
 
-#"device_status", ("active", "offline", "maintenance")
+
+# "device_status", ("active", "offline", "maintenance")
 class DeviceStatus(StrEnum):
     ACTIVE = "active"
     OFFLINE = "offline"
     MAINTENANCE = "maintenance"
+
 
 class DeviceAnomalyType(StrEnum):
     OFFLINE_WITH_OBSERVATIONS = "offline_with_observations"
     ONLINE_WITHOUT_OBSERVATIONS = "online_without_observations"
     MISSING_RATE_SPIKE = "missing_rate_spike"
     LOW_CONFIDENCE = "low_confidence"
+
 
 class ListSensorDevicesRequest(BaseModel):
     warehouse_id: UUID | None = None

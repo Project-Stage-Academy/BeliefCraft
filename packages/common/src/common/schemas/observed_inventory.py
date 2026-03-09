@@ -34,4 +34,3 @@ class ObservedInventorySnapshotRow(BaseModel):
 class ObservedInventorySnapshotDevRow(ObservedInventorySnapshotRow):
     on_hand: float
     reserved: float
-

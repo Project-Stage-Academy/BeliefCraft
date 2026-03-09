@@ -9,17 +9,30 @@ from environment_api.smart_query_builder.tools import (
     compare_observations_to_balances,
     get_at_risk_orders,
     get_current_inventory,
+    get_device_anomalies,
+    get_device_health_summary,
     get_inventory_adjustments_summary,
     get_inventory_move,
     get_inventory_move_audit_trace,
+    get_observed_inventory_snapshot,
+    get_sensor_device,
     get_shipments_delay_summary,
     list_inventory_moves,
+    list_sensor_devices,
 )
 from fastapi import APIRouter, Query
 
 router = APIRouter(prefix="/smart-query", tags=["smart-query"])
 router.include_router(procurement_router)
 router.include_router(topology_router)
+
+
+def _split_csv_or_none(raw: str | None) -> list[str] | None:
+    if raw is None:
+        return None
+
+    values = [part.strip() for part in raw.split(",") if part.strip()]
+    return values or None
 
 
 @router.get("/inventory/current")
@@ -41,6 +54,19 @@ def current_inventory(
             include_reserved=include_reserved,
             limit=limit,
             offset=offset,
+        )
+    )
+
+
+@router.get("/inventory/observed-snapshot")
+def observed_inventory_snapshot(
+    quality_status_in: str | None = None,
+    dev_mode: bool = False,
+) -> dict[str, Any]:
+    return execute_tool(
+        lambda: get_observed_inventory_snapshot(
+            quality_status_in=_split_csv_or_none(quality_status_in),
+            dev_mode=dev_mode,
         )
     )
 
@@ -162,3 +188,53 @@ def at_risk_orders(
             offset=offset,
         )
     )
+
+
+@router.get("/devices")
+def devices_list(
+    warehouse_id: str | None = None,
+    device_type: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    return execute_tool(
+        lambda: list_sensor_devices(
+            warehouse_id=warehouse_id,
+            device_type=device_type,
+            status=status,
+        )
+    )
+
+
+@router.get("/devices/health-summary")
+def devices_health_summary(
+    warehouse_id: str | None = None,
+    since_ts: datetime | None = None,
+    as_of: datetime | None = None,
+) -> dict[str, Any]:
+    return execute_tool(
+        lambda: get_device_health_summary(
+            warehouse_id=warehouse_id,
+            since_ts=since_ts,
+            as_of=as_of,
+        )
+    )
+
+
+@router.get("/devices/anomalies")
+def devices_anomalies(
+    warehouse_id: str | None = None,
+    window: int = Query(default=24, ge=1, le=24 * 30),
+) -> dict[str, Any]:
+    return execute_tool(
+        lambda: get_device_anomalies(
+            warehouse_id=warehouse_id,
+            window=window,
+        )
+    )
+
+
+@router.get("/devices/{device_id}")
+def devices_get(
+    device_id: str,
+) -> dict[str, Any]:
+    return execute_tool(lambda: get_sensor_device(device_id=device_id))
