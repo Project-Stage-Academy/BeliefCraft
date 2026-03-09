@@ -133,6 +133,37 @@ def test_extract_from_document_uses_declared_metadata_dependencies() -> None:
     assert snippets[0].dependencies == ["numpy", "scipy"]
 
 
+def test_extract_from_document_uses_nested_dependency_metadata_fields() -> None:
+    extractor = CodeExtractor()
+    document = {
+        "content": "import math\nx = math.sqrt(4)",
+        "metadata": {
+            "section_title": "Policy",
+            "chunk_type": "algorithm",
+            "declarations": {
+                "BeliefState": "from collections import defaultdict",
+                "ValueFn": "import numpy as np",
+            },
+            "used_structs": {"BeliefState": ["3.1"]},
+            "used_functions": {"update_belief": ["3.1", "3.2"]},
+        },
+    }
+
+    snippets = extractor.extract_from_document(document)
+
+    assert len(snippets) == 1
+    assert snippets[0].language == "python"
+    assert snippets[0].validated is True
+    assert snippets[0].dependencies == [
+        "collections",
+        "declaration:BeliefState",
+        "declaration:ValueFn",
+        "function:update_belief",
+        "numpy",
+        "struct:BeliefState",
+    ]
+
+
 def test_extract_from_document_reads_algorithm_chunk_content_from_mock_data() -> None:
     extractor = CodeExtractor()
     chunks = _load_mock_chunks()

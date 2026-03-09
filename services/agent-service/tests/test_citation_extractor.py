@@ -34,6 +34,15 @@ def _as_document_shape(raw_chunk: dict) -> dict:
     }
 
 
+def _expected_hierarchy_title(chunk: dict) -> str:
+    parts: list[str] = []
+    for key in ("part_title", "section_title", "subsection_title", "subsubsection_title"):
+        value = chunk.get(key)
+        if isinstance(value, str) and value.strip() and value.strip() not in parts:
+            parts.append(value.strip())
+    return " / ".join(parts)
+
+
 def test_extract_from_tool_calls_maps_metadata_fields() -> None:
     extractor = CitationExtractor()
     chunks = _load_mock_chunks()
@@ -55,7 +64,7 @@ def test_extract_from_tool_calls_maps_metadata_fields() -> None:
     assert citation.page == formula_chunk["page"]
     assert citation.entity_type == "formula"
     assert citation.entity_number == formula_chunk["entity_id"]
-    assert citation.title == formula_chunk["section_title"]
+    assert citation.title == _expected_hierarchy_title(formula_chunk)
 
 
 def test_extract_from_tool_calls_supports_flat_result_shape() -> None:
@@ -79,7 +88,7 @@ def test_extract_from_tool_calls_supports_flat_result_shape() -> None:
     assert citation.page == text_chunk["page"]
     assert citation.entity_type == "text"
     assert citation.entity_number is None
-    assert citation.title == f"{text_chunk['section_title']} / {text_chunk['subsection_title']}"
+    assert citation.title == _expected_hierarchy_title(text_chunk)
 
 
 def test_extract_from_tool_calls_deduplicates_chunk_ids() -> None:
@@ -190,4 +199,4 @@ def test_extract_from_tool_calls_combines_hierarchical_titles() -> None:
     )
 
     assert len(citations) == 1
-    assert citations[0].title == "Representation / Conditional Independence / D-separation"
+    assert citations[0].title == "Part I / Representation / Conditional Independence / D-separation"

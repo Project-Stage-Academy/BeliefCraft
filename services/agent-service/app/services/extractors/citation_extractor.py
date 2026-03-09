@@ -112,18 +112,11 @@ class CitationExtractor:
         entity_type = self._normalize_entity_type(raw_entity_type)
 
         # Canonical RAG metadata uses `entity_id` for numbered entities.
-        # Keep compatibility fallbacks for older payloads.
+        # For direct-entity tool calls, fall back to the requested `number`.
         entity_number = self._first_non_empty(
             metadata.get("entity_id"),
-            metadata.get("link_id"),
-            metadata.get("entity_number"),
             tool_arguments.get("number"),
         )
-
-        if not entity_number:
-            link = self._first_non_empty(metadata.get("link_id"))
-            if link and entity_type in self._ENTITY_PREFIX_BY_TYPE:
-                entity_number = f"{self._ENTITY_PREFIX_BY_TYPE[entity_type]} {link}"
 
         # Canonical RAG document identity is always provided as `document.id`.
         chunk_id = self._first_non_empty(document.get("id"))
@@ -159,6 +152,7 @@ class CitationExtractor:
         entity_type: str | None,
     ) -> str:
         hierarchy_title = self._join_unique_non_empty(
+            metadata.get("part_title"),
             metadata.get("section_title"),
             metadata.get("subsection_title"),
             metadata.get("subsubsection_title"),

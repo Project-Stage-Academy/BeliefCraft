@@ -93,8 +93,8 @@ class CodeExtractor:
         metadata = extract_metadata(canonical_document)
         description = self._first_non_empty(
             metadata.get("section_title"),
-            metadata.get("algorithm_name"),
-            metadata.get("title"),
+            metadata.get("subsection_title"),
+            metadata.get("subsubsection_title"),
         )
 
         snippets: list[CodeSnippet] = []
@@ -174,28 +174,51 @@ class CodeExtractor:
         """
         Extract package dependencies declared by RAG metadata.
 
-        Accepted keys:
-        - dependencies
-        - python_dependencies
-        - required_packages
+        Supported metadata shapes:
+        - PR #84 nested fields:
+          - declarations
+          - used_structs
+          - used_functions
+        - Legacy flat keys:
+          - dependencies
+          - python_dependencies
+          - required_packages
         """
-        raw = (
+        normalized: set[str] = set()
+
+        normalized.update(CodeExtractor._extract_from_declarations(metadata.get("declarations")))
+        normalized.update(
+            CodeExtractor._extract_from_usage_map(
+                metadata.get("used_structs"),
+                prefix="struct",
+            )
+        )
+        normalized.update(
+            CodeExtractor._extract_from_usage_map(
+                metadata.get("used_functions"),
+                prefix="function",
+            )
+        )
+
+        if normalized:
+            return sorted(normalized)
+
+        raw_legacy = (
             metadata.get("dependencies")
             or metadata.get("python_dependencies")
             or metadata.get("required_packages")
         )
 
-        if raw is None:
+        if raw_legacy is None:
             return []
 
-        if isinstance(raw, str):
-            items = [raw]
-        elif isinstance(raw, (list, tuple, set)):
-            items = [item for item in raw if isinstance(item, str)]
+        if isinstance(raw_legacy, str):
+            items = [raw_legacy]
+        elif isinstance(raw_legacy, (list, tuple, set)):
+            items = [item for item in raw_legacy if isinstance(item, str)]
         else:
             return []
 
-        normalized: set[str] = set()
         for item in items:
             for token in item.split(","):
                 dep = token.strip()
@@ -203,6 +226,41 @@ class CodeExtractor:
                     normalized.add(dep)
 
         return sorted(normalized)
+
+    @staticmethod
+    def _extract_from_declarations(raw: Any) -> set[str]:
+        dependencies: set[str] = set()
+        declaration_texts: list[str] = []
+
+        if isinstance(raw, dict):
+            for key, value in raw.items():
+                if isinstance(key, str) and key.strip():
+                    dependencies.add(f"declaration:{key.strip()}")
+                if isinstance(value, str) and value.strip():
+                    declaration_texts.append(value)
+        elif isinstance(raw, (list, tuple, set)):
+            declaration_texts.extend(
+                value for value in raw if isinstance(value, str) and value.strip()
+            )
+        elif isinstance(raw, str) and raw.strip():
+            declaration_texts.append(raw)
+
+        for declaration in declaration_texts:
+            dependencies.update(CodeExtractor._detect_python_dependencies(declaration))
+
+        return dependencies
+
+    @staticmethod
+    def _extract_from_usage_map(raw: Any, prefix: str) -> set[str]:
+        dependencies: set[str] = set()
+        if not isinstance(raw, dict):
+            return dependencies
+
+        for key in raw:
+            if isinstance(key, str) and key.strip():
+                dependencies.add(f"{prefix}:{key.strip()}")
+
+        return dependencies
 
     def _build_code_snippet(
         self,
