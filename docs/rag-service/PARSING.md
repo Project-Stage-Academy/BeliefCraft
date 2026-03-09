@@ -48,6 +48,17 @@ Maintains the stateful document hierarchy during processing:
 4. **Deduplication**: Validates bounding boxes to ensure caption text is not duplicated within the text stream.
 5. **Output**: Produces deterministic `chunk_ids` (SHA-256) for stable indexing.
 
+## Environment Configuration
+
+To correctly generate image links in the output JSON, ensure the following variable is set in your `.env` file:
+
+* **FIGURES_BUCKET_URL**: The base URL for the cloud storage bucket where figures are hosted (e.g., GCS or S3).
+  * **Where to get**: Access the project's Google Cloud Console or ask the DevOps team for the current production bucket URL.
+  * **Format**: `https://storage.googleapis.com/your-bucket-name/` (the code automatically handles trailing slashes).
+  * **Default**: If not set, links will default to a local path, which may break in the cloud environment.
+
+---
+
 ## Running the Parser
 
 FIGURES_BUCKET_URL environment variable is required and must not be empty. It defines the base URL for generating figure image links.

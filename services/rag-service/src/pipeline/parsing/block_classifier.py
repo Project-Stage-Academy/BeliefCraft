@@ -142,7 +142,7 @@ class BlockProcessor:
                     block_rect = self._find_matching_drawing(page, cap, drawings)
 
                     if block_rect:
-                        raw_content = page.get_text("text", clip=block_rect).strip()
+                        raw_content = "[CONTENT_PLACEHOLDER]"  # Ми не беремо текст з fitz!
                         entry = self._create_block_entry(cap, block_rect, page_num, raw_content)
                         all_blocks.append(entry)
                     else:
