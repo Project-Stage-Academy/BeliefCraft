@@ -200,24 +200,19 @@ def setup_collections(
 # ---------------------------------------------------------------------------
 
 
-def _make_ref(from_uuid: str, prop: str, to_uuid: str) -> DataReference:
-    """Build a single ``DataReference`` between two objects."""
-    return DataReference(from_uuid=from_uuid, from_property=prop, to_uuid=to_uuid)
-
-
 def _algorithm_ref(from_uuid: str, item: dict[str, Any]) -> DataReference | None:
     """
     Return an ``algorithm_ref`` ``DataReference`` for *item*, or ``None`` if the number is absent.
     """
     algo_number = str(item.get("algorithm_number", "")).strip()
     if algo_number:
-        return _make_ref(from_uuid, "algorithm_ref", uuid_for_algorithm_chunk(algo_number))
+        return DataReference(from_uuid, "algorithm_ref", uuid_for_algorithm_chunk(algo_number))
     return None
 
 
 def _id_list_refs(from_uuid: str, prop: str, ids: list[str]) -> list[DataReference]:
     """Return one ``DataReference`` per schema id in *ids*, all pointing from *from_uuid*.*prop*."""
-    return [_make_ref(from_uuid, prop, uuid_for_schema_id(sid)) for sid in ids]
+    return [DataReference(from_uuid, prop, uuid_for_schema_id(sid)) for sid in ids]
 
 
 def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
@@ -304,7 +299,7 @@ def _insert_methods(collection: Collection, methods: list[dict[str, Any]]) -> Re
     def _class_ref(from_uuid: str, mth: dict[str, Any]) -> RefList:
         class_schema_id = mth.get("class", "")
         if class_schema_id and not class_schema_id.startswith("external:"):
-            return [_make_ref(from_uuid, "class_ref", uuid_for_schema_id(class_schema_id))]
+            return [DataReference(from_uuid, "class_ref", uuid_for_schema_id(class_schema_id))]
         return []
 
     return _insert_code_entities(
