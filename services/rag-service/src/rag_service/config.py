@@ -22,3 +22,6 @@ class Settings(BaseSettings):
 
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     repository: Literal[*REPOSITORY_REGISTRY.keys()] = Field(default="FakeDataRepository")  # type: ignore[valid-type]
+    weaviate_host: str = Field(default="localhost")
+    weaviate_port: int = Field(default=8080)
+    weaviate_grpc_port: int = Field(default=50051)

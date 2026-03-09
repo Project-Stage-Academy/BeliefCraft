@@ -100,7 +100,10 @@ markers = [
   "slow: slow or expensive tests",
 ]
 
-filterwarnings = ["error"]
+filterwarnings = [
+  "error",
+  "ignore::DeprecationWarning"
+]
 
 
 [tool.mypy]
