@@ -258,6 +258,40 @@ class TestActNode:
         assert result["iteration"] == 1
 
     @pytest.mark.asyncio()
+    @patch("app.services.react_agent.tool_registry")
+    async def test_act_stores_tool_category_from_registry(
+        self,
+        mock_registry: MagicMock,
+        agent: ReActAgent,
+        initial_state: AgentState,
+    ) -> None:
+        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
+            return_value={"status": "success", "data": {"documents": []}}
+        )
+        mock_registry.get_tool.return_value.get_metadata.return_value.category = "rag"
+        initial_state["messages"] = [
+            {
+                "role": "assistant",
+                "content": "Checking...",
+                "tool_calls": [
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "search_knowledge_base",
+                            "arguments": '{"query": "policy iteration"}',
+                        },
+                    }
+                ],
+            }
+        ]
+
+        result = await agent._act_node(initial_state)
+
+        assert len(result["tool_calls"]) == 1
+        assert result["tool_calls"][0].category == "rag"
+
+    @pytest.mark.asyncio()
     async def test_act_adds_tool_result_message(
         self, agent: ReActAgent, initial_state: AgentState
     ) -> None:

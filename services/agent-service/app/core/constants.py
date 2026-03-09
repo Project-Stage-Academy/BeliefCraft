@@ -62,6 +62,7 @@ MCP_REQUEST_TIMEOUT = 30  # seconds for MCP HTTP requests
 
 # Cache TTL constants (in seconds)
 CACHE_TTL_RAG_TOOLS = 86400  # 24 hours - static knowledge from books
+CACHE_TTL_SKILLS = 86400  # 24 hours - domain skills are static expertise
 CACHE_TTL_HISTORY = 3600  # 1 hour - historical data doesn't change
 CACHE_TTL_ANALYTICS = 600  # 10 minutes - analytics/risk calculations
 CACHE_TTL_SHIPMENTS = 300  # 5 minutes - shipments change slowly

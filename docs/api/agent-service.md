@@ -155,6 +155,7 @@ RAG tools:
 The agent tool layer currently uses:
 - HTTP client contracts for `environment-api` (`services/agent-service/app/clients/environment_client.py`)
 - MCP client contract for `rag-service` (`services/agent-service/app/clients/rag_mcp_client.py`)
+- RAG metadata contract for extractor post-processing (`docs/agent-service/RAG_METADATA_CONTRACT.md`)
 
 Deprecated compatibility code for REST RAG client still exists in `services/agent-service/app/clients/rag_client.py`, but active startup path loads RAG tools from MCP.
 
