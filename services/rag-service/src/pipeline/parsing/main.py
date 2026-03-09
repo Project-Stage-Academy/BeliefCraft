@@ -13,7 +13,6 @@ try:
 except ImportError:
     from metadata_extractor import MetadataExtractor  # type: ignore
 
-import os
 
 FIGURES_BUCKET_URL = os.getenv("FIGURES_BUCKET_URL", "").rstrip("/") + "/"
 
