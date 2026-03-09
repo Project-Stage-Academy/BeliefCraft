@@ -38,22 +38,19 @@ def _enum_storage_value(value: object) -> str:
 
 def _build_latest_observations_subquery(observations: FromClause) -> Any:
     """Build subquery with the latest observation per product/location pair."""
-    return (
-        select(
-            observations.c.product_id,
-            observations.c.location_id,
-            observations.c.observed_qty,
-            observations.c.confidence,
-            observations.c.device_id,
-            func.row_number()
-            .over(
-                partition_by=(observations.c.product_id, observations.c.location_id),
-                order_by=(observations.c.observed_at.desc(), observations.c.id.asc()),
-            )
-            .label("rn"),
+    return select(
+        observations.c.product_id,
+        observations.c.location_id,
+        observations.c.observed_qty,
+        observations.c.confidence,
+        observations.c.device_id,
+        func.row_number()
+        .over(
+            partition_by=(observations.c.product_id, observations.c.location_id),
+            order_by=(observations.c.observed_at.desc(), observations.c.id.asc()),
         )
-        .subquery("latest_observations")
-    )
+        .label("rn"),
+    ).subquery("latest_observations")
 
 
 def _build_snapshot_stmt(

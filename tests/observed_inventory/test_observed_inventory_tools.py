@@ -101,8 +101,6 @@ def test_get_observed_inventory_snapshot_wraps_validation_error() -> None:
         RuntimeError,
         match="Unable to get observed inventory snapshot.",
     ) as excinfo:
-        observed_inventory_tools.get_observed_inventory_snapshot(
-            quality_status_in=["not-a-status"]
-        )
+        observed_inventory_tools.get_observed_inventory_snapshot(quality_status_in=["not-a-status"])
 
     assert isinstance(excinfo.value.__cause__, ValidationError)

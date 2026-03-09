@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from common.schemas.devices import DeviceStatus as SchemaDeviceStatus
+from common.schemas.devices import DeviceType as SchemaDeviceType
 from common.schemas.devices import (
-    DeviceStatus as SchemaDeviceStatus,
-    DeviceType as SchemaDeviceType,
     GetDeviceAnomaliesRequest,
     GetDeviceHealthSummaryRequest,
     ListSensorDevicesRequest,
@@ -57,9 +57,7 @@ def test_fetch_sensor_device_rows_filters_by_warehouse_and_status(
     returned_ids = {row["id"] for row in rows}
     assert active_device.id in returned_ids
     assert offline_device.id not in returned_ids
-    assert all(
-        str(getattr(row["status"], "value", row["status"])) == "active" for row in rows
-    )
+    assert all(str(getattr(row["status"], "value", row["status"])) == "active" for row in rows)
 
 
 @pytest.mark.integration

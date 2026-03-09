@@ -108,8 +108,7 @@ def get_observed_inventory_snapshot(
 
         if request.dev_mode:
             data: list[ObservedInventorySnapshotRow | ObservedInventorySnapshotDevRow] = [
-                _snapshot_dev_row_from_row(row)
-                for row in rows
+                _snapshot_dev_row_from_row(row) for row in rows
             ]
         else:
             data = [_snapshot_row_from_row(row) for row in rows]

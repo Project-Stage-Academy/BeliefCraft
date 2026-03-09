@@ -147,9 +147,7 @@ def test_observed_inventory_snapshot_endpoint_with_dev_mode(
     rows = payload["data"]
     assert len(rows) >= 1
 
-    row = next(
-        item for item in rows if item["product_id"] == str(seeded["product"].id)
-    )
+    row = next(item for item in rows if item["product_id"] == str(seeded["product"].id))
     assert row["quality_status"] == "damaged"
     assert row["observed_qty"] == 29.0
     assert row["on_hand"] == 30.0
