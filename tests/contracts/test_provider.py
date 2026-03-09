@@ -24,6 +24,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import requests
 import uvicorn
 from common.schemas.common import ToolResult
 from environment_api.main import app as main_app
@@ -110,7 +111,16 @@ def test_provider_complies_with_contract(
 
     server_process = multiprocessing.Process(target=run_server)
     server_process.start()
-    time.sleep(2)
+
+    for _ in range(50):
+        try:
+            requests.get("http://127.0.0.1:8001/", timeout=0.1)
+            break
+        except requests.exceptions.ConnectionError:
+            time.sleep(0.1)
+    else:
+        server_process.terminate()
+        pytest.fail("FastAPI server failed to start within the timeout.")
 
     try:
         verifier = (
@@ -121,4 +131,7 @@ def test_provider_complies_with_contract(
         verifier.verify()
     finally:
         server_process.terminate()
-        server_process.join()
+        server_process.join(timeout=2)
+        if server_process.is_alive():
+            server_process.kill()
+            server_process.join()

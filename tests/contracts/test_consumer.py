@@ -299,6 +299,6 @@ def test_at_risk_orders_contract(pact_mock_server: Pact):
                 "limit": 50,
                 "offset": 0,
             },
-            timeout=100,
+            timeout=5,
         )
     assert res.status_code == 200

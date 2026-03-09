@@ -4,10 +4,10 @@ Wrapped with `make_result` to mirror the Pydantic `ToolResult` model dump.
 """
 
 
-def make_result(data: dict | list) -> dict:
+def make_result(data: dict | list, message: str = "Success") -> dict:
     return {
         "data": data,
-        "message": "Success",
+        "message": message,
         "meta": {},
     }
 
