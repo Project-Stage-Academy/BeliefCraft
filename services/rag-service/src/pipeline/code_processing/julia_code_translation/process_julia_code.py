@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from pipeline.julia_code_translation.signature_stripper import strip_to_signatures
+from pipeline.code_processing.python_code_processing.signature_stripper import strip_to_signatures
 from pipeline.parsing.block_processor import BlockType
 
 APPENDIX_START_CHAPTER = (
@@ -35,7 +35,7 @@ JULIA_STOPWORDS = frozenset(
     {"if", "for", "while", "begin", "let", "try", "catch", "finally", "end", "do"}
 )
 
-# Usage pattern templates for usage index building.
+# Usage pattern prompt_templates for usage index building.
 STRUCT_QUAL_PATTERN_TEMPLATE = r"::({struct_names})\b"
 STRUCT_CALL_PATTERN_TEMPLATE = r"\b({struct_names})\s*\("
 FUNC_CALL_PATTERN_TEMPLATE = r"\b({func_names})\s*\("

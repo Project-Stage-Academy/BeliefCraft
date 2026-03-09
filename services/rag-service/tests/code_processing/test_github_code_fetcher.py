@@ -1,5 +1,5 @@
-from pipeline.julia_code_translation import github_code_fetcher
-from pipeline.julia_code_translation.github_code_fetcher import GitHubCodeFetcher
+from pipeline.code_processing.python_code_processing import github_code_fetcher
+from pipeline.code_processing.python_code_processing.github_code_fetcher import GitHubCodeFetcher
 
 
 def test_github_code_fetcher_collects_dependencies(monkeypatch):

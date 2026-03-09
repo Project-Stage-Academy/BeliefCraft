@@ -57,7 +57,7 @@ The prompt builder and processors add useful context and normalize data before p
 From the repo root:
 
 ```bash
-uv run services/rag-service/src/pipeline/julia_code_translation/translate.py \
+uv run services/rag-service/src/pipeline/code_processing/julia_code_translation/translate.py \
   --pdf-path dm.pdf \
   --paddle-ocr-dir ocr_jsons \
   --prompts-dir prompts \
@@ -96,7 +96,7 @@ Running `translate.py` will produce or update:
 Prompts are always saved when you run `translate.py`. If you only want to generate prompts without sending them to the LLM, run:
 
 ```bash
-uv run services/rag-service/src/pipeline/julia_code_translation/build_prompts.py \
+uv run services/rag-service/src/pipeline/code_processing/julia_code_translation/build_prompts.py \
   --pdf-path dm.pdf \
   --paddle-ocr-dir ocr_jsons \
   --prompts-dir prompts \
@@ -104,3 +104,21 @@ uv run services/rag-service/src/pipeline/julia_code_translation/build_prompts.py
 ```
 
 This writes the same prompt files to `prompts/` without making any model calls.
+
+## Update Chunks With Translations
+`services/rag-service/src/pipeline/julia_code_translation/update_chunks_with_translated_code.py` merges translated algorithms/examples into chunk JSON.
+
+### How to Run
+From the repo root:
+
+```bash
+uv run services/rag-service/src/pipeline/code_processing/julia_code_translation/update_chunks_with_translated_code.py \
+  --chunks ULTIMATE_BOOK_DATA.json \
+  --translated-algorithms translated_algorithms.json \
+  --translated-examples translated_examples.json \
+  --output ULTIMATE_BOOK_DATA.json
+```
+
+### Notes
+- `--paddle-ocr-dir` is the OCR JSON directory name passed into the block processor.
+- The script overwrites the output path you provide; use a new file if you want to keep the original chunks JSON.
