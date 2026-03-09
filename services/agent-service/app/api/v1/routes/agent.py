@@ -2,8 +2,10 @@ from datetime import UTC, datetime
 
 from app.models.requests import AgentQueryRequest
 from app.models.responses import AgentQueryResponse
+from app.prompts.system_prompts import get_warehouse_advisor_prompt
 from app.services.react_agent import ReActAgent
 from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
+from app.tools import get_skill_store
 from common.logging import get_logger
 from fastapi import APIRouter, HTTPException
 
@@ -26,7 +28,20 @@ async def analyze_query(request: AgentQueryRequest) -> AgentQueryResponse:
     start_time = datetime.now(UTC)
 
     try:
-        agent = ReActAgent()
+        # Generate system prompt with skill catalog if available
+        skill_store = get_skill_store()
+        if skill_store:
+            skill_catalog = skill_store.get_skill_catalog()
+            system_prompt = get_warehouse_advisor_prompt(skill_catalog=skill_catalog)
+            logger.debug(
+                "agent_initialized_with_skills",
+                skills_count=len(skill_store.get_skill_names()),
+            )
+        else:
+            system_prompt = get_warehouse_advisor_prompt()
+            logger.debug("agent_initialized_without_skills")
+
+        agent = ReActAgent(system_prompt=system_prompt)
 
         final_state = await agent.run(
             user_query=request.query,
