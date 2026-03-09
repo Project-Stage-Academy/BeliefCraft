@@ -1,11 +1,8 @@
 from app.models.requests import AgentQueryRequest
 from app.models.responses import AgentRecommendationResponse
-from app.services.react_agent import ReActAgent
-from app.services.recommendation_generator import RecommendationGenerator
-from app.models.responses import AgentQueryResponse
 from app.prompts.system_prompts import get_warehouse_advisor_prompt
 from app.services.react_agent import ReActAgent
-from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
+from app.services.recommendation_generator import RecommendationGenerator
 from app.tools import get_skill_store
 from common.logging import get_logger
 from fastapi import APIRouter, HTTPException
