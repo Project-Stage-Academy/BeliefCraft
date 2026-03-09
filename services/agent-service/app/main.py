@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     for each request.
     """
     from app.clients.rag_mcp_client import RAGMCPClient
-    from app.tools import register_mcp_rag_tools
+    from app.tools import register_mcp_rag_tools, register_skill_tools
 
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
@@ -78,6 +78,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Close MCP client on failure
         await mcp_client.close()
         # Continue startup without RAG tools (graceful degradation)
+
+    # Register skill tools (local file system - no external dependencies)
+    logger.info("loading_skill_tools", skills_dir=settings.SKILLS_DIR)
+    try:
+        register_skill_tools(settings.SKILLS_DIR)
+        logger.info("skill_tools_loaded_successfully")
+    except Exception as e:
+        logger.warning(
+            "failed_to_load_skill_tools_continuing_without_skills",
+            error=str(e),
+            error_type=type(e).__name__,
+            skills_dir=settings.SKILLS_DIR,
+            message="Service will continue with environment and RAG tools only",
+        )
 
     try:
         yield

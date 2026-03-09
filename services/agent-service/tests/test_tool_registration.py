@@ -4,10 +4,16 @@ Unit tests for tool registration.
 Tests automatic registration of environment tools at import time.
 RAG tools are now loaded dynamically via MCP server during startup
 (see test_mcp_tools.py for MCP tool loading tests).
+Skill tools are loaded dynamically via register_skill_tools() during startup.
 """
 
+import tempfile
+from collections.abc import Generator
+from pathlib import Path
+
+import app.tools  # For accessing _global_skill_store
 import pytest
-from app.tools import tool_registry
+from app.tools import register_skill_tools, tool_registry
 from app.tools.cached_tool import CachedTool
 
 
@@ -205,3 +211,171 @@ class TestToolRegistration:
         assert tool is not None
         assert tool.get_metadata().name == "get_observed_inventory_snapshot"
         assert tool.get_metadata().category == "environment"
+
+
+class TestSkillToolsRegistration:
+    """Test skill tools registration (dynamic loading via register_skill_tools)."""
+
+    @pytest.fixture(autouse=True)
+    def cleanup_skill_tools(self) -> Generator[None, None, None]:
+        """Remove skill tools from registry before each test to prevent registration conflicts."""
+        # Remove skill tools if they exist
+        skill_tool_names = ["load_skill", "read_skill_files"]
+        for name in skill_tool_names:
+            if name in tool_registry.tools:
+                del tool_registry.tools[name]
+
+        # Reset global skill store
+        app.tools._global_skill_store = None
+
+        yield
+
+        # Cleanup after test as well
+        for name in skill_tool_names:
+            if name in tool_registry.tools:
+                del tool_registry.tools[name]
+
+        # Reset global skill store
+        app.tools._global_skill_store = None
+
+    @pytest.fixture
+    def temp_skills_dir(self) -> Generator[Path, None, None]:
+        """Create temporary skills directory with test skills."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir)
+
+            # Create test skill
+            skill_dir = skills_dir / "test-skill"
+            skill_dir.mkdir()
+            (skill_dir / "SKILL.md").write_text(
+                """---
+name: test-skill
+description: Test skill for registration testing
+version: "1.0"
+---
+
+# Test Skill
+Content here.
+""",
+                encoding="utf-8",
+            )
+
+            yield skills_dir
+
+    def test_register_skill_tools(self, temp_skills_dir: Path) -> None:
+        """Test that register_skill_tools adds skill tools to registry."""
+        # Count tools before registration
+        tools_before = len(tool_registry.tools)
+
+        # Register skill tools
+        register_skill_tools(str(temp_skills_dir))
+
+        # Should add 2 tools: load_skill, read_skill_files
+        tools_after = len(tool_registry.tools)
+        assert tools_after == tools_before + 2
+
+        # Verify skill tools are registered
+        assert "load_skill" in tool_registry.tools
+        assert "read_skill_files" in tool_registry.tools
+
+    def test_skill_tools_are_cached(self, temp_skills_dir: Path) -> None:
+        """Test that skill tools are wrapped in CachedTool."""
+        register_skill_tools(str(temp_skills_dir))
+
+        load_tool = tool_registry.get_tool("load_skill")
+        read_batch_tool = tool_registry.get_tool("read_skill_files")
+
+        assert isinstance(load_tool, CachedTool)
+        assert isinstance(read_batch_tool, CachedTool)
+
+    def test_skill_tools_have_correct_category(self, temp_skills_dir: Path) -> None:
+        """Test that skill tools have category='skill'."""
+        register_skill_tools(str(temp_skills_dir))
+
+        load_tool = tool_registry.get_tool("load_skill")
+        read_batch_tool = tool_registry.get_tool("read_skill_files")
+
+        assert load_tool.get_metadata().category == "skill"
+        assert read_batch_tool.get_metadata().category == "skill"
+
+    def test_skill_tools_have_24h_ttl(self, temp_skills_dir: Path) -> None:
+        """Test that skill tools have 24-hour cache TTL (static knowledge)."""
+        register_skill_tools(str(temp_skills_dir))
+
+        load_tool = tool_registry.get_tool("load_skill")
+        read_batch_tool = tool_registry.get_tool("read_skill_files")
+
+        assert load_tool.get_metadata().cache_ttl == 86400  # 24 hours
+        assert read_batch_tool.get_metadata().cache_ttl == 86400
+
+    def test_skill_tools_dont_skip_cache(self, temp_skills_dir: Path) -> None:
+        """Test that skill tools use cache (not real-time data)."""
+        register_skill_tools(str(temp_skills_dir))
+
+        load_tool = tool_registry.get_tool("load_skill")
+        read_batch_tool = tool_registry.get_tool("read_skill_files")
+
+        assert load_tool.get_metadata().skip_cache is False
+        assert read_batch_tool.get_metadata().skip_cache is False
+
+    def test_skill_tools_include_in_openai_functions(self, temp_skills_dir: Path) -> None:
+        """Test that skill tools are included in OpenAI function schemas."""
+        register_skill_tools(str(temp_skills_dir))
+
+        functions = tool_registry.get_openai_functions()
+        function_names = {f["function"]["name"] for f in functions}
+
+        assert "load_skill" in function_names
+        assert "read_skill_files" in function_names
+
+    def test_filter_skill_tools_by_category(self, temp_skills_dir: Path) -> None:
+        """Test filtering by skill category."""
+        register_skill_tools(str(temp_skills_dir))
+
+        skill_functions = tool_registry.get_openai_functions(categories=["skill"])
+
+        assert len(skill_functions) == 2
+        function_names = {f["function"]["name"] for f in skill_functions}
+        assert function_names == {"load_skill", "read_skill_files"}
+
+    def test_register_skill_tools_with_empty_directory(self) -> None:
+        """Test registering skill tools with empty skills directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Empty directory - no skills
+            tools_before = len(tool_registry.tools)
+
+            register_skill_tools(tmpdir)
+
+            # Should still register 2 tools (they just won't find any skills)
+            tools_after = len(tool_registry.tools)
+            assert tools_after == tools_before + 2
+
+            # Verify tools exist but report no skills
+            load_tool = tool_registry.get_tool("load_skill")
+            metadata = load_tool.get_metadata()
+            param_desc = metadata.parameters["properties"]["skill_name"]["description"]
+            assert "none" in param_desc.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_load_skill_tool(self, temp_skills_dir: Path) -> None:
+        """Test executing load_skill tool through registry."""
+        register_skill_tools(str(temp_skills_dir))
+
+        result = await tool_registry.execute_tool("load_skill", {"skill_name": "test-skill"})
+
+        assert result.success is True
+        assert "skill_name" in result.data
+        assert result.data["skill_name"] == "test-skill"
+
+    @pytest.mark.asyncio
+    async def test_execute_read_skill_files_tool_error(self, temp_skills_dir: Path) -> None:
+        """Test executing read_skill_files tool with non-existent file."""
+        register_skill_tools(str(temp_skills_dir))
+
+        result = await tool_registry.execute_tool(
+            "read_skill_files", {"skill_name": "test-skill", "filenames": ["NONEXISTENT.md"]}
+        )
+
+        # Tool handles error gracefully
+        assert result.success is True
+        assert "errors" in result.data

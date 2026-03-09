@@ -2,7 +2,8 @@
 
 from typing import Any
 
-WAREHOUSE_ADVISOR_SYSTEM_PROMPT = """You are an expert warehouse operations advisor \
+# Base system prompt (without dynamic skill catalog)
+_BASE_WAREHOUSE_ADVISOR_PROMPT = """You are an expert warehouse operations advisor \
 powered by the "Algorithms for Decision Making" textbook.
 
 Your role:
@@ -22,9 +23,11 @@ Guidelines:
 5. If data is conflicting, acknowledge uncertainty.
 
 Available tool categories:
-- Warehouse observation tools: Query inventory, orders.
-- Risk calculation tools: Assess stockout probability.
-- Knowledge base tools: Search algorithms.
+- Warehouse observation tools: Query inventory, orders, devices, locations.
+- Knowledge base tools: Search algorithms and decision-making concepts.
+- Skill tools: Load domain-specific diagnostic workflows for complex investigations.
+
+{skill_catalog_section}
 
 Response format:
 When you reach a conclusion, provide:
@@ -35,6 +38,58 @@ When you reach a conclusion, provide:
 - Python code snippet
 - Actionable recommendations
 """
+
+# Legacy constant for backward compatibility
+WAREHOUSE_ADVISOR_SYSTEM_PROMPT = _BASE_WAREHOUSE_ADVISOR_PROMPT.format(skill_catalog_section="")
+
+
+def get_warehouse_advisor_prompt(skill_catalog: str | None = None) -> str:
+    """
+    Generate the warehouse advisor system prompt with optional skill catalog.
+
+    Args:
+        skill_catalog: XML-formatted skill catalog from SkillStore.get_skill_catalog()
+                      If None, prompt will not include skill catalog section.
+
+    Returns:
+        Complete system prompt with skill catalog injected (if provided).
+
+    Example:
+        ```python
+        from app.services.skill_store import SkillStore
+        from app.prompts.system_prompts import get_warehouse_advisor_prompt
+
+        store = SkillStore(skills_dir="skills")
+        store.scan()
+        catalog = store.get_skill_catalog()
+
+        prompt = get_warehouse_advisor_prompt(skill_catalog=catalog)
+        ```
+    """
+    if skill_catalog:
+        skill_section = f"""
+Available Domain Skills (Tier 1: Discovery):
+Use the load_skill tool to activate expert diagnostic workflows when the user's query \
+matches a skill's domain. Skills provide step-by-step procedures, tool sequences, and \
+decision-making frameworks for complex warehouse operations problems.
+
+<skills_catalog>
+{skill_catalog}
+</skills_catalog>
+
+When to use skills:
+- The task requires domain expertise not covered by general reasoning or available tools
+- The skill's description matches the user's query or investigation needs
+- You need specialized procedures, frameworks, or decision-making workflows
+
+After loading a skill, follow its instructions precisely, including tool call sequences \
+and decision points.
+"""
+    else:
+        skill_section = ""
+
+    return _BASE_WAREHOUSE_ADVISOR_PROMPT.format(skill_catalog_section=skill_section)
+
 
 REACT_LOOP_PROMPT = """You are in a ReAct (Reasoning + Acting) loop.
 
