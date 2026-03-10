@@ -20,6 +20,12 @@ class EntityType(StrEnum):
     EXAMPLE = "example"
 
 
+class CodeEntityType(StrEnum):
+    CLASS = "class"
+    METHOD = "method"
+    FUNCTION = "function"
+
+
 Part = Literal["I", "II", "III", "IV", "V", "Appendices"]
 
 

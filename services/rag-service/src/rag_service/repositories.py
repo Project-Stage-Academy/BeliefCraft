@@ -303,6 +303,41 @@ class WeaviateRepository(AbstractVectorStoreRepository):
 
         return condition_map[filters.condition](weaviate_filters)
 
+    def get_function_references(self, max_depth: int = 2) -> list[QueryReference]:
+        """
+        Generate QueryReference objects for code-related references with specified depth.
+
+        Args:
+            max_depth: Maximum depth to traverse for code references.
+
+        Returns:
+            List of QueryReference objects for code references.
+        """
+        code_reference_fields = [
+            "initialized_classes",
+            "referenced_methods",
+            "referenced_functions",
+        ]
+
+        result = []
+        for field_name in code_reference_fields:
+            if field_name == "initialized_classes" or max_depth == 0:
+                return_references = None
+            else:
+                return_references = self.get_function_references(max_depth - 1)
+
+            if return_references is not None and field_name == "referenced_methods":
+                return_references.append(QueryReference(link_on="class_ref"))
+
+            result.append(
+                QueryReference(
+                    link_on=field_name,
+                    return_references=return_references,
+                )
+            )
+
+        return result
+
     def _get_return_references(
         self, traverse_fields: list[str] | None = None
     ) -> list[QueryReference]:
@@ -317,6 +352,21 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """
         base_references = [QueryReference(link_on=name) for name in REFERENCE_TYPE_MAP]
 
+        code_references = [
+            QueryReference(
+                link_on="referenced_classes",
+            ),
+            QueryReference(
+                link_on="referenced_methods",
+                return_references=self.get_function_references()
+                + [QueryReference(link_on="class_ref")],
+            ),
+            QueryReference(
+                link_on="referenced_functions",
+                return_references=self.get_function_references(),
+            ),
+        ]
+
         return [
             QueryReference(
                 link_on=field_name,
@@ -325,7 +375,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
                 ),
             )
             for field_name in REFERENCE_TYPE_MAP
-        ]
+        ] + code_references
 
     def _to_document(self, weaviate_object: Any) -> Document:
         """
@@ -393,6 +443,66 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             return_metadata=MetadataQuery(certainty=True),
         )
 
+    def _process_ref_obj(
+        self,
+        ref_obj: Any,
+        seen_uuids: set[str],
+        documents: list[Document],
+        parent_collection: str | None = None,
+    ) -> None:
+        """
+        Recursively process a reference object, expanding CodeMethod and CodeFunction collections.
+
+        For CodeMethod objects that reference a CodeClass, the class name is added to the
+        document metadata instead of recursing into the class.
+
+        Args:
+            ref_obj: The reference object to process.
+            seen_uuids: Set of already-seen UUIDs for deduplication.
+            documents: List to append resulting documents to.
+            parent_collection: Collection name of the parent object (used for context).
+        """
+        if ref_obj.uuid in seen_uuids:
+            return
+
+        collection = getattr(ref_obj, "collection", None)
+
+        # If this reference object is a CodeClass being referenced from a CodeMethod,
+        # don't recurse — handled at the call site via class_name metadata.
+        if parent_collection == "CodeMethod" and collection == "CodeClass":
+            return
+
+        doc = self._to_document(ref_obj)
+
+        # For CodeMethod: attach class_name from any CodeClass reference
+        if collection == "CodeMethod" and ref_obj.references:
+            class_ref = ref_obj.references.get("class_ref")
+            if class_ref and class_ref.objects:
+                class_obj = class_ref.objects[0]
+                class_name = (class_obj.properties or {}).get("name") or (
+                    class_obj.properties or {}
+                ).get("entity_id")
+                if class_name:
+                    doc.metadata["class_name"] = class_name
+
+        documents.append(doc)
+        seen_uuids.add(ref_obj.uuid)
+
+        # Recurse into nested references for CodeMethod / CodeFunction
+        if collection in ("CodeMethod", "CodeFunction") and ref_obj.references:
+            nested_fields = ["referenced_methods", "referenced_functions", "initialized_classes"]
+            for nested_field in nested_fields:
+                nested_ref = ref_obj.references.get(nested_field)
+                if not nested_ref:
+                    continue
+                for nested_obj in nested_ref.objects or []:
+                    self._process_ref_obj(
+                        nested_obj,
+                        seen_uuids,
+                        documents,
+                        parent_collection=collection,
+                    )
+
     def _process_results(
         self,
         weaviate_objects: list[Any],
@@ -423,9 +533,12 @@ class WeaviateRepository(AbstractVectorStoreRepository):
                     field = obj.references.get(field_name)
                     reference_objects = field.objects if field else []
                     for ref_obj in reference_objects:
-                        if ref_obj.uuid not in seen_uuids:
-                            documents.append(self._to_document(ref_obj))
-                            seen_uuids.add(ref_obj.uuid)
+                        self._process_ref_obj(
+                            ref_obj,
+                            seen_uuids,
+                            documents,
+                            parent_collection=getattr(obj, "collection", None),
+                        )
 
         return documents
 
@@ -483,7 +596,11 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         if not document_ids or not traverse_types:
             return []
 
-        reference_fields = [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in traverse_types]
+        reference_fields = [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in traverse_types] + [
+            "referenced_classes",
+            "referenced_methods",
+            "referenced_functions",
+        ]
         results = await self._query(
             filters=Filter.by_id().contains_any(document_ids),
             return_references=self._get_return_references(reference_fields),

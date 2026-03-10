@@ -130,7 +130,7 @@ def _common_properties(extra: list[Property] | None = None) -> list[Property]:
     base = [
         Property(name="schema_id", data_type=DataType.TEXT, skip_vectorization=True),
         Property(name="name", data_type=DataType.TEXT, skip_vectorization=True),
-        Property(name="code", data_type=DataType.TEXT, skip_vectorization=True),
+        Property(name="content", data_type=DataType.TEXT, skip_vectorization=True),
     ]
     return base + (extra or [])
 
@@ -260,7 +260,7 @@ def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> Re
                 properties={
                     "schema_id": cls["id"],
                     "name": cls["name"],
-                    "code": cls["code"],
+                    "content": cls["code"],
                 },
                 uuid=uuid_for_schema_id(cls["id"]),
             )
@@ -292,7 +292,7 @@ def _insert_code_entities(
             props: dict[str, Any] = {
                 "schema_id": item["id"],
                 "name": item["name"],
-                "code": item["code"],
+                "content": item["code"],
             }
             for key in extra_prop_keys or []:
                 props[key] = item.get(key, "")
@@ -500,7 +500,7 @@ def store_schema(
             algorithms,
             schema,
             number_key="algorithm_number",
-            text_key="code",
+            text_key="content",
             uuid_fn=uuid_for_algorithm_chunk,
             chunk_label="algorithm",
         )
