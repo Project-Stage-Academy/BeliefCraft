@@ -51,14 +51,32 @@ Notes:
 
 ### AWS auth note (profile vs access keys)
 
-- `agent-service` env supports both:
-  - `AWS_PROFILE` in `services/agent-service/.env`
-  - or `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`
-- If using `AWS_PROFILE`, ensure your local `~/.aws` has that profile (compose mounts `~/.aws` into `agent-service`).
-- `rag-service` Weaviate vectorizer is configured via compose env from root `.env`:
+- `agent-service` and `weaviate` receive AWS credentials from environment variables
+  passed by Docker Compose.
+- We do **not** mount `~/.aws` into containers.
+- `rag-service` Weaviate vectorizer is configured via compose env values:
   - `AWS_ACCESS_KEY_ID`
   - `AWS_SECRET_ACCESS_KEY`
-    Profile-based auth is not used by Weaviate module in this setup.
+
+Always load credentials from AWS CLI into your shell before running `docker compose`.
+
+Linux/macOS:
+
+```bash
+. scripts/aws-env.sh
+```
+
+PowerShell:
+
+```powershell
+. .\scripts\aws-env.ps1
+```
+
+Notes:
+
+- Use the script in the same terminal session where you run `docker compose ...`.
+- Run it again in each new terminal session.
+- This is required because both `agent-service` and `weaviate` need AWS credentials.
 
 ### Supabase credentials note
 

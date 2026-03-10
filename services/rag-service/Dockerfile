@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock /app/
 COPY packages/common /app/packages/common
-COPY services/rag-service /app/services/rag-service
+COPY services/rag-service/pyproject.toml /app/services/rag-service/pyproject.toml
 RUN uv sync --frozen --project services/rag-service
 
 
