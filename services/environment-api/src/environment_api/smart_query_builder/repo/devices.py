@@ -4,9 +4,9 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from common.schemas.devices import DeviceStatus as SchemaDeviceStatus
+from common.schemas.devices import DeviceType as SchemaDeviceType
 from common.schemas.devices import (
-    DeviceStatus as SchemaDeviceStatus,
-    DeviceType as SchemaDeviceType,
     GetDeviceAnomaliesRequest,
     GetDeviceHealthSummaryRequest,
     GetSensorDeviceRequest,
@@ -22,7 +22,7 @@ _DEVICE_TABLES: dict[str, FromClause] = {
     "sensor_devices": SensorDevice.__table__,
     "observations": Observation.__table__,
 }
-_MAX_ANOMALY_WINDOW_HOURS = 24 * 30 #30 days are max for the window size
+_MAX_ANOMALY_WINDOW_HOURS = 24 * 30  # 30 days are max for the window size
 _ALLOWED_DEVICE_TYPE_FILTERS = frozenset(device_type.value for device_type in SchemaDeviceType)
 _ALLOWED_DEVICE_STATUS_FILTERS = frozenset(status.value for status in SchemaDeviceStatus)
 

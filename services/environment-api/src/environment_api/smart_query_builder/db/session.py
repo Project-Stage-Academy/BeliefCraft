@@ -28,9 +28,7 @@ def get_session() -> Iterator[Session]:
     """
     Context manager that yields a SQLAlchemy session.
     """
-    engine_with_isolation = get_engine().execution_options(
-        isolation_level=DEFAULT_ISOLATION_LEVEL
-    )
+    engine_with_isolation = get_engine().execution_options(isolation_level=DEFAULT_ISOLATION_LEVEL)
     session = SESSION_FACTORY(bind=engine_with_isolation)
     try:
         with session.begin():
