@@ -1,17 +1,17 @@
 """
-Unit tests for extract_example_refs.py
+Unit tests for extract_code_refs.py
 """
 
 import ast
 
-from pipeline.code_processing.python_code_processing.extract_example_refs import (
+from pipeline.code_processing.python_code_processing.extract_code_refs import (
     _CallCollector,
     _extract_fenced_blocks,
     _extract_inline_assignments,
     _is_code_line,
     _strip_non_code,
     extract_code_blocks,
-    extract_example_refs,
+    extract_code_refs,
 )
 
 # ------------------------------------------------------------------ #
@@ -198,7 +198,7 @@ def test_call_collector_kind_method_for_attribute_call():
 
 
 # ------------------------------------------------------------------ #
-# extract_example_refs
+# extract_code_refs
 # ------------------------------------------------------------------ #
 
 _SAMPLE_SCHEMA = {
@@ -212,78 +212,87 @@ _SAMPLE_SCHEMA = {
 }
 
 
-def test_extract_example_refs_required_keys():
-    refs = extract_example_refs("no code here at all.", _SAMPLE_SCHEMA)
+def test_extract_code_refs_required_keys():
+    refs = extract_code_refs("no code here at all.", _SAMPLE_SCHEMA)
     assert set(refs.keys()) == {"initialized_classes", "referenced_functions", "referenced_methods"}
 
 
-def test_extract_example_refs_empty_text():
-    refs = extract_example_refs("", _SAMPLE_SCHEMA)
+def test_extract_code_refs_empty_text():
+    refs = extract_code_refs("", _SAMPLE_SCHEMA)
     assert refs["initialized_classes"] == []
     assert refs["referenced_functions"] == []
     assert refs["referenced_methods"] == []
 
 
-def test_extract_example_refs_detects_function_call():
+def test_extract_code_refs_detects_function_call():
     text = "```python\ncompute()\n```"
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "fn:compute" in refs["referenced_functions"]
 
 
-def test_extract_example_refs_detects_class_instantiation():
+def test_extract_code_refs_detects_class_instantiation():
     text = "```python\ne = Engine()\n```"
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "cls:Engine" in refs["initialized_classes"]
 
 
-def test_extract_example_refs_detects_method_call():
+def test_extract_code_refs_detects_method_call():
     text = "```python\ne = Engine()\ne.start()\n```"
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "mth:Engine.start" in refs["referenced_methods"]
 
 
-def test_extract_example_refs_unknown_call_not_in_refs():
+def test_extract_code_refs_unknown_call_not_in_refs():
     text = "```python\nunknown_func()\n```"
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "fn:unknown_func" not in refs["referenced_functions"]
 
 
-def test_extract_example_refs_sorted_output():
+def test_extract_code_refs_sorted_output():
     text = "```python\ncompute()\nhelper()\n```"
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert refs["referenced_functions"] == sorted(refs["referenced_functions"])
 
 
-def test_extract_example_refs_locally_defined_not_counted():
-    """Functions defined inside the example block should not appear as external refs."""
+def test_extract_code_refs_locally_defined_not_counted():
+    """Functions defined inside the code block should not appear as external refs."""
     text = "```python\ndef compute(): pass\ncompute()\n```"
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "fn:compute" not in refs["referenced_functions"]
 
 
-def test_extract_example_refs_multiple_method_calls():
+def test_extract_code_refs_multiple_method_calls():
     text = "```python\n" "e = Engine()\n" "e.start()\n" "e.stop()\n" "```"
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "mth:Engine.start" in refs["referenced_methods"]
     assert "mth:Engine.stop" in refs["referenced_methods"]
 
 
-def test_extract_example_refs_no_duplicates():
+def test_extract_code_refs_no_duplicates():
     text = "```python\n" "compute()\n" "compute()\n" "```"
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert len(refs["referenced_functions"]) == len(set(refs["referenced_functions"]))
 
 
-def test_extract_example_refs_empty_schema():
+def test_extract_code_refs_empty_schema():
     schema = {"classes": [], "functions": [], "methods": []}
     text = "```python\ncompute()\n```"
-    refs = extract_example_refs(text, schema)
+    refs = extract_code_refs(text, schema)
     assert refs["initialized_classes"] == []
     assert refs["referenced_functions"] == []
     assert refs["referenced_methods"] == []
 
 
-def test_extract_example_refs_prose_with_inline_assignment_no_crash():
+def test_extract_code_refs_prose_with_inline_assignment_no_crash():
     text = "We can write result = compute( to get started."
-    refs = extract_example_refs(text, _SAMPLE_SCHEMA)
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert isinstance(refs["referenced_functions"], list)
+
+
+def test_extract_code_refs_plain_python_no_fences():
+    """Algorithm chunks contain plain Python code without markdown fences."""
+    text = "e = Engine()\ne.start()\ncompute()"
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
+    assert "cls:Engine" in refs["initialized_classes"]
+    assert "mth:Engine.start" in refs["referenced_methods"]
+    assert "fn:compute" in refs["referenced_functions"]

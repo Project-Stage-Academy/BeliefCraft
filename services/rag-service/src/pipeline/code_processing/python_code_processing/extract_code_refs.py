@@ -1,8 +1,9 @@
 """
-extract_example_refs.py
------------------------
-Extracts references to classes, methods, and functions from "examples" —
-fragments containing plain text with embedded ```python blocks.
+extract_code_refs.py
+--------------------
+Extracts references to classes, methods, and functions from code chunks —
+algorithm or example fragments containing Python code (plain or embedded in
+```python blocks inside prose).
 
 Unlike code_analyzer, no new definitions are registered here;
 we only collect calls and resolve them against an already-known schema.
@@ -340,14 +341,14 @@ def _resolve_calls(
 # ------------------------------------------------------------------ #
 
 
-def extract_example_refs_with_index(
+def extract_code_refs_with_index(
     text: str,
     index: SchemaIndex,
 ) -> dict[str, list[str]]:
     """Extract schema refs from *text* using a pre-built ``SchemaIndex``.
 
-    Prefer this over :func:`extract_example_refs` in hot paths where the same
-    schema is reused across many examples.
+    Prefer this over :func:`extract_code_refs` in hot paths where the same
+    schema is reused across many chunks.
     """
     blocks = extract_code_blocks(text)
     if not blocks:
@@ -369,17 +370,18 @@ def extract_example_refs_with_index(
     return _resolve_calls(collector.calls, index, local_definitions)
 
 
-def extract_example_refs(
+def extract_code_refs(
     text: str, schema: dict[str, list[dict[str, object]]]
 ) -> dict[str, list[str]]:
-    """Extract references to known definitions from an example text.
+    """Extract references to known definitions from a code chunk text.
 
-    Builds a :class:`SchemaIndex` from *schema* on every call. When processing
-    many examples against the same schema, use
-    :func:`extract_example_refs_with_index` with a shared index instead.
+    Works for both algorithm chunks (plain Python code) and example chunks
+    (prose with embedded ``python`` code blocks). Builds a :class:`SchemaIndex`
+    from *schema* on every call. When processing many chunks against the same
+    schema, use :func:`extract_code_refs_with_index` with a shared index instead.
 
     Args:
-        text:   String with prose and optional ``python`` code blocks.
+        text:   Python source string or prose with optional ``python`` code blocks.
         schema: Result of ``build_code_schema()`` —
                 ``{"classes": [...], "methods": [...], "functions": [...]}``.
 
@@ -387,7 +389,7 @@ def extract_example_refs(
         ``{"initialized_classes": [...], "referenced_functions": [...],
         "referenced_methods": [...]}``.
     """
-    return extract_example_refs_with_index(text, SchemaIndex.from_schema(schema))
+    return extract_code_refs_with_index(text, SchemaIndex.from_schema(schema))
 
 
 if __name__ == "__main__":
@@ -416,7 +418,7 @@ if __name__ == "__main__":
     for example in examples:
         example_number = example.get("example_number", "?")
         text = example.get("text", "")
-        refs = extract_example_refs_with_index(text, index)
+        refs = extract_code_refs_with_index(text, index)
 
         if any(refs[k] for k in refs):
             logger.info("Example: %s", example_number)

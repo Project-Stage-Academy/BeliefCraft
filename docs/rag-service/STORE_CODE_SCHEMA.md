@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`services/rag-service/src/scripts/store_code_schema.py` parses translated Python algorithm and example JSON files, extracts a structured code schema (classes, methods, and top-level functions), and stores it into three dedicated Weaviate collections. It also enriches existing algorithm and example chunks in the unified collection with cross-references pointing to the code entities they define or use.
+`services/rag-service/src/scripts/store_code_schema.py` parses translated Python algorithm and example JSON files, extracts a structured code schema (classes, methods, and top-level functions), and stores it into three dedicated Weaviate collections. It also enriches existing algorithm and example chunks in the unified collection with cross-references pointing to the code entities they use.
 
 ---
 
@@ -20,12 +20,11 @@ Three new collections are created alongside the existing `unified_collection`:
 
 All three collections share the following base properties:
 
-| Property           | Type   | Description                                      |
-|--------------------|--------|--------------------------------------------------|
-| `schema_id`        | TEXT   | Stable identifier (`cls:Name`, `mth:A.b`, `fn:name`) |
-| `name`             | TEXT   | Short (unqualified) name                         |
-| `code`             | TEXT   | Source code of the entity                        |
-| `algorithm_number` | TEXT   | Origin algorithm number (e.g. `"2.1"`)           |
+| Property    | Type   | Description                                           |
+|-------------|--------|-------------------------------------------------------|
+| `schema_id` | TEXT   | Stable identifier (`cls:Name`, `mth:A.b`, `fn:name`) |
+| `name`      | TEXT   | Short (unqualified) name                              |
+| `code`      | TEXT   | Source code of the entity                             |
 
 `CodeMethod` additionally stores:
 
@@ -37,30 +36,38 @@ All three collections share the following base properties:
 
 ## Cross-References
 
+### `CodeClass`
+
+| Reference       | Target collection    | Description                                          |
+|-----------------|----------------------|------------------------------------------------------|
+| `algorithm_ref` | `unified_collection` | The algorithm chunk that defines this class          |
+
 ### `CodeMethod`
 
-| Reference             | Target collection   | Description                                      |
-|-----------------------|---------------------|--------------------------------------------------|
-| `class_ref`           | `CodeClass`         | The class this method belongs to                 |
-| `initialized_classes` | `CodeClass`         | Classes instantiated inside the method body      |
-| `referenced_methods`  | `CodeMethod`        | Methods called inside the method body            |
-| `referenced_functions`| `CodeFunction`      | Functions called inside the method body          |
+| Reference             | Target collection    | Description                                      |
+|-----------------------|----------------------|--------------------------------------------------|
+| `algorithm_ref`       | `unified_collection` | The algorithm chunk that defines this method     |
+| `class_ref`           | `CodeClass`          | The class this method belongs to                 |
+| `initialized_classes` | `CodeClass`          | Classes instantiated inside the method body      |
+| `referenced_methods`  | `CodeMethod`         | Methods called inside the method body            |
+| `referenced_functions`| `CodeFunction`       | Functions called inside the method body          |
 
 ### `CodeFunction`
 
-| Reference             | Target collection   | Description                                      |
-|-----------------------|---------------------|--------------------------------------------------|
-| `initialized_classes` | `CodeClass`         | Classes instantiated inside the function body    |
-| `referenced_methods`  | `CodeMethod`        | Methods called inside the function body          |
-| `referenced_functions`| `CodeFunction`      | Functions called inside the function body        |
+| Reference             | Target collection    | Description                                      |
+|-----------------------|----------------------|--------------------------------------------------|
+| `algorithm_ref`       | `unified_collection` | The algorithm chunk that defines this function   |
+| `initialized_classes` | `CodeClass`          | Classes instantiated inside the function body    |
+| `referenced_methods`  | `CodeMethod`         | Methods called inside the function body          |
+| `referenced_functions`| `CodeFunction`       | Functions called inside the function body        |
 
 ### `unified_collection` — algorithm chunks
 
-| Reference          | Target collection   | Description                                        |
-|--------------------|---------------------|----------------------------------------------------|
-| `defined_classes`  | `CodeClass`         | Classes introduced in the algorithm                |
-| `defined_methods`  | `CodeMethod`        | Methods introduced in the algorithm                |
-| `defined_functions`| `CodeFunction`      | Functions introduced in the algorithm              |
+| Reference              | Target collection   | Description                                      |
+|------------------------|---------------------|--------------------------------------------------|
+| `referenced_classes`   | `CodeClass`         | Classes used in the algorithm                    |
+| `referenced_methods`   | `CodeMethod`        | Methods used in the algorithm                    |
+| `referenced_functions` | `CodeFunction`      | Functions used in the algorithm                  |
 
 ### `unified_collection` — example chunks
 
@@ -90,10 +97,12 @@ translated_examples.json
           │         │
           │         └─► Add cross-references between code entities
           │
-          ├─► Add defined_classes / defined_methods / defined_functions
-          │   references on algorithm chunks in unified_collection
+          ├─► extract_code_refs()  (for each algorithm)
+          │         │
+          │         └─► Add referenced_classes / referenced_methods / referenced_functions
+          │             references on algorithm chunks in unified_collection
           │
-          └─► extract_example_refs()
+          └─► extract_code_refs()  (for each example)
                     │
                     └─► Add referenced_classes / referenced_methods / referenced_functions
                         references on example chunks in unified_collection
@@ -106,11 +115,11 @@ translated_examples.json
 3. **Set up collections** — creates `CodeClass`, `CodeMethod`, and `CodeFunction` in Weaviate in two phases to avoid circular-reference errors:
    - **Phase 1**: create each collection with its own direct references only.
    - **Phase 2**: add cross-collection references (`initialized_classes`, `referenced_methods`, `referenced_functions`) once all collections exist.
-4. **Insert classes** — batches all class records into `CodeClass`.
-5. **Insert methods** — batches all method records into `CodeMethod`, resolves `class_ref` and all cross-references.
-6. **Insert functions** — batches all function records into `CodeFunction` and resolves cross-references.
-7. **Add algorithm → code references** — for each class, method, and function, adds `defined_classes`, `defined_methods`, and `defined_functions` reference properties on the corresponding algorithm chunk in `unified_collection`.
-8. **Add example → code references** — for each example, `extract_example_refs()` scans the example text for Python code blocks and inline patterns, resolves calls against the known schema, and adds `referenced_classes`, `referenced_methods`, and `referenced_functions` reference properties on the matching example chunk in `unified_collection`.
+4. **Insert classes** — batches all class records into `CodeClass` and sets `algorithm_ref` pointing to the defining algorithm chunk.
+5. **Insert methods** — batches all method records into `CodeMethod`, sets `algorithm_ref`, and resolves `class_ref` and all cross-references.
+6. **Insert functions** — batches all function records into `CodeFunction`, sets `algorithm_ref`, and resolves cross-references.
+7. **Add algorithm → code references** — for each algorithm, `extract_code_refs()` scans the algorithm's Python code for calls, resolves them against the known schema, and adds `referenced_classes`, `referenced_methods`, and `referenced_functions` reference properties on the matching algorithm chunk in `unified_collection`.
+8. **Add example → code references** — for each example, `extract_code_refs()` scans the example text for Python code blocks and inline patterns, resolves calls against the known schema, and adds `referenced_classes`, `referenced_methods`, and `referenced_functions` reference properties on the matching example chunk in `unified_collection`.
 
 ### UUID Strategy
 
@@ -142,14 +151,14 @@ schema = build_code_schema(algorithms)
 # }
 ```
 
-**ClassRecord** — contains the class header and `__init__` method (plus any leading docstring). The rest of the class body is omitted to keep the stored code concise.
+**ClassRecord** — contains the class header and `__init__` method (plus any leading docstring), and the `algorithm_number` entity id of the algorithm that defines it. The rest of the class body is omitted to keep the stored code concise.
 
-**MethodRecord** — contains the full method source, its class reference (`cls:ClassName`), and lists of cross-references to other entities it uses:
+**MethodRecord** — contains the full method source, `algorithm_number`, its class reference (`cls:ClassName`), and lists of cross-references to other entities it uses:
 - `initialized_classes` — classes instantiated within the method.
 - `referenced_functions` — functions called within the method.
 - `referenced_methods` — methods called within the method.
 
-**FunctionRecord** — contains the full function source and the same cross-reference lists as MethodRecord.
+**FunctionRecord** — contains the full function source, `algorithm_number`, and the same cross-reference lists as MethodRecord.
 
 `__init__` methods are intentionally skipped as stand-alone `MethodRecord` entries because their code is already embedded inside the `ClassRecord`.
 
@@ -166,9 +175,9 @@ After visiting all fragments `build_graph()` produces a dependency graph `{calle
 
 External library calls (NumPy, PyTorch, Pandas, etc.) are filtered out via the `EXTERNAL_MODULES` allow-list.
 
-### `extract_example_refs.py`
+### `extract_code_refs.py`
 
-Extracts code entity references from example texts that mix prose and Python snippets. It operates in three passes:
+Extracts code entity references from a chunk's text. Works for both **algorithm chunks** (plain Python code) and **example chunks** (prose with embedded Python snippets). It operates in three passes:
 
 1. Explicit ```` ```python … ``` ```` fenced code blocks.
 2. Consecutive lines outside fenced blocks that parse as valid Python.
@@ -208,7 +217,7 @@ python store_code_schema.py \
 ### Prerequisites
 
 - A local Weaviate instance must be running and reachable (the script connects via `weaviate.connect_to_local()`).
-- `unified_collection` must already exist and be populated with algorithm and example chunks before running this script, because `defined_*` and `referenced_*` cross-references point into it.
+- `unified_collection` must already exist and be populated with algorithm and example chunks before running this script, because `referenced_*` cross-references point into it.
 - Both JSON files should be produced by the Julia code translation pipeline (see [Julia Code Translation](JULIA_CODE_TRANSLATION.md)).
 
 ---
