@@ -125,6 +125,37 @@ Important:
 - It reads local JSON and inserts records into Weaviate over its exposed ports.
 - Data is persisted in Docker volume/path (`.weaviate_data` via compose mount).
 
+### Alternative: Restore Weaviate from shared backup
+
+If someone shared a prepared Weaviate backup, you can load it instead of re-embedding JSON.
+
+1. Place backup directory under:
+
+```bash
+./.weaviate_backups/backup_for_sharing
+```
+
+2. Ensure Weaviate is running:
+
+```bash
+docker compose up weaviate
+```
+
+3. Run restore script:
+
+```bash
+PYTHONPATH=services/rag-service/src \
+uv run services/rag-service/src/scripts/restore_weaviate_backup.py
+```
+
+Notes:
+
+- Restore script currently uses hardcoded backup id `backup_for_sharing`.
+- If your backup folder has a different name, either rename it to `backup_for_sharing` or update `services/rag-service/src/scripts/restore_weaviate_backup.py`.
+- Backup create/restore scripts are:
+  - `services/rag-service/src/scripts/create_weaviate_backup.py`
+  - `services/rag-service/src/scripts/restore_weaviate_backup.py`
+
 ## 7. Smoke Test Agent Analyze Endpoint
 
 ```bash
