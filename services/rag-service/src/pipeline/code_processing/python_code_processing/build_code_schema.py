@@ -48,9 +48,6 @@ from pathlib import Path
 from typing import Any
 
 from common.logging import get_logger
-from pipeline.code_processing.julia_code_translation.update_chunks_with_translated_code import (
-    extract_entity_id_from_number,
-)
 from pipeline.code_processing.python_code_processing.code_analyzer import (
     KIND_CLASS_INIT,
     KIND_FUNCTION,
@@ -180,18 +177,11 @@ def _refs_from_edges(
 # ------------------------------------------------------------------ #
 
 
-def _fragment_algorithm_number(analyzer: CodeAnalyzer, key: str) -> object:
-    """Return the parsed algorithm identifier for the fragment that defines *key*."""
-    full_number = str(analyzer.fragment_idx.get(key))
-    return extract_entity_id_from_number(full_number)
-
-
 def _build_classes(analyzer: CodeAnalyzer) -> list[dict[str, Any]]:
-    """Build class records (id, algorithm_number, name, code) from the analyzer."""
+    """Build class records (id, name, code) from the analyzer."""
     return [
         {
             "id": class_id(name),
-            "algorithm_number": _fragment_algorithm_number(analyzer, name),
             "name": name,
             "code": _class_init_source(node),
         }
@@ -219,7 +209,6 @@ def _build_methods(
         methods.append(
             {
                 "id": method_id(qualified),
-                "algorithm_number": _fragment_algorithm_number(analyzer, qualified),
                 "name": method_name,
                 "qualified_name": qualified,
                 "code": ast.unparse(node),
@@ -244,7 +233,6 @@ def _build_functions(
         result.append(
             {
                 "id": function_id(name),
-                "algorithm_number": _fragment_algorithm_number(analyzer, name),
                 "name": name,
                 "code": ast.unparse(node),
                 "initialized_classes": inits,

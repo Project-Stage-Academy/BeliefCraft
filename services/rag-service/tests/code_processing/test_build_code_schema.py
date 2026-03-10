@@ -196,18 +196,12 @@ def test_method_known_class_ref_not_external():
 
 def test_function_references_function_in_another_fragment():
     fragments = [
-        {"code": "def compute(): pass", "algorithm_number": "1.1"},
-        {"code": "def run():\n    compute()", "algorithm_number": "1.2"},
+        "def compute(): pass",
+        "def run():\n    compute()",
     ]
     schema = build_code_schema(fragments)
     run = next(f for f in schema["functions"] if f["name"] == "run")
     assert "fn:compute" in run["referenced_functions"]
-
-
-def test_algorithm_number_field_present():
-    fragments = [{"code": "def foo(): pass", "algorithm_number": "3.7"}]
-    schema = build_code_schema(fragments)
-    assert "algorithm_number" in schema["functions"][0]
 
 
 def test_syntax_error_fragment_skipped():

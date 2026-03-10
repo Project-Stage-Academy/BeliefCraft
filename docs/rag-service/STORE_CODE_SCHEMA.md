@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`services/rag-service/src/scripts/store_code_schema.py` parses translated Python algorithm and example JSON files, extracts a structured code schema (classes, methods, and top-level functions), and stores it into three dedicated Weaviate collections. It also enriches existing algorithm and example chunks in the unified collection with cross-references pointing to the code entities they define or use.
+`services/rag-service/src/scripts/store_code_schema.py` parses translated Python algorithm and example JSON files, extracts a structured code schema (classes, methods, and top-level functions), and stores it into three dedicated Weaviate collections. It also enriches existing algorithm and example chunks in the unified collection with cross-references pointing to the code entities they use.
 
 ---
 
@@ -20,12 +20,11 @@ Three new collections are created alongside the existing `unified_collection`:
 
 All three collections share the following base properties:
 
-| Property           | Type   | Description                                      |
-|--------------------|--------|--------------------------------------------------|
-| `schema_id`        | TEXT   | Stable identifier (`cls:Name`, `mth:A.b`, `fn:name`) |
-| `name`             | TEXT   | Short (unqualified) name                         |
-| `code`             | TEXT   | Source code of the entity                        |
-| `algorithm_number` | TEXT   | Origin algorithm number (e.g. `"2.1"`)           |
+| Property    | Type   | Description                                           |
+|-------------|--------|-------------------------------------------------------|
+| `schema_id` | TEXT   | Stable identifier (`cls:Name`, `mth:A.b`, `fn:name`) |
+| `name`      | TEXT   | Short (unqualified) name                              |
+| `code`      | TEXT   | Source code of the entity                             |
 
 `CodeMethod` additionally stores:
 
@@ -56,11 +55,11 @@ All three collections share the following base properties:
 
 ### `unified_collection` — algorithm chunks
 
-| Reference          | Target collection   | Description                                        |
-|--------------------|---------------------|----------------------------------------------------|
-| `defined_classes`  | `CodeClass`         | Classes introduced in the algorithm                |
-| `defined_methods`  | `CodeMethod`        | Methods introduced in the algorithm                |
-| `defined_functions`| `CodeFunction`      | Functions introduced in the algorithm              |
+| Reference              | Target collection   | Description                                      |
+|------------------------|---------------------|--------------------------------------------------|
+| `referenced_classes`   | `CodeClass`         | Classes used in the algorithm                    |
+| `referenced_methods`   | `CodeMethod`        | Methods used in the algorithm                    |
+| `referenced_functions` | `CodeFunction`      | Functions used in the algorithm                  |
 
 ### `unified_collection` — example chunks
 
@@ -90,10 +89,12 @@ translated_examples.json
           │         │
           │         └─► Add cross-references between code entities
           │
-          ├─► Add defined_classes / defined_methods / defined_functions
-          │   references on algorithm chunks in unified_collection
+          ├─► extract_code_refs()  (for each algorithm)
+          │         │
+          │         └─► Add referenced_classes / referenced_methods / referenced_functions
+          │             references on algorithm chunks in unified_collection
           │
-          └─► extract_example_refs()
+          └─► extract_code_refs()  (for each example)
                     │
                     └─► Add referenced_classes / referenced_methods / referenced_functions
                         references on example chunks in unified_collection
@@ -109,8 +110,8 @@ translated_examples.json
 4. **Insert classes** — batches all class records into `CodeClass`.
 5. **Insert methods** — batches all method records into `CodeMethod`, resolves `class_ref` and all cross-references.
 6. **Insert functions** — batches all function records into `CodeFunction` and resolves cross-references.
-7. **Add algorithm → code references** — for each class, method, and function, adds `defined_classes`, `defined_methods`, and `defined_functions` reference properties on the corresponding algorithm chunk in `unified_collection`.
-8. **Add example → code references** — for each example, `extract_example_refs()` scans the example text for Python code blocks and inline patterns, resolves calls against the known schema, and adds `referenced_classes`, `referenced_methods`, and `referenced_functions` reference properties on the matching example chunk in `unified_collection`.
+7. **Add algorithm → code references** — for each algorithm, `extract_code_refs()` scans the algorithm's Python code for calls, resolves them against the known schema, and adds `referenced_classes`, `referenced_methods`, and `referenced_functions` reference properties on the matching algorithm chunk in `unified_collection`.
+8. **Add example → code references** — for each example, `extract_code_refs()` scans the example text for Python code blocks and inline patterns, resolves calls against the known schema, and adds `referenced_classes`, `referenced_methods`, and `referenced_functions` reference properties on the matching example chunk in `unified_collection`.
 
 ### UUID Strategy
 
@@ -166,9 +167,9 @@ After visiting all fragments `build_graph()` produces a dependency graph `{calle
 
 External library calls (NumPy, PyTorch, Pandas, etc.) are filtered out via the `EXTERNAL_MODULES` allow-list.
 
-### `extract_example_refs.py`
+### `extract_code_refs.py`
 
-Extracts code entity references from example texts that mix prose and Python snippets. It operates in three passes:
+Extracts code entity references from a chunk's text. Works for both **algorithm chunks** (plain Python code) and **example chunks** (prose with embedded Python snippets). It operates in three passes:
 
 1. Explicit ```` ```python … ``` ```` fenced code blocks.
 2. Consecutive lines outside fenced blocks that parse as valid Python.
@@ -208,7 +209,7 @@ python store_code_schema.py \
 ### Prerequisites
 
 - A local Weaviate instance must be running and reachable (the script connects via `weaviate.connect_to_local()`).
-- `unified_collection` must already exist and be populated with algorithm and example chunks before running this script, because `defined_*` and `referenced_*` cross-references point into it.
+- `unified_collection` must already exist and be populated with algorithm and example chunks before running this script, because `referenced_*` cross-references point into it.
 - Both JSON files should be produced by the Julia code translation pipeline (see [Julia Code Translation](JULIA_CODE_TRANSLATION.md)).
 
 ---

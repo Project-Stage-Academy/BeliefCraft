@@ -22,9 +22,9 @@ CodeFunction
   referenced_functions  -> CodeFunction
 
 unified_collection (algorithm chunks)
-  defined_classes       -> CodeClass           (classes introduced in the algorithm)
-  defined_methods       -> CodeMethod          (methods introduced in the algorithm)
-  defined_functions     -> CodeFunction        (functions introduced in the algorithm)
+  referenced_classes    -> CodeClass           (classes used in the algorithm)
+  referenced_methods    -> CodeMethod          (methods used in the algorithm)
+  referenced_functions  -> CodeFunction        (functions used in the algorithm)
 
 unified_collection (example chunks)
   referenced_classes    -> CodeClass           (classes used in the example)
@@ -38,6 +38,7 @@ Usage
 
 import argparse
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -47,8 +48,8 @@ from pipeline.code_processing.julia_code_translation.update_chunks_with_translat
     extract_entity_id_from_number,
 )
 from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
-from pipeline.code_processing.python_code_processing.extract_example_refs import (
-    extract_example_refs,
+from pipeline.code_processing.python_code_processing.extract_code_refs import (
+    extract_code_refs,
 )
 from rag_service.constants import (
     CODE_CLASS_COLLECTION,
@@ -125,7 +126,6 @@ def _common_properties(extra: list[Property] | None = None) -> list[Property]:
         Property(name="schema_id", data_type=DataType.TEXT, skip_vectorization=True),
         Property(name="name", data_type=DataType.TEXT, skip_vectorization=True),
         Property(name="code", data_type=DataType.TEXT, skip_vectorization=True),
-        Property(name="algorithm_number", data_type=DataType.TEXT, skip_vectorization=True),
     ]
     return base + (extra or [])
 
@@ -202,7 +202,10 @@ def setup_collections(
 
 def _id_list_refs(from_uuid: str, prop: str, ids: list[str]) -> list[DataReference]:
     """Return one ``DataReference`` per schema id in *ids*, all pointing from *from_uuid*.*prop*."""
-    return [DataReference(from_uuid, prop, uuid_for_schema_id(sid)) for sid in ids]
+    return [
+        DataReference(from_property=prop, from_uuid=from_uuid, to_uuid=uuid_for_schema_id(sid))
+        for sid in ids
+    ]
 
 
 def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
@@ -235,7 +238,6 @@ def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> Re
                     "schema_id": cls["id"],
                     "name": cls["name"],
                     "code": cls["code"],
-                    "algorithm_number": str(cls.get("algorithm_number", "")),
                 },
                 uuid=uuid_for_schema_id(cls["id"]),
             )
@@ -263,7 +265,6 @@ def _insert_code_entities(
                 "schema_id": item["id"],
                 "name": item["name"],
                 "code": item["code"],
-                "algorithm_number": str(item.get("algorithm_number", "")),
             }
             for key in extra_prop_keys or []:
                 props[key] = item.get(key, "")
@@ -284,7 +285,13 @@ def _insert_methods(collection: Collection, methods: list[dict[str, Any]]) -> Re
     def _class_ref(from_uuid: str, mth: dict[str, Any]) -> RefList:
         class_schema_id = mth.get("class", "")
         if class_schema_id and not class_schema_id.startswith("external:"):
-            return [DataReference(from_uuid, "class_ref", uuid_for_schema_id(class_schema_id))]
+            return [
+                DataReference(
+                    from_property="class_ref",
+                    from_uuid=from_uuid,
+                    to_uuid=uuid_for_schema_id(class_schema_id),
+                )
+            ]
         return []
 
     return _insert_code_entities(
@@ -312,104 +319,65 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
 
 
 # ---------------------------------------------------------------------------
-# Algorithm → code entity references (defined_classes/methods/functions)
+# Chunk → code entity references (shared by algorithm and example chunks)
 # ---------------------------------------------------------------------------
 
-_ALGORITHM_CODE_REFS = [
-    ("defined_classes", CODE_CLASS_COLLECTION),
-    ("defined_methods", CODE_METHOD_COLLECTION),
-    ("defined_functions", CODE_FUNCTION_COLLECTION),
-]
-
-
-def _ensure_algorithm_code_ref_properties(client: weaviate.WeaviateClient) -> None:
-    """Add the algorithm → code reference properties to unified_collection if missing."""
-    if not client.collections.exists(COLLECTION_NAME):
-        logger.warning("%s not found; skipping algorithm-code ref setup.", COLLECTION_NAME)
-        return
-    unified = client.collections.use(COLLECTION_NAME)
-    _add_missing_refs(unified, _ALGORITHM_CODE_REFS)
-
-
-def _build_algorithm_code_references(
-    schema: dict[str, Any],
-) -> RefList:
-    """
-    Build ``defined_classes``, ``defined_methods``, and ``defined_functions`` references from
-    each code entity back to the algorithm chunk that introduced it.
-    """
-    references: RefList = []
-
-    for cls in schema.get("classes", []):
-        algo_number = str(cls.get("algorithm_number", "")).strip()
-        if not algo_number:
-            continue
-        from_uuid = uuid_for_algorithm_chunk(algo_number)
-        references.extend(_id_list_refs(from_uuid, "defined_classes", [cls["id"]]))
-
-    for mth in schema.get("methods", []):
-        algo_number = str(mth.get("algorithm_number", "")).strip()
-        if not algo_number:
-            continue
-        from_uuid = uuid_for_algorithm_chunk(algo_number)
-        references.extend(_id_list_refs(from_uuid, "defined_methods", [mth["id"]]))
-
-    for fn in schema.get("functions", []):
-        algo_number = str(fn.get("algorithm_number", "")).strip()
-        if not algo_number:
-            continue
-        from_uuid = uuid_for_algorithm_chunk(algo_number)
-        references.extend(_id_list_refs(from_uuid, "defined_functions", [fn["id"]]))
-
-    return references
-
-
-# ---------------------------------------------------------------------------
-# Example → code entity references
-# ---------------------------------------------------------------------------
-
-_EXAMPLE_CODE_REFS = [
+# Reference properties added to unified_collection chunks (both algorithm and example).
+_CHUNK_CODE_REFS = [
     ("referenced_classes", CODE_CLASS_COLLECTION),
     ("referenced_methods", CODE_METHOD_COLLECTION),
     ("referenced_functions", CODE_FUNCTION_COLLECTION),
 ]
 
-_EXAMPLE_REFS_KEY_TO_PROP = {
+# Maps extract_code_refs output keys to the Weaviate property names on the chunk.
+_REFS_KEY_TO_PROP = {
     "initialized_classes": "referenced_classes",
     "referenced_methods": "referenced_methods",
     "referenced_functions": "referenced_functions",
 }
 
 
-def _ensure_example_code_ref_properties(client: weaviate.WeaviateClient) -> None:
-    """Add the example → code reference properties to unified_collection if missing."""
+def _ensure_chunk_code_ref_properties(client: weaviate.WeaviateClient) -> None:
+    """Add the chunk → code reference properties to unified_collection if missing."""
     if not client.collections.exists(COLLECTION_NAME):
-        logger.warning("%s not found; skipping example-code ref setup.", COLLECTION_NAME)
+        logger.warning("%s not found; skipping chunk-code ref setup.", COLLECTION_NAME)
         return
     unified = client.collections.use(COLLECTION_NAME)
-    _add_missing_refs(unified, _EXAMPLE_CODE_REFS)
+    _add_missing_refs(unified, _CHUNK_CODE_REFS)
 
 
-def _build_example_code_references(
-    examples: list[dict[str, Any]],
+def _build_chunk_code_references(
+    chunks: list[dict[str, Any]],
     schema: dict[str, Any],
+    *,
+    number_key: str,
+    text_key: str,
+    uuid_fn: "Callable[[str], str]",
+    chunk_label: str,
 ) -> RefList:
-    """
-    Extract code refs from each example's text and return the corresponding ``DataReference`` list.
+    """Extract code refs from each chunk and return the corresponding ``DataReference`` list.
+
+    Args:
+        chunks:      List of chunk dicts (algorithms or examples).
+        schema:      Result of ``build_code_schema()``, used to resolve references.
+        number_key:  Dict key that holds the chunk number (e.g. ``"algorithm_number"``).
+        text_key:    Dict key that holds the Python text to scan (e.g. ``"code"`` or ``"text"``).
+        uuid_fn:     Function mapping an entity id to the chunk's Weaviate UUID.
+        chunk_label: Human-readable label used in warning messages (e.g. ``"algorithm"``).
     """
     references: RefList = []
 
-    for example in examples:
-        example_number = example.get("example_number", "")
-        entity_id = extract_entity_id_from_number(example_number)
+    for chunk in chunks:
+        number = chunk.get(number_key, "")
+        entity_id = extract_entity_id_from_number(number)
         if not entity_id:
-            logger.warning("Skipping example with unparseable number: %r", example_number)
+            logger.warning("Skipping %s with unparseable number: %r", chunk_label, number)
             continue
 
-        refs = extract_example_refs(example.get("text", ""), schema)
-        from_uuid = uuid_for_example_chunk(entity_id)
+        refs = extract_code_refs(chunk.get(text_key, ""), schema)
+        from_uuid = uuid_fn(entity_id)
 
-        for ref_key, prop in _EXAMPLE_REFS_KEY_TO_PROP.items():
+        for ref_key, prop in _REFS_KEY_TO_PROP.items():
             references.extend(_id_list_refs(from_uuid, prop, refs.get(ref_key, [])))
 
     return references
@@ -427,7 +395,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "algorithms JSON into Weaviate. Creates three collections: "
             f"{CODE_CLASS_COLLECTION}, {CODE_METHOD_COLLECTION}, {CODE_FUNCTION_COLLECTION}. "
             "Each entity stores its code, metadata, and cross-references to related code entities. "
-            f"Algorithm chunks in {COLLECTION_NAME} receive defined_classes/methods/functions "
+            f"Algorithm chunks in {COLLECTION_NAME} receive referenced_classes/methods/functions "
             "references, and example chunks receive referenced_classes/methods/functions links."
         )
     )
@@ -463,21 +431,24 @@ def _load_json(path: Path, label: str) -> list[dict[str, Any]] | None:
 
 def store_schema(
     client: weaviate.WeaviateClient,
+    algorithms: list[dict[str, Any]],
     schema: dict[str, Any],
     recreate: bool,
 ) -> None:
     """Store all code schema entities (classes, methods, functions) in Weaviate.
 
     Sets up the three code collections, inserts all objects, and adds
-    cross-references between them. Also adds ``defined_classes``,
-    ``defined_methods``, and ``defined_functions`` references on algorithm chunks
-    in ``unified_collection``.
+    cross-references between them. Also adds ``referenced_classes``,
+    ``referenced_methods``, and ``referenced_functions`` references on algorithm chunks
+    in ``unified_collection`` by extracting code references from each algorithm's code.
 
     Args:
-        client:   Active Weaviate client.
-        schema:   Result of ``build_code_schema()`` with keys
-                  ``"classes"``, ``"methods"``, ``"functions"``.
-        recreate: If True, drops and recreates the collections before inserting.
+        client:     Active Weaviate client.
+        algorithms: List of algorithm dicts with ``"algorithm_number"`` and ``"code"`` fields,
+                    used to build algorithm → code entity references.
+        schema:     Result of ``build_code_schema()`` with keys
+                    ``"classes"``, ``"methods"``, ``"functions"``.
+        recreate:   If True, drops and recreates the collections before inserting.
     """
     classes, methods, functions = schema["classes"], schema["methods"], schema["functions"]
     cls_col, mth_col, fn_col = setup_collections(client, recreate=recreate)
@@ -492,9 +463,16 @@ def store_schema(
     _add_references_safely(fn_col, _insert_functions(fn_col, functions), CODE_FUNCTION_COLLECTION)
 
     logger.info("Adding algorithm → code entity references …")
-    _ensure_algorithm_code_ref_properties(client)
+    _ensure_chunk_code_ref_properties(client)
     if client.collections.exists(COLLECTION_NAME):
-        algo_refs = _build_algorithm_code_references(schema)
+        algo_refs = _build_chunk_code_references(
+            algorithms,
+            schema,
+            number_key="algorithm_number",
+            text_key="code",
+            uuid_fn=uuid_for_algorithm_chunk,
+            chunk_label="algorithm",
+        )
         unified_col = client.collections.use(COLLECTION_NAME)
         _add_references_safely(unified_col, algo_refs, f"{COLLECTION_NAME} (algorithms)")
 
@@ -515,7 +493,7 @@ def store_example_refs(
         schema:   Result of ``build_code_schema()``, used to resolve named references.
     """
     logger.info("Adding example → code entity references …")
-    _ensure_example_code_ref_properties(client)
+    _ensure_chunk_code_ref_properties(client)
 
     if not client.collections.exists(COLLECTION_NAME):
         logger.warning(
@@ -523,7 +501,14 @@ def store_example_refs(
             COLLECTION_NAME,
         )
         return
-    example_refs = _build_example_code_references(examples, schema)
+    example_refs = _build_chunk_code_references(
+        examples,
+        schema,
+        number_key="example_number",
+        text_key="text",
+        uuid_fn=uuid_for_example_chunk,
+        chunk_label="example",
+    )
     unified_col = client.collections.use(COLLECTION_NAME)
     _add_references_safely(unified_col, example_refs, f"{COLLECTION_NAME} (examples)")
     logger.info("Processed %d examples.", len(examples))
@@ -552,7 +537,7 @@ def main() -> None:
     )
 
     with weaviate.connect_to_local() as client:
-        store_schema(client, schema, recreate=args.recreate)
+        store_schema(client, algorithms, schema, recreate=args.recreate)
         if examples:
             store_example_refs(client, examples, schema)
 
