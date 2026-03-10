@@ -38,7 +38,6 @@ Usage
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any, cast
 
@@ -48,14 +47,6 @@ from pipeline.code_processing.julia_code_translation.update_chunks_with_translat
     extract_entity_id_from_number,
 )
 from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
-from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
-from weaviate.classes.data import DataReference
-from weaviate.collections import Collection
-from weaviate.collections.classes.data import DataReferenceMulti
-from weaviate.util import generate_uuid5
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from pipeline.code_processing.python_code_processing.extract_example_refs import (
     extract_example_refs,
 )
@@ -65,6 +56,11 @@ from rag_service.constants import (
     CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
 )
+from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
+from weaviate.classes.data import DataReference
+from weaviate.collections import Collection
+from weaviate.collections.classes.data import DataReferenceMulti
+from weaviate.util import generate_uuid5
 
 logger = get_logger(__name__)
 
