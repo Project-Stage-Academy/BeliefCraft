@@ -111,7 +111,7 @@ services:
       - ./services/rag-service/.env
     command: ["/app/.venv/bin/uvicorn", "rag_service.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
     volumes:
-      - ./services/rag-service/src:/app/services/rag-service/src
+      - ./services/rag-service/src:/app/src
       - ./packages/common:/app/packages/common
     depends_on:
       weaviate:
