@@ -12,9 +12,10 @@ Returns a dict with three lists:
 
 ClassRecord:
   {
-    "id":   "cls:ClassName",
-    "name": "ClassName",
-    "code": "<class header + __init__ only>",  # or full class if no __init__
+    "id":               "cls:ClassName",
+    "name":             "ClassName",
+    "algorithm_number": "1.1",                # entity_id of the defining algorithm
+    "code":             "<class header + __init__ only>",  # or full class if no __init__
   }
 
 MethodRecord:
@@ -22,8 +23,9 @@ MethodRecord:
     "id":                   "mth:ClassName.method_name",
     "name":                 "method_name",
     "qualified_name":       "ClassName.method_name",
+    "algorithm_number":     "1.1",            # entity_id of the defining algorithm
     "code":                 "<source of the method>",
-    "class":                "cls:ClassName",          # ref -> ClassRecord.id
+    "class":                "cls:ClassName",  # ref -> ClassRecord.id
     "initialized_classes":  ["cls:X", ...],
     "referenced_functions": ["fn:foo", ...],
     "referenced_methods":   ["mth:Bar.baz", ...],
@@ -33,6 +35,7 @@ FunctionRecord:
   {
     "id":                   "fn:function_name",
     "name":                 "function_name",
+    "algorithm_number":     "1.1",            # entity_id of the defining algorithm
     "code":                 "<source of the function>",
     "initialized_classes":  ["cls:X", ...],
     "referenced_functions": ["fn:foo", ...],
@@ -48,6 +51,9 @@ from pathlib import Path
 from typing import Any
 
 from common.logging import get_logger
+from pipeline.code_processing.julia_code_translation.update_chunks_with_translated_code import (
+    extract_entity_id_from_number,
+)
 from pipeline.code_processing.python_code_processing.code_analyzer import (
     KIND_CLASS_INIT,
     KIND_FUNCTION,
@@ -177,12 +183,23 @@ def _refs_from_edges(
 # ------------------------------------------------------------------ #
 
 
+def _fragment_algorithm_number(analyzer: CodeAnalyzer, key: str) -> str:
+    """Return the parsed entity_id for the algorithm fragment that defines *key*.
+
+    E.g. if the fragment index stored ``"Algorithm 1.1."`` this returns ``"1.1"``.
+    Returns an empty string when the key is not found or the number is unparseable.
+    """
+    raw = str(analyzer.fragment_idx.get(key, ""))
+    return extract_entity_id_from_number(raw)
+
+
 def _build_classes(analyzer: CodeAnalyzer) -> list[dict[str, Any]]:
-    """Build class records (id, name, code) from the analyzer."""
+    """Build class records (id, algorithm_number, name, code) from the analyzer."""
     return [
         {
             "id": class_id(name),
             "name": name,
+            "algorithm_number": _fragment_algorithm_number(analyzer, name),
             "code": _class_init_source(node),
         }
         for name, node in analyzer.classes.items()
@@ -211,6 +228,7 @@ def _build_methods(
                 "id": method_id(qualified),
                 "name": method_name,
                 "qualified_name": qualified,
+                "algorithm_number": _fragment_algorithm_number(analyzer, qualified),
                 "code": ast.unparse(node),
                 "class": cls_ref,
                 "initialized_classes": inits,
@@ -234,6 +252,7 @@ def _build_functions(
             {
                 "id": function_id(name),
                 "name": name,
+                "algorithm_number": _fragment_algorithm_number(analyzer, name),
                 "code": ast.unparse(node),
                 "initialized_classes": inits,
                 "referenced_functions": funcs,

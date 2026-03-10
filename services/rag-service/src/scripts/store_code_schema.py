@@ -10,13 +10,18 @@ Three new collections are created alongside the existing unified_collection:
 
 Cross-references
 ~~~~~~~~~~~~~~~~
+CodeClass
+  algorithm_ref         -> unified_collection  (the algorithm chunk that defines this class)
+
 CodeMethod
+  algorithm_ref         -> unified_collection  (the algorithm chunk that defines this method)
   class_ref             -> CodeClass           (the class this method belongs to)
   initialized_classes   -> CodeClass           (classes instantiated inside the method)
   referenced_methods    -> CodeMethod          (methods called inside the method)
   referenced_functions  -> CodeFunction        (functions called inside the method)
 
 CodeFunction
+  algorithm_ref         -> unified_collection  (the algorithm chunk that defines this function)
   initialized_classes   -> CodeClass
   referenced_methods    -> CodeMethod
   referenced_functions  -> CodeFunction
@@ -147,6 +152,9 @@ _CROSS_REFS = [
     ("referenced_functions", CODE_FUNCTION_COLLECTION),
 ]
 
+# Back-reference from any code entity to the algorithm chunk that defines it.
+_ALGORITHM_REF = ("algorithm_ref", COLLECTION_NAME)
+
 
 def setup_collections(
     client: weaviate.WeaviateClient, recreate: bool = False
@@ -189,8 +197,9 @@ def setup_collections(
     )
 
     logger.info("Adding cross-collection references …")
-    _add_missing_refs(mth_col, _CROSS_REFS)
-    _add_missing_refs(fn_col, _CROSS_REFS)
+    _add_missing_refs(cls_col, [_ALGORITHM_REF])
+    _add_missing_refs(mth_col, _CROSS_REFS + [_ALGORITHM_REF])
+    _add_missing_refs(fn_col, _CROSS_REFS + [_ALGORITHM_REF])
 
     return cls_col, mth_col, fn_col
 
@@ -224,13 +233,27 @@ def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
     return refs
 
 
+def _algorithm_ref(from_uuid: str, entity: dict[str, Any]) -> RefList:
+    """Return a single ``algorithm_ref`` DataReference for *entity*, or ``[]`` if not applicable."""
+    algo_number = str(entity.get("algorithm_number", "")).strip()
+    if not algo_number:
+        return []
+    return [
+        DataReference(
+            from_property="algorithm_ref",
+            from_uuid=from_uuid,
+            to_uuid=uuid_for_algorithm_chunk(algo_number),
+        )
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Insertion helpers
 # ---------------------------------------------------------------------------
 
 
 def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> RefList:
-    """Batch-insert class objects. No algorithm-level back-references are stored here."""
+    """Batch-insert class objects and return their ``algorithm_ref`` references."""
     with collection.batch.dynamic() as batch:
         for cls in classes:
             batch.add_object(
@@ -241,7 +264,12 @@ def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> Re
                 },
                 uuid=uuid_for_schema_id(cls["id"]),
             )
-    return []
+
+    refs: RefList = []
+    for cls in classes:
+        from_uuid = uuid_for_schema_id(cls["id"])
+        refs.extend(_algorithm_ref(from_uuid, cls))
+    return refs
 
 
 def _insert_code_entities(
@@ -273,6 +301,7 @@ def _insert_code_entities(
     refs: RefList = []
     for item in items:
         from_uuid = uuid_for_schema_id(item["id"])
+        refs.extend(_algorithm_ref(from_uuid, item))
         if extra_refs_fn:
             refs.extend(extra_refs_fn(from_uuid, item))
         refs.extend(_cross_refs(from_uuid, item))
@@ -438,9 +467,11 @@ def store_schema(
     """Store all code schema entities (classes, methods, functions) in Weaviate.
 
     Sets up the three code collections, inserts all objects, and adds
-    cross-references between them. Also adds ``referenced_classes``,
-    ``referenced_methods``, and ``referenced_functions`` references on algorithm chunks
-    in ``unified_collection`` by extracting code references from each algorithm's code.
+    cross-references between them. Each code entity receives an ``algorithm_ref``
+    back-reference pointing to the algorithm chunk in ``unified_collection`` where
+    it is defined. Also adds ``referenced_classes``, ``referenced_methods``, and
+    ``referenced_functions`` references on algorithm chunks in ``unified_collection``
+    by extracting code references from each algorithm's code.
 
     Args:
         client:     Active Weaviate client.

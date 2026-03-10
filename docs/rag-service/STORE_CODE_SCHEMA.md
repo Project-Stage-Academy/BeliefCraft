@@ -36,22 +36,30 @@ All three collections share the following base properties:
 
 ## Cross-References
 
+### `CodeClass`
+
+| Reference       | Target collection    | Description                                          |
+|-----------------|----------------------|------------------------------------------------------|
+| `algorithm_ref` | `unified_collection` | The algorithm chunk that defines this class          |
+
 ### `CodeMethod`
 
-| Reference             | Target collection   | Description                                      |
-|-----------------------|---------------------|--------------------------------------------------|
-| `class_ref`           | `CodeClass`         | The class this method belongs to                 |
-| `initialized_classes` | `CodeClass`         | Classes instantiated inside the method body      |
-| `referenced_methods`  | `CodeMethod`        | Methods called inside the method body            |
-| `referenced_functions`| `CodeFunction`      | Functions called inside the method body          |
+| Reference             | Target collection    | Description                                      |
+|-----------------------|----------------------|--------------------------------------------------|
+| `algorithm_ref`       | `unified_collection` | The algorithm chunk that defines this method     |
+| `class_ref`           | `CodeClass`          | The class this method belongs to                 |
+| `initialized_classes` | `CodeClass`          | Classes instantiated inside the method body      |
+| `referenced_methods`  | `CodeMethod`         | Methods called inside the method body            |
+| `referenced_functions`| `CodeFunction`       | Functions called inside the method body          |
 
 ### `CodeFunction`
 
-| Reference             | Target collection   | Description                                      |
-|-----------------------|---------------------|--------------------------------------------------|
-| `initialized_classes` | `CodeClass`         | Classes instantiated inside the function body    |
-| `referenced_methods`  | `CodeMethod`        | Methods called inside the function body          |
-| `referenced_functions`| `CodeFunction`      | Functions called inside the function body        |
+| Reference             | Target collection    | Description                                      |
+|-----------------------|----------------------|--------------------------------------------------|
+| `algorithm_ref`       | `unified_collection` | The algorithm chunk that defines this function   |
+| `initialized_classes` | `CodeClass`          | Classes instantiated inside the function body    |
+| `referenced_methods`  | `CodeMethod`         | Methods called inside the function body          |
+| `referenced_functions`| `CodeFunction`       | Functions called inside the function body        |
 
 ### `unified_collection` — algorithm chunks
 
@@ -107,9 +115,9 @@ translated_examples.json
 3. **Set up collections** — creates `CodeClass`, `CodeMethod`, and `CodeFunction` in Weaviate in two phases to avoid circular-reference errors:
    - **Phase 1**: create each collection with its own direct references only.
    - **Phase 2**: add cross-collection references (`initialized_classes`, `referenced_methods`, `referenced_functions`) once all collections exist.
-4. **Insert classes** — batches all class records into `CodeClass`.
-5. **Insert methods** — batches all method records into `CodeMethod`, resolves `class_ref` and all cross-references.
-6. **Insert functions** — batches all function records into `CodeFunction` and resolves cross-references.
+4. **Insert classes** — batches all class records into `CodeClass` and sets `algorithm_ref` pointing to the defining algorithm chunk.
+5. **Insert methods** — batches all method records into `CodeMethod`, sets `algorithm_ref`, and resolves `class_ref` and all cross-references.
+6. **Insert functions** — batches all function records into `CodeFunction`, sets `algorithm_ref`, and resolves cross-references.
 7. **Add algorithm → code references** — for each algorithm, `extract_code_refs()` scans the algorithm's Python code for calls, resolves them against the known schema, and adds `referenced_classes`, `referenced_methods`, and `referenced_functions` reference properties on the matching algorithm chunk in `unified_collection`.
 8. **Add example → code references** — for each example, `extract_code_refs()` scans the example text for Python code blocks and inline patterns, resolves calls against the known schema, and adds `referenced_classes`, `referenced_methods`, and `referenced_functions` reference properties on the matching example chunk in `unified_collection`.
 
@@ -143,14 +151,14 @@ schema = build_code_schema(algorithms)
 # }
 ```
 
-**ClassRecord** — contains the class header and `__init__` method (plus any leading docstring). The rest of the class body is omitted to keep the stored code concise.
+**ClassRecord** — contains the class header and `__init__` method (plus any leading docstring), and the `algorithm_number` entity id of the algorithm that defines it. The rest of the class body is omitted to keep the stored code concise.
 
-**MethodRecord** — contains the full method source, its class reference (`cls:ClassName`), and lists of cross-references to other entities it uses:
+**MethodRecord** — contains the full method source, `algorithm_number`, its class reference (`cls:ClassName`), and lists of cross-references to other entities it uses:
 - `initialized_classes` — classes instantiated within the method.
 - `referenced_functions` — functions called within the method.
 - `referenced_methods` — methods called within the method.
 
-**FunctionRecord** — contains the full function source and the same cross-reference lists as MethodRecord.
+**FunctionRecord** — contains the full function source, `algorithm_number`, and the same cross-reference lists as MethodRecord.
 
 `__init__` methods are intentionally skipped as stand-alone `MethodRecord` entries because their code is already embedded inside the `ClassRecord`.
 
