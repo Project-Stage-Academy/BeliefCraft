@@ -12,6 +12,7 @@ SESSION_FACTORY = sessionmaker(
     autocommit=False,
     future=True,
 )
+DEFAULT_ISOLATION_LEVEL = "REPEATABLE READ"
 
 
 def get_engine() -> Engine:
@@ -27,9 +28,13 @@ def get_session() -> Iterator[Session]:
     """
     Context manager that yields a SQLAlchemy session.
     """
-    session = SESSION_FACTORY(bind=get_engine())
+    engine_with_isolation = get_engine().execution_options(
+        isolation_level=DEFAULT_ISOLATION_LEVEL
+    )
+    session = SESSION_FACTORY(bind=engine_with_isolation)
     try:
-        yield session
+        with session.begin():
+            yield session
     except Exception:
         session.rollback()
         raise

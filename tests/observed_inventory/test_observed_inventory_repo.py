@@ -25,6 +25,11 @@ def test_build_latest_observations_subquery_has_expected_projection() -> None:
         set(subquery.c.keys())
     )
 
+    sql = str(subquery.select()).lower()
+    assert "order by observations.observed_at desc" in sql
+    assert "observations.confidence desc nulls last" in sql
+    assert "observations.id asc" in sql
+
 
 def test_build_snapshot_stmt_adds_quality_filter() -> None:
     stmt = _build_snapshot_stmt(

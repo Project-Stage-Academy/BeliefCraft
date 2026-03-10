@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from common.schemas.devices import (
+    DeviceStatus as SchemaDeviceStatus,
+    DeviceType as SchemaDeviceType,
     GetDeviceAnomaliesRequest,
     GetDeviceHealthSummaryRequest,
     GetSensorDeviceRequest,
@@ -20,6 +22,9 @@ _DEVICE_TABLES: dict[str, FromClause] = {
     "sensor_devices": SensorDevice.__table__,
     "observations": Observation.__table__,
 }
+_MAX_ANOMALY_WINDOW_HOURS = 24 * 30 #30 days are max for the window size
+_ALLOWED_DEVICE_TYPE_FILTERS = frozenset(device_type.value for device_type in SchemaDeviceType)
+_ALLOWED_DEVICE_STATUS_FILTERS = frozenset(status.value for status in SchemaDeviceStatus)
 
 
 def _load_tables(session: Session) -> dict[str, FromClause]:
@@ -29,22 +34,44 @@ def _load_tables(session: Session) -> dict[str, FromClause]:
     return _DEVICE_TABLES.copy()
 
 
-def _enum_storage_value(value: object) -> str:
-    if hasattr(value, "value"):
-        return str(value.value)
-    if hasattr(value, "name"):
-        return str(value.name).lower()
+def _validated_device_type_filter(value: object) -> str:
+    candidate = value.value if hasattr(value, "value") else value
+    if not isinstance(candidate, str) or candidate not in _ALLOWED_DEVICE_TYPE_FILTERS:
+        raise ValueError(f"Invalid device_type filter: {value!r}")
+    return candidate
 
-    raw = str(value)
-    if "." in raw:
-        raw = raw.rsplit(".", 1)[-1]
-    return raw.lower()
+
+def _validated_device_status_filter(value: object) -> str:
+    candidate = value.value if hasattr(value, "value") else value
+    if not isinstance(candidate, str) or candidate not in _ALLOWED_DEVICE_STATUS_FILTERS:
+        raise ValueError(f"Invalid status filter: {value!r}")
+    return candidate
+
+
+def _validate_anomaly_window_hours(window: object) -> int:
+    if isinstance(window, bool) or not isinstance(window, int):
+        raise ValueError(
+            f"window must be an integer between 1 and {_MAX_ANOMALY_WINDOW_HOURS} hours."
+        )
+    if window < 1 or window > _MAX_ANOMALY_WINDOW_HOURS:
+        raise ValueError(
+            f"window must be between 1 and {_MAX_ANOMALY_WINDOW_HOURS} hours inclusive."
+        )
+    return window
 
 
 def fetch_sensor_device_rows(
     session: Session,
     request: ListSensorDevicesRequest,
 ) -> Sequence[RowMapping]:
+    device_type_filter: str | None = None
+    status_filter: str | None = None
+
+    if request.device_type is not None:
+        device_type_filter = _validated_device_type_filter(request.device_type)
+    if request.status is not None:
+        status_filter = _validated_device_status_filter(request.status)
+
     tables = _load_tables(session)
     sensor_devices = tables["sensor_devices"]
 
@@ -64,10 +91,10 @@ def fetch_sensor_device_rows(
 
     if request.warehouse_id:
         stmt = stmt.where(sensor_devices.c.warehouse_id == request.warehouse_id)
-    if request.device_type:
-        stmt = stmt.where(sensor_devices.c.device_type == _enum_storage_value(request.device_type))
-    if request.status:
-        stmt = stmt.where(sensor_devices.c.status == _enum_storage_value(request.status))
+    if device_type_filter is not None:
+        stmt = stmt.where(sensor_devices.c.device_type == device_type_filter)
+    if status_filter is not None:
+        stmt = stmt.where(sensor_devices.c.status == status_filter)
 
     return session.execute(stmt).mappings().all()
 
@@ -157,12 +184,13 @@ def fetch_device_anomaly_candidate_rows(
     session: Session,
     request: GetDeviceAnomaliesRequest,
 ) -> Sequence[RowMapping]:
+    window_hours = _validate_anomaly_window_hours(request.window)
     tables = _load_tables(session)
     sensor_devices = tables["sensor_devices"]
     observations = tables["observations"]
 
     window_end = datetime.now(UTC)
-    window_start = window_end - timedelta(hours=request.window)
+    window_start = window_end - timedelta(hours=window_hours)
 
     observation_join_condition = and_(
         observations.c.device_id == sensor_devices.c.id,

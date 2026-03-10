@@ -47,7 +47,11 @@ def _build_latest_observations_subquery(observations: FromClause) -> Any:
         func.row_number()
         .over(
             partition_by=(observations.c.product_id, observations.c.location_id),
-            order_by=(observations.c.observed_at.desc(), observations.c.id.asc()),
+            order_by=(
+                observations.c.observed_at.desc(),
+                observations.c.confidence.desc().nulls_last(),
+                observations.c.id.asc(),
+            ),
         )
         .label("rn"),
     ).subquery("latest_observations")

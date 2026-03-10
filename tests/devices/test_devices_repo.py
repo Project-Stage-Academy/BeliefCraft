@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from common.schemas.devices import DeviceStatus as SchemaDeviceStatus
@@ -189,3 +190,41 @@ def test_fetch_device_anomaly_candidate_rows_respects_window(
     assert int(active_row["obs_count_window"]) == 0
     assert int(active_row["missing_count_window"]) == 0
     assert active_row["observed_missing_rate"] is None
+
+
+@pytest.mark.parametrize("invalid_window", [0, -1, 721, "24", True])
+def test_fetch_device_anomaly_candidate_rows_rejects_unvalidated_window(
+    invalid_window: object,
+) -> None:
+    request = SimpleNamespace(warehouse_id=None, window=invalid_window)
+
+    with pytest.raises(ValueError, match="window must be"):
+        fetch_device_anomaly_candidate_rows(object(), request)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("invalid_device_type", ["unknown", 123, True])
+def test_fetch_sensor_device_rows_rejects_unvalidated_device_type(
+    invalid_device_type: object,
+) -> None:
+    request = SimpleNamespace(
+        warehouse_id=None,
+        device_type=invalid_device_type,
+        status=None,
+    )
+
+    with pytest.raises(ValueError, match="Invalid device_type filter"):
+        fetch_sensor_device_rows(object(), request)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("invalid_status", ["unknown", 123, True])
+def test_fetch_sensor_device_rows_rejects_unvalidated_status(
+    invalid_status: object,
+) -> None:
+    request = SimpleNamespace(
+        warehouse_id=None,
+        device_type=None,
+        status=invalid_status,
+    )
+
+    with pytest.raises(ValueError, match="Invalid status filter"):
+        fetch_sensor_device_rows(object(), request)  # type: ignore[arg-type]
