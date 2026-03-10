@@ -9,7 +9,8 @@ RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock /app/
 COPY packages/common /app/packages/common
-COPY services/rag-service /app/services/rag-service
+COPY services/rag-service/pyproject.toml /app/services/rag-service/pyproject.toml
+COPY services/rag-service/src/rag_service /app/services/rag-service/src/rag_service
 RUN uv sync --frozen --project services/rag-service
 
 
@@ -24,7 +25,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 COPY --from=builder /app/.venv /app/.venv
 COPY packages/common /app/packages/common
-COPY services/rag-service/src /app/src
+COPY services/rag-service/src/rag_service /app/src/rag_service
 COPY services/rag-service/config /app/config
 
 EXPOSE 8001

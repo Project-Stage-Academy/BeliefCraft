@@ -125,7 +125,41 @@ Important:
 - It reads local JSON and inserts records into Weaviate over its exposed ports.
 - Data is persisted in Docker volume/path (`.weaviate_data` via compose mount).
 
-## 7. Smoke Test Agent Analyze Endpoint
+## 7. Import Weaviate Data from a Shared Backup
+
+If another developer has shared a Weaviate backup with you (e.g. via Google Drive or a shared archive), follow these steps instead of running the full embedding pipeline.
+
+### 1. Place the backup
+
+Unpack the received archive into the `.weaviate_backups/` directory at the repo root so the folder structure looks like:
+
+```
+.weaviate_backups/
+└── backup_for_sharing/
+    └── ...
+```
+
+### 2. Start Weaviate
+
+Ensure Weaviate is running (if the full stack is not already up):
+
+```bash
+docker compose up weaviate -d
+```
+
+### 3. Restore
+
+```bash
+PYTHONPATH=services/rag-service/src \
+uv run services/rag-service/src/scripts/restore_weaviate_backup.py
+```
+
+The script restores the `backup_for_sharing` backup into your local Weaviate instance.
+Data is persisted in the Docker volume (`.weaviate_data` via compose mount).
+
+> For full details on the backup/restore workflow, see [docs/rag-service/vector-db-workflow.md](../rag-service/vector-db-workflow.md).
+
+## 8. Smoke Test Agent Analyze Endpoint
 
 ```bash
 curl -s -X POST http://localhost:8003/api/v1/agent/analyze \
@@ -145,14 +179,14 @@ Check response fields:
 - `tools_used`
 - optional: `formulas`, `code_snippets`, `citations`, `warnings`
 
-## 8. Useful Additional Test Queries
+## 9. Useful Additional Test Queries
 
 1. `Analyze inventory discrepancy risk for fast-moving SKUs and propose immediate containment steps.`
 2. `Recommend a replenishment policy under uncertain demand and lead time; include algorithm, formula, and Python code.`
 3. `For service level 95% and volatile demand, how should reorder points and safety stock be set?`
 4. `Find a warehouse decision-making algorithm from the knowledge base and provide executable Python snippet with comments.`
 
-## 9. Operational Logs (During Debugging)
+## 10. Operational Logs (During Debugging)
 
 ```bash
 docker compose logs -f agent-service rag-service environment-api
@@ -167,7 +201,7 @@ docker compose logs rag-service --tail=200
 docker compose logs agent-service --tail=200
 ```
 
-## 10. Common Issues Seen During Setup
+## 11. Common Issues Seen During Setup
 
 ### A) Docker image pull / TLS timeout
 
