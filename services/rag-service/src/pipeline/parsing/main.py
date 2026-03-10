@@ -1,15 +1,20 @@
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 from common.logging import configure_logging, get_logger
+from dotenv import load_dotenv
 
 try:
     from .metadata_extractor import MetadataExtractor
 except ImportError:
     from metadata_extractor import MetadataExtractor  # type: ignore
+
+
+FIGURES_BUCKET_URL = os.getenv("FIGURES_BUCKET_URL", "").rstrip("/") + "/"
 
 configure_logging("rag-service", log_level="INFO")
 logger = get_logger(__name__)
@@ -21,6 +26,12 @@ BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
 
 
+def load_bucket_url_from_env() -> str | None:
+    """Load environment variables explicitly for parsing runtime configuration."""
+    load_dotenv()
+    return os.getenv("FIGURES_BUCKET_URL")
+
+
 class DocumentAssembler:
     def __init__(
         self,
@@ -29,6 +40,7 @@ class DocumentAssembler:
         blocks_json: str | Path,
         tables_json: str | Path,
         formulas_json: str | Path,
+        figures_bucket_url: str | None = None,
     ) -> None:
         logger.info("[*] Assembler Initialization: Validating Sources...")
         self.paddle_dir = Path(paddle_dir)
@@ -49,6 +61,13 @@ class DocumentAssembler:
 
         self.meta_extractor = MetadataExtractor()
         self.final_chunks: list[dict[str, Any]] = []
+
+        self.figures_bucket_url: str | None = None
+
+        if figures_bucket_url:
+            self.figures_bucket_url = figures_bucket_url
+        else:
+            self.figures_bucket_url = load_bucket_url_from_env()
 
     def _validate_files(self, file_paths: list[Path]) -> None:
         for path in file_paths:
@@ -119,14 +138,29 @@ class DocumentAssembler:
 
     def _process_page(self, page_idx: int, page_data: dict[str, Any]) -> None:
         page_num = int(page_data.get("page_num") or (page_idx + 1))
+
+        markdown_data = page_data.get("markdown", {})
+        full_markdown_text = markdown_data.get("text", "")
         blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
-        if not blocks:
-            return
+
         used_indices: set[int] = set()
 
-        used_indices.update(self._handle_visual_objects(page_num, blocks))
-        self._handle_tables(page_num)
-        self._handle_text_stream(page_num, blocks, used_indices)
+        if blocks:
+            used_indices.update(self._handle_visual_objects(page_num, blocks))
+            self._handle_tables(page_num)
+
+        if full_markdown_text:
+            meta_res = self.meta_extractor.process_content_and_get_meta(full_markdown_text)
+            chunk = self._create_chunk_obj("text", full_markdown_text, page_num, meta_res)
+            if hasattr(self.meta_extractor, "get_references"):
+                refs = self.meta_extractor.get_references(full_markdown_text)
+                chunk.update(refs)
+            self.final_chunks.append(chunk)
+            logger.info(f"Page {page_num}: Processed using high-quality Markdown.")
+        else:
+            self._handle_text_stream(page_num, blocks, used_indices)
+
+        return
 
     def _handle_visual_objects(self, page_num: int, blocks: list[dict[str, Any]]) -> set[int]:
         used: set[int] = set()
@@ -152,7 +186,9 @@ class DocumentAssembler:
             chunk.update({"entity_id": eid, "caption": full_caption})
 
             if "image_index" in v_obj:
-                chunk["image_links"] = [f"images/fig_{v_obj['image_index']}.png"]
+                chunk["image_links"] = [
+                    f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']}.png"
+                ]
 
             self.final_chunks.append(chunk)
         return used
@@ -284,7 +320,6 @@ class DocumentAssembler:
             return
         chunk = self._create_chunk_obj("text", meta_res["clean_content"], page, meta_res)
         if hasattr(self.meta_extractor, "get_references"):
-            # Викликаємо метод безпечно
             refs = self.meta_extractor.get_references(meta_res["clean_content"])
             chunk.update(refs)
         self.final_chunks.append(chunk)
@@ -292,7 +327,11 @@ class DocumentAssembler:
     def _extract_id(self, text: str | None) -> str | None:
         if not text:
             return None
-        m = re.search(r"(?:Exercise|Figure|Table|Algorithm|Example)?\s*(\d+\.\d+)", str(text), re.I)
+        # Спочатку шукаємо за суворим шаблоном
+        m = re.search(r"(?:Exercise|Figure|Table|Algorithm|Example)\s+(\d+\.\d+)", str(text), re.I)
+        if not m:
+            # Якщо не знайшли, шукаємо просто число формату X.X (наприклад, "4.4")
+            m = re.search(r"\b(\d+\.\d+)\b", str(text))
         return m.group(1) if m else None
 
     def _save(self) -> None:

@@ -1,9 +1,9 @@
-from datetime import UTC, datetime
-
 from app.models.requests import AgentQueryRequest
-from app.models.responses import AgentQueryResponse
+from app.models.responses import AgentRecommendationResponse
+from app.prompts.system_prompts import get_warehouse_advisor_prompt
 from app.services.react_agent import ReActAgent
-from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
+from app.services.recommendation_generator import RecommendationGenerator
+from app.tools import get_skill_store
 from common.logging import get_logger
 from fastapi import APIRouter, HTTPException
 
@@ -11,8 +11,8 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-@router.post("/agent/analyze", response_model=AgentQueryResponse)
-async def analyze_query(request: AgentQueryRequest) -> AgentQueryResponse:
+@router.post("/agent/analyze", response_model=AgentRecommendationResponse)
+async def analyze_query(request: AgentQueryRequest) -> AgentRecommendationResponse:
     """
     Analyze a warehouse query using ReAct agent (powered by Claude via AWS Bedrock).
 
@@ -23,10 +23,21 @@ async def analyze_query(request: AgentQueryRequest) -> AgentQueryResponse:
     """
     logger.info("agent_analyze_request", query=request.query)
 
-    start_time = datetime.now(UTC)
-
     try:
-        agent = ReActAgent()
+        # Generate system prompt with skill catalog if available
+        skill_store = get_skill_store()
+        if skill_store:
+            skill_catalog = skill_store.get_skill_catalog()
+            system_prompt = get_warehouse_advisor_prompt(skill_catalog=skill_catalog)
+            logger.debug(
+                "agent_initialized_with_skills",
+                skills_count=len(skill_store.get_skill_names()),
+            )
+        else:
+            system_prompt = get_warehouse_advisor_prompt()
+            logger.debug("agent_initialized_without_skills")
+
+        agent = ReActAgent(system_prompt=system_prompt)
 
         final_state = await agent.run(
             user_query=request.query,
@@ -34,27 +45,14 @@ async def analyze_query(request: AgentQueryRequest) -> AgentQueryResponse:
             max_iterations=request.max_iterations,
         )
 
-        duration = (datetime.now(UTC) - start_time).total_seconds()
-
-        formatter = ReasoningTraceFormatter()
-        reasoning_trace = formatter.format(final_state)
-
-        response = AgentQueryResponse(
-            request_id=final_state["request_id"],
-            query=request.query,
-            status=final_state["status"],
-            answer=final_state["final_answer"],
-            iterations=final_state["iteration"],
-            total_tokens=final_state["total_tokens"],
-            reasoning_trace=reasoning_trace,
-            duration_seconds=round(duration, 2),
-        )
+        generator = RecommendationGenerator()
+        response = await generator.generate(final_state)
 
         logger.info(
             "agent_analyze_complete",
             request_id=response.request_id,
             status=response.status,
-            duration_seconds=response.duration_seconds,
+            execution_time_seconds=response.execution_time_seconds,
         )
 
         return response

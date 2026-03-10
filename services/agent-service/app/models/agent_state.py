@@ -9,6 +9,7 @@ class ToolCall(BaseModel):
     """Represents a single tool invocation"""
 
     tool_name: str
+    category: str | None = None
     arguments: dict[str, Any]
     result: dict[str, Any] | None = None
     error: str | None = None
