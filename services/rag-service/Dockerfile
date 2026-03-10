@@ -7,9 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN pip install --no-cache-dir uv
 
-COPY services/rag-service/pyproject.toml services/rag-service/uv.lock ./
+COPY pyproject.toml uv.lock /app/
 COPY packages/common /app/packages/common
-RUN uv sync --frozen --no-dev
+COPY services/rag-service /app/services/rag-service
+RUN uv sync --frozen --project services/rag-service
 
 
 FROM python:3.11-slim AS runtime
@@ -18,7 +19,7 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
+    PYTHONPATH=/app/src:/app/packages/common/src \
     PORT=8001
 
 COPY --from=builder /app/.venv /app/.venv

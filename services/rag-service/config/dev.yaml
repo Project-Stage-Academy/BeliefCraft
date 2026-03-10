@@ -2,3 +2,6 @@ logging:
   level: DEBUG
 
 repository: "WeaviateRepository"
+weaviate_host: "weaviate"
+weaviate_port: 8080
+weaviate_grpc_port: 50051
