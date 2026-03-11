@@ -370,9 +370,9 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
 
 # Reference properties added to unified_collection chunks (both algorithm and example).
 _CHUNK_CODE_REFS = [
-    (str(ChunkCodeReferenceField.REFERENCED_CLASSES), CODE_CLASS_COLLECTION),
-    (str(ChunkCodeReferenceField.REFERENCED_METHODS), CODE_METHOD_COLLECTION),
-    (str(ChunkCodeReferenceField.REFERENCED_FUNCTIONS), CODE_FUNCTION_COLLECTION),
+    (ChunkCodeReferenceField.REFERENCED_CLASSES.value, CODE_CLASS_COLLECTION),
+    (ChunkCodeReferenceField.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
+    (ChunkCodeReferenceField.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
 ]
 
 # Maps extract_code_refs output keys to the Weaviate property names on the chunk.
