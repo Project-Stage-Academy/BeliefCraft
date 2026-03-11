@@ -457,10 +457,6 @@ class WeaviateRepository(AbstractVectorStoreRepository):
 
         return documents
 
-    # ------------------------------------------------------------------ #
-    # Public API                                                           #
-    # ------------------------------------------------------------------ #
-
     async def vector_search(
         self,
         query: str,
@@ -570,10 +566,6 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         )
         docs = CodeDefinitionProcessor.collect_code_definitions(results.objects)
         return CodeDefinitionProcessor.restore_code_fragment(docs)
-
-    # ------------------------------------------------------------------ #
-    # QueryReference builders for code definitions                        #
-    # ------------------------------------------------------------------ #
 
     def _build_nested_code_def_refs(self, max_depth: int = 2) -> list[QueryReference]:
         """

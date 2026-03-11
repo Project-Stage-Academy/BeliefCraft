@@ -35,10 +35,6 @@ class CodeDefinitionProcessor:
     * ``CodeFunction`` — top-level function body.
     """
 
-    # ------------------------------------------------------------------ #
-    # Phase 1: Graph traversal — Weaviate objects → Documents             #
-    # ------------------------------------------------------------------ #
-
     @staticmethod
     def collect_code_definitions(weaviate_objects: list[Any]) -> list[Document]:
         """
@@ -162,10 +158,6 @@ class CodeDefinitionProcessor:
                 metadata={**cls_props, "collection": "CodeClass"},
             )
         )
-
-    # ------------------------------------------------------------------ #
-    # Phase 2: Source reconstruction — Documents → Python source           #
-    # ------------------------------------------------------------------ #
 
     @staticmethod
     def restore_code_fragment(documents: list[Document]) -> str:
