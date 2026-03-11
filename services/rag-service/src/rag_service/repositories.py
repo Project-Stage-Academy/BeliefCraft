@@ -592,24 +592,3 @@ REPOSITORY_REGISTRY: dict[str, type[AbstractVectorStoreRepository]] = {
 def create_repository(settings: "Settings") -> AbstractVectorStoreRepository:
     """Factory function to create the appropriate repository based on settings."""
     return REPOSITORY_REGISTRY[settings.repository](settings)
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    from rag_service.config import Settings
-
-    async def _demo() -> None:
-        settings = Settings(
-            repository="WeaviateRepository",
-            weaviate_host="localhost",
-            weaviate_port=8080,
-            weaviate_grpc_port=50051,
-        )
-        sample_ids = ["8b607abb-8ad6-5e92-a051-daa5684344c7"]
-
-        async with WeaviateRepository(settings) as repo:
-            fragment = await repo.get_related_code_definitions(sample_ids)
-            print(fragment)
-
-    asyncio.run(_demo())
