@@ -6,12 +6,13 @@ import json
 import random
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import weaviate
 from weaviate.collections.classes.filters import Filter
 from weaviate.collections.classes.grpc import MetadataQuery, QueryReference
 
+from .code_entity_processor import CodeDefinitionProcessor
 from .constants import (
     COLLECTION_NAME,
     ENTITY_TYPE_TO_CHUNK_TYPE,
@@ -103,7 +104,9 @@ class AbstractVectorStoreRepository(ABC):
 
         for doc in docs:
             for field in traverse_types:
-                refs: list[str] = doc.metadata.get(TRAVERSE_TYPE_TO_REFERENCE_FIELD[field])  # type: ignore[assignment]
+                refs: list[str] = cast(
+                    list[str], doc.metadata.get(TRAVERSE_TYPE_TO_REFERENCE_FIELD[field])
+                )
                 chunk_type_value = ENTITY_TYPE_TO_CHUNK_TYPE.get(field, field)
                 filters = MetadataFilters(
                     filters=[
@@ -189,6 +192,7 @@ class FakeDataRepository(AbstractVectorStoreRepository):
                 return val == field.value
             case MetadataFilterOperator.IN:
                 return val in field.value if isinstance(field.value, list) else val == field.value
+        return False
 
     def _matches_filters(self, doc: dict[str, Any], filters: MetadataFilters) -> bool:
         """Check if document matches all/any filters based on condition."""
@@ -223,8 +227,8 @@ class WeaviateRepository(AbstractVectorStoreRepository):
     """
     Weaviate-based vector store repository implementation.
 
-    This repository handles semantic search and graph expansion using Weaviate's
-    native collection and reference capabilities.
+    Handles semantic search, graph expansion, and code-definition retrieval
+    using Weaviate's native collection and reference capabilities.
     """
 
     def __init__(self, settings: "Settings") -> None:
@@ -269,278 +273,9 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """
         await self._client.close()
 
-    def _convert_filters(self, filters: MetadataFilters | None) -> Any:
-        """
-        Convert domain-specific metadata filters to Weaviate-native filters.
-
-        Args:
-            filters: The domain metadata filters to convert.
-
-        Returns:
-            A Weaviate Filter object or None if no filters are provided.
-        """
-        if not filters or not filters.filters:
-            return None
-
-        operator_map = {
-            MetadataFilterOperator.EQ: lambda prop, val: prop.equal(val),
-            MetadataFilterOperator.IN: lambda prop, val: prop.contains_any(
-                val if isinstance(val, list) else [val]
-            ),
-        }
-
-        condition_map = {
-            "and": Filter.all_of,
-            "or": Filter.any_of,
-        }
-
-        weaviate_filters = [
-            operator_map[metadata_filter.operator](
-                Filter.by_property(metadata_filter.field), metadata_filter.value
-            )
-            for metadata_filter in filters.filters
-        ]
-
-        return condition_map[filters.condition](weaviate_filters)
-
-    def get_function_references(self, max_depth: int = 2) -> list[QueryReference]:
-        """
-        Generate QueryReference objects for code-related references with specified depth.
-
-        Args:
-            max_depth: Maximum depth to traverse for code references.
-
-        Returns:
-            List of QueryReference objects for code references.
-        """
-        code_reference_fields = [
-            "initialized_classes",
-            "referenced_methods",
-            "referenced_functions",
-        ]
-
-        result = []
-        for field_name in code_reference_fields:
-            if field_name == "initialized_classes" or max_depth == 0:
-                return_references = None
-            else:
-                return_references = self.get_function_references(max_depth - 1)
-
-            if return_references is not None and field_name == "referenced_methods":
-                return_references.append(QueryReference(link_on="class_ref"))
-
-            result.append(
-                QueryReference(
-                    link_on=field_name,
-                    return_references=return_references,
-                )
-            )
-
-        return result
-
-    def _get_return_references(
-        self, traverse_fields: list[str] | None = None
-    ) -> list[QueryReference]:
-        """
-        Generate a list of Weaviate QueryReference objects for retrieval.
-
-        Args:
-            traverse_fields: Optional list of reference fields to expand deeply.
-
-        Returns:
-            List of configured QueryReference objects.
-        """
-        base_references = [QueryReference(link_on=name) for name in REFERENCE_TYPE_MAP]
-
-        code_references = [
-            QueryReference(
-                link_on="referenced_classes",
-            ),
-            QueryReference(
-                link_on="referenced_methods",
-                return_references=self.get_function_references()
-                + [QueryReference(link_on="class_ref")],
-            ),
-            QueryReference(
-                link_on="referenced_functions",
-                return_references=self.get_function_references(),
-            ),
-        ]
-
-        return [
-            QueryReference(
-                link_on=field_name,
-                return_references=(
-                    base_references if traverse_fields and field_name in traverse_fields else None
-                ),
-            )
-            for field_name in REFERENCE_TYPE_MAP
-        ] + code_references
-
-    def _to_document(self, weaviate_object: Any) -> Document:
-        """
-        Convert a Weaviate object to a domain Document model.
-
-        Args:
-            weaviate_object: The raw object returned from Weaviate.
-
-        Returns:
-            A populated Document instance.
-        """
-        properties = dict(weaviate_object.properties or {})
-        metadata = {**properties}
-        content = metadata.pop("content", "")
-
-        for field_name in REFERENCE_TYPE_MAP:
-            if weaviate_object.references and field_name in weaviate_object.references:
-                reference_objects = weaviate_object.references.get(field_name).objects
-                metadata[field_name] = [
-                    ref_obj.properties.get("entity_id")
-                    for ref_obj in reference_objects
-                    if ref_obj.properties and ref_obj.properties.get("entity_id")
-                ]
-
-        certainty = getattr(weaviate_object.metadata, "certainty", None)
-        cosine_similarity = 2 * certainty - 1 if certainty is not None else None
-        return Document(
-            id=str(weaviate_object.uuid),
-            content=content,
-            cosine_similarity=cosine_similarity,
-            metadata=metadata,
-        )
-
-    async def _query(
-        self,
-        query_text: str | None = None,
-        limit: int | None = None,
-        filters: Any | None = None,
-        return_references: list[QueryReference] | None = None,
-    ) -> Any:
-        """
-        Internal helper to execute Weaviate collection queries.
-
-        Args:
-            query_text: Optional text for semantic search.
-            limit: Maximum number of objects to return.
-            filters: Optional Weaviate filters.
-            return_references: Optional list of references to resolve.
-
-        Returns:
-            The raw Weaviate query results.
-        """
-        if not query_text:
-            return await self._collection.query.fetch_objects(
-                limit=limit,
-                filters=filters,
-                return_references=return_references,
-            )
-
-        return await self._collection.query.near_text(
-            query=query_text,
-            limit=limit,
-            filters=filters,
-            return_references=return_references,
-            return_metadata=MetadataQuery(certainty=True),
-        )
-
-    def _process_ref_obj(
-        self,
-        ref_obj: Any,
-        seen_uuids: set[str],
-        documents: list[Document],
-        parent_collection: str | None = None,
-    ) -> None:
-        """
-        Recursively process a reference object, expanding CodeMethod and CodeFunction collections.
-
-        For CodeMethod objects that reference a CodeClass, the class name is added to the
-        document metadata instead of recursing into the class.
-
-        Args:
-            ref_obj: The reference object to process.
-            seen_uuids: Set of already-seen UUIDs for deduplication.
-            documents: List to append resulting documents to.
-            parent_collection: Collection name of the parent object (used for context).
-        """
-        if ref_obj.uuid in seen_uuids:
-            return
-
-        collection = getattr(ref_obj, "collection", None)
-
-        # If this reference object is a CodeClass being referenced from a CodeMethod,
-        # don't recurse — handled at the call site via class_name metadata.
-        if parent_collection == "CodeMethod" and collection == "CodeClass":
-            return
-
-        doc = self._to_document(ref_obj)
-
-        # For CodeMethod: attach class_name from any CodeClass reference
-        if collection == "CodeMethod" and ref_obj.references:
-            class_ref = ref_obj.references.get("class_ref")
-            if class_ref and class_ref.objects:
-                class_obj = class_ref.objects[0]
-                class_name = (class_obj.properties or {}).get("name") or (
-                    class_obj.properties or {}
-                ).get("entity_id")
-                if class_name:
-                    doc.metadata["class_name"] = class_name
-
-        documents.append(doc)
-        seen_uuids.add(ref_obj.uuid)
-
-        # Recurse into nested references for CodeMethod / CodeFunction
-        if collection in ("CodeMethod", "CodeFunction") and ref_obj.references:
-            nested_fields = ["referenced_methods", "referenced_functions", "initialized_classes"]
-            for nested_field in nested_fields:
-                nested_ref = ref_obj.references.get(nested_field)
-                if not nested_ref:
-                    continue
-                for nested_obj in nested_ref.objects or []:
-                    self._process_ref_obj(
-                        nested_obj,
-                        seen_uuids,
-                        documents,
-                        parent_collection=collection,
-                    )
-
-    def _process_results(
-        self,
-        weaviate_objects: list[Any],
-        expansion_fields: list[str] | None = None,
-        include_root: bool = True,
-    ) -> list[Document]:
-        """
-        Process query results into documents, handling expansion and deduplication.
-
-        Args:
-            weaviate_objects: Raw objects from Weaviate.
-            expansion_fields: Optional fields to expand into linked documents.
-            include_root: Whether to include the root documents in the output.
-
-        Returns:
-            A deduplicated list of Document instances.
-        """
-        seen_uuids = set()
-        documents = []
-
-        for obj in weaviate_objects:
-            if include_root and obj.uuid not in seen_uuids:
-                documents.append(self._to_document(obj))
-                seen_uuids.add(obj.uuid)
-
-            for field_name in expansion_fields or []:
-                if obj.references and field_name in obj.references:
-                    field = obj.references.get(field_name)
-                    reference_objects = field.objects if field else []
-                    for ref_obj in reference_objects:
-                        self._process_ref_obj(
-                            ref_obj,
-                            seen_uuids,
-                            documents,
-                            parent_collection=getattr(obj, "collection", None),
-                        )
-
-        return documents
+    # ------------------------------------------------------------------ #
+    # Public API                                                           #
+    # ------------------------------------------------------------------ #
 
     async def vector_search(
         self,
@@ -596,11 +331,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         if not document_ids or not traverse_types:
             return []
 
-        reference_fields = [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in traverse_types] + [
-            "referenced_classes",
-            "referenced_methods",
-            "referenced_functions",
-        ]
+        reference_fields = [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in traverse_types]
         results = await self._query(
             filters=Filter.by_id().contains_any(document_ids),
             return_references=self._get_return_references(reference_fields),
@@ -637,6 +368,196 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         )
         return self._process_results(results.objects, expansion_fields=reference_fields)
 
+    async def get_related_code_definitions(self, document_ids: list[str]) -> list[Document]:
+        """
+        Fetch code-definition objects (CodeClass, CodeMethod, CodeFunction)
+        linked from the given ``unified_collection`` chunk IDs.
+
+        Args:
+            document_ids: UUIDs of ``unified_collection`` chunks.
+
+        Returns:
+            Post-order list of Documents covering all reachable code definitions
+            (callees before callers).
+        """
+        results = await self._query(
+            filters=Filter.by_id().contains_any(document_ids),
+            return_references=self._build_top_level_code_def_refs(),
+        )
+        return CodeDefinitionProcessor.collect_code_definitions(results.objects)
+
+    @staticmethod
+    def restore_code_fragment(documents: list[Document]) -> str:
+        """
+        Reconstruct a single ordered Python source fragment from code-definition
+        documents returned by :meth:`get_related_code_definitions`.
+        """
+        return CodeDefinitionProcessor.restore_code_fragment(documents)
+
+    # ------------------------------------------------------------------ #
+    # QueryReference builders for code definitions                        #
+    # ------------------------------------------------------------------ #
+
+    def _build_nested_code_def_refs(self, max_depth: int = 2) -> list[QueryReference]:
+        """
+        Build recursive QueryReference objects for the three nested
+        code-definition cross-reference fields.
+
+        ``initialized_classes`` is always a leaf. ``referenced_methods`` and
+        ``referenced_functions`` are expanded up to *max_depth* levels.
+        """
+        fields = ("initialized_classes", "referenced_methods", "referenced_functions")
+        return [
+            QueryReference(
+                link_on=field,
+                return_references=self._sub_refs_for_code_def_field(field, max_depth),
+                return_properties=True,
+            )
+            for field in fields
+        ]
+
+    def _sub_refs_for_code_def_field(
+        self, field: str, max_depth: int
+    ) -> list[QueryReference] | None:
+        """Return sub-references for one nested code-def field, or None for leaves."""
+        if field == "initialized_classes" or max_depth == 0:
+            return None
+        sub_refs = self._build_nested_code_def_refs(max_depth - 1)
+        if field == "referenced_methods":
+            sub_refs.append(QueryReference(link_on="class_ref", return_properties=True))
+        return sub_refs
+
+    def _build_top_level_code_def_refs(self) -> list[QueryReference]:
+        """
+        Build the top-level QueryReference list for fetching unified_collection
+        chunks together with all linked code definitions.
+        """
+        return [
+            QueryReference(link_on="referenced_classes", return_properties=True),
+            QueryReference(
+                link_on="referenced_methods",
+                return_properties=True,
+                return_references=self._build_nested_code_def_refs()
+                + [QueryReference(link_on="class_ref", return_properties=True)],
+            ),
+            QueryReference(
+                link_on="referenced_functions",
+                return_properties=True,
+                return_references=self._build_nested_code_def_refs(),
+            ),
+        ]
+
+    # ------------------------------------------------------------------ #
+    # QueryReference builders for unified collection                      #
+    # ------------------------------------------------------------------ #
+
+    def _get_return_references(
+        self, traverse_fields: list[str] | None = None
+    ) -> list[QueryReference]:
+        """Build QueryReference objects for the unified collection's reference fields."""
+        base_references = [QueryReference(link_on=name) for name in REFERENCE_TYPE_MAP]
+        return [
+            QueryReference(
+                link_on=field_name,
+                return_references=(
+                    base_references if traverse_fields and field_name in traverse_fields else None
+                ),
+            )
+            for field_name in REFERENCE_TYPE_MAP
+        ]
+
+    # ------------------------------------------------------------------ #
+    # Weaviate query execution and result conversion                      #
+    # ------------------------------------------------------------------ #
+
+    async def _query(
+        self,
+        query_text: str | None = None,
+        limit: int | None = None,
+        filters: Any | None = None,
+        return_references: list[QueryReference] | None = None,
+    ) -> Any:
+        """Execute a Weaviate fetch or near-text query."""
+        if not query_text:
+            return await self._collection.query.fetch_objects(
+                limit=limit,
+                filters=filters,
+                return_references=return_references,
+            )
+        return await self._collection.query.near_text(
+            query=query_text,
+            limit=limit,
+            filters=filters,
+            return_references=return_references,
+            return_metadata=MetadataQuery(certainty=True),
+        )
+
+    def _to_document(self, weaviate_object: Any) -> Document:
+        """Convert a Weaviate unified-collection object to a domain Document."""
+        properties = dict(weaviate_object.properties or {})
+        metadata = {**properties}
+        content = metadata.pop("content", "")
+
+        for field_name in REFERENCE_TYPE_MAP:
+            if weaviate_object.references and field_name in weaviate_object.references:
+                reference_objects = weaviate_object.references.get(field_name).objects
+                metadata[field_name] = [
+                    ref_obj.properties.get("entity_id")
+                    for ref_obj in reference_objects
+                    if ref_obj.properties and ref_obj.properties.get("entity_id")
+                ]
+
+        certainty = getattr(weaviate_object.metadata, "certainty", None)
+        cosine_similarity = 2 * certainty - 1 if certainty is not None else None
+        return Document(
+            id=str(weaviate_object.uuid),
+            content=content,
+            cosine_similarity=cosine_similarity,
+            metadata=metadata,
+        )
+
+    def _convert_filters(self, filters: MetadataFilters | None) -> Any:
+        """Convert domain metadata filters to Weaviate-native filters."""
+        if not filters or not filters.filters:
+            return None
+
+        operator_map = {
+            MetadataFilterOperator.EQ: lambda prop, val: prop.equal(val),
+            MetadataFilterOperator.IN: lambda prop, val: prop.contains_any(
+                val if isinstance(val, list) else [val]
+            ),
+        }
+        condition_map = {"and": Filter.all_of, "or": Filter.any_of}
+
+        weaviate_filters = [
+            operator_map[f.operator](Filter.by_property(f.field), f.value) for f in filters.filters
+        ]
+        return condition_map[filters.condition](weaviate_filters)
+
+    def _process_results(
+        self,
+        weaviate_objects: list[Any],
+        expansion_fields: list[str] | None = None,
+        include_root: bool = True,
+    ) -> list[Document]:
+        """Convert raw Weaviate objects to Documents, optionally expanding references."""
+        seen_uuids: set[str] = set()
+        documents: list[Document] = []
+
+        for obj in weaviate_objects:
+            if include_root and obj.uuid not in seen_uuids:
+                documents.append(self._to_document(obj))
+                seen_uuids.add(obj.uuid)
+            for field_name in expansion_fields or []:
+                if obj.references and field_name in obj.references:
+                    field = obj.references.get(field_name)
+                    for ref_obj in field.objects if field else []:
+                        if ref_obj.uuid not in seen_uuids:
+                            documents.append(self._to_document(ref_obj))
+                            seen_uuids.add(ref_obj.uuid)
+
+        return documents
+
 
 REPOSITORY_REGISTRY: dict[str, type[AbstractVectorStoreRepository]] = {
     "FakeDataRepository": FakeDataRepository,
@@ -645,14 +566,26 @@ REPOSITORY_REGISTRY: dict[str, type[AbstractVectorStoreRepository]] = {
 
 
 def create_repository(settings: "Settings") -> AbstractVectorStoreRepository:
-    """
-    Factory function to create the appropriate repository based on settings.
+    """Factory function to create the appropriate repository based on settings."""
+    return REPOSITORY_REGISTRY[settings.repository](settings)
 
-    Args:
-        settings: Application settings containing repository class name.
 
-    Returns:
-        Configured AbstractVectorStoreRepository implementation.
-    """
-    repo_class_name = settings.repository
-    return REPOSITORY_REGISTRY[repo_class_name](settings)
+if __name__ == "__main__":
+    import asyncio
+
+    from rag_service.config import Settings
+
+    async def _demo() -> None:
+        settings = Settings(
+            repository="WeaviateRepository",
+            weaviate_host="localhost",
+            weaviate_port=8080,
+            weaviate_grpc_port=50051,
+        )
+        sample_ids = ["8b607abb-8ad6-5e92-a051-daa5684344c7"]
+
+        async with WeaviateRepository(settings) as repo:
+            docs = await repo.get_related_code_definitions(sample_ids)
+            print(WeaviateRepository.restore_code_fragment(docs))
+
+    asyncio.run(_demo())
