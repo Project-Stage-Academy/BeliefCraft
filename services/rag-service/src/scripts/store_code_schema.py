@@ -57,13 +57,14 @@ from pipeline.code_processing.python_code_processing.extract_code_refs import (
     extract_code_refs,
 )
 from rag_service.constants import (
+    ALGORITHM_REF_FIELD,
     CLASS_REF_FIELD,
     CODE_CLASS_COLLECTION,
     CODE_FUNCTION_COLLECTION,
     CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
-    ChunkCodeReferenceField,
-    CodeEntityReferenceField,
+    ChunkCodeRef,
+    CodeEntityRef,
 )
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
 from weaviate.classes.data import DataReference
@@ -150,13 +151,13 @@ def _add_missing_refs(collection: Collection, refs: list[tuple[str, str]]) -> No
 
 # Cross-collection references shared by both CodeMethod and CodeFunction.
 _CROSS_REFS = [
-    (CodeEntityReferenceField.INITIALIZED_CLASSES, CODE_CLASS_COLLECTION),
-    (CodeEntityReferenceField.REFERENCED_METHODS, CODE_METHOD_COLLECTION),
-    (CodeEntityReferenceField.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION),
+    (CodeEntityRef.INITIALIZED_CLASSES.value, CODE_CLASS_COLLECTION),
+    (CodeEntityRef.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
+    (CodeEntityRef.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
 ]
 
 # Back-reference from any code entity to the algorithm chunk that defines it.
-_ALGORITHM_REF = ("algorithm_ref", COLLECTION_NAME)
+_ALGORITHM_REF = (ALGORITHM_REF_FIELD, COLLECTION_NAME)
 
 
 def setup_collections(
@@ -229,22 +230,22 @@ def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
     refs.extend(
         _id_list_refs(
             from_uuid,
-            CodeEntityReferenceField.INITIALIZED_CLASSES,
-            item.get(CodeEntityReferenceField.INITIALIZED_CLASSES, []),
+            CodeEntityRef.INITIALIZED_CLASSES.value,
+            item.get(CodeEntityRef.INITIALIZED_CLASSES.value, []),
         )
     )
     refs.extend(
         _id_list_refs(
             from_uuid,
-            CodeEntityReferenceField.REFERENCED_METHODS,
-            item.get(CodeEntityReferenceField.REFERENCED_METHODS, []),
+            CodeEntityRef.REFERENCED_METHODS.value,
+            item.get(CodeEntityRef.REFERENCED_METHODS.value, []),
         )
     )
     refs.extend(
         _id_list_refs(
             from_uuid,
-            CodeEntityReferenceField.REFERENCED_FUNCTIONS,
-            item.get(CodeEntityReferenceField.REFERENCED_FUNCTIONS, []),
+            CodeEntityRef.REFERENCED_FUNCTIONS.value,
+            item.get(CodeEntityRef.REFERENCED_FUNCTIONS.value, []),
         )
     )
     return refs
@@ -370,16 +371,16 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
 
 # Reference properties added to unified_collection chunks (both algorithm and example).
 _CHUNK_CODE_REFS = [
-    (ChunkCodeReferenceField.REFERENCED_CLASSES.value, CODE_CLASS_COLLECTION),
-    (ChunkCodeReferenceField.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
-    (ChunkCodeReferenceField.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
+    (ChunkCodeRef.REFERENCED_CLASSES.value, CODE_CLASS_COLLECTION),
+    (ChunkCodeRef.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
+    (ChunkCodeRef.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
 ]
 
 # Maps extract_code_refs output keys to the Weaviate property names on the chunk.
 _REFS_KEY_TO_PROP = {
-    CodeEntityReferenceField.INITIALIZED_CLASSES: ChunkCodeReferenceField.REFERENCED_CLASSES,
-    CodeEntityReferenceField.REFERENCED_METHODS: ChunkCodeReferenceField.REFERENCED_METHODS,
-    CodeEntityReferenceField.REFERENCED_FUNCTIONS: ChunkCodeReferenceField.REFERENCED_FUNCTIONS,
+    CodeEntityRef.INITIALIZED_CLASSES.value: ChunkCodeRef.REFERENCED_CLASSES.value,
+    CodeEntityRef.REFERENCED_METHODS.value: ChunkCodeRef.REFERENCED_METHODS.value,
+    CodeEntityRef.REFERENCED_FUNCTIONS.value: ChunkCodeRef.REFERENCED_FUNCTIONS.value,
 }
 
 
@@ -517,7 +518,7 @@ def store_schema(
             algorithms,
             schema,
             number_key="algorithm_number",
-            text_key="content",
+            text_key="code",
             uuid_fn=uuid_for_algorithm_chunk,
             chunk_label="algorithm",
         )

@@ -14,13 +14,14 @@ from weaviate.collections.classes.grpc import MetadataQuery, QueryReference
 
 from .code_entity_processor import CodeDefinitionProcessor
 from .constants import (
+    ALGORITHM_REF_FIELD,
     CLASS_REF_FIELD,
     COLLECTION_NAME,
     ENTITY_TYPE_TO_CHUNK_TYPE,
     REFERENCE_TYPE_MAP,
     TRAVERSE_TYPE_TO_REFERENCE_FIELD,
-    ChunkCodeReferenceField,
-    CodeEntityReferenceField,
+    ChunkCodeRef,
+    CodeEntityRef,
 )
 from .models import Document, EntityType, MetadataFilter, MetadataFilterOperator, MetadataFilters
 
@@ -564,7 +565,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             filters=Filter.by_id().contains_any(document_ids),
             return_references=self._build_top_level_code_def_refs(),
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions(results.objects)
+        docs = CodeDefinitionProcessor.collect_code_definitions(results.objects, document_ids)
         return CodeDefinitionProcessor.restore_code_fragment(docs)
 
     def _build_nested_code_def_refs(self, max_depth: int = 10) -> list[QueryReference]:
@@ -576,27 +577,28 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         ``referenced_functions`` are expanded up to *max_depth* levels.
         """
         fields = (
-            CodeEntityReferenceField.INITIALIZED_CLASSES,
-            CodeEntityReferenceField.REFERENCED_METHODS,
-            CodeEntityReferenceField.REFERENCED_FUNCTIONS,
+            CodeEntityRef.INITIALIZED_CLASSES,
+            CodeEntityRef.REFERENCED_METHODS,
+            CodeEntityRef.REFERENCED_FUNCTIONS,
         )
         return [
             QueryReference(
                 link_on=field,
-                return_references=self._sub_refs_for_code_def_field(field, max_depth),
+                return_references=self._sub_refs_for_code_def_field(field, max_depth)
+                + [QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)],
                 return_properties=True,
             )
             for field in fields
         ]
 
-    def _sub_refs_for_code_def_field(
-        self, field: str, max_depth: int
-    ) -> list[QueryReference] | None:
+    def _sub_refs_for_code_def_field(self, field: str, max_depth: int) -> list[QueryReference]:
         """Return sub-references for one nested code-def field, or None for leaves."""
-        if field == CodeEntityReferenceField.INITIALIZED_CLASSES or max_depth == 0:
-            return None
-        sub_refs = self._build_nested_code_def_refs(max_depth - 1)
-        if field == CodeEntityReferenceField.REFERENCED_METHODS:
+        if field == CodeEntityRef.INITIALIZED_CLASSES or max_depth == 0:
+            return []
+        sub_refs = self._build_nested_code_def_refs(max_depth - 1) + [
+            QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)
+        ]
+        if field == CodeEntityRef.REFERENCED_METHODS:
             sub_refs.append(QueryReference(link_on=CLASS_REF_FIELD, return_properties=True))
         return sub_refs
 
@@ -607,19 +609,26 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """
         return [
             QueryReference(
-                link_on=ChunkCodeReferenceField.REFERENCED_CLASSES,
+                link_on=ChunkCodeRef.REFERENCED_CLASSES,
                 return_properties=True,
+                return_references=[
+                    QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)
+                ],
             ),
             QueryReference(
-                link_on=ChunkCodeReferenceField.REFERENCED_METHODS,
+                link_on=ChunkCodeRef.REFERENCED_METHODS,
                 return_properties=True,
                 return_references=self._build_nested_code_def_refs()
-                + [QueryReference(link_on=CLASS_REF_FIELD, return_properties=True)],
+                + [
+                    QueryReference(link_on=CLASS_REF_FIELD, return_properties=True),
+                    QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True),
+                ],
             ),
             QueryReference(
-                link_on=ChunkCodeReferenceField.REFERENCED_FUNCTIONS,
+                link_on=ChunkCodeRef.REFERENCED_FUNCTIONS,
                 return_properties=True,
-                return_references=self._build_nested_code_def_refs(),
+                return_references=self._build_nested_code_def_refs()
+                + [QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)],
             ),
         ]
 
@@ -633,3 +642,24 @@ REPOSITORY_REGISTRY: dict[str, type[AbstractVectorStoreRepository]] = {
 def create_repository(settings: "Settings") -> AbstractVectorStoreRepository:
     """Factory function to create the appropriate repository based on settings."""
     return REPOSITORY_REGISTRY[settings.repository](settings)
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    from rag_service.config import Settings
+
+    async def _demo() -> None:
+        settings = Settings(
+            repository="WeaviateRepository",
+            weaviate_host="localhost",
+            weaviate_port=8080,
+            weaviate_grpc_port=50051,
+        )
+        sample_ids = ["f5e69291-3663-5fb7-a61b-ddd52cf6ea60"]
+
+        async with WeaviateRepository(settings) as repo:
+            fragment = await repo.get_related_code_definitions(sample_ids)
+            print(fragment)
+
+    asyncio.run(_demo())

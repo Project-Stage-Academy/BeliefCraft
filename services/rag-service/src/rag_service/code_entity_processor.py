@@ -1,18 +1,20 @@
 from typing import Any
 
-from .constants import CLASS_REF_FIELD, ChunkCodeReferenceField, CodeEntityReferenceField
+from rag_service.constants import ALGORITHM_REF_FIELD
+
+from .constants import CLASS_REF_FIELD, ChunkCodeRef, CodeEntityRef
 from .models import Document
 
 _CODE_DEF_EXPANSION_FIELDS = (
-    ChunkCodeReferenceField.REFERENCED_CLASSES,
-    ChunkCodeReferenceField.REFERENCED_METHODS,
-    ChunkCodeReferenceField.REFERENCED_FUNCTIONS,
+    ChunkCodeRef.REFERENCED_CLASSES,
+    ChunkCodeRef.REFERENCED_METHODS,
+    ChunkCodeRef.REFERENCED_FUNCTIONS,
 )
 
 _CODE_DEF_NESTED_FIELDS = (
-    CodeEntityReferenceField.INITIALIZED_CLASSES,
-    CodeEntityReferenceField.REFERENCED_METHODS,
-    CodeEntityReferenceField.REFERENCED_FUNCTIONS,
+    CodeEntityRef.INITIALIZED_CLASSES,
+    CodeEntityRef.REFERENCED_METHODS,
+    CodeEntityRef.REFERENCED_FUNCTIONS,
 )
 
 
@@ -36,7 +38,9 @@ class CodeDefinitionProcessor:
     """
 
     @staticmethod
-    def collect_code_definitions(weaviate_objects: list[Any]) -> list[Document]:
+    def collect_code_definitions(
+        weaviate_objects: list[Any], root_document_ids: list[str]
+    ) -> list[Document]:
         """
         Traverse the code-definition reference graph for a batch of root objects
         and return a flat, deduplicated, post-order list of :class:`Document`
@@ -60,12 +64,16 @@ class CodeDefinitionProcessor:
                 if not field_ref:
                     continue
                 for ref_obj in field_ref.objects or []:
-                    CodeDefinitionProcessor._traverse(ref_obj, seen_uuids, documents)
+                    CodeDefinitionProcessor._traverse(
+                        ref_obj, seen_uuids, root_document_ids, documents
+                    )
 
         return documents
 
     @staticmethod
-    def _traverse(obj: Any, seen_uuids: set[str], documents: list[Document]) -> None:
+    def _traverse(
+        obj: Any, seen_uuids: set[str], root_document_ids: list[str], documents: list[Document]
+    ) -> None:
         """
         Post-order DFS for a single code-definition Weaviate object.
 
@@ -74,7 +82,10 @@ class CodeDefinitionProcessor:
         immediately before the method so that :meth:`restore_code_fragment`
         can group them correctly.
         """
-        if obj.uuid in seen_uuids:
+        if (
+            obj.uuid in seen_uuids
+            or str(obj.references[ALGORITHM_REF_FIELD].objects[0].uuid) in root_document_ids
+        ):
             return
         seen_uuids.add(obj.uuid)
 
@@ -89,10 +100,14 @@ class CodeDefinitionProcessor:
                 if not nested_ref:
                     continue
                 for nested_obj in nested_ref.objects or []:
-                    CodeDefinitionProcessor._traverse(nested_obj, seen_uuids, documents)
+                    CodeDefinitionProcessor._traverse(
+                        nested_obj, seen_uuids, root_document_ids, documents
+                    )
 
         if collection == "CodeMethod" and class_name:
-            CodeDefinitionProcessor._emit_parent_class(obj, class_name, seen_uuids, documents)
+            CodeDefinitionProcessor._emit_parent_class(
+                obj, class_name, seen_uuids, root_document_ids, documents
+            )
 
         documents.append(doc)
 
@@ -134,6 +149,7 @@ class CodeDefinitionProcessor:
         method_obj: Any,
         class_name: str,
         seen_uuids: set[str],
+        root_document_ids: list[str],
         documents: list[Document],
     ) -> None:
         """
@@ -146,6 +162,12 @@ class CodeDefinitionProcessor:
             return
         class_obj = class_ref.objects[0]
         if class_obj.uuid in seen_uuids:
+            return
+
+        if (
+            class_obj.references
+            and str(class_obj.references[ALGORITHM_REF_FIELD].objects[0].uuid) in root_document_ids
+        ):
             return
 
         seen_uuids.add(class_obj.uuid)

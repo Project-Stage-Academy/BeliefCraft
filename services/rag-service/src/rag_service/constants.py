@@ -37,7 +37,7 @@ CODE_METHOD_COLLECTION = "CodeMethod"
 CODE_FUNCTION_COLLECTION = "CodeFunction"
 
 
-class CodeEntityReferenceField(StrEnum):
+class CodeEntityRef(StrEnum):
     """Reference fields used inside code-definition collections (CodeMethod/CodeFunction)."""
 
     INITIALIZED_CLASSES = "initialized_classes"
@@ -45,7 +45,7 @@ class CodeEntityReferenceField(StrEnum):
     REFERENCED_FUNCTIONS = "referenced_functions"
 
 
-class ChunkCodeReferenceField(StrEnum):
+class ChunkCodeRef(StrEnum):
     """Reference fields stored on unified_collection algorithm/example chunks."""
 
     REFERENCED_CLASSES = "referenced_classes"
@@ -54,3 +54,4 @@ class ChunkCodeReferenceField(StrEnum):
 
 
 CLASS_REF_FIELD = "class_ref"
+ALGORITHM_REF_FIELD = "algorithm_ref"
