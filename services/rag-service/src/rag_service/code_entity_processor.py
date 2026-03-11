@@ -1,17 +1,18 @@
 from typing import Any
 
+from .constants import CLASS_REF_FIELD, ChunkCodeReferenceField, CodeEntityReferenceField
 from .models import Document
 
 _CODE_DEF_EXPANSION_FIELDS = (
-    "referenced_classes",
-    "referenced_methods",
-    "referenced_functions",
+    ChunkCodeReferenceField.REFERENCED_CLASSES,
+    ChunkCodeReferenceField.REFERENCED_METHODS,
+    ChunkCodeReferenceField.REFERENCED_FUNCTIONS,
 )
 
 _CODE_DEF_NESTED_FIELDS = (
-    "initialized_classes",
-    "referenced_methods",
-    "referenced_functions",
+    CodeEntityReferenceField.INITIALIZED_CLASSES,
+    CodeEntityReferenceField.REFERENCED_METHODS,
+    CodeEntityReferenceField.REFERENCED_FUNCTIONS,
 )
 
 
@@ -126,7 +127,7 @@ class CodeDefinitionProcessor:
     @staticmethod
     def _resolve_class_name(method_obj: Any) -> str | None:
         """Extract the parent class name from a ``CodeMethod``'s ``class_ref``."""
-        class_ref = method_obj.references.get("class_ref")
+        class_ref = method_obj.references.get(CLASS_REF_FIELD)
         if not class_ref or not class_ref.objects:
             return None
         props = class_ref.objects[0].properties or {}
@@ -144,7 +145,7 @@ class CodeDefinitionProcessor:
         that owns it, so the class definition immediately precedes its methods
         in the post-order stream.
         """
-        class_ref = method_obj.references.get("class_ref")
+        class_ref = method_obj.references.get(CLASS_REF_FIELD)
         if not class_ref or not class_ref.objects:
             return
         class_obj = class_ref.objects[0]

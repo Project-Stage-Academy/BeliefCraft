@@ -57,10 +57,13 @@ from pipeline.code_processing.python_code_processing.extract_code_refs import (
     extract_code_refs,
 )
 from rag_service.constants import (
+    CLASS_REF_FIELD,
     CODE_CLASS_COLLECTION,
     CODE_FUNCTION_COLLECTION,
     CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
+    ChunkCodeReferenceField,
+    CodeEntityReferenceField,
 )
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
 from weaviate.classes.data import DataReference
@@ -147,9 +150,9 @@ def _add_missing_refs(collection: Collection, refs: list[tuple[str, str]]) -> No
 
 # Cross-collection references shared by both CodeMethod and CodeFunction.
 _CROSS_REFS = [
-    ("initialized_classes", CODE_CLASS_COLLECTION),
-    ("referenced_methods", CODE_METHOD_COLLECTION),
-    ("referenced_functions", CODE_FUNCTION_COLLECTION),
+    (CodeEntityReferenceField.INITIALIZED_CLASSES, CODE_CLASS_COLLECTION),
+    (CodeEntityReferenceField.REFERENCED_METHODS, CODE_METHOD_COLLECTION),
+    (CodeEntityReferenceField.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION),
 ]
 
 # Back-reference from any code entity to the algorithm chunk that defines it.
@@ -185,7 +188,7 @@ def setup_collections(
             [Property(name="qualified_name", data_type=DataType.TEXT, skip_vectorization=True)]
         ),
         references=[
-            ReferenceProperty(name="class_ref", target_collection=CODE_CLASS_COLLECTION),
+            ReferenceProperty(name=CLASS_REF_FIELD, target_collection=CODE_CLASS_COLLECTION),
         ],
     )
     fn_col = _create_or_use(
@@ -224,11 +227,25 @@ def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
     """
     refs: RefList = []
     refs.extend(
-        _id_list_refs(from_uuid, "initialized_classes", item.get("initialized_classes", []))
+        _id_list_refs(
+            from_uuid,
+            CodeEntityReferenceField.INITIALIZED_CLASSES,
+            item.get(CodeEntityReferenceField.INITIALIZED_CLASSES, []),
+        )
     )
-    refs.extend(_id_list_refs(from_uuid, "referenced_methods", item.get("referenced_methods", [])))
     refs.extend(
-        _id_list_refs(from_uuid, "referenced_functions", item.get("referenced_functions", []))
+        _id_list_refs(
+            from_uuid,
+            CodeEntityReferenceField.REFERENCED_METHODS,
+            item.get(CodeEntityReferenceField.REFERENCED_METHODS, []),
+        )
+    )
+    refs.extend(
+        _id_list_refs(
+            from_uuid,
+            CodeEntityReferenceField.REFERENCED_FUNCTIONS,
+            item.get(CodeEntityReferenceField.REFERENCED_FUNCTIONS, []),
+        )
     )
     return refs
 
@@ -316,7 +333,7 @@ def _insert_methods(collection: Collection, methods: list[dict[str, Any]]) -> Re
         if class_schema_id and not class_schema_id.startswith("external:"):
             return [
                 DataReference(
-                    from_property="class_ref",
+                    from_property=CLASS_REF_FIELD,
                     from_uuid=from_uuid,
                     to_uuid=uuid_for_schema_id(class_schema_id),
                 )
@@ -353,16 +370,16 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
 
 # Reference properties added to unified_collection chunks (both algorithm and example).
 _CHUNK_CODE_REFS = [
-    ("referenced_classes", CODE_CLASS_COLLECTION),
-    ("referenced_methods", CODE_METHOD_COLLECTION),
-    ("referenced_functions", CODE_FUNCTION_COLLECTION),
+    (str(ChunkCodeReferenceField.REFERENCED_CLASSES), CODE_CLASS_COLLECTION),
+    (str(ChunkCodeReferenceField.REFERENCED_METHODS), CODE_METHOD_COLLECTION),
+    (str(ChunkCodeReferenceField.REFERENCED_FUNCTIONS), CODE_FUNCTION_COLLECTION),
 ]
 
 # Maps extract_code_refs output keys to the Weaviate property names on the chunk.
 _REFS_KEY_TO_PROP = {
-    "initialized_classes": "referenced_classes",
-    "referenced_methods": "referenced_methods",
-    "referenced_functions": "referenced_functions",
+    CodeEntityReferenceField.INITIALIZED_CLASSES: ChunkCodeReferenceField.REFERENCED_CLASSES,
+    CodeEntityReferenceField.REFERENCED_METHODS: ChunkCodeReferenceField.REFERENCED_METHODS,
+    CodeEntityReferenceField.REFERENCED_FUNCTIONS: ChunkCodeReferenceField.REFERENCED_FUNCTIONS,
 }
 
 

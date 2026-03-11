@@ -14,10 +14,13 @@ from weaviate.collections.classes.grpc import MetadataQuery, QueryReference
 
 from .code_entity_processor import CodeDefinitionProcessor
 from .constants import (
+    CLASS_REF_FIELD,
     COLLECTION_NAME,
     ENTITY_TYPE_TO_CHUNK_TYPE,
     REFERENCE_TYPE_MAP,
     TRAVERSE_TYPE_TO_REFERENCE_FIELD,
+    ChunkCodeReferenceField,
+    CodeEntityReferenceField,
 )
 from .models import Document, EntityType, MetadataFilter, MetadataFilterOperator, MetadataFilters
 
@@ -420,7 +423,11 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         ``initialized_classes`` is always a leaf. ``referenced_methods`` and
         ``referenced_functions`` are expanded up to *max_depth* levels.
         """
-        fields = ("initialized_classes", "referenced_methods", "referenced_functions")
+        fields = (
+            CodeEntityReferenceField.INITIALIZED_CLASSES,
+            CodeEntityReferenceField.REFERENCED_METHODS,
+            CodeEntityReferenceField.REFERENCED_FUNCTIONS,
+        )
         return [
             QueryReference(
                 link_on=field,
@@ -434,11 +441,11 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         self, field: str, max_depth: int
     ) -> list[QueryReference] | None:
         """Return sub-references for one nested code-def field, or None for leaves."""
-        if field == "initialized_classes" or max_depth == 0:
+        if field == CodeEntityReferenceField.INITIALIZED_CLASSES or max_depth == 0:
             return None
         sub_refs = self._build_nested_code_def_refs(max_depth - 1)
-        if field == "referenced_methods":
-            sub_refs.append(QueryReference(link_on="class_ref", return_properties=True))
+        if field == CodeEntityReferenceField.REFERENCED_METHODS:
+            sub_refs.append(QueryReference(link_on=CLASS_REF_FIELD, return_properties=True))
         return sub_refs
 
     def _build_top_level_code_def_refs(self) -> list[QueryReference]:
@@ -447,15 +454,18 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         chunks together with all linked code definitions.
         """
         return [
-            QueryReference(link_on="referenced_classes", return_properties=True),
             QueryReference(
-                link_on="referenced_methods",
+                link_on=ChunkCodeReferenceField.REFERENCED_CLASSES,
                 return_properties=True,
-                return_references=self._build_nested_code_def_refs()
-                + [QueryReference(link_on="class_ref", return_properties=True)],
             ),
             QueryReference(
-                link_on="referenced_functions",
+                link_on=ChunkCodeReferenceField.REFERENCED_METHODS,
+                return_properties=True,
+                return_references=self._build_nested_code_def_refs()
+                + [QueryReference(link_on=CLASS_REF_FIELD, return_properties=True)],
+            ),
+            QueryReference(
+                link_on=ChunkCodeReferenceField.REFERENCED_FUNCTIONS,
                 return_properties=True,
                 return_references=self._build_nested_code_def_refs(),
             ),
