@@ -67,7 +67,12 @@ SEARCH_FILTER_FIELD_TO_METADATA_FIELD = {
 
 
 class RagTools:
-    tools = ["search_knowledge_base", "expand_graph_by_ids", "get_entity_by_number"]
+    tools = [
+        "search_knowledge_base",
+        "expand_graph_by_ids",
+        "get_entity_by_number",
+        "get_related_code_definitions",
+    ]
 
     def __init__(self, repository: AbstractVectorStoreRepository) -> None:
         self._repository = repository
@@ -193,6 +198,34 @@ class RagTools:
             found=False,
         )
         return None
+
+    async def get_related_code_definitions(
+        self,
+        document_ids: Annotated[
+            list[str],
+            "List of document IDs (UUIDs) from which to follow code-definition references.",
+        ],
+    ) -> str:
+        """
+        Retrieve the Python source code related to a set of documents (algorithms or examples).
+
+        Follows ``referenced_classes``, ``referenced_methods``, and
+        ``referenced_functions`` links from the given document IDs, collects all
+        reachable code-definition entities (CodeClass, CodeMethod, CodeFunction),
+        and returns them as a single ordered Python source fragment.
+        """
+        logger.info(
+            "rag tool call",
+            tool="get_related_code_definitions",
+            document_ids=document_ids,
+        )
+        source = await self._repository.get_related_code_definitions(document_ids)
+        logger.info(
+            "rag tool result",
+            tool="get_related_code_definitions",
+            source_len=len(source),
+        )
+        return source
 
 
 def create_mcp_server(repository: AbstractVectorStoreRepository) -> FastMCP:

@@ -66,6 +66,16 @@ The book "Algorithms for Decision Making" uses a strict numbering system. This t
 - `entity_type` (`EntityType`, required): Type of entity (e.g., `formula`).
 - `number` (string, required): Unique number of the object, e.g., "1.2.3".
 
+#### `get_related_code_definitions`
+**Retrieve Python source code related to a set of documents (algorithms or examples).**
+
+Follows `referenced_classes`, `referenced_methods`, and `referenced_functions` links from the given document IDs, collects all reachable code-definition entities (`CodeClass`, `CodeMethod`, `CodeFunction`), and returns them as a single ordered Python source fragment.
+
+**Arguments:**
+- `document_ids` (array of strings, required): List of document IDs (UUIDs) from which to follow code-definition references.
+
+**Returns:** Python source string with all related code definitions in call order.
+
 ---
 
 ## Client Usage Example
@@ -112,6 +122,13 @@ async def interact_with_rag():
                 {"entity_type": "formula", "number": "3.1"}
             )
             print(f"Formula: {formula}")
+
+            # 5. Retrieve and reconstruct Python source code for a document
+            source = await client.call_tool(
+                "get_related_code_definitions",
+                {"document_ids": ["<algorithm-chunk-uuid>"]}
+            )
+            print(f"Source code:\n{source}")
 
 
 if __name__ == "__main__":

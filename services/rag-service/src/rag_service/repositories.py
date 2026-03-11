@@ -155,6 +155,27 @@ class AbstractVectorStoreRepository(ABC):
             )
         return results
 
+    async def get_related_code_definitions(self, document_ids: list[str]) -> str:
+        """
+        Retrieve the Python source code related to the given chunk IDs (algorithms or examples).
+
+        Follows code-definition references and returns all reachable code entities
+        (CodeClass, CodeMethod, CodeFunction) as an ordered Python source fragment.
+
+        Args:
+            document_ids: IDs of chunks from which to follow code-definition references.
+
+        Returns:
+            Python source string with all related code definitions in call order.
+
+        Raises:
+            NotImplementedError: Subclasses that do not support code-definition
+                retrieval should raise this or override the method.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support get_related_code_definitions."
+        )
+
 
 class FakeDataRepository(AbstractVectorStoreRepository):
     """
@@ -368,31 +389,24 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         )
         return self._process_results(results.objects, expansion_fields=reference_fields)
 
-    async def get_related_code_definitions(self, document_ids: list[str]) -> list[Document]:
+    async def get_related_code_definitions(self, document_ids: list[str]) -> str:
         """
         Fetch code-definition objects (CodeClass, CodeMethod, CodeFunction)
-        linked from the given ``unified_collection`` chunk IDs.
+        linked from the given ``unified_collection`` chunk IDs and return them
+        as an ordered Python source fragment.
 
         Args:
-            document_ids: UUIDs of ``unified_collection`` chunks.
+            document_ids: UUIDs of ``unified_collection`` chunks (algorithms or examples).
 
         Returns:
-            Post-order list of Documents covering all reachable code definitions
-            (callees before callers).
+            Python source string with all related code definitions in call order.
         """
         results = await self._query(
             filters=Filter.by_id().contains_any(document_ids),
             return_references=self._build_top_level_code_def_refs(),
         )
-        return CodeDefinitionProcessor.collect_code_definitions(results.objects)
-
-    @staticmethod
-    def restore_code_fragment(documents: list[Document]) -> str:
-        """
-        Reconstruct a single ordered Python source fragment from code-definition
-        documents returned by :meth:`get_related_code_definitions`.
-        """
-        return CodeDefinitionProcessor.restore_code_fragment(documents)
+        docs = CodeDefinitionProcessor.collect_code_definitions(results.objects)
+        return CodeDefinitionProcessor.restore_code_fragment(docs)
 
     # ------------------------------------------------------------------ #
     # QueryReference builders for code definitions                        #
@@ -585,7 +599,7 @@ if __name__ == "__main__":
         sample_ids = ["8b607abb-8ad6-5e92-a051-daa5684344c7"]
 
         async with WeaviateRepository(settings) as repo:
-            docs = await repo.get_related_code_definitions(sample_ids)
-            print(WeaviateRepository.restore_code_fragment(docs))
+            fragment = await repo.get_related_code_definitions(sample_ids)
+            print(fragment)
 
     asyncio.run(_demo())

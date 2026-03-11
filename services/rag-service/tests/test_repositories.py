@@ -72,3 +72,10 @@ async def test_expand_graph_empty_input(repo):
     """Verify expansion handles empty inputs gracefully."""
     assert await repo.expand_graph_by_ids([], [EntityType.FORMULA]) == []
     assert await repo.expand_graph_by_ids(["id"], []) == []
+
+
+@pytest.mark.asyncio
+async def test_fake_repo_get_related_code_definitions_not_supported(repo):
+    """Verify FakeDataRepository raises NotImplementedError for code-definition retrieval."""
+    with pytest.raises(NotImplementedError):
+        await repo.get_related_code_definitions(["some-id"])
