@@ -51,6 +51,14 @@ Notes:
 
 ### AWS auth note (profile vs access keys)
 
+**Docker mode:** Containers cannot access `~/.aws` on the host. AWS credentials
+must be passed as environment variables. Do **not** set `AWS_PROFILE` in
+`services/agent-service/.env` when running in Docker — it will fail because the
+profile config file is not available inside the container.
+
+**Local mode (no Docker):** `AWS_PROFILE` works because boto3 can read
+`~/.aws/credentials` and `~/.aws/config` directly from the host filesystem.
+
 - `agent-service` and `weaviate` receive AWS credentials from environment variables
   passed by Docker Compose.
 - We do **not** mount `~/.aws` into containers.
@@ -90,7 +98,49 @@ For `environment-api`, put DB config in `services/environment-api/.env`:
   - `SUPABASE_PORT`
   - `SUPABASE_DB`
 
-## 4. Clean Start (Recommended)
+## 4. Choose Run Mode
+
+### Option A: Full Docker (default)
+
+All services run in containers. See next section for clean start.
+
+### Option B: Local Python services + Docker infrastructure
+
+Run only infrastructure in Docker and Python services natively. This allows
+`AWS_PROFILE` usage, faster iteration, and direct debugger access.
+
+**Start infrastructure only:**
+
+```bash
+docker compose up -d postgres weaviate redis db-migrate
+```
+
+**Run each Python service** (each in its own terminal, from repo root):
+
+```bash
+# Environment API
+DATABASE_URL=postgresql://beliefcraft:beliefcraft@localhost:5432/environment_db \
+uv run uvicorn environment_api.main:app --host 0.0.0.0 --port 8000 --reload
+
+# RAG Service
+uv run uvicorn rag_service.main:app --host 0.0.0.0 --port 8001 --reload
+
+# Agent Service
+ENVIRONMENT_API_URL=http://localhost:8000 \
+RAG_API_URL=http://localhost:8001 \
+REDIS_URL=redis://localhost:6379 \
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8003 --reload
+```
+
+Notes:
+
+- Service `.env` files use Docker hostnames (`redis`, `postgres`, `environment-api`).
+  Override with `localhost` via env vars as shown above.
+- `AWS_PROFILE` works in local mode since boto3 reads `~/.aws/` directly.
+- RAG service defaults to `FakeDataRepository` (no Weaviate needed) unless
+  `ENV=dev` is set.
+
+## 5. Clean Start — Docker (Recommended)
 
 ```bash
 docker compose down -v --remove-orphans
@@ -103,7 +153,7 @@ What this does:
 - Rebuilds images (`--build`)
 - Removes stale/orphan containers (`--remove-orphans`)
 
-## 5. Confirm Services Are Healthy
+## 6. Confirm Services Are Healthy
 
 In another terminal:
 
@@ -124,7 +174,7 @@ Expected:
   - `expand_graph_by_ids`
   - `get_entity_by_number`
 
-## 6. Ingest Book Chunks into Weaviate
+## 7. Ingest Book Chunks into Weaviate
 
 If your chunk JSON is at repo root, run:
 
@@ -174,7 +224,7 @@ Notes:
   - `services/rag-service/src/scripts/create_weaviate_backup.py`
   - `services/rag-service/src/scripts/restore_weaviate_backup.py`
 
-## 7. Smoke Test Agent Analyze Endpoint
+## 8. Smoke Test Agent Analyze Endpoint
 
 ```bash
 curl -s -X POST http://localhost:8003/api/v1/agent/analyze \
@@ -194,14 +244,14 @@ Check response fields:
 - `tools_used`
 - optional: `formulas`, `code_snippets`, `citations`, `warnings`
 
-## 8. Useful Additional Test Queries
+## 9. Useful Additional Test Queries
 
 1. `Analyze inventory discrepancy risk for fast-moving SKUs and propose immediate containment steps.`
 2. `Recommend a replenishment policy under uncertain demand and lead time; include algorithm, formula, and Python code.`
 3. `For service level 95% and volatile demand, how should reorder points and safety stock be set?`
 4. `Find a warehouse decision-making algorithm from the knowledge base and provide executable Python snippet with comments.`
 
-## 9. Operational Logs (During Debugging)
+## 10. Operational Logs (During Debugging)
 
 ```bash
 docker compose logs -f agent-service rag-service environment-api
@@ -216,7 +266,7 @@ docker compose logs rag-service --tail=200
 docker compose logs agent-service --tail=200
 ```
 
-## 10. Common Issues Seen During Setup
+## 11. Common Issues Seen During Setup
 
 ### A) Docker image pull / TLS timeout
 
