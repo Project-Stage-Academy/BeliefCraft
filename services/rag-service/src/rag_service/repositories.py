@@ -567,7 +567,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         docs = CodeDefinitionProcessor.collect_code_definitions(results.objects)
         return CodeDefinitionProcessor.restore_code_fragment(docs)
 
-    def _build_nested_code_def_refs(self, max_depth: int = 2) -> list[QueryReference]:
+    def _build_nested_code_def_refs(self, max_depth: int = 10) -> list[QueryReference]:
         """
         Build recursive QueryReference objects for the three nested
         code-definition cross-reference fields.
