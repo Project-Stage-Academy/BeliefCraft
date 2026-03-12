@@ -2,6 +2,9 @@
 .weaviate_data/
 .weaviate_backups/
 
+# rag parser data
+data_source/
+
 # JetBrains
 .idea/
 

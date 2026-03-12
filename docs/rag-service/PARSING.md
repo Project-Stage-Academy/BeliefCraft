@@ -52,10 +52,8 @@ Maintains the stateful document hierarchy during processing:
 
 To correctly generate image links in the output JSON, ensure the following variable is set in your `.env` file:
 
-* **FIGURES_BUCKET_URL**: The base URL for the cloud storage bucket where figures are hosted (e.g., GCS or S3).
-  * **Where to get**: Access the project's Google Cloud Console or ask the DevOps team for the current production bucket URL.
-  * **Format**: `https://storage.googleapis.com/your-bucket-name/` (the code automatically handles trailing slashes).
-  * **Default**: If not set, links will default to a local path, which may break in the cloud environment.
+* **FIGURES_BUCKET_URL**: The base URL for the cloud storage bucket where figures are hosted (e.g., GCS or S3). You
+can find it in .env.example of rag-service.
 
 ---
 
@@ -65,23 +63,30 @@ FIGURES_BUCKET_URL environment variable is required and must not be empty. It de
 
 To execute the full processing cycle (assembling the final JSON), run:
 
+1. Put `dm.pdf` and `dm-figures.pdf` in the `data_source/` directory.
+2. Run this to generate `figures_metadata.json` from `dm.pdf` and `dm-figures.pdf`:
 ```bash
-# Run the main assembler module
-uv run python -m services.rag_service.src.rag_service.main
-
+PYTHONPATH=services/rag-service/src uv run python -m pipeline.parsing.image_processor
+```
+3. Now your working directory has `figures_metadata.json`. Move it to `data_source/` directory.
+4. Run this to generate `blocks_metadata.json` from `dm.pdf`:
+```bash
+PYTHONPATH=services/rag-service/src uv run python -m pipeline.parsing.block_processor
+```
+5. Now your working directory has `blocks_metadata.json`. Move it to `data_source/` directory.
+6. Also put `extracted_tables.json` and `formula_mapping.json` from google drive into `data_source/` directory.
+7. Create folder `paddle_results` inside `data_source/` and put paddleocr results from google drive into it(files from
+`1-100.json` to `601-700.json`).
+8. Run this to generate `ULTIMATE_BOOK_DATA.json`:
+```bash
+PYTHONPATH=services/rag-service/src uv run python -m pipeline.parsing.main
 ```
 
-### Running Individual Components (Debug Mode)
+### Replacing Julia with Python translations
 
-If you need to run only the block processor, image processing or math engine components independently:
-
+Put `translated_algorithms.json` and `translated_examples.json` from google drive into `data_source/` directory and run
 ```bash
-# Process text blocks only
-uv run python -m services.rag_service.src.rag_service.block_processor
-
-# Process CV-based image matching only
-uv run python -m services.rag_service.src.rag_service.image_processor
-
-# Process formulas and tabels only
-uv run python -m services.rag_service.src.rag_service.math_table_engine
+uv run services/rag-service/src/pipeline/code_processing/julia_code_translation/update_chunks_with_translated_code.py\
+--chunks ULTIMATE_BOOK_DATA.json   --translated-algorithms data_source/translated_algorithms.json\
+--translated-examples data_source/translated_examples.json   --output ULTIMATE_BOOK_DATA_translated.json
 ```
