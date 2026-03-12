@@ -236,3 +236,6 @@ out/
 docker-compose.override.yml
 **/.docker/
 *.tar
+
+# MacOS
+.DS_Store

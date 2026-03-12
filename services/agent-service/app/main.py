@@ -42,6 +42,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
 
+    # Verify AWS credentials early (fail-fast in production)
+    from app.services.health_checker import verify_aws_credentials_at_startup
+
+    verify_aws_credentials_at_startup(settings)
+
     # Create persistent HTTP client
     http_client = TracedHttpClient("", timeout=HEALTH_CHECK_TIMEOUT)
     await http_client.__aenter__()
