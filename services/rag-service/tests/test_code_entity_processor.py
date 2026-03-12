@@ -39,6 +39,7 @@ CLASS_UUID = "cls-uuid-001"
 METHOD_UUID = "mth-uuid-001"
 FUNCTION_UUID = "fn-uuid-001"
 CALLEE_FN_UUID = "fn-uuid-002"
+ALGORITH_UUID = "alg-uuid-001"
 
 CLASS_CONTENT = "class Foo:\n    def __init__(self, x):\n        self.x = x"
 METHOD_CONTENT = "def bar(self):\n    return self.x"
@@ -94,7 +95,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_functions": _make_ref([fn])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root])
+        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
 
         assert len(docs) == 1
         assert docs[0].id == FUNCTION_UUID
@@ -108,7 +109,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_methods": _make_ref([method])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root])
+        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
 
         # Expect: class emitted before method
         ids = [d.id for d in docs]
@@ -124,7 +125,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_methods": _make_ref([method])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root])
+        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
 
         class_doc = next(d for d in docs if d.id == CLASS_UUID)
         assert class_doc.content == CLASS_CONTENT
@@ -143,7 +144,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_functions": _make_ref([fn])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root1, root2])
+        docs = CodeDefinitionProcessor.collect_code_definitions([root1, root2], [ALGORITH_UUID])
 
         ids = [d.id for d in docs]
         assert ids.count(FUNCTION_UUID) == 1
@@ -162,7 +163,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_functions": _make_ref([caller])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root])
+        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
 
         ids = [d.id for d in docs]
         assert ids.index(CALLEE_FN_UUID) < ids.index(FUNCTION_UUID)
@@ -174,7 +175,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root])
+        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
         assert docs == []
 
 

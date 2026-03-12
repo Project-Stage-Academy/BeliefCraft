@@ -82,12 +82,16 @@ class CodeDefinitionProcessor:
         immediately before the method so that :meth:`restore_code_fragment`
         can group them correctly.
         """
-        if (
-            obj.uuid in seen_uuids
-            or str(obj.references[ALGORITHM_REF_FIELD].objects[0].uuid) in root_document_ids
-        ):
+        if obj.uuid in seen_uuids:
             return
         seen_uuids.add(obj.uuid)
+
+        if (
+            ALGORITHM_REF_FIELD in obj.references
+            and len(obj.references[ALGORITHM_REF_FIELD].objects) > 0
+            and str(obj.references[ALGORITHM_REF_FIELD].objects[0].uuid) in root_document_ids
+        ):
+            return
 
         collection: str | None = getattr(obj, "collection", None)
         doc, class_name = CodeDefinitionProcessor._to_document(obj, collection)
@@ -166,6 +170,8 @@ class CodeDefinitionProcessor:
 
         if (
             class_obj.references
+            and ALGORITHM_REF_FIELD in class_obj.references
+            and len(class_obj.references[ALGORITHM_REF_FIELD].objects) > 0
             and str(class_obj.references[ALGORITHM_REF_FIELD].objects[0].uuid) in root_document_ids
         ):
             return
