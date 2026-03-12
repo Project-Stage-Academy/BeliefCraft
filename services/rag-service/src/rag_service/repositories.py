@@ -595,9 +595,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """Return sub-references for one nested code-def field, or None for leaves."""
         if field == CodeEntityRef.INITIALIZED_CLASSES or max_depth == 0:
             return []
-        sub_refs = self._build_nested_code_def_refs(max_depth - 1) + [
-            QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)
-        ]
+        sub_refs = self._build_nested_code_def_refs(max_depth - 1)
         if field == CodeEntityRef.REFERENCED_METHODS:
             sub_refs.append(QueryReference(link_on=CLASS_REF_FIELD, return_properties=True))
         return sub_refs
