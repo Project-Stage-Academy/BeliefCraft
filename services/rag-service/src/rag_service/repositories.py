@@ -252,8 +252,8 @@ class WeaviateRepository(AbstractVectorStoreRepository):
     """
     Weaviate-based vector store repository implementation.
 
-    Handles semantic search, graph expansion, and code-definition retrieval
-    using Weaviate's native collection and reference capabilities.
+    This repository handles semantic search and graph expansion using Weaviate's
+    native collection and reference capabilities.
     """
 
     def __init__(self, settings: "Settings") -> None:
@@ -640,5 +640,12 @@ REPOSITORY_REGISTRY: dict[str, type[AbstractVectorStoreRepository]] = {
 
 
 def create_repository(settings: "Settings") -> AbstractVectorStoreRepository:
-    """Factory function to create the appropriate repository based on settings."""
-    return REPOSITORY_REGISTRY[settings.repository](settings)
+    """
+    Factory function to create the appropriate repository based on settings.
+    Args:
+        settings: Application settings containing repository class name.
+    Returns:
+        Configured AbstractVectorStoreRepository implementation.
+    """
+    repo_class_name = settings.repository
+    return REPOSITORY_REGISTRY[repo_class_name](settings)
