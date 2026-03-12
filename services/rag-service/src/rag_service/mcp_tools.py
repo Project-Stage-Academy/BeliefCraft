@@ -220,6 +220,8 @@ class RagTools:
             document_ids=document_ids,
         )
         source = await self._repository.get_related_code_definitions(document_ids)
+        if not source.strip():
+            source = "# No related code definitions found for the provided document IDs."
         logger.info(
             "rag tool result",
             tool="get_related_code_definitions",

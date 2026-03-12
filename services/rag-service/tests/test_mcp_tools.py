@@ -93,4 +93,4 @@ async def test_get_related_code_definitions_empty_ids(rag_tools, mock_repo):
     result = await rag_tools.get_related_code_definitions(document_ids=[])
 
     mock_repo.get_related_code_definitions.assert_called_once_with([])
-    assert result == ""
+    assert result == "# No related code definitions found for the provided document IDs."

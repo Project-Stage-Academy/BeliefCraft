@@ -566,7 +566,9 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             return_references=self._build_top_level_code_def_refs(),
         )
         docs = CodeDefinitionProcessor.collect_code_definitions(results.objects, document_ids)
-        return CodeDefinitionProcessor.restore_code_fragment(docs)
+        if docs:
+            return CodeDefinitionProcessor.restore_code_fragment(docs)
+        return ""
 
     def _build_nested_code_def_refs(self, max_depth: int = 10) -> list[QueryReference]:
         """
