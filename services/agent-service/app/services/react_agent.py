@@ -265,6 +265,8 @@ class ReActAgent:
                 )
             else:
                 tool_data = result.get("data", {})
+                if not isinstance(tool_data, dict):
+                    tool_data = {"result": tool_data}
                 logger.info(
                     "tool_execution_success",
                     request_id=request_id,

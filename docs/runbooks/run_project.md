@@ -153,6 +153,33 @@ What this does:
 - Rebuilds images (`--build`)
 - Removes stale/orphan containers (`--remove-orphans`)
 
+### Data persistence: Weaviate vs Postgres
+
+Weaviate uses a **bind mount** (`./.weaviate_data:/var/lib/weaviate`), while
+Postgres uses a **named Docker volume** (`postgres-data`). This distinction
+matters when running `docker compose down`:
+
+| Command                     | Postgres data | Weaviate data |
+| --------------------------- | ------------- | ------------- |
+| `docker compose down`       | Kept          | Kept          |
+| `docker compose down -v`    | **Deleted**   | Kept          |
+| `docker compose up --build` | Intact        | Intact        |
+| `rm -rf .weaviate_data`     | Intact        | **Deleted**   |
+
+`docker compose down -v` only removes **named volumes** — it does not touch bind
+mounts (host directories). So `.weaviate_data/` and your ingested chunks survive
+any Docker restart. You only lose them by manually deleting the directory.
+
+**Restarting after code changes** — no need for `down -v`:
+
+```bash
+docker compose up --build --remove-orphans
+```
+
+This rebuilds images with your code changes while keeping both databases intact.
+Use `down -v` only when you intentionally want to reset Postgres (e.g. schema
+changes that need a fresh migration).
+
 ## 6. Confirm Services Are Healthy
 
 In another terminal:
