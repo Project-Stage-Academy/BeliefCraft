@@ -203,8 +203,7 @@ class RagTools:
         self,
         document_ids: Annotated[
             list[str],
-            "Algorithm or example document IDs (UUIDs) whose referenced class, method, and function"
-            " definitions are retrieved.",
+            "Algorithm or example document IDs to retrieve related code definitions.",
         ],
     ) -> str:
         """
