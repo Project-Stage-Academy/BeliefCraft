@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -41,6 +42,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
+
+    # Configure LangSmith tracing
+    # Env vars must be set in os.environ before the first LangChain call.
+    # Pydantic-settings reads .env into the Settings object but does NOT write
+    # back to os.environ, so we propagate the values explicitly here.
+    if settings.LANGCHAIN_TRACING_V2 and settings.LANGCHAIN_API_KEY:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
+        if settings.LANGCHAIN_PROJECT:
+            os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
+        logger.info(
+            "langsmith_tracing_enabled",
+            project=settings.LANGCHAIN_PROJECT,
+        )
+    else:
+        logger.info("langsmith_tracing_disabled")
 
     # Verify AWS credentials early (fail-fast in production)
     from app.services.health_checker import verify_aws_credentials_at_startup
