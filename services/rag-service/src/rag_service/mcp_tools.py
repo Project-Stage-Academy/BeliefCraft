@@ -203,16 +203,17 @@ class RagTools:
         self,
         document_ids: Annotated[
             list[str],
-            "List of document IDs (UUIDs) from which to follow code-definition references.",
+            "Algorithm or example document IDs (UUIDs) whose referenced class, method, and function"
+            " definitions are retrieved.",
         ],
     ) -> str:
         """
-        Retrieve the Python source code related to a set of documents (algorithms or examples).
+        Retrieve Python source code definitions used by the specified documents
+        (algorithms or examples).
 
-        Follows ``referenced_classes``, ``referenced_methods``, and
-        ``referenced_functions`` links from the given document IDs, collects all
-        reachable code-definition entities (CodeClass, CodeMethod, CodeFunction),
-        and returns them as a single ordered Python source fragment.
+        Returns the class, method, and function definitions that are called or used
+        within the given algorithm or example but defined elsewhere. The collected
+        definitions are returned as a single ordered Python source fragment.
         """
         logger.info(
             "rag tool call",
