@@ -99,3 +99,10 @@ Canonical request/response schemas are in:
 - Main DB variable: `DATABASE_URL`
 - YAML config root: `services/environment-api/config/default.yaml`
 - Optional config override env var: `ENVIRONMENT_API_CONFIG`
+
+
+## Database data population
+It's important to provide --force-wipe flag to ensure that this process fully recreates db.
+```cli
+uv run python -m environment_api.data_generator.generate_seed_data --force-wipe
+```
