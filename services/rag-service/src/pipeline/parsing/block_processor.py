@@ -105,7 +105,7 @@ class CaptionFinder:
         return caption_text, caption_rect
 
     def extract_captions(self, page: PyMuPDFPage) -> list[BlockData]:
-        page_dict = page.get_text("dict")
+        page_dict = page.get_text("dict", sort=True)
         captions = []
         for block in page_dict.get("blocks", []):
             if "lines" not in block:
@@ -116,6 +116,14 @@ class CaptionFinder:
                 continue
 
             first_line_text = "".join(span["text"] for span in first_line["spans"])
+
+            if first_line_text in ("Example", "Algorithm"):
+                second_line = block["lines"][1]
+                if "spans" not in second_line:
+                    continue
+
+                first_line_text += " " + "".join(span["text"] for span in second_line["spans"])
+
             block_type = self.classify_text(first_line_text)
 
             if block_type == BlockType.OTHER.value:
@@ -137,7 +145,10 @@ class CaptionFinder:
                     prev_line_bbox = line_bbox
                     line_rect = fitz.Rect(line_bbox)
                     caption_rect = line_rect if caption_rect is None else (caption_rect | line_rect)
-                    caption_text += " ".join(span["text"] for span in line["spans"]) + " "
+                    caption_text += (
+                        " ".join(span["text"] for span in line["spans"] if span["text"].strip())
+                        + " "
+                    )
 
             if caption_text and caption_rect:
                 captions.append(
