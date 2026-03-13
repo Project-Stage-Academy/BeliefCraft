@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import weaviate
-from scripts.embed_chunks import (
+from rag_scripts.embed_chunks import (
     COLLECTION_NAME,
     REFERENCE_TYPE_MAP,
     build_reference_map,
