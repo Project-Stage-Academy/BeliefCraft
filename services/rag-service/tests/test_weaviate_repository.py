@@ -44,6 +44,213 @@ class FixedWeaviateContainer(WeaviateContainer):
         response.raise_for_status()
 
 
+def _vector_config():
+    return Configure.Vectors.self_provided(
+        vector_index_config=Configure.VectorIndex.flat(distance_metric=VectorDistances.COSINE)
+    )
+
+
+async def _add_reference_if_missing(collection, name: str, target: str) -> None:
+    config = await collection.config.get()
+    if any(ref.name == name for ref in config.references):
+        return
+    maybe_awaitable = collection.config.add_reference(
+        ReferenceProperty(name=name, target_collection=target)
+    )
+    if inspect.isawaitable(maybe_awaitable):
+        await maybe_awaitable
+
+
+async def _create_collections(client):
+    await client.collections.create(
+        name=CODE_CLASS_COLLECTION,
+        vector_config=_vector_config(),
+        references=[],
+    )
+    await client.collections.create(
+        name=CODE_FUNCTION_COLLECTION,
+        vector_config=_vector_config(),
+        references=[],
+    )
+    await client.collections.create(
+        name=CODE_METHOD_COLLECTION,
+        vector_config=_vector_config(),
+        references=[
+            ReferenceProperty(name=CLASS_REF_FIELD, target_collection=CODE_CLASS_COLLECTION),
+        ],
+    )
+    await client.collections.create(
+        name=COLLECTION_NAME,
+        vector_config=_vector_config(),
+        references=[
+            ReferenceProperty(name=name, target_collection=COLLECTION_NAME)
+            for name in REFERENCE_TYPE_MAP
+        ],
+    )
+
+    return (
+        client.collections.get(COLLECTION_NAME),
+        client.collections.get(CODE_CLASS_COLLECTION),
+        client.collections.get(CODE_METHOD_COLLECTION),
+        client.collections.get(CODE_FUNCTION_COLLECTION),
+    )
+
+
+async def _configure_cross_collection_refs(collection, code_classes, code_methods, code_functions):
+    await _add_reference_if_missing(
+        collection, ChunkCodeRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
+    )
+    await _add_reference_if_missing(
+        collection, ChunkCodeRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
+    )
+    await _add_reference_if_missing(
+        collection, ChunkCodeRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
+    )
+
+    for code_collection in (code_classes, code_methods, code_functions):
+        await _add_reference_if_missing(
+            code_collection, CodeEntityRef.INITIALIZED_CLASSES, CODE_CLASS_COLLECTION
+        )
+        await _add_reference_if_missing(
+            code_collection, CodeEntityRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
+        )
+        await _add_reference_if_missing(
+            code_collection, CodeEntityRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
+        )
+        await _add_reference_if_missing(code_collection, ALGORITHM_REF_FIELD, COLLECTION_NAME)
+
+
+async def _seed_chunk_documents(collection):
+    await collection.data.insert(
+        properties={
+            "content": "E=mc^2",
+            "chunk_type": "numbered_formula",
+            "entity_id": "F1",
+            "page": 5,
+        },
+        uuid=F1_UUID,
+        vector=[0.1] * 2,
+    )
+    await collection.data.insert(
+        properties={
+            "content": "QuickSort",
+            "chunk_type": "algorithm",
+            "entity_id": "A1",
+            "page": 10,
+        },
+        uuid=A1_UUID,
+        vector=[0.2] * 2,
+    )
+    await collection.data.insert(
+        properties={
+            "content": "Physics and Sorting",
+            "chunk_type": "text",
+            "page": 1,
+            "section_title": "Intro",
+        },
+        uuid=ROOT_UUID,
+        vector=[0.3] * 2,
+    )
+    await collection.data.insert(
+        properties={"content": "Unrelated info", "chunk_type": "text", "page": 100},
+        uuid=OTHER_UUID,
+        vector=[0.4] * 2,
+    )
+    await collection.data.insert(
+        properties={
+            "content": "Example",
+            "chunk_type": "example",
+            "page": 101,
+            "entity_id": "3.1",
+        },
+        uuid=EXAMPLE_UUID,
+        vector=[0.5] * 2,
+    )
+
+
+async def _seed_code_documents(code_classes, code_methods, code_functions):
+    await code_classes.data.insert(
+        properties={
+            "name": "Runner",
+            "content": "class Runner:\n    def __init__(self):\n        self.enabled = True",
+        },
+        uuid=CODE_CLASS_UUID,
+        vector=[0.11] * 2,
+    )
+    await code_methods.data.insert(
+        properties={
+            "name": "run",
+            "content": "def run(self):\n    return execute()",
+        },
+        uuid=CODE_METHOD_UUID,
+        vector=[0.12] * 2,
+    )
+    await code_functions.data.insert(
+        properties={
+            "name": "execute",
+            "content": "def execute():\n    return helper()",
+        },
+        uuid=CODE_CALLER_UUID,
+        vector=[0.13] * 2,
+    )
+    await code_functions.data.insert(
+        properties={
+            "name": "helper",
+            "content": "def helper():\n    return 1",
+        },
+        uuid=CODE_CALLEE_UUID,
+        vector=[0.14] * 2,
+    )
+    await code_functions.data.insert(
+        properties={
+            "name": "unrelated",
+            "content": "def unrelated():\n    return -1",
+        },
+        uuid=CODE_UNRELATED_UUID,
+        vector=[0.15] * 2,
+    )
+
+
+async def _seed_references(collection, code_methods, code_functions):
+    await collection.data.reference_add(
+        from_uuid=ROOT_UUID, from_property="referenced_formulas", to=F1_UUID
+    )
+    await collection.data.reference_add(
+        from_uuid=ROOT_UUID, from_property="referenced_algorithms", to=A1_UUID
+    )
+    await collection.data.reference_add(
+        from_uuid=F1_UUID, from_property="referenced_examples", to=EXAMPLE_UUID
+    )
+
+    await collection.data.reference_add(
+        from_uuid=ROOT_UUID,
+        from_property=ChunkCodeRef.REFERENCED_METHODS,
+        to=CODE_METHOD_UUID,
+    )
+    await collection.data.reference_add(
+        from_uuid=ROOT_UUID,
+        from_property=ChunkCodeRef.REFERENCED_FUNCTIONS,
+        to=CODE_CALLER_UUID,
+    )
+
+    await code_methods.data.reference_add(
+        from_uuid=CODE_METHOD_UUID,
+        from_property=CLASS_REF_FIELD,
+        to=CODE_CLASS_UUID,
+    )
+    await code_methods.data.reference_add(
+        from_uuid=CODE_METHOD_UUID,
+        from_property=CodeEntityRef.REFERENCED_FUNCTIONS,
+        to=CODE_CALLER_UUID,
+    )
+
+    await code_functions.data.reference_add(
+        from_uuid=CODE_CALLER_UUID,
+        from_property=CodeEntityRef.REFERENCED_FUNCTIONS,
+        to=CODE_CALLEE_UUID,
+    )
+
+
 @pytest.fixture(scope="module")
 async def weaviate_setup():
     """Module-scoped fixture to start Weaviate, load test data and yield client."""
@@ -52,221 +259,20 @@ async def weaviate_setup():
         port = int(container.get_exposed_port(8080))
         grpc_port = int(container.get_exposed_port(50051))
 
-        client = weaviate.use_async_with_local(
-            host=host,
-            port=port,
-            grpc_port=grpc_port,
-        )
+        client = weaviate.use_async_with_local(host=host, port=port, grpc_port=grpc_port)
         await client.connect()
 
-        async def add_reference_if_missing(collection, name: str, target: str) -> None:
-            config = await collection.config.get()
-            if any(ref.name == name for ref in config.references):
-                return
-            maybe_awaitable = collection.config.add_reference(
-                ReferenceProperty(name=name, target_collection=target)
-            )
-            if inspect.isawaitable(maybe_awaitable):
-                await maybe_awaitable
-
-        # Create code collections first, then attach cross-collection references in phase 2.
-        await client.collections.create(
-            name=CODE_CLASS_COLLECTION,
-            vector_config=Configure.Vectors.self_provided(
-                vector_index_config=Configure.VectorIndex.flat(
-                    distance_metric=VectorDistances.COSINE,
-                ),
-            ),
-            references=[],
-        )
-
-        await client.collections.create(
-            name=CODE_FUNCTION_COLLECTION,
-            vector_config=Configure.Vectors.self_provided(
-                vector_index_config=Configure.VectorIndex.flat(
-                    distance_metric=VectorDistances.COSINE,
-                ),
-            ),
-            references=[],
-        )
-
-        await client.collections.create(
-            name=CODE_METHOD_COLLECTION,
-            vector_config=Configure.Vectors.self_provided(
-                vector_index_config=Configure.VectorIndex.flat(
-                    distance_metric=VectorDistances.COSINE,
-                ),
-            ),
-            references=[
-                ReferenceProperty(name=CLASS_REF_FIELD, target_collection=CODE_CLASS_COLLECTION),
-            ],
-        )
-
-        await client.collections.create(
-            name=COLLECTION_NAME,
-            vector_config=Configure.Vectors.self_provided(
-                vector_index_config=Configure.VectorIndex.flat(
-                    distance_metric=VectorDistances.COSINE,
-                ),
-            ),
-            references=[
-                ReferenceProperty(name=name, target_collection=COLLECTION_NAME)
-                for name in REFERENCE_TYPE_MAP
-            ],
-        )
-
-        collection = client.collections.get(COLLECTION_NAME)
-        code_classes = client.collections.get(CODE_CLASS_COLLECTION)
-        code_methods = client.collections.get(CODE_METHOD_COLLECTION)
-        code_functions = client.collections.get(CODE_FUNCTION_COLLECTION)
-
-        await add_reference_if_missing(
-            collection, ChunkCodeRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
-        )
-        await add_reference_if_missing(
-            collection, ChunkCodeRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
-        )
-        await add_reference_if_missing(
-            collection, ChunkCodeRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
-        )
-
-        for code_collection in (code_classes, code_methods, code_functions):
-            await add_reference_if_missing(
-                code_collection, CodeEntityRef.INITIALIZED_CLASSES, CODE_CLASS_COLLECTION
-            )
-            await add_reference_if_missing(
-                code_collection, CodeEntityRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
-            )
-            await add_reference_if_missing(
-                code_collection, CodeEntityRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
-            )
-            await add_reference_if_missing(code_collection, ALGORITHM_REF_FIELD, COLLECTION_NAME)
-
-        await collection.data.insert(
-            properties={
-                "content": "E=mc^2",
-                "chunk_type": "numbered_formula",
-                "entity_id": "F1",
-                "page": 5,
-            },
-            uuid=F1_UUID,
-            vector=[0.1] * 2,
-        )
-        await collection.data.insert(
-            properties={
-                "content": "QuickSort",
-                "chunk_type": "algorithm",
-                "entity_id": "A1",
-                "page": 10,
-            },
-            uuid=A1_UUID,
-            vector=[0.2] * 2,
-        )
-        await collection.data.insert(
-            properties={
-                "content": "Physics and Sorting",
-                "chunk_type": "text",
-                "page": 1,
-                "section_title": "Intro",
-            },
-            uuid=ROOT_UUID,
-            vector=[0.3] * 2,
-        )
-        await collection.data.insert(
-            properties={"content": "Unrelated info", "chunk_type": "text", "page": 100},
-            uuid=OTHER_UUID,
-            vector=[0.4] * 2,
-        )
-        await collection.data.insert(
-            properties={
-                "content": "Example",
-                "chunk_type": "example",
-                "page": 101,
-                "entity_id": "3.1",
-            },
-            uuid=EXAMPLE_UUID,
-            vector=[0.5] * 2,
-        )
-        await collection.data.reference_add(
-            from_uuid=ROOT_UUID, from_property="referenced_formulas", to=F1_UUID
-        )
-        await collection.data.reference_add(
-            from_uuid=ROOT_UUID, from_property="referenced_algorithms", to=A1_UUID
-        )
-        await collection.data.reference_add(
-            from_uuid=F1_UUID, from_property="referenced_examples", to=EXAMPLE_UUID
-        )
-
-        await code_classes.data.insert(
-            properties={
-                "name": "Runner",
-                "content": "class Runner:\n    def __init__(self):\n        self.enabled = True",
-            },
-            uuid=CODE_CLASS_UUID,
-            vector=[0.11] * 2,
-        )
-        await code_methods.data.insert(
-            properties={
-                "name": "run",
-                "content": "def run(self):\n    return execute()",
-            },
-            uuid=CODE_METHOD_UUID,
-            vector=[0.12] * 2,
-        )
-        await code_functions.data.insert(
-            properties={
-                "name": "execute",
-                "content": "def execute():\n    return helper()",
-            },
-            uuid=CODE_CALLER_UUID,
-            vector=[0.13] * 2,
-        )
-        await code_functions.data.insert(
-            properties={
-                "name": "helper",
-                "content": "def helper():\n    return 1",
-            },
-            uuid=CODE_CALLEE_UUID,
-            vector=[0.14] * 2,
-        )
-        await code_functions.data.insert(
-            properties={
-                "name": "unrelated",
-                "content": "def unrelated():\n    return -1",
-            },
-            uuid=CODE_UNRELATED_UUID,
-            vector=[0.15] * 2,
-        )
-
-        await collection.data.reference_add(
-            from_uuid=ROOT_UUID,
-            from_property=ChunkCodeRef.REFERENCED_METHODS,
-            to=CODE_METHOD_UUID,
-        )
-        await collection.data.reference_add(
-            from_uuid=ROOT_UUID,
-            from_property=ChunkCodeRef.REFERENCED_FUNCTIONS,
-            to=CODE_CALLER_UUID,
-        )
-
-        await code_methods.data.reference_add(
-            from_uuid=CODE_METHOD_UUID,
-            from_property=CLASS_REF_FIELD,
-            to=CODE_CLASS_UUID,
-        )
-        await code_methods.data.reference_add(
-            from_uuid=CODE_METHOD_UUID,
-            from_property=CodeEntityRef.REFERENCED_FUNCTIONS,
-            to=CODE_CALLER_UUID,
-        )
-
-        await code_functions.data.reference_add(
-            from_uuid=CODE_CALLER_UUID,
-            from_property=CodeEntityRef.REFERENCED_FUNCTIONS,
-            to=CODE_CALLEE_UUID,
-        )
-
         try:
+            collection, code_classes, code_methods, code_functions = await _create_collections(
+                client
+            )
+            await _configure_cross_collection_refs(
+                collection, code_classes, code_methods, code_functions
+            )
+            await _seed_chunk_documents(collection)
+            await _seed_code_documents(code_classes, code_methods, code_functions)
+            await _seed_references(collection, code_methods, code_functions)
+
             yield {
                 "host": host,
                 "port": port,
