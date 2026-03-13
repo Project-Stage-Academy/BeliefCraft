@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from sync_mcp_config import (
+from scripts.sync_mcp_config import (
     CodexTomlTransformer,
     ConfigSynchronizer,
     JsonTransformer,
