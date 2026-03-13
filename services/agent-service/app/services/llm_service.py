@@ -173,9 +173,10 @@ class LLMService:
 
             response = await chain.ainvoke(lc_messages)
 
-            usage = response.response_metadata.get("usage", {})
-            prompt_tokens = usage.get("input_tokens", 0)
-            completion_tokens = usage.get("output_tokens", 0)
+            # Extract tokens from usage_metadata (LangChain/Bedrock standard format)
+            usage_metadata = response.usage_metadata or {}
+            prompt_tokens = usage_metadata.get("input_tokens", 0)
+            completion_tokens = usage_metadata.get("output_tokens", 0)
 
             stop_reason = response.response_metadata.get("stop_reason")
             finish_reason = "tool_calls" if stop_reason == "tool_use" else "stop"

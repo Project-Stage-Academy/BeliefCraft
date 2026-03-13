@@ -123,10 +123,8 @@ class TestChatCompletion:
     async def test_basic_text_response(self, llm_service: LLMService) -> None:
         mock_response = AIMessage(
             content="The stock level is 42 units.",
-            response_metadata={
-                "usage": {"input_tokens": 10, "output_tokens": 15},
-                "stop_reason": "end_turn",
-            },
+            response_metadata={"stop_reason": "end_turn"},
+            usage_metadata={"input_tokens": 10, "output_tokens": 15, "total_tokens": 25},
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
@@ -146,10 +144,8 @@ class TestChatCompletion:
     async def test_response_with_tool_calls(self, llm_service: LLMService) -> None:
         mock_response = AIMessage(
             content="",
-            response_metadata={
-                "usage": {"input_tokens": 20, "output_tokens": 30},
-                "stop_reason": "tool_use",
-            },
+            response_metadata={"stop_reason": "tool_use"},
+            usage_metadata={"input_tokens": 20, "output_tokens": 30, "total_tokens": 50},
             tool_calls=[
                 {
                     "id": "call_123",
@@ -190,10 +186,8 @@ class TestChatCompletion:
         """finish_reason should be 'tool_calls' even if stop_reason is not 'tool_use'."""
         mock_response = AIMessage(
             content="",
-            response_metadata={
-                "usage": {"input_tokens": 5, "output_tokens": 10},
-                "stop_reason": "end_turn",
-            },
+            response_metadata={"stop_reason": "end_turn"},
+            usage_metadata={"input_tokens": 5, "output_tokens": 10, "total_tokens": 15},
             tool_calls=[{"id": "call_456", "name": "lookup", "args": {"id": "1"}}],
         )
         mock_chain = MagicMock()
@@ -211,10 +205,8 @@ class TestChatCompletion:
         """When response.content is a list of content blocks, text is extracted."""
         mock_response = AIMessage(
             content=[{"type": "text", "text": "hello"}],
-            response_metadata={
-                "usage": {"input_tokens": 5, "output_tokens": 5},
-                "stop_reason": "end_turn",
-            },
+            response_metadata={"stop_reason": "end_turn"},
+            usage_metadata={"input_tokens": 5, "output_tokens": 5, "total_tokens": 10},
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
@@ -230,10 +222,8 @@ class TestChatCompletion:
                 {"type": "tool_use", "id": "tc_1", "name": "x", "input": {}},
                 {"type": "text", "text": "second"},
             ],
-            response_metadata={
-                "usage": {"input_tokens": 5, "output_tokens": 5},
-                "stop_reason": "end_turn",
-            },
+            response_metadata={"stop_reason": "end_turn"},
+            usage_metadata={"input_tokens": 5, "output_tokens": 5, "total_tokens": 10},
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
@@ -265,10 +255,8 @@ class TestChatCompletion:
     async def test_tools_are_bound_when_provided(self, llm_service: LLMService) -> None:
         mock_response = AIMessage(
             content="done",
-            response_metadata={
-                "usage": {"input_tokens": 1, "output_tokens": 1},
-                "stop_reason": "end_turn",
-            },
+            response_metadata={"stop_reason": "end_turn"},
+            usage_metadata={"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
         )
         mock_chain = MagicMock()
         mock_chain.ainvoke = AsyncMock(return_value=mock_response)
@@ -285,10 +273,8 @@ class TestChatCompletion:
     async def test_no_tools_calls_llm_directly(self, llm_service: LLMService) -> None:
         mock_response = AIMessage(
             content="direct response",
-            response_metadata={
-                "usage": {"input_tokens": 1, "output_tokens": 1},
-                "stop_reason": "end_turn",
-            },
+            response_metadata={"stop_reason": "end_turn"},
+            usage_metadata={"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
@@ -302,10 +288,8 @@ class TestExtractThought:
     async def test_extract_thought_returns_content(self, llm_service: LLMService) -> None:
         mock_response = AIMessage(
             content="I should search the inventory database.",
-            response_metadata={
-                "usage": {"input_tokens": 5, "output_tokens": 10},
-                "stop_reason": "end_turn",
-            },
+            response_metadata={"stop_reason": "end_turn"},
+            usage_metadata={"input_tokens": 5, "output_tokens": 10, "total_tokens": 15},
         )
         llm_service.llm.ainvoke = AsyncMock(return_value=mock_response)
 
