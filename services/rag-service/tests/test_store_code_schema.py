@@ -6,7 +6,7 @@ import json
 import logging
 from unittest.mock import MagicMock, patch
 
-from scripts.store_code_schema import (
+from rag_scripts.store_code_schema import (
     main,
     setup_collections,
 )
