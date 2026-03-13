@@ -105,7 +105,7 @@ class CaptionFinder:
         return caption_text, caption_rect
 
     def extract_captions(self, page: PyMuPDFPage) -> list[BlockData]:
-        page_dict = page.get_text("dict", sort=True)
+        page_dict = page.get_text("dict")
         captions = []
         for block in page_dict.get("blocks", []):
             if "lines" not in block:
