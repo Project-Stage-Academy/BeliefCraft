@@ -138,6 +138,7 @@ services:
     command: ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
     volumes:
       - ./services/agent-service/app:/app/services/agent-service/app
+      - ./services/agent-service/skills:/app/skills
       - ./packages/common:/app/packages/common
     depends_on:
       redis:
