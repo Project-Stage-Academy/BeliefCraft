@@ -105,8 +105,8 @@ def _fake_examples():
     return [{"example_number": "Example 1.1.", "text": "Use Foo().", "description": ""}]
 
 
-@patch("scripts.store_code_schema.weaviate.connect_to_local")
-@patch("scripts.store_code_schema.build_code_schema")
+@patch("rag_scripts.store_code_schema.weaviate.connect_to_local")
+@patch("rag_scripts.store_code_schema.build_code_schema")
 def test_main_runs_without_error(mock_build_schema, mock_connect, tmp_path):
     alg_file = tmp_path / "algs.json"
     alg_file.write_text(json.dumps(_fake_algorithms()))
@@ -133,8 +133,8 @@ def test_main_runs_without_error(mock_build_schema, mock_connect, tmp_path):
         main()  # Should not raise
 
 
-@patch("scripts.store_code_schema.weaviate.connect_to_local")
-@patch("scripts.store_code_schema.build_code_schema")
+@patch("rag_scripts.store_code_schema.weaviate.connect_to_local")
+@patch("rag_scripts.store_code_schema.build_code_schema")
 def test_main_exits_gracefully_on_bad_algorithms_file(
     mock_build_schema, mock_connect, tmp_path, caplog
 ):
@@ -152,8 +152,8 @@ def test_main_exits_gracefully_on_bad_algorithms_file(
     mock_connect.assert_not_called()
 
 
-@patch("scripts.store_code_schema.weaviate.connect_to_local")
-@patch("scripts.store_code_schema.build_code_schema")
+@patch("rag_scripts.store_code_schema.weaviate.connect_to_local")
+@patch("rag_scripts.store_code_schema.build_code_schema")
 def test_main_exits_gracefully_on_bad_examples_file(
     mock_build_schema, mock_connect, tmp_path, caplog
 ):
@@ -180,8 +180,8 @@ def test_main_exits_gracefully_on_bad_examples_file(
     mock_connect.assert_not_called()
 
 
-@patch("scripts.store_code_schema.weaviate.connect_to_local")
-@patch("scripts.store_code_schema.build_code_schema")
+@patch("rag_scripts.store_code_schema.weaviate.connect_to_local")
+@patch("rag_scripts.store_code_schema.build_code_schema")
 def test_main_skips_example_refs_when_examples_list_is_empty(
     mock_build_schema, mock_connect, tmp_path
 ):
