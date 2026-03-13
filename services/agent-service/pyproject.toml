@@ -23,7 +23,8 @@ dependencies = [
   "langchain-aws>=0.1",
   "langchain-core>=0.1",
   "langgraph>=0.1",
-  "fastmcp<3",
+  "fastmcp>=3",
+  "langsmith>=0.1",
 ]
 
 [tool.uv.sources]

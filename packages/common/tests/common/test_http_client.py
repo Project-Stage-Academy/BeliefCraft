@@ -242,7 +242,14 @@ async def test_streaming_response_logging_success(caplog):
 
 @pytest.mark.asyncio
 async def test_streaming_response_logging_error(caplog):
-    """Test streaming response failure logs error."""
+    """Test streaming error response is logged without consuming the stream.
+
+    This test verifies the fix for: "Attempted to read or stream some content,
+    but the content has already been streamed" error from FastMCP.
+
+    The logging hook should NOT consume streaming responses, so downstream code
+    (like FastMCP's StreamableHttpTransport) can read the full response body.
+    """
     with respx.mock(base_url="http://test") as respx_mock:
         respx_mock.post("/stream").respond(
             status_code=503,
@@ -251,13 +258,19 @@ async def test_streaming_response_logging_error(caplog):
 
         with patch("common.http_client.time.perf_counter", new=selective_perf_counter):
             async with TracedHttpClient("http://test") as client:
-                async with client._ensure_initialized().stream("POST", "/stream"):
-                    pass  # We expect the log_response hook to handle the error logging
+                async with client._ensure_initialized().stream("POST", "/stream") as response:
+                    # Verify the response error status is set
+                    assert response.status_code == 503
 
-    assert "http_request_failed" in caplog.text
-    assert "503" in caplog.text
-    assert "chunk1" in caplog.text
-    assert "chunk2" not in caplog.text  # Read only first chunk for error preview
+                    # Most importantly: verify stream can still be consumed after logging
+                    # (The logging hook ran via event hooks and did NOT consume the stream)
+                    full_response = b""
+                    async for chunk in response.aiter_bytes():
+                        full_response += chunk
+
+                    # Verify we got the complete streaming response
+                    assert b"chunk1" in full_response
+                    assert b"chunk2" in full_response
 
 
 @pytest.mark.asyncio

@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 T = TypeVar("T", bound=BaseSettings)
 
-_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}")
 
 
 class ConfigLoader:
@@ -172,11 +172,13 @@ class ConfigLoader:
             raw = dotenv_values(dotenv_path)
             dotenv_vars = {k: v for k, v in raw.items() if v is not None}
 
-        def resolve(var: str, key_path: str) -> str:
+        def resolve(var: str, default: str | None, key_path: str) -> str:
             if var in dotenv_vars:
                 return dotenv_vars[var]
             if var in os.environ:
                 return os.environ[var]
+            if default is not None:
+                return default
             raise MissingEnvironmentVariableError(var, key_path)
 
         def walk(x: Any, path: str) -> Any:
@@ -187,7 +189,7 @@ class ConfigLoader:
             if isinstance(x, str):
 
                 def repl(m: re.Match[str]) -> str:
-                    return resolve(m.group(1), path)
+                    return resolve(m.group(1), m.group(2), path)
 
                 return _VAR_PATTERN.sub(repl, x)
             return x

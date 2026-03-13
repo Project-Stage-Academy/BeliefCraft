@@ -11,7 +11,8 @@ any MCP server tool to our BaseTool interface following SOLID principles:
 - Dependency Inversion: Depends on abstract MCP client interface
 """
 
-from typing import Any, Protocol, cast
+import json
+from typing import Any, Protocol
 
 from app.tools.base import BaseTool, ToolMetadata
 from common.logging import get_logger
@@ -122,5 +123,41 @@ class MCPTool(BaseTool):
             result_type=type(result).__name__,
         )
 
-        # Cast result to expected return type
-        return cast(dict[str, Any], result)
+        return _unwrap_call_tool_result(result)
+
+
+def _unwrap_call_tool_result(result: Any) -> dict[str, Any]:
+    """Convert FastMCP ``CallToolResult`` dataclass to a plain dict.
+
+    ``fastmcp.client.Client.call_tool()`` always returns a ``CallToolResult``
+    dataclass with ``structured_content: dict | None`` and ``data: Any``.
+    Our downstream ``ToolCall.result`` field requires ``dict[str, Any]``,
+    so we extract the payload and ensure it is a dict.
+    """
+    if isinstance(result, dict):
+        return result
+
+    # CallToolResult.structured_content is the primary payload.
+    structured = getattr(result, "structured_content", None)
+    if isinstance(structured, dict):
+        # When the server tool has x-fastmcp-wrap-result, structured_content
+        # looks like {"result": <actual_value>}.  Unwrap single-key dicts,
+        # but keep lists wrapped so the return value stays dict[str, Any].
+        if len(structured) == 1 and "result" in structured:
+            inner = structured["result"]
+            return inner if isinstance(inner, dict) else {"result": inner}
+        return structured
+
+    # structured_content was None (tool had no output_schema).
+    # Fall back to the text content block that FastMCP always provides.
+    content_blocks = getattr(result, "content", None)
+    if isinstance(content_blocks, list) and content_blocks:
+        text = getattr(content_blocks[0], "text", None)
+        if isinstance(text, str):
+            try:
+                parsed = json.loads(text)
+                return parsed if isinstance(parsed, dict) else {"result": parsed}
+            except (json.JSONDecodeError, TypeError):
+                return {"text": text}
+
+    return {"raw": str(result)}

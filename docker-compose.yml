@@ -47,6 +47,7 @@ services:
       ENABLE_MODULES: 'backup-filesystem,text2vec-aws'
       BACKUP_FILESYSTEM_PATH: '/backups'
       CLUSTER_HOSTNAME: 'node1'
+      QUERY_CROSS_REFERENCE_DEPTH_LIMIT: 15
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
       interval: 5s
@@ -111,7 +112,7 @@ services:
       - ./services/rag-service/.env
     command: ["/app/.venv/bin/uvicorn", "rag_service.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
     volumes:
-      - ./services/rag-service/src:/app/services/rag-service/src
+      - ./services/rag-service/src:/app/src
       - ./packages/common:/app/packages/common
     depends_on:
       weaviate:
@@ -130,11 +131,16 @@ services:
       - "8003:8003"
     env_file:
       - ./services/agent-service/.env
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
     command: ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
     volumes:
       - ./services/agent-service/app:/app/services/agent-service/app
+      - ./services/agent-service/skills:/app/skills
       - ./packages/common:/app/packages/common
-      - ~/.aws:/home/agent/.aws:ro
     depends_on:
       redis:
         condition: service_healthy

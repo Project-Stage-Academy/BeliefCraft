@@ -1,0 +1,339 @@
+import json
+
+import pytest
+from pipeline.parsing.main import DocumentAssembler
+
+
+@pytest.fixture
+def mock_data_env(tmp_path):
+    """Create a mock environment with necessary files for testing DocumentAssembler."""
+    paddle_dir = tmp_path / "paddle_results"
+    paddle_dir.mkdir()
+
+    paddle_file = paddle_dir / "page_1.json"
+    paddle_data = {
+        "page_num": 1,
+        "prunedResult": {
+            "parsing_res_list": [
+                {
+                    "block_content": "CHAPTER 1 INTRODUCTION",
+                    "block_label": "title",
+                    "block_bbox": [10, 10, 100, 20],
+                },
+                {
+                    "block_content": "This is a simple text paragraph.",
+                    "block_label": "text",
+                    "block_bbox": [10, 30, 100, 50],
+                },
+            ]
+        },
+    }
+    paddle_file.write_text(json.dumps([paddle_data]), encoding="utf-8")
+
+    figures_json = tmp_path / "figures.json"
+    figures_json.write_text(json.dumps([]), encoding="utf-8")
+
+    blocks_json = tmp_path / "blocks.json"
+    blocks_json.write_text(json.dumps([]), encoding="utf-8")
+
+    tables_json = tmp_path / "tables.json"
+    tables_json.write_text(json.dumps([]), encoding="utf-8")
+
+    formulas_json = tmp_path / "formulas.json"
+    formulas_json.write_text(json.dumps({" (1.1)": "E = mc^2"}), encoding="utf-8")
+
+    return {
+        "paddle_dir": paddle_dir,
+        "figures": figures_json,
+        "blocks": blocks_json,
+        "tables": tables_json,
+        "formulas": formulas_json,
+        "output": tmp_path / "ULTIMATE_BOOK_DATA.json",
+    }
+
+
+def test_assembler_initialization(mock_data_env):
+    """Test that DocumentAssembler initializes correctly with mock data."""
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    assert len(assembler.paddle_pages) == 1
+    assert assembler.formula_map[" (1.1)"] == "E = mc^2"
+
+
+def test_generate_deterministic_id():
+    """Test that the ID generation is deterministic and consistent."""
+    with pytest.raises(FileNotFoundError):
+        DocumentAssembler("no", "no", "no", "no", "no")
+
+
+def test_assembler_safe_load_non_existent(mock_data_env):
+    """Test that _safe_load_json returns an empty dict when the file does not exist."""
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    res = assembler._safe_load_json("imaginary_file.json")
+    assert res == {}
+
+    uid = assembler._generate_deterministic_id("text", "1.1", "some content")
+    assert "text_1.1_" in uid
+
+    assert assembler._extract_id("Figure 1.2") == "1.2"
+    assert assembler._extract_id("Table 10.5") == "10.5"
+    assert assembler._extract_id(None) is None
+
+
+def test_assembler_is_inside(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    assert assembler._is_inside([100, 100, 200, 200], [90, 90, 210, 210]) is True
+    assert assembler._is_inside([100, 100, 200, 200], [300, 300, 400, 400]) is False
+    assert assembler._is_inside([], [10, 10, 20, 20]) is False
+
+
+def test_merge_visual_items(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    items = [
+        {"entity_id": "fig_1", "bbox": [10, 10, 50, 50], "chunk_type": "image"},
+        {"entity_id": "fig_1", "bbox": [40, 40, 100, 100], "image_index": 5},
+    ]
+    merged = assembler._merge_visual_items(items)
+
+    assert "fig_1" in merged
+    assert merged["fig_1"]["bbox"] == [10, 10, 100, 100]
+    assert merged["fig_1"]["image_index"] == 5
+
+
+def test_assembler_load_and_offset(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    path = mock_data_env["paddle_dir"] / "temp_test.json"
+    path.write_text(json.dumps([{"page": "not_an_int"}, {"page": 5}]), encoding="utf-8")
+
+    res = assembler._load_and_offset(path, "page", offset=10)
+    assert 15 in res
+
+
+def test_assembler_load_and_offset_edge_cases(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    bad_json = mock_data_env["paddle_dir"] / "bad_data.json"
+    bad_json.write_text(json.dumps([{"page": "not_a_number"}, {"page": 10}]), encoding="utf-8")
+
+    res = assembler._load_and_offset(bad_json, "page", offset=5)
+    assert 15 in res  # 10 + 5
+
+    assert assembler._safe_load_json("missing.json") == {}
+
+
+def test_document_assembler_full_flow(mock_data_env, monkeypatch):
+    """Comprehensive test of the DocumentAssembler's full flow with mocked data."""
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    assembler.image_map = {
+        1: [{"chunk_type": "captioned_image", "entity_id": "1.1", "content": "Fig 1"}]
+    }
+    assembler.table_map = {1: [{"caption_content": "Table 1.1", "table_content": "data"}]}
+
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+
+    assembler.assemble()
+
+    assert len(assembler.final_chunks) > 0
+
+
+def test_assembler_flush_empty(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    assembler._flush([], 1)
+    assert len(assembler.final_chunks) == 0
+
+    assembler._flush(["Hello"], 1)
+    assert len(assembler.final_chunks) > 0
+
+
+def test_assembler_id_generation_variants(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    id1 = assembler._generate_deterministic_id("image", None, "content1")
+    id2 = assembler._generate_deterministic_id("table", "2.2", "content1")
+
+    assert id1 != id2
+    assert "image_" in id1
+    assert "table_2.2_" in id2
+
+
+def test_assembler_simple_helpers(mock_data_env):
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    assert assembler._extract_id("Exercise 5.1") == "5.1"
+    assert assembler._extract_id("Just text") is None
+
+    meta = {"section_title": "Test"}
+    obj = assembler._create_chunk_obj("text", "content", 1, meta)
+    assert obj["chunk_type"] == "text"
+    assert obj["page"] == 1
+
+
+def test_id_generation_logic(mock_data_env):
+
+    assembler = DocumentAssembler(
+        mock_data_env["paddle_dir"],
+        mock_data_env["figures"],
+        mock_data_env["blocks"],
+        mock_data_env["tables"],
+        mock_data_env["formulas"],
+    )
+
+    id1 = assembler._generate_deterministic_id("text", "1.1", "content")
+    id2 = assembler._generate_deterministic_id("text", None, "content")
+
+    assert id1 != id2
+    assert len(id1) > 0
+
+
+def test_assembler_markdown_priority(mock_data_env):
+    """Test that Markdown content takes priority over PaddleOCR content."""
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    page_data = {
+        "page_num": 10,
+        "markdown": {"text": "Formula: $E=mc^2$"},
+        "prunedResult": {
+            "parsing_res_list": [
+                {
+                    "block_content": "Formula: E=mc2",
+                    "block_label": "text",
+                    "block_bbox": [0, 0, 10, 10],
+                }
+            ]
+        },
+    }
+
+    assembler._process_page(0, page_data)
+
+    assert len(assembler.final_chunks) == 1
+    assert assembler.final_chunks[0]["content"] == "Formula: $E=mc^2$"
+    assert assembler.final_chunks[0]["page"] == 10
+
+
+def test_handle_visual_objects_overlap(mock_data_env):
+    """
+    Test that overlapping visual objects are handled correctly.
+    Data is provided through mock files to avoid direct state mutation.
+    """
+    mock_block_data = [
+        {
+            "page": 1,
+            "entity_id": "4.4",
+            "bbox": [0, 0, 100, 100],
+            "chunk_type": "example",
+            "caption": "Example 4.4",
+        }
+    ]
+    mock_data_env["blocks"].write_text(json.dumps(mock_block_data), encoding="utf-8")
+
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    blocks_from_paddle = [
+        {
+            "block_content": "Example 4.4 text inside box",
+            "block_bbox": [10, 10, 50, 50],
+            "block_label": "text",
+        },
+        {
+            "block_content": "Normal text outside",
+            "block_bbox": [200, 200, 300, 300],
+            "block_label": "text",
+        },
+    ]
+
+    used = assembler._handle_visual_objects(1, blocks_from_paddle)
+
+    assert 0 in used
+    assert 1 not in used
+    assert any(c["chunk_type"] == "example" for c in assembler.final_chunks)
+    example_chunk = next(c for c in assembler.final_chunks if c["chunk_type"] == "example")
+    assert example_chunk["entity_id"] == "4.4"
+
+
+def test_extract_id_strict_regex(mock_data_env):
+    """Test that ID is extracted correctly with the new fallback logic."""
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+
+    assert assembler._extract_id("Example 4.4") == "4.4"
+    assert assembler._extract_id("Exercise 1.2") == "1.2"
+
+    assert assembler._extract_id("The value is 4.4") == "4.4"
+
+    assert assembler._extract_id("Value is 100") is None

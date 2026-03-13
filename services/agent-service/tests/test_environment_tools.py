@@ -1,26 +1,42 @@
 """
 Unit tests for environment tools.
 
-Tests all 7 environment tools:
-- GetCurrentObservationsTool
-- GetOrderBacklogTool
-- GetShipmentsInTransitTool
-- CalculateStockoutProbabilityTool
-- CalculateLeadTimeRiskTool
-- GetInventoryHistoryTool
+Tests all 21 environment tools organized by module:
+- PROCUREMENT MODULE (6 tools)
+- INVENTORY AUDIT MODULE (4 tools)
+- TOPOLOGY MODULE (6 tools)
+- DEVICE MONITORING MODULE (4 tools)
+- OBSERVED INVENTORY MODULE (1 tool)
 """
 
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
+# Import all environment tools (21 total across 5 modules)
 from app.tools.environment_tools import (
-    CalculateLeadTimeRiskTool,
-    CalculateStockoutProbabilityTool,
-    GetCurrentObservationsTool,
-    GetInventoryHistoryTool,
-    GetOrderBacklogTool,
-    GetShipmentsInTransitTool,
+    GetCapacityUtilizationSnapshotTool,
+    GetDeviceAnomaliesTool,
+    GetDeviceHealthSummaryTool,
+    GetInventoryAdjustmentsSummaryTool,
+    GetInventoryMoveAuditTraceTool,
+    GetInventoryMoveTool,
+    GetLocationsTreeTool,
+    GetLocationTool,
+    GetObservedInventorySnapshotTool,
+    GetProcurementPipelineSummaryTool,
+    GetPurchaseOrderTool,
+    GetSensorDeviceTool,
+    GetSupplierTool,
+    GetWarehouseTool,
+    ListInventoryMovesTool,
+    ListLocationsTool,
+    ListPOLinesTool,
+    ListPurchaseOrdersTool,
+    ListSensorDevicesTool,
+    ListSuppliersTool,
+    ListWarehousesTool,
 )
 
 
@@ -33,158 +49,330 @@ def mock_env_client() -> AsyncMock:
     return client
 
 
-class TestGetCurrentObservationsTool:
-    """Tests for GetCurrentObservationsTool."""
+# ========================================
+# PROCUREMENT MODULE TESTS (6 tools)
+# ========================================
+
+
+class TestListSuppliersTool:
+    """Tests for ListSuppliersTool."""
 
     @pytest.mark.asyncio
     async def test_metadata(self) -> None:
         """Test tool metadata is correct."""
-        tool = GetCurrentObservationsTool()
+        tool = ListSuppliersTool()
         metadata = tool.get_metadata()
 
-        assert metadata.name == "get_current_observations"
+        assert metadata.name == "list_suppliers"
         assert metadata.category == "environment"
-        assert "observations" in metadata.description.lower()
+        assert "supplier" in metadata.description.lower()
+        assert "region" in metadata.parameters["properties"]
+        assert metadata.parameters["required"] == []
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = ListSuppliersTool()
+
+        mock_response = {
+            "suppliers": [
+                {"id": "SUP1", "name": "Supplier A", "reliability_score": 0.95, "region": "US"},
+                {"id": "SUP2", "name": "Supplier B", "reliability_score": 0.88, "region": "EU"},
+            ]
+        }
+        mock_env_client.list_suppliers.return_value = mock_response
+
+        with patch(
+            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
+        ):
+            result = await tool.execute(region="US", reliability_min=0.9)
+
+            assert result == mock_response
+            mock_env_client.list_suppliers.assert_called_once_with(
+                region="US", reliability_min=0.9, name_like=None
+            )
+
+
+class TestListPurchaseOrdersTool:
+    """Tests for ListPurchaseOrdersTool."""
+
+    @pytest.mark.asyncio
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = ListPurchaseOrdersTool()
+        metadata = tool.get_metadata()
+
+        assert metadata.name == "list_purchase_orders"
+        assert metadata.category == "environment"
+        assert "purchase order" in metadata.description.lower()
+        assert "supplier_id" in metadata.parameters["properties"]
+
+    @pytest.mark.asyncio
+    async def test_execute_with_filters(self, mock_env_client: AsyncMock) -> None:
+        """Test execution with filters."""
+        tool = ListPurchaseOrdersTool()
+
+        mock_response: dict[str, Any] = {
+            "purchase_orders": [
+                {"id": "PO1", "supplier_id": "SUP1", "status": "pending"},
+            ]
+        }
+        mock_env_client.list_purchase_orders.return_value = mock_response
+
+        with patch(
+            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
+        ):
+            result = await tool.execute(supplier_id="SUP1", status_in=["pending", "confirmed"])
+
+            assert result == mock_response
+            mock_env_client.list_purchase_orders.assert_called_once()
+
+
+class TestGetProcurementPipelineSummaryTool:
+    """Tests for GetProcurementPipelineSummaryTool."""
+
+    @pytest.mark.asyncio
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = GetProcurementPipelineSummaryTool()
+        metadata = tool.get_metadata()
+
+        assert metadata.name == "get_procurement_pipeline_summary"
+        assert metadata.category == "environment"
+        assert "pipeline" in metadata.description.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = GetProcurementPipelineSummaryTool()
+
+        mock_response = {
+            "open_po_count": 15,
+            "total_qty_ordered": 1000,
+            "total_qty_received": 650,
+            "total_remaining": 350,
+        }
+        mock_env_client.get_procurement_pipeline_summary.return_value = mock_response
+
+        with patch(
+            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
+        ):
+            result = await tool.execute(destination_warehouse_id="WH1")
+
+            assert result == mock_response
+            mock_env_client.get_procurement_pipeline_summary.assert_called_once()
+
+
+# ========================================
+# INVENTORY AUDIT MODULE TESTS (4 tools)
+# ========================================
+
+
+class TestListInventoryMovesTool:
+    """Tests for ListInventoryMovesTool."""
+
+    @pytest.mark.asyncio
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = ListInventoryMovesTool()
+        metadata = tool.get_metadata()
+
+        assert metadata.name == "list_inventory_moves"
+        assert metadata.category == "environment"
+        assert "movement" in metadata.description.lower()
+        assert "warehouse_id" in metadata.parameters["properties"]
         assert "product_id" in metadata.parameters["properties"]
-        assert "location_id" in metadata.parameters["properties"]
-        assert "warehouse_id" in metadata.parameters["properties"]
-        assert metadata.parameters["required"] == []
-
-    @pytest.mark.asyncio
-    async def test_execute_success_no_filters(self, mock_env_client: AsyncMock) -> None:
-        """Test successful execution without filters."""
-        tool = GetCurrentObservationsTool()
-
-        mock_response = {
-            "observations": [
-                {"product_id": "P1", "quantity": 100, "location_id": "L1"},
-                {"product_id": "P2", "quantity": 50, "location_id": "L2"},
-            ]
-        }
-        mock_env_client.get_current_observations.return_value = mock_response
-
-        with patch(
-            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
-        ):
-            result = await tool.execute()
-
-            assert result == mock_response
-            mock_env_client.get_current_observations.assert_called_once_with(
-                product_id=None, location_id=None, warehouse_id=None
-            )
-
-    @pytest.mark.asyncio
-    async def test_execute_success_with_filters(self, mock_env_client: AsyncMock) -> None:
-        """Test successful execution with filters."""
-        tool = GetCurrentObservationsTool()
-
-        mock_response = {"observations": [{"product_id": "P1", "quantity": 100}]}
-        mock_env_client.get_current_observations.return_value = mock_response
-
-        with patch(
-            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
-        ):
-            result = await tool.execute(product_id="P1", warehouse_id="WH1")
-
-            assert result == mock_response
-            mock_env_client.get_current_observations.assert_called_once_with(
-                product_id="P1", location_id=None, warehouse_id="WH1"
-            )
-
-    @pytest.mark.asyncio
-    async def test_to_openai_function(self) -> None:
-        """Test conversion to OpenAI function schema."""
-        tool = GetCurrentObservationsTool()
-        schema = tool.to_openai_function()
-
-        assert schema["type"] == "function"
-        assert schema["function"]["name"] == "get_current_observations"
-        assert "parameters" in schema["function"]
-
-
-class TestGetOrderBacklogTool:
-    """Tests for GetOrderBacklogTool."""
-
-    @pytest.mark.asyncio
-    async def test_metadata(self) -> None:
-        """Test tool metadata is correct."""
-        tool = GetOrderBacklogTool()
-        metadata = tool.get_metadata()
-
-        assert metadata.name == "get_order_backlog"
-        assert metadata.category == "environment"
-        assert "order" in metadata.description.lower()
-        assert "status" in metadata.parameters["properties"]
-        assert "priority" in metadata.parameters["properties"]
-        assert metadata.parameters["required"] == []
 
     @pytest.mark.asyncio
     async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
         """Test successful execution."""
-        tool = GetOrderBacklogTool()
+        tool = ListInventoryMovesTool()
 
         mock_response = {
-            "orders": [
-                {"order_id": "O1", "status": "pending", "priority": "high"},
-                {"order_id": "O2", "status": "processing", "priority": "medium"},
+            "moves": [
+                {"id": "M1", "product_id": "P1", "move_type": "transfer", "qty": 50},
+                {"id": "M2", "product_id": "P2", "move_type": "adjustment", "qty": -10},
             ]
         }
-        mock_env_client.get_order_backlog.return_value = mock_response
+        mock_env_client.list_inventory_moves.return_value = mock_response
 
         with patch(
             "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
         ):
-            result = await tool.execute(status="pending", priority="high")
+            result = await tool.execute(warehouse_id="WH1", move_type="adjustment")
 
             assert result == mock_response
-            mock_env_client.get_order_backlog.assert_called_once_with(
-                status="pending", priority="high"
-            )
-
-    @pytest.mark.asyncio
-    async def test_execute_without_filters(self, mock_env_client: AsyncMock) -> None:
-        """Test execution without filters."""
-        tool = GetOrderBacklogTool()
-
-        mock_response: dict[str, Any] = {"orders": []}
-        mock_env_client.get_order_backlog.return_value = mock_response
-
-        with patch(
-            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
-        ):
-            result = await tool.execute()
-
-            assert result == mock_response
-            mock_env_client.get_order_backlog.assert_called_once_with(status=None, priority=None)
+            mock_env_client.list_inventory_moves.assert_called_once()
 
 
-class TestGetShipmentsInTransitTool:
-    """Tests for GetShipmentsInTransitTool."""
+class TestGetInventoryMoveAuditTraceTool:
+    """Tests for GetInventoryMoveAuditTraceTool."""
 
     @pytest.mark.asyncio
     async def test_metadata(self) -> None:
         """Test tool metadata is correct."""
-        tool = GetShipmentsInTransitTool()
+        tool = GetInventoryMoveAuditTraceTool()
         metadata = tool.get_metadata()
 
-        assert metadata.name == "get_shipments_in_transit"
+        assert metadata.name == "get_inventory_move_audit_trace"
         assert metadata.category == "environment"
-        assert "shipment" in metadata.description.lower()
-        assert "warehouse_id" in metadata.parameters["properties"]
-        assert metadata.parameters["required"] == []
+        assert "audit" in metadata.description.lower()
+        assert metadata.parameters["required"] == ["move_id"]
 
     @pytest.mark.asyncio
     async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
         """Test successful execution."""
-        tool = GetShipmentsInTransitTool()
+        tool = GetInventoryMoveAuditTraceTool()
 
         mock_response = {
-            "shipments": [
-                {"shipment_id": "S1", "status": "in_transit", "destination": "WH1"},
-                {"shipment_id": "S2", "status": "in_transit", "destination": "WH2"},
+            "move": {"id": "M1", "product_id": "P1"},
+            "observations": [{"id": "O1", "related_move_id": "M1"}],
+        }
+        mock_env_client.get_inventory_move_audit_trace.return_value = mock_response
+
+        with patch(
+            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
+        ):
+            result = await tool.execute(move_id="M1")
+
+            assert result == mock_response
+            mock_env_client.get_inventory_move_audit_trace.assert_called_once_with(move_id="M1")
+
+
+class TestGetInventoryAdjustmentsSummaryTool:
+    """Tests for GetInventoryAdjustmentsSummaryTool."""
+
+    @pytest.mark.asyncio
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = GetInventoryAdjustmentsSummaryTool()
+        metadata = tool.get_metadata()
+
+        assert metadata.name == "get_inventory_adjustments_summary"
+        assert metadata.category == "environment"
+        assert "adjustment" in metadata.description.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = GetInventoryAdjustmentsSummaryTool()
+
+        mock_response = {
+            "count": 25,
+            "total_qty": -150,
+            "breakdown": {"damaged": -80, "lost": -50, "found": 20},
+        }
+        mock_env_client.get_inventory_adjustments_summary.return_value = mock_response
+
+        with patch(
+            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
+        ):
+            result = await tool.execute(warehouse_id="WH1", product_id="P1")
+
+            assert result == mock_response
+
+
+# ========================================
+# TOPOLOGY MODULE TESTS (6 tools)
+# ========================================
+
+
+class TestListWarehousesTool:
+    """Tests for ListWarehousesTool."""
+
+    @pytest.mark.asyncio
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = ListWarehousesTool()
+        metadata = tool.get_metadata()
+
+        assert metadata.name == "list_warehouses"
+        assert metadata.category == "environment"
+        assert "warehouse" in metadata.description.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = ListWarehousesTool()
+
+        mock_response = {
+            "warehouses": [
+                {"id": "WH1", "name": "Main Warehouse", "region": "US", "tz": "America/New_York"},
+                {"id": "WH2", "name": "EU Warehouse", "region": "EU", "tz": "Europe/Paris"},
             ]
         }
-        mock_env_client.get_shipments_in_transit.return_value = mock_response
+        mock_env_client.list_warehouses.return_value = mock_response
+
+        with patch(
+            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
+        ):
+            result = await tool.execute(region="US")
+
+            assert result == mock_response
+            mock_env_client.list_warehouses.assert_called_once_with(region="US")
+
+
+class TestListLocationsTool:
+    """Tests for ListLocationsTool."""
+
+    @pytest.mark.asyncio
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = ListLocationsTool()
+        metadata = tool.get_metadata()
+
+        assert metadata.name == "list_locations"
+        assert metadata.category == "environment"
+        assert "location" in metadata.description.lower()
+        assert metadata.parameters["required"] == ["warehouse_id"]
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = ListLocationsTool()
+
+        mock_response = {
+            "locations": [
+                {"id": "L1", "warehouse_id": "WH1", "code": "A-01", "type": "shelf"},
+                {"id": "L2", "warehouse_id": "WH1", "code": "B-01", "type": "bin"},
+            ]
+        }
+        mock_env_client.list_locations.return_value = mock_response
+
+        with patch(
+            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
+        ):
+            result = await tool.execute(warehouse_id="WH1", type="shelf")
+
+            assert result == mock_response
+
+
+class TestGetLocationsTreeTool:
+    """Tests for GetLocationsTreeTool."""
+
+    @pytest.mark.asyncio
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = GetLocationsTreeTool()
+        metadata = tool.get_metadata()
+
+        assert metadata.name == "get_locations_tree"
+        assert metadata.category == "environment"
+        assert "tree" in metadata.description.lower()
+        assert metadata.parameters["required"] == ["warehouse_id"]
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = GetLocationsTreeTool()
+
+        mock_response = {
+            "warehouse_id": "WH1",
+            "tree": [
+                {"id": "L1", "code": "A", "children": [{"id": "L2", "code": "A-01"}]},
+            ],
+        }
+        mock_env_client.get_locations_tree.return_value = mock_response
 
         with patch(
             "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
@@ -192,179 +380,206 @@ class TestGetShipmentsInTransitTool:
             result = await tool.execute(warehouse_id="WH1")
 
             assert result == mock_response
-            mock_env_client.get_shipments_in_transit.assert_called_once_with(warehouse_id="WH1")
+            mock_env_client.get_locations_tree.assert_called_once_with(warehouse_id="WH1")
 
 
-class TestCalculateStockoutProbabilityTool:
-    """Tests for CalculateStockoutProbabilityTool."""
+class TestGetCapacityUtilizationSnapshotTool:
+    """Tests for GetCapacityUtilizationSnapshotTool."""
 
     @pytest.mark.asyncio
     async def test_metadata(self) -> None:
         """Test tool metadata is correct."""
-        tool = CalculateStockoutProbabilityTool()
+        tool = GetCapacityUtilizationSnapshotTool()
         metadata = tool.get_metadata()
 
-        assert metadata.name == "calculate_stockout_probability"
+        assert metadata.name == "get_capacity_utilization_snapshot"
         assert metadata.category == "environment"
-        assert "stockout" in metadata.description.lower()
-        assert "product_id" in metadata.parameters["properties"]
-        assert metadata.parameters["required"] == ["product_id"]
+        assert "capacity" in metadata.description.lower()
+        assert metadata.parameters["required"] == ["warehouse_id"]
 
     @pytest.mark.asyncio
     async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
         """Test successful execution."""
-        tool = CalculateStockoutProbabilityTool()
+        tool = GetCapacityUtilizationSnapshotTool()
 
         mock_response = {
-            "product_id": "P1",
-            "probability": 0.35,
-            "risk_level": "medium",
-            "recommendation": "Consider reordering",
+            "locations": [
+                {
+                    "location_id": "L1",
+                    "capacity_units": 1000,
+                    "on_hand_sum": 750,
+                    "utilization": 0.75,
+                },
+            ]
         }
-        mock_env_client.calculate_stockout_probability.return_value = mock_response
+        mock_env_client.get_capacity_utilization_snapshot.return_value = mock_response
 
         with patch(
             "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
         ):
-            result = await tool.execute(product_id="P1")
+            result = await tool.execute(warehouse_id="WH1")
 
             assert result == mock_response
-            mock_env_client.calculate_stockout_probability.assert_called_once_with(product_id="P1")
-
-    @pytest.mark.asyncio
-    async def test_execute_high_risk(self, mock_env_client: AsyncMock) -> None:
-        """Test execution with high stockout risk."""
-        tool = CalculateStockoutProbabilityTool()
-
-        mock_response = {"product_id": "P2", "probability": 0.85, "risk_level": "high"}
-        mock_env_client.calculate_stockout_probability.return_value = mock_response
-
-        with patch(
-            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
-        ):
-            result = await tool.execute(product_id="P2")
-
-            assert result["probability"] == 0.85
-            assert result["risk_level"] == "high"
 
 
-class TestCalculateLeadTimeRiskTool:
-    """Tests for CalculateLeadTimeRiskTool."""
+# ========================================
+# DEVICE MONITORING MODULE TESTS (4 tools)
+# ========================================
+
+
+class TestListSensorDevicesTool:
+    """Tests for ListSensorDevicesTool."""
 
     @pytest.mark.asyncio
     async def test_metadata(self) -> None:
         """Test tool metadata is correct."""
-        tool = CalculateLeadTimeRiskTool()
+        tool = ListSensorDevicesTool()
         metadata = tool.get_metadata()
 
-        assert metadata.name == "calculate_lead_time_risk"
+        assert metadata.name == "list_sensor_devices"
         assert metadata.category == "environment"
-        assert "lead time" in metadata.description.lower()
-        assert "supplier_id" in metadata.parameters["properties"]
-        assert "route_id" in metadata.parameters["properties"]
-        assert metadata.parameters["required"] == []
+        assert "sensor" in metadata.description.lower() or "device" in metadata.description.lower()
+        assert metadata.skip_cache is True  # Real-time data
 
     @pytest.mark.asyncio
-    async def test_execute_success_with_supplier(self, mock_env_client: AsyncMock) -> None:
-        """Test successful execution with supplier filter."""
-        tool = CalculateLeadTimeRiskTool()
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = ListSensorDevicesTool()
 
         mock_response = {
-            "supplier_id": "SUP1",
-            "mean_lead_time_days": 14,
-            "std_dev": 3.5,
-            "cvar_95": 21,
-            "reliability_score": 0.85,
+            "devices": [
+                {"id": "D1", "warehouse_id": "WH1", "device_type": "rfid", "status": "online"},
+                {"id": "D2", "warehouse_id": "WH1", "device_type": "barcode", "status": "offline"},
+            ]
         }
-        mock_env_client.calculate_lead_time_risk.return_value = mock_response
+        mock_env_client.list_sensor_devices.return_value = mock_response
 
         with patch(
             "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
         ):
-            result = await tool.execute(supplier_id="SUP1")
+            result = await tool.execute(warehouse_id="WH1", status="online")
 
             assert result == mock_response
-            mock_env_client.calculate_lead_time_risk.assert_called_once_with(
-                supplier_id="SUP1", route_id=None
-            )
-
-    @pytest.mark.asyncio
-    async def test_execute_success_with_route(self, mock_env_client: AsyncMock) -> None:
-        """Test successful execution with route filter."""
-        tool = CalculateLeadTimeRiskTool()
-
-        mock_response: dict[str, Any] = {
-            "route_id": "R1",
-            "mean_lead_time_days": 7,
-            "risk_level": "low",
-        }
-        mock_env_client.calculate_lead_time_risk.return_value = mock_response
-
-        with patch(
-            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
-        ):
-            result = await tool.execute(route_id="R1")
-
-            assert result == mock_response
-            mock_env_client.calculate_lead_time_risk.assert_called_once_with(
-                supplier_id=None, route_id="R1"
-            )
 
 
-class TestGetInventoryHistoryTool:
-    """Tests for GetInventoryHistoryTool."""
+class TestGetDeviceHealthSummaryTool:
+    """Tests for GetDeviceHealthSummaryTool."""
 
     @pytest.mark.asyncio
     async def test_metadata(self) -> None:
         """Test tool metadata is correct."""
-        tool = GetInventoryHistoryTool()
+        tool = GetDeviceHealthSummaryTool()
         metadata = tool.get_metadata()
 
-        assert metadata.name == "get_inventory_history"
+        assert metadata.name == "get_device_health_summary"
         assert metadata.category == "environment"
-        assert "historical" in metadata.description.lower()
-        assert "product_id" in metadata.parameters["properties"]
-        assert "days" in metadata.parameters["properties"]
-        assert metadata.parameters["required"] == ["product_id"]
+        assert "health" in metadata.description.lower()
 
     @pytest.mark.asyncio
-    async def test_execute_success_default_days(self, mock_env_client: AsyncMock) -> None:
-        """Test successful execution with default days parameter."""
-        tool = GetInventoryHistoryTool()
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = GetDeviceHealthSummaryTool()
 
-        mock_response: dict[str, Any] = {
-            "product_id": "P1",
-            "days": 30,
-            "history": [
-                {"date": "2024-01-01", "quantity": 100},
-                {"date": "2024-01-02", "quantity": 95},
-            ],
+        mock_response = {
+            "total_devices": 50,
+            "online": 45,
+            "offline": 5,
+            "avg_confidence": 0.92,
         }
-        mock_env_client.get_inventory_history.return_value = mock_response
+        mock_env_client.get_device_health_summary.return_value = mock_response
 
         with patch(
             "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
         ):
-            result = await tool.execute(product_id="P1")
+            result = await tool.execute(warehouse_id="WH1")
 
             assert result == mock_response
-            mock_env_client.get_inventory_history.assert_called_once_with(product_id="P1", days=30)
+
+
+class TestGetDeviceAnomaliesTool:
+    """Tests for GetDeviceAnomaliesTool."""
 
     @pytest.mark.asyncio
-    async def test_execute_success_custom_days(self, mock_env_client: AsyncMock) -> None:
-        """Test successful execution with custom days parameter."""
-        tool = GetInventoryHistoryTool()
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = GetDeviceAnomaliesTool()
+        metadata = tool.get_metadata()
 
-        mock_response: dict[str, Any] = {"product_id": "P1", "days": 90, "history": []}
-        mock_env_client.get_inventory_history.return_value = mock_response
+        assert metadata.name == "get_device_anomalies"
+        assert metadata.category == "environment"
+        assert "anomal" in metadata.description.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = GetDeviceAnomaliesTool()
+
+        mock_response = {
+            "anomalies": [
+                {"device_id": "D1", "type": "offline_but_producing", "severity": "high"},
+                {"device_id": "D2", "type": "low_confidence", "severity": "medium"},
+            ]
+        }
+        mock_env_client.get_device_anomalies.return_value = mock_response
 
         with patch(
             "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
         ):
-            result = await tool.execute(product_id="P1", days=90)
+            result = await tool.execute(warehouse_id="WH1", window=60)
 
             assert result == mock_response
-            mock_env_client.get_inventory_history.assert_called_once_with(product_id="P1", days=90)
+
+
+# ========================================
+# OBSERVED INVENTORY MODULE TESTS (1 tool)
+# ========================================
+
+
+class TestGetObservedInventorySnapshotTool:
+    """Tests for GetObservedInventorySnapshotTool."""
+
+    @pytest.mark.asyncio
+    async def test_metadata(self) -> None:
+        """Test tool metadata is correct."""
+        tool = GetObservedInventorySnapshotTool()
+        metadata = tool.get_metadata()
+
+        assert metadata.name == "get_observed_inventory_snapshot"
+        assert metadata.category == "environment"
+        assert "observed" in metadata.description.lower()
+        assert "quality_status_in" in metadata.parameters["properties"]
+        assert metadata.skip_cache is True  # Real-time observations
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
+        """Test successful execution."""
+        tool = GetObservedInventorySnapshotTool()
+
+        mock_response = {
+            "observations": [
+                {
+                    "product_id": "P1",
+                    "location_id": "L1",
+                    "observed_qty": 100,
+                    "confidence": 0.95,
+                    "quality_status": "good",
+                },
+            ]
+        }
+        mock_env_client.get_observed_inventory_snapshot.return_value = mock_response
+
+        with patch(
+            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
+        ):
+            result = await tool.execute(quality_status_in=["good", "inspected"])
+
+            assert result == mock_response
+            mock_env_client.get_observed_inventory_snapshot.assert_called_once()
+
+
+# ========================================
+# INTEGRATION TESTS
+# ========================================
 
 
 class TestToolIntegration:
@@ -372,16 +587,37 @@ class TestToolIntegration:
 
     @pytest.mark.asyncio
     async def test_all_tools_have_correct_category(self) -> None:
-        """Test that all tools have 'environment' category."""
+        """Test that all 21 tools have 'environment' category."""
         tools = [
-            GetCurrentObservationsTool(),
-            GetOrderBacklogTool(),
-            GetShipmentsInTransitTool(),
-            CalculateStockoutProbabilityTool(),
-            CalculateLeadTimeRiskTool(),
-            GetInventoryHistoryTool(),
+            # Procurement (6)
+            ListSuppliersTool(),
+            GetSupplierTool(),
+            ListPurchaseOrdersTool(),
+            GetPurchaseOrderTool(),
+            ListPOLinesTool(),
+            GetProcurementPipelineSummaryTool(),
+            # Inventory Audit (4)
+            ListInventoryMovesTool(),
+            GetInventoryMoveTool(),
+            GetInventoryMoveAuditTraceTool(),
+            GetInventoryAdjustmentsSummaryTool(),
+            # Topology (6)
+            ListWarehousesTool(),
+            GetWarehouseTool(),
+            ListLocationsTool(),
+            GetLocationTool(),
+            GetLocationsTreeTool(),
+            GetCapacityUtilizationSnapshotTool(),
+            # Device Monitoring (4)
+            ListSensorDevicesTool(),
+            GetSensorDeviceTool(),
+            GetDeviceHealthSummaryTool(),
+            GetDeviceAnomaliesTool(),
+            # Observed Inventory (1)
+            GetObservedInventorySnapshotTool(),
         ]
 
+        assert len(tools) == 21  # Verify we have all 21 tools
         for tool in tools:
             assert tool.metadata.category == "environment"
 
@@ -389,12 +625,12 @@ class TestToolIntegration:
     async def test_all_tools_have_openai_schemas(self) -> None:
         """Test that all tools can generate OpenAI function schemas."""
         tools = [
-            GetCurrentObservationsTool(),
-            GetOrderBacklogTool(),
-            GetShipmentsInTransitTool(),
-            CalculateStockoutProbabilityTool(),
-            CalculateLeadTimeRiskTool(),
-            GetInventoryHistoryTool(),
+            ListSuppliersTool(),
+            ListPurchaseOrdersTool(),
+            ListInventoryMovesTool(),
+            ListWarehousesTool(),
+            ListSensorDevicesTool(),
+            GetObservedInventorySnapshotTool(),
         ]
 
         for tool in tools:
@@ -405,117 +641,22 @@ class TestToolIntegration:
             assert "description" in schema["function"]
             assert "parameters" in schema["function"]
 
-    @pytest.mark.asyncio
-    async def test_tool_run_wrapper_success(self, mock_env_client: AsyncMock) -> None:
-        """Test that BaseTool.run() wrapper works correctly."""
-        tool = GetCurrentObservationsTool()
-
-        mock_response: dict[str, Any] = {"observations": []}
-        mock_env_client.get_current_observations.return_value = mock_response
-
-        with patch(
-            "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
-        ):
-            result = await tool.run(product_id="P1")
-
-            assert result.success is True
-            assert result.data == mock_response
-            assert result.execution_time_ms > 0
-            assert result.error is None
-
-    @pytest.mark.asyncio
-    async def test_tool_run_wrapper_error(self) -> None:
-        """Test that BaseTool.run() handles errors correctly."""
-        tool = GetCurrentObservationsTool()
-
-        # Create a mock that raises exception when method is called
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.get_current_observations = AsyncMock(side_effect=Exception("API Error"))
-
-        with patch("app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_client):
-            result = await tool.run()
-
-            assert result.success is False
-            assert result.data is None
-            assert result.error is not None
-            assert "API Error" in result.error
-            assert result.execution_time_ms > 0
-
-
-class TestDependencyInjection:
-    """Tests for dependency injection functionality."""
-
-    @pytest.mark.asyncio
-    async def test_tool_with_injected_client(self, mock_env_client: AsyncMock) -> None:
-        """Test tool works with injected client (no patching needed)."""
-        # Create tool with injected client
-        tool = GetCurrentObservationsTool(client=mock_env_client)
-
-        mock_response = {"observations": [{"product_id": "P1", "quantity": 100}]}
-        mock_env_client.get_current_observations.return_value = mock_response
-
-        # No patching needed - using injected client
-        result = await tool.execute(product_id="P1")
-
-        assert result == mock_response
-        mock_env_client.get_current_observations.assert_called_once_with(
-            product_id="P1", location_id=None, warehouse_id=None
-        )
-
-    @pytest.mark.asyncio
-    async def test_multiple_tools_share_client(self, mock_env_client: AsyncMock) -> None:
-        """Test multiple tools can share same client instance."""
-        # Create multiple tools sharing same client
-        tool1 = GetCurrentObservationsTool(client=mock_env_client)
-        tool2 = CalculateStockoutProbabilityTool(client=mock_env_client)
-
-        mock_env_client.get_current_observations.return_value = {"observations": []}
-        mock_env_client.calculate_stockout_probability.return_value = {"probability": 0.5}
-
-        await tool1.execute()
-        await tool2.execute(product_id="P1")
-
-        # Both tools used same client
-        assert mock_env_client.get_current_observations.call_count == 1
-        assert mock_env_client.calculate_stockout_probability.call_count == 1
-
 
 class TestParameterValidation:
     """Tests for parameter validation in tools."""
 
     @pytest.mark.asyncio
-    async def test_missing_required_parameter(self) -> None:
+    async def test_missing_required_parameter_in_audit_trace(self) -> None:
         """Test that missing required parameter raises ValueError."""
-        tool = CalculateStockoutProbabilityTool()
+        tool = GetInventoryMoveAuditTraceTool()
 
-        with pytest.raises(ValueError, match="Missing required parameter.*product_id"):
-            await tool.execute()  # Missing product_id
-
-    @pytest.mark.asyncio
-    async def test_missing_required_parameter_in_history_tool(self) -> None:
-        """Test missing required parameter in history tool."""
-        tool = GetInventoryHistoryTool()
-
-        with pytest.raises(ValueError, match="Missing required parameter.*product_id"):
-            await tool.execute(days=60)  # Missing product_id
+        with pytest.raises(ValueError, match="Missing required parameter.*move_id"):
+            await tool.execute()  # Missing move_id
 
     @pytest.mark.asyncio
-    async def test_invalid_days_parameter(self) -> None:
-        """Test invalid days parameter validation."""
-        tool = GetInventoryHistoryTool()
+    async def test_missing_required_parameter_in_locations_tree(self) -> None:
+        """Test missing required parameter in locations tree tool."""
+        tool = GetLocationsTreeTool()
 
-        with pytest.raises(ValueError, match="days must be an integer between 1 and 365"):
-            await tool.execute(product_id="P1", days=500)  # days > 365
-
-        with pytest.raises(ValueError, match="days must be an integer between 1 and 365"):
-            await tool.execute(product_id="P1", days=0)  # days < 1
-
-    @pytest.mark.asyncio
-    async def test_empty_product_id(self) -> None:
-        """Test empty product_id validation."""
-        tool = GetInventoryHistoryTool()
-
-        with pytest.raises(ValueError, match="product_id must be a non-empty string"):
-            await tool.execute(product_id="", days=30)
+        with pytest.raises(ValueError, match="Missing required parameter.*warehouse_id"):
+            await tool.execute()  # Missing warehouse_id

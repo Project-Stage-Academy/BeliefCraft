@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -37,10 +38,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     for each request.
     """
     from app.clients.rag_mcp_client import RAGMCPClient
-    from app.tools import register_mcp_rag_tools
+    from app.tools import register_mcp_rag_tools, register_skill_tools
 
     # Startup
     logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
+
+    # Configure LangSmith tracing
+    # Env vars must be set in os.environ before the first LangChain call.
+    # Pydantic-settings reads .env into the Settings object but does NOT write
+    # back to os.environ, so we propagate the values explicitly here.
+    if settings.LANGCHAIN_TRACING_V2 and settings.LANGCHAIN_API_KEY:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
+        if settings.LANGCHAIN_PROJECT:
+            os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
+        logger.info(
+            "langsmith_tracing_enabled",
+            project=settings.LANGCHAIN_PROJECT,
+        )
+    else:
+        logger.info("langsmith_tracing_disabled")
+
+    # Verify AWS credentials early (fail-fast in production)
+    from app.services.health_checker import verify_aws_credentials_at_startup
+
+    verify_aws_credentials_at_startup(settings)
 
     # Create persistent HTTP client
     http_client = TracedHttpClient("", timeout=HEALTH_CHECK_TIMEOUT)
@@ -78,6 +100,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Close MCP client on failure
         await mcp_client.close()
         # Continue startup without RAG tools (graceful degradation)
+
+    # Register skill tools (local file system - no external dependencies)
+    logger.info("loading_skill_tools", skills_dir=settings.SKILLS_DIR)
+    try:
+        register_skill_tools(settings.SKILLS_DIR)
+        logger.info("skill_tools_loaded_successfully")
+    except Exception as e:
+        logger.warning(
+            "failed_to_load_skill_tools_continuing_without_skills",
+            error=str(e),
+            error_type=type(e).__name__,
+            skills_dir=settings.SKILLS_DIR,
+            message="Service will continue with environment and RAG tools only",
+        )
 
     try:
         yield

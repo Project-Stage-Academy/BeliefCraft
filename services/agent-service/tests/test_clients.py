@@ -141,30 +141,237 @@ class TestBaseAPIClient:
 class TestEnvironmentAPIClient:
     """Tests for EnvironmentAPIClient."""
 
+    # PROCUREMENT MODULE TESTS
+
     @pytest.mark.asyncio
-    async def test_get_current_observations(self, mock_settings: Mock) -> None:
-        """Test getting observations."""
+    async def test_list_suppliers(self, mock_settings: Mock) -> None:
+        """Test listing suppliers."""
         with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
             client = EnvironmentAPIClient()
 
-            with patch.object(client, "get", return_value={"inventory": []}) as mock_get:
-                await client.get_current_observations(product_id="P1", location_id="L1")
+            with patch.object(client, "get", return_value={"suppliers": []}) as mock_get:
+                await client.list_suppliers(region="US", reliability_min=0.9)
 
                 mock_get.assert_called_once_with(
-                    "/observations/current",
-                    params={"product_id": "P1", "location_id": "L1"},
+                    "/api/v1/smart-query/procurement/suppliers",
+                    params={"region": "US", "reliability_min": 0.9},
                     timeout=None,
                 )
 
     @pytest.mark.asyncio
-    async def test_calculate_stockout_probability(self, mock_settings: Mock) -> None:
-        """Test stockout probability calculation."""
+    async def test_get_supplier(self, mock_settings: Mock) -> None:
+        """Test getting a specific supplier."""
         with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
             client = EnvironmentAPIClient()
 
             with patch.object(client, "get", return_value={}) as mock_get:
-                await client.calculate_stockout_probability("P1")
-                mock_get.assert_called_once_with("/analysis/stockout-probability/P1")
+                await client.get_supplier("SUP1")
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/procurement/suppliers/SUP1", timeout=None
+                )
+
+    @pytest.mark.asyncio
+    async def test_list_purchase_orders(self, mock_settings: Mock) -> None:
+        """Test listing purchase orders."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={"purchase_orders": []}) as mock_get:
+                await client.list_purchase_orders(
+                    supplier_id="SUP1", status_in=["pending", "confirmed"]
+                )
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/procurement/purchase-orders",
+                    params={"supplier_id": "SUP1", "status_in": ["pending", "confirmed"]},
+                    timeout=None,
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_procurement_pipeline_summary(self, mock_settings: Mock) -> None:
+        """Test getting procurement pipeline summary."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={}) as mock_get:
+                await client.get_procurement_pipeline_summary(destination_warehouse_id="WH1")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/procurement/pipeline-summary",
+                    params={"destination_warehouse_id": "WH1"},
+                    timeout=None,
+                )
+
+    # INVENTORY AUDIT MODULE TESTS
+
+    @pytest.mark.asyncio
+    async def test_list_inventory_moves(self, mock_settings: Mock) -> None:
+        """Test listing inventory moves."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={"moves": []}) as mock_get:
+                await client.list_inventory_moves(warehouse_id="WH1", move_type="adjustment")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/inventory/moves",
+                    params={"warehouse_id": "WH1", "move_type": "adjustment"},
+                    timeout=None,
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_inventory_move_audit_trace(self, mock_settings: Mock) -> None:
+        """Test getting inventory move audit trace."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={}) as mock_get:
+                await client.get_inventory_move_audit_trace("M1")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/inventory/moves/M1/audit-trace", timeout=None
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_inventory_adjustments_summary(self, mock_settings: Mock) -> None:
+        """Test getting inventory adjustments summary."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={}) as mock_get:
+                await client.get_inventory_adjustments_summary(warehouse_id="WH1", product_id="P1")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/inventory/adjustments-summary",
+                    params={"warehouse_id": "WH1", "product_id": "P1"},
+                    timeout=None,
+                )
+
+    # TOPOLOGY MODULE TESTS
+
+    @pytest.mark.asyncio
+    async def test_list_warehouses(self, mock_settings: Mock) -> None:
+        """Test listing warehouses."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={"warehouses": []}) as mock_get:
+                await client.list_warehouses(region="US")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/topology/warehouses",
+                    params={"region": "US"},
+                    timeout=None,
+                )
+
+    @pytest.mark.asyncio
+    async def test_list_locations(self, mock_settings: Mock) -> None:
+        """Test listing locations."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={"locations": []}) as mock_get:
+                await client.list_locations(warehouse_id="WH1", type="shelf")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/topology/locations",
+                    params={"warehouse_id": "WH1", "type": "shelf"},
+                    timeout=None,
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_locations_tree(self, mock_settings: Mock) -> None:
+        """Test getting locations tree."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={}) as mock_get:
+                await client.get_locations_tree("WH1")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/topology/warehouses/WH1/locations-tree", timeout=None
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_capacity_utilization_snapshot(self, mock_settings: Mock) -> None:
+        """Test getting capacity utilization snapshot."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={}) as mock_get:
+                await client.get_capacity_utilization_snapshot(warehouse_id="WH1", type="shelf")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/topology/warehouses/WH1/capacity-utilization",
+                    params={"type": "shelf"},
+                    timeout=None,
+                )
+
+    # DEVICE MONITORING MODULE TESTS
+
+    @pytest.mark.asyncio
+    async def test_list_sensor_devices(self, mock_settings: Mock) -> None:
+        """Test listing sensor devices."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={"devices": []}) as mock_get:
+                await client.list_sensor_devices(warehouse_id="WH1", status="online")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/devices",
+                    params={"warehouse_id": "WH1", "status": "online"},
+                    timeout=None,
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_device_health_summary(self, mock_settings: Mock) -> None:
+        """Test getting device health summary."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={}) as mock_get:
+                await client.get_device_health_summary(warehouse_id="WH1")
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/devices/health-summary",
+                    params={"warehouse_id": "WH1"},
+                    timeout=None,
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_device_anomalies(self, mock_settings: Mock) -> None:
+        """Test getting device anomalies."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={}) as mock_get:
+                await client.get_device_anomalies(warehouse_id="WH1", window=60)
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/devices/anomalies",
+                    params={"warehouse_id": "WH1", "window": 60},
+                    timeout=None,
+                )
+
+    # OBSERVED INVENTORY MODULE TESTS
+
+    @pytest.mark.asyncio
+    async def test_get_observed_inventory_snapshot(self, mock_settings: Mock) -> None:
+        """Test getting observed inventory snapshot."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={}) as mock_get:
+                await client.get_observed_inventory_snapshot(
+                    quality_status_in=["good", "inspected"]
+                )
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/inventory/current",
+                    params={"quality_status_in": "good,inspected"},
+                    timeout=None,
+                )
 
 
 class TestRAGAPIClient:
@@ -236,12 +443,37 @@ class TestProtocolCompliance:
             # Check that client has all required methods
             assert hasattr(client, "__aenter__")
             assert hasattr(client, "__aexit__")
-            assert hasattr(client, "get_current_observations")
-            assert hasattr(client, "get_inventory_history")
-            assert hasattr(client, "get_order_backlog")
-            assert hasattr(client, "get_shipments_in_transit")
-            assert hasattr(client, "calculate_stockout_probability")
-            assert hasattr(client, "calculate_lead_time_risk")
+
+            # Procurement module methods
+            assert hasattr(client, "list_suppliers")
+            assert hasattr(client, "get_supplier")
+            assert hasattr(client, "list_purchase_orders")
+            assert hasattr(client, "get_purchase_order")
+            assert hasattr(client, "list_po_lines")
+            assert hasattr(client, "get_procurement_pipeline_summary")
+
+            # Inventory audit module methods
+            assert hasattr(client, "list_inventory_moves")
+            assert hasattr(client, "get_inventory_move")
+            assert hasattr(client, "get_inventory_move_audit_trace")
+            assert hasattr(client, "get_inventory_adjustments_summary")
+
+            # Topology module methods
+            assert hasattr(client, "list_warehouses")
+            assert hasattr(client, "get_warehouse")
+            assert hasattr(client, "list_locations")
+            assert hasattr(client, "get_location")
+            assert hasattr(client, "get_locations_tree")
+            assert hasattr(client, "get_capacity_utilization_snapshot")
+
+            # Device monitoring module methods
+            assert hasattr(client, "list_sensor_devices")
+            assert hasattr(client, "get_sensor_device")
+            assert hasattr(client, "get_device_health_summary")
+            assert hasattr(client, "get_device_anomalies")
+
+            # Observed inventory module methods
+            assert hasattr(client, "get_observed_inventory_snapshot")
 
     @pytest.mark.asyncio
     async def test_rag_client_implements_protocol(self, mock_settings: Mock) -> None:

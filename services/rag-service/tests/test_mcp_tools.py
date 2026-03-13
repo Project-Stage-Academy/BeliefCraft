@@ -71,3 +71,26 @@ async def test_get_entity_by_number_delegation(rag_tools, mock_repo):
     field_values = {f.field: f.value for f in filters.filters}
     assert field_values["chunk_type"] == "numbered_formula"
     assert field_values["entity_id"] == "3.1"
+
+
+@pytest.mark.asyncio
+async def test_get_related_code_definitions_delegation(rag_tools, mock_repo):
+    """Verify get_related_code_definitions delegates to the repository and returns a str."""
+    mock_repo.get_related_code_definitions.return_value = "def foo():\n    pass"
+
+    result = await rag_tools.get_related_code_definitions(document_ids=["doc-uuid-001"])
+
+    mock_repo.get_related_code_definitions.assert_called_once_with(["doc-uuid-001"])
+    assert isinstance(result, str)
+    assert result == "def foo():\n    pass"
+
+
+@pytest.mark.asyncio
+async def test_get_related_code_definitions_empty_ids(rag_tools, mock_repo):
+    """Verify get_related_code_definitions passes empty list to repository."""
+    mock_repo.get_related_code_definitions.return_value = ""
+
+    result = await rag_tools.get_related_code_definitions(document_ids=[])
+
+    mock_repo.get_related_code_definitions.assert_called_once_with([])
+    assert result == "# No related code definitions found for the provided document IDs."

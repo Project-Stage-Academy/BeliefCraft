@@ -56,9 +56,22 @@ class Settings(BaseSettings):
         default=30, ge=1, le=300, description="Tool execution timeout in seconds"
     )
 
+    # Skills system
+    SKILLS_DIR: str = Field(
+        default="skills",
+        description="Path to skills directory (relative to service root or absolute)",
+    )
+
     # CORS
     CORS_ORIGINS: list[str] = Field(
         default=["*"], description="Allowed CORS origins (comma-separated in env)"
+    )
+
+    # LangSmith tracing
+    LANGCHAIN_TRACING_V2: bool = Field(default=False, description="Enable LangSmith tracing")
+    LANGCHAIN_API_KEY: str | None = Field(default=None, description="LangSmith API key")
+    LANGCHAIN_PROJECT: str | None = Field(
+        default=None, description="LangSmith project name for grouping traces"
     )
 
     # Logging

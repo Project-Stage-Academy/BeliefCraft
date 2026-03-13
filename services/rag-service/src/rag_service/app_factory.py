@@ -46,7 +46,6 @@ def create_app(env: str = "") -> FastAPI:
     mcp.add_middleware(StructuredLoggingMiddleware(logger=logger))  # type: ignore
     mcp_app = mcp.http_app(path="/mcp")
     app = FastAPI(title="BeliefCraft RAG Service", version="0.1.0", lifespan=mcp_app.lifespan)
-    app.mount("/", mcp_app)
     setup_logging_middleware(app)
 
     @app.get("/health")
@@ -56,5 +55,7 @@ def create_app(env: str = "") -> FastAPI:
             "service": "rag-service",
             "timestamp": datetime.now(UTC).isoformat(),
         }
+
+    app.mount("/", mcp_app)
 
     return app

@@ -258,6 +258,40 @@ class TestActNode:
         assert result["iteration"] == 1
 
     @pytest.mark.asyncio()
+    @patch("app.services.react_agent.tool_registry")
+    async def test_act_stores_tool_category_from_registry(
+        self,
+        mock_registry: MagicMock,
+        agent: ReActAgent,
+        initial_state: AgentState,
+    ) -> None:
+        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
+            return_value={"status": "success", "data": {"documents": []}}
+        )
+        mock_registry.get_tool.return_value.get_metadata.return_value.category = "rag"
+        initial_state["messages"] = [
+            {
+                "role": "assistant",
+                "content": "Checking...",
+                "tool_calls": [
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "search_knowledge_base",
+                            "arguments": '{"query": "policy iteration"}',
+                        },
+                    }
+                ],
+            }
+        ]
+
+        result = await agent._act_node(initial_state)
+
+        assert len(result["tool_calls"]) == 1
+        assert result["tool_calls"][0].category == "rag"
+
+    @pytest.mark.asyncio()
     async def test_act_adds_tool_result_message(
         self, agent: ReActAgent, initial_state: AgentState
     ) -> None:
@@ -453,14 +487,6 @@ class TestShouldContinue:
         initial_state["final_answer"] = "The answer is 42."
         assert agent._should_continue(initial_state) == "finalize"
 
-    def test_max_iterations_at_limit(self, agent: ReActAgent, initial_state: AgentState) -> None:
-        initial_state["iteration"] = 5  # equals max_iterations
-        assert agent._should_continue(initial_state) == "max_iterations"
-
-    def test_max_iterations_over_limit(self, agent: ReActAgent, initial_state: AgentState) -> None:
-        initial_state["iteration"] = 10
-        assert agent._should_continue(initial_state) == "max_iterations"
-
     def test_continue_one_below_limit(self, agent: ReActAgent, initial_state: AgentState) -> None:
         initial_state["iteration"] = 4  # one below max_iterations=5
         assert agent._should_continue(initial_state) == "continue"
@@ -653,7 +679,7 @@ class TestRun:
 
     @pytest.mark.asyncio()
     async def test_run_max_iterations(self, agent: ReActAgent, mock_llm_service: MagicMock) -> None:
-        """Agent stops after hitting the iteration limit."""
+        """Agent stops before hitting the iteration limit (early check in _think_node)."""
         mock_llm_service.chat_completion.return_value = _make_llm_response(
             content="Need more data...",
             tool_calls=[
@@ -671,8 +697,9 @@ class TestRun:
         assert result["status"] == "max_iterations"
         assert result["final_answer"] is not None
         assert "iteration limit" in result["final_answer"]
-        # 3 think calls: iteration 0, 1, then 2 (hits limit after think)
-        assert mock_llm_service.chat_completion.call_count == 3
+        # 2 think calls: iteration 0 (calls LLM), iteration 1 (calls LLM)
+        # Then iteration 2 would hit the check at start of _think_node (no LLM call)
+        assert mock_llm_service.chat_completion.call_count == 2
 
     @pytest.mark.asyncio()
     async def test_run_passes_context(self, agent: ReActAgent, mock_llm_service: MagicMock) -> None:

@@ -135,3 +135,10 @@ File edits do not appear in running service behavior.
 make clean
 make dev
 ```
+
+## 9. Problems with testcontainers tests when using Docker Desktop on Linux
+Run
+```bash
+export DOCKER_HOST="unix://$HOME/.docker/desktop/docker.sock"
+export TESTCONTAINERS_RYUK_DISABLED=true
+```

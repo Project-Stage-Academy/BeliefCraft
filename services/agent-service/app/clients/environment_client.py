@@ -1,14 +1,14 @@
 """
 HTTP client for Environment API (warehouse data service).
 
-This client provides typed methods for querying warehouse state,
-inventory history, order backlogs, and performing risk calculations.
+This client provides typed methods for querying procurement, inventory,
+topology, device monitoring, and observed inventory data.
 
 Example:
     ```python
     async with EnvironmentAPIClient() as client:
-        obs = await client.get_current_observations(product_id="P123")
-        backlog = await client.get_order_backlog(status="pending")
+        suppliers = await client.list_suppliers(region="US")
+        moves = await client.list_inventory_moves(product_id="P123")
     ```
 """
 
@@ -33,28 +33,143 @@ class EnvironmentClientProtocol(Protocol):
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None: ...
 
-    async def get_current_observations(
+    # PROCUREMENT MODULE
+    async def list_suppliers(
         self,
-        product_id: str | None = None,
-        location_id: str | None = None,
-        warehouse_id: str | None = None,
+        region: str | None = None,
+        reliability_min: float | None = None,
+        name_like: str | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]: ...
 
-    async def get_inventory_history(
-        self, product_id: str, days: int = 30, timeout: float | None = None
+    async def get_supplier(
+        self, supplier_id: str, timeout: float | None = None
     ) -> dict[str, Any]: ...
 
-    async def get_order_backlog(
-        self, status: str | None = None, priority: str | None = None
+    async def list_purchase_orders(
+        self,
+        supplier_id: str | None = None,
+        destination_warehouse_id: str | None = None,
+        status_in: list[str] | None = None,
+        created_after: str | None = None,
+        expected_before: str | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]: ...
 
-    async def get_shipments_in_transit(self, warehouse_id: str | None = None) -> dict[str, Any]: ...
+    async def get_purchase_order(
+        self, purchase_order_id: str, timeout: float | None = None
+    ) -> dict[str, Any]: ...
 
-    async def calculate_stockout_probability(self, product_id: str) -> dict[str, Any]: ...
+    async def list_po_lines(
+        self,
+        purchase_order_id: str | None = None,
+        purchase_order_ids: list[str] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
 
-    async def calculate_lead_time_risk(
-        self, supplier_id: str | None = None, route_id: str | None = None
+    async def get_procurement_pipeline_summary(
+        self,
+        destination_warehouse_id: str | None = None,
+        supplier_id: str | None = None,
+        status_in: list[str] | None = None,
+        horizon_days: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    # INVENTORY AUDIT MODULE
+    async def list_inventory_moves(
+        self,
+        warehouse_id: str | None = None,
+        product_id: str | None = None,
+        move_type: str | None = None,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def get_inventory_move(
+        self, move_id: str, timeout: float | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_inventory_move_audit_trace(
+        self, move_id: str, timeout: float | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_inventory_adjustments_summary(
+        self,
+        warehouse_id: str | None = None,
+        product_id: str | None = None,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    # TOPOLOGY MODULE
+    async def list_warehouses(
+        self, region: str | None = None, timeout: float | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_warehouse(
+        self, warehouse_id: str, timeout: float | None = None
+    ) -> dict[str, Any]: ...
+
+    async def list_locations(
+        self,
+        warehouse_id: str,
+        type: str | None = None,
+        parent_location_id: str | None = None,
+        code_like: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def get_location(
+        self, location_id: str, timeout: float | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_locations_tree(
+        self, warehouse_id: str, timeout: float | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_capacity_utilization_snapshot(
+        self,
+        warehouse_id: str,
+        type: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    # DEVICE MONITORING MODULE
+    async def list_sensor_devices(
+        self,
+        warehouse_id: str | None = None,
+        device_type: str | None = None,
+        status: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def get_sensor_device(
+        self, device_id: str, timeout: float | None = None
+    ) -> dict[str, Any]: ...
+
+    async def get_device_health_summary(
+        self,
+        warehouse_id: str | None = None,
+        since_ts: str | None = None,
+        as_of: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def get_device_anomalies(
+        self,
+        warehouse_id: str | None = None,
+        window: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    # OBSERVED INVENTORY MODULE
+    async def get_observed_inventory_snapshot(
+        self,
+        quality_status_in: list[str] | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -63,12 +178,11 @@ class EnvironmentAPIClient(BaseAPIClient):
     Client for Environment API (warehouse data).
 
     Provides methods for:
-    - Querying current warehouse observations
-    - Retrieving inventory history
-    - Getting order backlog information
-    - Checking shipments in transit
-    - Calculating stockout probabilities
-    - Assessing lead time risks
+    - PROCUREMENT: Suppliers, purchase orders, PO lines, pipeline summary
+    - INVENTORY AUDIT: Moves, audit trace, adjustments
+    - TOPOLOGY: Warehouses, locations, capacity utilization
+    - DEVICE MONITORING: Sensor devices, health summary, anomalies
+    - OBSERVED INVENTORY: Snapshot with quality filtering
     """
 
     def __init__(self) -> None:
@@ -76,172 +190,322 @@ class EnvironmentAPIClient(BaseAPIClient):
         settings = get_settings()
         super().__init__(base_url=settings.ENVIRONMENT_API_URL, service_name="environment-api")
 
-    async def get_current_observations(
+    # ========== PROCUREMENT MODULE ==========
+
+    async def list_suppliers(
         self,
-        product_id: str | None = None,
-        location_id: str | None = None,
-        warehouse_id: str | None = None,
+        region: str | None = None,
+        reliability_min: float | None = None,
+        name_like: str | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]:
-        """
-        Get current warehouse observations (inventory levels, demand, etc.).
-
-        Args:
-            product_id: Optional filter by product ID
-            location_id: Optional filter by location ID
-            warehouse_id: Optional filter by warehouse ID
-
-        Returns:
-            Dictionary with current observations data
-
-        Example:
-            ```python
-            # Get all observations
-            obs = await client.get_current_observations()
-
-            # Get observations for specific product
-            obs = await client.get_current_observations(product_id="P123")
-            ```
-        """
+        """Get list of suppliers with reliability and region metadata."""
         params: dict[str, Any] = {}
-        if product_id:
-            params["product_id"] = product_id
-        if location_id:
-            params["location_id"] = location_id
-        if warehouse_id:
-            params["warehouse_id"] = warehouse_id
+        if region:
+            params["region"] = region
+        if reliability_min is not None:
+            params["reliability_min"] = reliability_min
+        if name_like:
+            params["name_like"] = name_like
 
-        return await self.get("/observations/current", params=params, timeout=timeout)
-
-    async def get_inventory_history(
-        self, product_id: str, days: int = 30, timeout: float | None = None
-    ) -> dict[str, Any]:
-        """
-        Get inventory history for a product.
-
-        Args:
-            product_id: Product ID to query
-            days: Number of days of history (default: 30)
-
-        Returns:
-            Dictionary with historical inventory data
-
-        Example:
-            ```python
-            history = await client.get_inventory_history(
-                product_id="P123",
-                days=60
-            )
-            ```
-        """
         return await self.get(
-            f"/inventory/history/{product_id}", params={"days": days}, timeout=timeout
+            "/api/v1/smart-query/procurement/suppliers", params=params, timeout=timeout
         )
 
-    async def get_order_backlog(
-        self, status: str | None = None, priority: str | None = None
+    async def get_supplier(self, supplier_id: str, timeout: float | None = None) -> dict[str, Any]:
+        """Get detailed information for a single supplier."""
+        return await self.get(
+            f"/api/v1/smart-query/procurement/suppliers/{supplier_id}", timeout=timeout
+        )
+
+    async def list_purchase_orders(
+        self,
+        supplier_id: str | None = None,
+        destination_warehouse_id: str | None = None,
+        status_in: list[str] | None = None,
+        created_after: str | None = None,
+        expected_before: str | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
-        """
-        Get current order backlog.
-
-        Args:
-            status: Optional filter by status (e.g., "pending", "processing")
-            priority: Optional filter by priority (e.g., "high", "medium", "low")
-
-        Returns:
-            Dictionary with order backlog data
-
-        Example:
-            ```python
-            # All pending orders
-            backlog = await client.get_order_backlog(status="pending")
-
-            # High priority orders
-            backlog = await client.get_order_backlog(priority="high")
-            ```
-        """
-        params: dict[str, Any] = {}
-        if status:
-            params["status"] = status
-        if priority:
-            params["priority"] = priority
-
-        return await self.get("/orders/backlog", params=params)
-
-    async def get_shipments_in_transit(self, warehouse_id: str | None = None) -> dict[str, Any]:
-        """
-        Get shipments currently in transit.
-
-        Args:
-            warehouse_id: Optional filter by destination warehouse
-
-        Returns:
-            Dictionary with shipment data
-
-        Example:
-            ```python
-            shipments = await client.get_shipments_in_transit(
-                warehouse_id="WH1"
-            )
-            ```
-        """
-        params: dict[str, Any] = {}
-        if warehouse_id:
-            params["warehouse_id"] = warehouse_id
-
-        return await self.get("/shipments/in-transit", params=params)
-
-    async def calculate_stockout_probability(self, product_id: str) -> dict[str, Any]:
-        """
-        Calculate stockout probability for a product.
-
-        Uses historical demand patterns and current inventory
-        to estimate stockout risk.
-
-        Args:
-            product_id: Product ID to analyze
-
-        Returns:
-            Dictionary with probability and risk metrics
-
-        Example:
-            ```python
-            risk = await client.calculate_stockout_probability("P123")
-            print(f"Stockout probability: {risk['probability']}")
-            ```
-        """
-        return await self.get(f"/analysis/stockout-probability/{product_id}")
-
-    async def calculate_lead_time_risk(
-        self, supplier_id: str | None = None, route_id: str | None = None
-    ) -> dict[str, Any]:
-        """
-        Calculate lead time risk for suppliers/routes.
-
-        Analyzes historical lead time variance and reliability.
-
-        Args:
-            supplier_id: Optional filter by supplier
-            route_id: Optional filter by shipping route
-
-        Returns:
-            Dictionary with lead time statistics and risk metrics
-
-        Example:
-            ```python
-            # Risk for specific supplier
-            risk = await client.calculate_lead_time_risk(
-                supplier_id="SUP123"
-            )
-
-            # Risk for all suppliers
-            risk = await client.calculate_lead_time_risk()
-            ```
-        """
+        """Get purchase orders with filtering capabilities."""
         params: dict[str, Any] = {}
         if supplier_id:
             params["supplier_id"] = supplier_id
-        if route_id:
-            params["route_id"] = route_id
+        if destination_warehouse_id:
+            params["destination_warehouse_id"] = destination_warehouse_id
+        if status_in:
+            params["status_in"] = status_in
+        if created_after:
+            params["created_after"] = created_after
+        if expected_before:
+            params["expected_before"] = expected_before
 
-        return await self.get("/analysis/lead-time-risk", params=params)
+        return await self.get(
+            "/api/v1/smart-query/procurement/purchase-orders", params=params, timeout=timeout
+        )
+
+    async def get_purchase_order(
+        self, purchase_order_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """Get a single purchase order."""
+        return await self.get(
+            f"/api/v1/smart-query/procurement/purchase-orders/{purchase_order_id}",
+            timeout=timeout,
+        )
+
+    async def list_po_lines(
+        self,
+        purchase_order_id: str | None = None,
+        purchase_order_ids: list[str] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get line-level details for purchase orders."""
+        params: dict[str, Any] = {}
+        if purchase_order_id:
+            params["purchase_order_id"] = purchase_order_id
+        if purchase_order_ids:
+            params["purchase_order_ids"] = ",".join(purchase_order_ids)
+
+        return await self.get(
+            "/api/v1/smart-query/procurement/po-lines", params=params, timeout=timeout
+        )
+
+    async def get_procurement_pipeline_summary(
+        self,
+        destination_warehouse_id: str | None = None,
+        supplier_id: str | None = None,
+        status_in: list[str] | None = None,
+        horizon_days: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get aggregated inbound supply pipeline metrics."""
+        params: dict[str, Any] = {}
+        if destination_warehouse_id:
+            params["destination_warehouse_id"] = destination_warehouse_id
+        if supplier_id:
+            params["supplier_id"] = supplier_id
+        if status_in:
+            params["status_in"] = status_in
+        if horizon_days is not None:
+            params["horizon_days"] = horizon_days
+
+        return await self.get(
+            "/api/v1/smart-query/procurement/pipeline-summary", params=params, timeout=timeout
+        )
+
+    # ========== INVENTORY AUDIT MODULE ==========
+
+    async def list_inventory_moves(
+        self,
+        warehouse_id: str | None = None,
+        product_id: str | None = None,
+        move_type: str | None = None,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get inventory movement history."""
+        params: dict[str, Any] = {}
+        if warehouse_id:
+            params["warehouse_id"] = warehouse_id
+        if product_id:
+            params["product_id"] = product_id
+        if move_type:
+            params["move_type"] = move_type
+        if from_ts:
+            params["from_ts"] = from_ts
+        if to_ts:
+            params["to_ts"] = to_ts
+
+        return await self.get("/api/v1/smart-query/inventory/moves", params=params, timeout=timeout)
+
+    async def get_inventory_move(
+        self, move_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """Get a single inventory move."""
+        return await self.get(f"/api/v1/smart-query/inventory/moves/{move_id}", timeout=timeout)
+
+    async def get_inventory_move_audit_trace(
+        self, move_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """Get the audit chain for a movement."""
+        return await self.get(
+            f"/api/v1/smart-query/inventory/moves/{move_id}/audit-trace", timeout=timeout
+        )
+
+    async def get_inventory_adjustments_summary(
+        self,
+        warehouse_id: str | None = None,
+        product_id: str | None = None,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get aggregated inventory adjustments."""
+        params: dict[str, Any] = {}
+        if warehouse_id:
+            params["warehouse_id"] = warehouse_id
+        if product_id:
+            params["product_id"] = product_id
+        if from_ts:
+            params["from_ts"] = from_ts
+        if to_ts:
+            params["to_ts"] = to_ts
+
+        return await self.get(
+            "/api/v1/smart-query/inventory/adjustments-summary", params=params, timeout=timeout
+        )
+
+    # ========== TOPOLOGY MODULE ==========
+
+    async def list_warehouses(
+        self, region: str | None = None, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """Get list of warehouses."""
+        params: dict[str, Any] = {}
+        if region:
+            params["region"] = region
+
+        return await self.get(
+            "/api/v1/smart-query/topology/warehouses", params=params, timeout=timeout
+        )
+
+    async def get_warehouse(
+        self, warehouse_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """Get full warehouse record."""
+        return await self.get(
+            f"/api/v1/smart-query/topology/warehouses/{warehouse_id}", timeout=timeout
+        )
+
+    async def list_locations(
+        self,
+        warehouse_id: str,
+        type: str | None = None,
+        parent_location_id: str | None = None,
+        code_like: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get flat location structure."""
+        params: dict[str, Any] = {"warehouse_id": warehouse_id}
+        if type:
+            params["type"] = type
+        if parent_location_id:
+            params["parent_location_id"] = parent_location_id
+        if code_like:
+            params["code_like"] = code_like
+
+        return await self.get(
+            "/api/v1/smart-query/topology/locations", params=params, timeout=timeout
+        )
+
+    async def get_location(self, location_id: str, timeout: float | None = None) -> dict[str, Any]:
+        """Get full location record."""
+        return await self.get(
+            f"/api/v1/smart-query/topology/locations/{location_id}", timeout=timeout
+        )
+
+    async def get_locations_tree(
+        self, warehouse_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """Get hierarchical location tree."""
+        return await self.get(
+            f"/api/v1/smart-query/topology/warehouses/{warehouse_id}/locations-tree",
+            timeout=timeout,
+        )
+
+    async def get_capacity_utilization_snapshot(
+        self,
+        warehouse_id: str,
+        type: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get capacity utilization metrics."""
+        params: dict[str, Any] = {}
+        if type:
+            params["type"] = type
+
+        return await self.get(
+            f"/api/v1/smart-query/topology/warehouses/{warehouse_id}/capacity-utilization",
+            params=params,
+            timeout=timeout,
+        )
+
+    # ========== DEVICE MONITORING MODULE ==========
+
+    async def list_sensor_devices(
+        self,
+        warehouse_id: str | None = None,
+        device_type: str | None = None,
+        status: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get list of sensor devices."""
+        params: dict[str, Any] = {}
+        if warehouse_id:
+            params["warehouse_id"] = warehouse_id
+        if device_type:
+            params["device_type"] = device_type
+        if status:
+            params["status"] = status
+
+        return await self.get("/api/v1/smart-query/devices", params=params, timeout=timeout)
+
+    async def get_sensor_device(
+        self, device_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """Get full device record."""
+        return await self.get(f"/api/v1/smart-query/devices/{device_id}", timeout=timeout)
+
+    async def get_device_health_summary(
+        self,
+        warehouse_id: str | None = None,
+        since_ts: str | None = None,
+        as_of: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get health metrics for devices within time window."""
+        params: dict[str, Any] = {}
+        if warehouse_id:
+            params["warehouse_id"] = warehouse_id
+        if since_ts:
+            params["since_ts"] = since_ts
+        if as_of:
+            params["as_of"] = as_of
+
+        return await self.get(
+            "/api/v1/smart-query/devices/health-summary", params=params, timeout=timeout
+        )
+
+    async def get_device_anomalies(
+        self,
+        warehouse_id: str | None = None,
+        window: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Detect anomalous device behavior."""
+        params: dict[str, Any] = {}
+        if warehouse_id:
+            params["warehouse_id"] = warehouse_id
+        if window is not None:
+            params["window"] = window
+
+        return await self.get(
+            "/api/v1/smart-query/devices/anomalies", params=params, timeout=timeout
+        )
+
+    # ========== OBSERVED INVENTORY MODULE ==========
+
+    async def get_observed_inventory_snapshot(
+        self,
+        quality_status_in: list[str] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Get observed inventory snapshot with quality filtering."""
+        params: dict[str, Any] = {}
+        if quality_status_in:
+            params["quality_status_in"] = ",".join(quality_status_in)
+
+        return await self.get(
+            "/api/v1/smart-query/inventory/current", params=params, timeout=timeout
+        )

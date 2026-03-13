@@ -1,2 +1,7 @@
 logging:
   level: DEBUG
+
+repository: "WeaviateRepository"
+weaviate_host: "${WEAVIATE_HOST:-weaviate}"
+weaviate_port: "${WEAVIATE_PORT:-8080}"
+weaviate_grpc_port: "${WEAVIATE_GRPC_PORT:-50051}"

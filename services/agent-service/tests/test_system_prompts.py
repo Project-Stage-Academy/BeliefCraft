@@ -3,6 +3,7 @@ from app.prompts.system_prompts import (
     REACT_LOOP_PROMPT,
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
     format_react_prompt,
+    get_warehouse_advisor_prompt,
 )
 
 
@@ -20,7 +21,7 @@ class TestWarehouseAdvisorSystemPrompt:
 
     def test_contains_tool_categories(self) -> None:
         assert "Warehouse observation tools" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        assert "Risk calculation tools" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        assert "Skill tools" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
         assert "Knowledge base tools" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
 
     def test_contains_response_format(self) -> None:
@@ -302,3 +303,79 @@ class TestFormatReactPromptIterationDisplay:
         }
         result = format_react_prompt(state)
         assert "10/10" in result
+
+
+class TestGetWarehouseAdvisorPrompt:
+    """Tests for get_warehouse_advisor_prompt dynamic prompt generation."""
+
+    def test_without_skill_catalog(self) -> None:
+        """Calling without skill_catalog should return base prompt."""
+        result = get_warehouse_advisor_prompt()
+
+        # Should contain core advisor role description
+        assert "warehouse operations advisor" in result
+        assert "CRITICAL INSTRUCTION" in result
+        assert "<thinking>" in result
+
+        # Should NOT contain skills catalog section
+        assert "<skills_catalog>" not in result
+        assert "</skills_catalog>" not in result
+
+    def test_with_skill_catalog(self) -> None:
+        """Calling with skill_catalog should inject catalog into prompt."""
+        test_catalog = """<skill name="test-skill">
+  <description>Test skill for verification</description>
+  <tags>testing, verification</tags>
+</skill>"""
+
+        result = get_warehouse_advisor_prompt(skill_catalog=test_catalog)
+
+        # Should contain injected catalog
+        assert "<skills_catalog>" in result
+        assert test_catalog in result
+        assert "</skills_catalog>" in result
+
+        # Should still contain core advisor content
+        assert "warehouse operations advisor" in result
+
+    def test_skill_catalog_xml_wrapping(self) -> None:
+        """Skill catalog should be wrapped in XML tags."""
+        test_catalog = "<skill>example</skill>"
+        result = get_warehouse_advisor_prompt(skill_catalog=test_catalog)
+
+        # Verify proper XML wrapping
+        assert "<skills_catalog>\n" + test_catalog + "\n</skills_catalog>" in result
+
+    def test_with_empty_skill_catalog(self) -> None:
+        """Empty skill catalog should not add catalog section."""
+        result = get_warehouse_advisor_prompt(skill_catalog="")
+
+        # Empty string is falsy, so no catalog section should be added
+        assert "<skills_catalog>" not in result
+        assert "</skills_catalog>" not in result
+
+    def test_backward_compatibility(self) -> None:
+        """WAREHOUSE_ADVISOR_SYSTEM_PROMPT constant should remain unchanged."""
+        # The constant should be the base prompt without skills
+        assert "warehouse operations advisor" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        assert "<skills_catalog>" not in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+
+        # get_warehouse_advisor_prompt() without args should match the constant
+        dynamic_base = get_warehouse_advisor_prompt()
+        assert dynamic_base == WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+
+    def test_skill_catalog_placement(self) -> None:
+        """Skill catalog should be placed in appropriate location."""
+        test_catalog = "<skill>test</skill>"
+        result = get_warehouse_advisor_prompt(skill_catalog=test_catalog)
+
+        # Find positions in the prompt
+        catalog_pos = result.find("<skills_catalog>")
+        response_format_pos = result.find("Response format:")
+
+        # Catalog should come before response format section
+        if response_format_pos != -1:
+            assert catalog_pos < response_format_pos
+        else:
+            # Catalog should still be present
+            assert catalog_pos != -1
