@@ -69,6 +69,17 @@ class ReActAgent:
             iteration=state["iteration"],
         )
 
+        # Early exit if max iterations already reached
+        # (prevents unnecessary LLM calls when limit was just incremented)
+        if state["iteration"] >= state["max_iterations"]:
+            logger.warning(
+                "max_iterations_check_in_think",
+                request_id=state["request_id"],
+                iteration=state["iteration"],
+                max_iterations=state["max_iterations"],
+            )
+            return {"status": "max_iterations"}
+
         try:
             messages = self._build_llm_messages(state)
             response = await self._call_llm(messages)
@@ -338,20 +349,11 @@ class ReActAgent:
 
         Pure routing function — does not mutate state.
         """
-        if state["status"] in ("failed", "completed"):
+        if state["status"] in ("failed", "completed", "max_iterations"):
             return "finalize"
 
         if state["final_answer"] is not None:
             return "finalize"
-
-        if state["iteration"] >= state["max_iterations"]:
-            logger.warning(
-                "max_iterations_reached",
-                request_id=state["request_id"],
-                iteration=state["iteration"],
-                max_iterations=state["max_iterations"],
-            )
-            return "max_iterations"
 
         return "continue"
 
