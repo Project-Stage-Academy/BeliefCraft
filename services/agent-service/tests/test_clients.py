@@ -183,7 +183,7 @@ class TestEnvironmentAPIClient:
 
                 mock_get.assert_called_once_with(
                     "/api/v1/smart-query/procurement/purchase-orders",
-                    params={"supplier_id": "SUP1", "status_in": "pending,confirmed"},
+                    params={"supplier_id": "SUP1", "status_in": ["pending", "confirmed"]},
                     timeout=None,
                 )
 
@@ -368,7 +368,7 @@ class TestEnvironmentAPIClient:
                 )
 
                 mock_get.assert_called_once_with(
-                    "/api/v1/smart-query/inventory/observed-snapshot",
+                    "/api/v1/smart-query/inventory/current",
                     params={"quality_status_in": "good,inspected"},
                     timeout=None,
                 )
