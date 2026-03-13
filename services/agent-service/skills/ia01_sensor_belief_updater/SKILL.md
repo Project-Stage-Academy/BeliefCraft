@@ -152,7 +152,7 @@ posterior_mean = max(0.0, posterior_mean)    # inventory cannot be negative
 
 ```
 <thinking>
-Before committing stock, I need to verify the true inventory level — 
+Before committing stock, I need to verify the true inventory level —
 the raw sensor reading may not be reliable. I'll run SKILL-IA-01.
 </thinking>
 
