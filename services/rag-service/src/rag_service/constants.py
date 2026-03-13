@@ -1,3 +1,5 @@
+from enum import StrEnum
+
 from .models import EntityType
 
 # mapping of mcp tool entity types to chunk types used in metadata of chunk
@@ -33,3 +35,23 @@ COLLECTION_NAME = "unified_collection"
 CODE_CLASS_COLLECTION = "CodeClass"
 CODE_METHOD_COLLECTION = "CodeMethod"
 CODE_FUNCTION_COLLECTION = "CodeFunction"
+
+
+class CodeEntityRef(StrEnum):
+    """Reference fields used inside code-definition collections (CodeMethod/CodeFunction)."""
+
+    INITIALIZED_CLASSES = "initialized_classes"
+    REFERENCED_METHODS = "referenced_methods"
+    REFERENCED_FUNCTIONS = "referenced_functions"
+
+
+class ChunkCodeRef(StrEnum):
+    """Reference fields stored on unified_collection algorithm/example chunks."""
+
+    REFERENCED_CLASSES = "referenced_classes"
+    REFERENCED_METHODS = "referenced_methods"
+    REFERENCED_FUNCTIONS = "referenced_functions"
+
+
+CLASS_REF_FIELD = "class_ref"
+ALGORITHM_REF_FIELD = "algorithm_ref"

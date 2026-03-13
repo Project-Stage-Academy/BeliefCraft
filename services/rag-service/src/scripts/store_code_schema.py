@@ -57,10 +57,14 @@ from pipeline.code_processing.python_code_processing.extract_code_refs import (
     extract_code_refs,
 )
 from rag_service.constants import (
+    ALGORITHM_REF_FIELD,
+    CLASS_REF_FIELD,
     CODE_CLASS_COLLECTION,
     CODE_FUNCTION_COLLECTION,
     CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
+    ChunkCodeRef,
+    CodeEntityRef,
 )
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
 from weaviate.classes.data import DataReference
@@ -130,7 +134,7 @@ def _common_properties(extra: list[Property] | None = None) -> list[Property]:
     base = [
         Property(name="schema_id", data_type=DataType.TEXT, skip_vectorization=True),
         Property(name="name", data_type=DataType.TEXT, skip_vectorization=True),
-        Property(name="code", data_type=DataType.TEXT, skip_vectorization=True),
+        Property(name="content", data_type=DataType.TEXT, skip_vectorization=True),
     ]
     return base + (extra or [])
 
@@ -147,13 +151,13 @@ def _add_missing_refs(collection: Collection, refs: list[tuple[str, str]]) -> No
 
 # Cross-collection references shared by both CodeMethod and CodeFunction.
 _CROSS_REFS = [
-    ("initialized_classes", CODE_CLASS_COLLECTION),
-    ("referenced_methods", CODE_METHOD_COLLECTION),
-    ("referenced_functions", CODE_FUNCTION_COLLECTION),
+    (CodeEntityRef.INITIALIZED_CLASSES.value, CODE_CLASS_COLLECTION),
+    (CodeEntityRef.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
+    (CodeEntityRef.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
 ]
 
 # Back-reference from any code entity to the algorithm chunk that defines it.
-_ALGORITHM_REF = ("algorithm_ref", COLLECTION_NAME)
+_ALGORITHM_REF = (ALGORITHM_REF_FIELD, COLLECTION_NAME)
 
 
 def setup_collections(
@@ -185,7 +189,7 @@ def setup_collections(
             [Property(name="qualified_name", data_type=DataType.TEXT, skip_vectorization=True)]
         ),
         references=[
-            ReferenceProperty(name="class_ref", target_collection=CODE_CLASS_COLLECTION),
+            ReferenceProperty(name=CLASS_REF_FIELD, target_collection=CODE_CLASS_COLLECTION),
         ],
     )
     fn_col = _create_or_use(
@@ -224,11 +228,25 @@ def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
     """
     refs: RefList = []
     refs.extend(
-        _id_list_refs(from_uuid, "initialized_classes", item.get("initialized_classes", []))
+        _id_list_refs(
+            from_uuid,
+            CodeEntityRef.INITIALIZED_CLASSES.value,
+            item.get(CodeEntityRef.INITIALIZED_CLASSES.value, []),
+        )
     )
-    refs.extend(_id_list_refs(from_uuid, "referenced_methods", item.get("referenced_methods", [])))
     refs.extend(
-        _id_list_refs(from_uuid, "referenced_functions", item.get("referenced_functions", []))
+        _id_list_refs(
+            from_uuid,
+            CodeEntityRef.REFERENCED_METHODS.value,
+            item.get(CodeEntityRef.REFERENCED_METHODS.value, []),
+        )
+    )
+    refs.extend(
+        _id_list_refs(
+            from_uuid,
+            CodeEntityRef.REFERENCED_FUNCTIONS.value,
+            item.get(CodeEntityRef.REFERENCED_FUNCTIONS.value, []),
+        )
     )
     return refs
 
@@ -260,7 +278,7 @@ def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> Re
                 properties={
                     "schema_id": cls["id"],
                     "name": cls["name"],
-                    "code": cls["code"],
+                    "content": cls["code"],
                 },
                 uuid=uuid_for_schema_id(cls["id"]),
             )
@@ -292,7 +310,7 @@ def _insert_code_entities(
             props: dict[str, Any] = {
                 "schema_id": item["id"],
                 "name": item["name"],
-                "code": item["code"],
+                "content": item["code"],
             }
             for key in extra_prop_keys or []:
                 props[key] = item.get(key, "")
@@ -316,7 +334,7 @@ def _insert_methods(collection: Collection, methods: list[dict[str, Any]]) -> Re
         if class_schema_id and not class_schema_id.startswith("external:"):
             return [
                 DataReference(
-                    from_property="class_ref",
+                    from_property=CLASS_REF_FIELD,
                     from_uuid=from_uuid,
                     to_uuid=uuid_for_schema_id(class_schema_id),
                 )
@@ -353,16 +371,16 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
 
 # Reference properties added to unified_collection chunks (both algorithm and example).
 _CHUNK_CODE_REFS = [
-    ("referenced_classes", CODE_CLASS_COLLECTION),
-    ("referenced_methods", CODE_METHOD_COLLECTION),
-    ("referenced_functions", CODE_FUNCTION_COLLECTION),
+    (ChunkCodeRef.REFERENCED_CLASSES.value, CODE_CLASS_COLLECTION),
+    (ChunkCodeRef.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
+    (ChunkCodeRef.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
 ]
 
 # Maps extract_code_refs output keys to the Weaviate property names on the chunk.
 _REFS_KEY_TO_PROP = {
-    "initialized_classes": "referenced_classes",
-    "referenced_methods": "referenced_methods",
-    "referenced_functions": "referenced_functions",
+    CodeEntityRef.INITIALIZED_CLASSES.value: ChunkCodeRef.REFERENCED_CLASSES.value,
+    CodeEntityRef.REFERENCED_METHODS.value: ChunkCodeRef.REFERENCED_METHODS.value,
+    CodeEntityRef.REFERENCED_FUNCTIONS.value: ChunkCodeRef.REFERENCED_FUNCTIONS.value,
 }
 
 
