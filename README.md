@@ -81,3 +81,16 @@ Service health endpoints (host ports):
 - Python services use `uv` for dependency management with `pyproject.toml`.
 - Each service keeps its own `pyproject.toml` or `package.json` for isolated dependencies.
 - Docker Compose runs everything from the repo root via `docker-compose.yml`.
+
+**LangSmith Tracing**
+
+LangSmith enables trace inspection, cost monitoring, and evaluation for all LLM calls in the agent-service.
+To enable it locally, add these variables to `services/agent-service/.env`:
+
+```bash
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=ls__your_api_key_here
+LANGCHAIN_PROJECT=beliefcraft-dev
+```
+
+Get your API key at https://smith.langchain.com/. See [agent-service README](services/agent-service/README.md#langsmith-tracing-optional) for full setup instructions.
