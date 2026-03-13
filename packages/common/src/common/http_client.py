@@ -61,21 +61,32 @@ class RequestLogger:
                 duration_ms = None
 
         if response.status_code >= 400:
+            # For streaming responses, don't attempt to read the body.
+            # Consuming the stream in the logging hook prevents downstream code
+            # (e.g., FastMCP's StreamableHttpTransport) from reading it.
+            # httpx.StreamConsumed error: "content has already been streamed"
             if streaming:
-                prefix = await response.aiter_bytes().__anext__()
-                body_preview = prefix.decode(errors="replace")[:500]
+                logger.warning(
+                    "http_request_failed",
+                    status_code=response.status_code,
+                    method=response.request.method,
+                    url=str(response.request.url),
+                    duration_ms=duration_ms,
+                    streaming=streaming,
+                    response_body="<streaming response - body not logged to preserve stream>",
+                )
             else:
                 await response.aread()
                 body_preview = response.text[:500]
-            logger.warning(
-                "http_request_failed",
-                status_code=response.status_code,
-                method=response.request.method,
-                url=str(response.request.url),
-                duration_ms=duration_ms,
-                streaming=streaming,
-                response_body=body_preview,
-            )
+                logger.warning(
+                    "http_request_failed",
+                    status_code=response.status_code,
+                    method=response.request.method,
+                    url=str(response.request.url),
+                    duration_ms=duration_ms,
+                    streaming=streaming,
+                    response_body=body_preview,
+                )
         else:
             logger.info(
                 "http_request_completed",
