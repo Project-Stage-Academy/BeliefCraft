@@ -116,8 +116,12 @@ class CaptionFinder:
                 continue
 
             first_line_text = "".join(span["text"] for span in first_line["spans"])
+            normalized_first_line = first_line_text.strip().lower()
 
-            if first_line_text in ("Example", "Algorithm"):
+            if normalized_first_line in ("example", "algorithm"):
+                if len(block["lines"]) <= 1:
+                    continue
+
                 second_line = block["lines"][1]
                 if "spans" not in second_line:
                     continue
