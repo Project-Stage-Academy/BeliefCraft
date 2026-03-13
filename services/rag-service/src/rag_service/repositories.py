@@ -12,7 +12,7 @@ import weaviate
 from weaviate.collections.classes.filters import Filter
 from weaviate.collections.classes.grpc import MetadataQuery, QueryReference
 
-from .code_entity_processor import CodeDefinitionProcessor
+from .code_entity_processor import WeaviateCodeDefinitionProcessor
 from .constants import (
     ALGORITHM_REF_FIELD,
     CLASS_REF_FIELD,
@@ -159,6 +159,7 @@ class AbstractVectorStoreRepository(ABC):
             )
         return results
 
+    @abstractmethod
     async def get_related_code_definitions(self, document_ids: list[str]) -> str:
         """
         Retrieve the Python source code related to the given chunk IDs (algorithms or examples).
@@ -171,14 +172,8 @@ class AbstractVectorStoreRepository(ABC):
 
         Returns:
             Python source string with all related code definitions in call order.
-
-        Raises:
-            NotImplementedError: Subclasses that do not support code-definition
-                retrieval should raise this or override the method.
         """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not support get_related_code_definitions."
-        )
+        pass
 
 
 class FakeDataRepository(AbstractVectorStoreRepository):
@@ -246,6 +241,12 @@ class FakeDataRepository(AbstractVectorStoreRepository):
             if doc_id in self._by_id:
                 results.append(self._to_document(self._by_id[doc_id]))
         return results
+
+    async def get_related_code_definitions(self, document_ids: list[str]) -> str:
+        """Fake repository does not support code-definition retrieval."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support get_related_code_definitions."
+        )
 
 
 class WeaviateRepository(AbstractVectorStoreRepository):
@@ -565,9 +566,11 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             filters=Filter.by_id().contains_any(document_ids),
             return_references=self._build_top_level_code_def_refs(),
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions(results.objects, document_ids)
+        docs = WeaviateCodeDefinitionProcessor.collect_code_definitions(
+            results.objects, document_ids
+        )
         if docs:
-            return CodeDefinitionProcessor.restore_code_fragment(docs)
+            return WeaviateCodeDefinitionProcessor.restore_code_fragment(docs)
         return ""
 
     def _build_nested_code_def_refs(self, max_depth: int = 10) -> list[QueryReference]:

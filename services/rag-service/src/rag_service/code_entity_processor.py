@@ -5,20 +5,12 @@ from rag_service.constants import ALGORITHM_REF_FIELD
 from .constants import CLASS_REF_FIELD, ChunkCodeRef, CodeEntityRef
 from .models import Document
 
-_CODE_DEF_EXPANSION_FIELDS = (
-    ChunkCodeRef.REFERENCED_CLASSES,
-    ChunkCodeRef.REFERENCED_METHODS,
-    ChunkCodeRef.REFERENCED_FUNCTIONS,
-)
+_CODE_DEF_EXPANSION_FIELDS = [option.value for option in ChunkCodeRef]
 
-_CODE_DEF_NESTED_FIELDS = (
-    CodeEntityRef.INITIALIZED_CLASSES,
-    CodeEntityRef.REFERENCED_METHODS,
-    CodeEntityRef.REFERENCED_FUNCTIONS,
-)
+_CODE_DEF_NESTED_FIELDS = [option.value for option in CodeEntityRef]
 
 
-class CodeDefinitionProcessor:
+class WeaviateCodeDefinitionProcessor:
     """
     Stateless processor that converts raw Weaviate code-definition objects into
     ordered :class:`~models.Document` lists and reconstructs them into a single
@@ -64,7 +56,7 @@ class CodeDefinitionProcessor:
                 if not field_ref:
                     continue
                 for ref_obj in field_ref.objects or []:
-                    CodeDefinitionProcessor._traverse(
+                    WeaviateCodeDefinitionProcessor._traverse(
                         ref_obj, seen_uuids, root_document_ids, documents
                     )
 
@@ -94,7 +86,7 @@ class CodeDefinitionProcessor:
             return
 
         collection: str | None = getattr(obj, "collection", None)
-        doc, class_name = CodeDefinitionProcessor._to_document(obj, collection)
+        doc, class_name = WeaviateCodeDefinitionProcessor._to_document(obj, collection)
 
         # Post-order: visit dependencies BEFORE appending self.
         # CodeClass is a leaf — its methods point to it, not the reverse.
@@ -104,12 +96,12 @@ class CodeDefinitionProcessor:
                 if not nested_ref:
                     continue
                 for nested_obj in nested_ref.objects or []:
-                    CodeDefinitionProcessor._traverse(
+                    WeaviateCodeDefinitionProcessor._traverse(
                         nested_obj, seen_uuids, root_document_ids, documents
                     )
 
         if collection == "CodeMethod" and class_name:
-            CodeDefinitionProcessor._emit_parent_class(
+            WeaviateCodeDefinitionProcessor._emit_parent_class(
                 obj, class_name, seen_uuids, root_document_ids, documents
             )
 
@@ -133,7 +125,7 @@ class CodeDefinitionProcessor:
 
         class_name: str | None = None
         if collection == "CodeMethod" and obj.references:
-            class_name = CodeDefinitionProcessor._resolve_class_name(obj)
+            class_name = WeaviateCodeDefinitionProcessor._resolve_class_name(obj)
             if class_name:
                 metadata["class_name"] = class_name
 
@@ -204,11 +196,11 @@ class CodeDefinitionProcessor:
             Python source string; top-level blocks separated by two blank lines,
             classes united with their ``__init__`` and all methods.
         """
-        unique_docs = CodeDefinitionProcessor._deduplicate(documents)
+        unique_docs = WeaviateCodeDefinitionProcessor._deduplicate(documents)
         class_docs, methods_by_class, class_last_idx, fn_entries = (
-            CodeDefinitionProcessor._classify(unique_docs)
+            WeaviateCodeDefinitionProcessor._classify(unique_docs)
         )
-        blocks = CodeDefinitionProcessor._render_blocks(
+        blocks = WeaviateCodeDefinitionProcessor._render_blocks(
             fn_entries, class_docs, methods_by_class, class_last_idx
         )
         blocks.sort(key=lambda t: t[0])
@@ -284,7 +276,7 @@ class CodeDefinitionProcessor:
         emitted_method_ids: set[str] = set()
         for class_name in set(class_docs) | set(methods_by_class):
             position = class_last_idx.get(class_name, 0)
-            rendered = CodeDefinitionProcessor._render_class_block(
+            rendered = WeaviateCodeDefinitionProcessor._render_class_block(
                 class_name, class_docs, methods_by_class, emitted_method_ids
             )
             blocks.append((position, rendered))

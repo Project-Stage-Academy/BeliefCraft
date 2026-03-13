@@ -1,10 +1,19 @@
+import inspect
+
 import pytest
 import requests
 import weaviate
 from rag_service.config import Settings
 from rag_service.constants import (
+    ALGORITHM_REF_FIELD,
+    CLASS_REF_FIELD,
+    CODE_CLASS_COLLECTION,
+    CODE_FUNCTION_COLLECTION,
+    CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
     REFERENCE_TYPE_MAP,
+    ChunkCodeRef,
+    CodeEntityRef,
 )
 from rag_service.models import EntityType, MetadataFilter, MetadataFilters
 from rag_service.repositories import WeaviateRepository
@@ -19,6 +28,12 @@ OTHER_UUID = "00000000-0000-0000-0000-000000000004"
 A1_UUID = "00000000-0000-0000-0000-000000000003"
 F1_UUID = "00000000-0000-0000-0000-000000000002"
 ROOT_UUID = "00000000-0000-0000-0000-000000000001"
+
+CODE_CLASS_UUID = "00000000-0000-0000-0000-000000000006"
+CODE_METHOD_UUID = "00000000-0000-0000-0000-000000000007"
+CODE_CALLER_UUID = "00000000-0000-0000-0000-000000000008"
+CODE_CALLEE_UUID = "00000000-0000-0000-0000-000000000009"
+CODE_UNRELATED_UUID = "00000000-0000-0000-0000-000000000010"
 
 
 class FixedWeaviateContainer(WeaviateContainer):
@@ -44,6 +59,49 @@ async def weaviate_setup():
         )
         await client.connect()
 
+        async def add_reference_if_missing(collection, name: str, target: str) -> None:
+            config = await collection.config.get()
+            if any(ref.name == name for ref in config.references):
+                return
+            maybe_awaitable = collection.config.add_reference(
+                ReferenceProperty(name=name, target_collection=target)
+            )
+            if inspect.isawaitable(maybe_awaitable):
+                await maybe_awaitable
+
+        # Create code collections first, then attach cross-collection references in phase 2.
+        await client.collections.create(
+            name=CODE_CLASS_COLLECTION,
+            vector_config=Configure.Vectors.self_provided(
+                vector_index_config=Configure.VectorIndex.flat(
+                    distance_metric=VectorDistances.COSINE,
+                ),
+            ),
+            references=[],
+        )
+
+        await client.collections.create(
+            name=CODE_FUNCTION_COLLECTION,
+            vector_config=Configure.Vectors.self_provided(
+                vector_index_config=Configure.VectorIndex.flat(
+                    distance_metric=VectorDistances.COSINE,
+                ),
+            ),
+            references=[],
+        )
+
+        await client.collections.create(
+            name=CODE_METHOD_COLLECTION,
+            vector_config=Configure.Vectors.self_provided(
+                vector_index_config=Configure.VectorIndex.flat(
+                    distance_metric=VectorDistances.COSINE,
+                ),
+            ),
+            references=[
+                ReferenceProperty(name=CLASS_REF_FIELD, target_collection=CODE_CLASS_COLLECTION),
+            ],
+        )
+
         await client.collections.create(
             name=COLLECTION_NAME,
             vector_config=Configure.Vectors.self_provided(
@@ -56,7 +114,34 @@ async def weaviate_setup():
                 for name in REFERENCE_TYPE_MAP
             ],
         )
+
         collection = client.collections.get(COLLECTION_NAME)
+        code_classes = client.collections.get(CODE_CLASS_COLLECTION)
+        code_methods = client.collections.get(CODE_METHOD_COLLECTION)
+        code_functions = client.collections.get(CODE_FUNCTION_COLLECTION)
+
+        await add_reference_if_missing(
+            collection, ChunkCodeRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
+        )
+        await add_reference_if_missing(
+            collection, ChunkCodeRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
+        )
+        await add_reference_if_missing(
+            collection, ChunkCodeRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
+        )
+
+        for code_collection in (code_classes, code_methods, code_functions):
+            await add_reference_if_missing(
+                code_collection, CodeEntityRef.INITIALIZED_CLASSES, CODE_CLASS_COLLECTION
+            )
+            await add_reference_if_missing(
+                code_collection, CodeEntityRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
+            )
+            await add_reference_if_missing(
+                code_collection, CodeEntityRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
+            )
+            await add_reference_if_missing(code_collection, ALGORITHM_REF_FIELD, COLLECTION_NAME)
+
         await collection.data.insert(
             properties={
                 "content": "E=mc^2",
@@ -110,6 +195,75 @@ async def weaviate_setup():
         )
         await collection.data.reference_add(
             from_uuid=F1_UUID, from_property="referenced_examples", to=EXAMPLE_UUID
+        )
+
+        await code_classes.data.insert(
+            properties={
+                "name": "Runner",
+                "content": "class Runner:\n    def __init__(self):\n        self.enabled = True",
+            },
+            uuid=CODE_CLASS_UUID,
+            vector=[0.11] * 2,
+        )
+        await code_methods.data.insert(
+            properties={
+                "name": "run",
+                "content": "def run(self):\n    return execute()",
+            },
+            uuid=CODE_METHOD_UUID,
+            vector=[0.12] * 2,
+        )
+        await code_functions.data.insert(
+            properties={
+                "name": "execute",
+                "content": "def execute():\n    return helper()",
+            },
+            uuid=CODE_CALLER_UUID,
+            vector=[0.13] * 2,
+        )
+        await code_functions.data.insert(
+            properties={
+                "name": "helper",
+                "content": "def helper():\n    return 1",
+            },
+            uuid=CODE_CALLEE_UUID,
+            vector=[0.14] * 2,
+        )
+        await code_functions.data.insert(
+            properties={
+                "name": "unrelated",
+                "content": "def unrelated():\n    return -1",
+            },
+            uuid=CODE_UNRELATED_UUID,
+            vector=[0.15] * 2,
+        )
+
+        await collection.data.reference_add(
+            from_uuid=ROOT_UUID,
+            from_property=ChunkCodeRef.REFERENCED_METHODS,
+            to=CODE_METHOD_UUID,
+        )
+        await collection.data.reference_add(
+            from_uuid=ROOT_UUID,
+            from_property=ChunkCodeRef.REFERENCED_FUNCTIONS,
+            to=CODE_CALLER_UUID,
+        )
+
+        await code_methods.data.reference_add(
+            from_uuid=CODE_METHOD_UUID,
+            from_property=CLASS_REF_FIELD,
+            to=CODE_CLASS_UUID,
+        )
+        await code_methods.data.reference_add(
+            from_uuid=CODE_METHOD_UUID,
+            from_property=CodeEntityRef.REFERENCED_FUNCTIONS,
+            to=CODE_CALLER_UUID,
+        )
+
+        await code_functions.data.reference_add(
+            from_uuid=CODE_CALLER_UUID,
+            from_property=CodeEntityRef.REFERENCED_FUNCTIONS,
+            to=CODE_CALLEE_UUID,
         )
 
         try:
@@ -314,3 +468,28 @@ async def test_weaviate_search_with_expansion(repo):
     assert "F1" in root_doc.metadata["referenced_formulas"]
     assert "A1" in root_doc.metadata["referenced_algorithms"]
     assert "referenced_examples" not in root_doc.metadata
+
+
+@pytest.mark.asyncio
+async def test_weaviate_get_related_code_definitions(repo):
+    """Verify code-definition graph traversal returns ordered, deduplicated source."""
+    repo._build_nested_code_def_refs = (  # type: ignore[method-assign]
+        lambda max_depth=10: WeaviateRepository._build_nested_code_def_refs(repo, min(max_depth, 1))
+    )
+
+    result = await repo.get_related_code_definitions([ROOT_UUID])
+
+    assert result
+    assert "def helper():" in result
+    assert "def execute():" in result
+    assert "class Runner:" in result
+    assert "def run(self):" in result
+
+    # Dependencies should appear before their callers.
+    assert result.index("def helper():") < result.index("def execute():")
+
+    # Caller is referenced from both root and method, but should only appear once.
+    assert result.count("def execute():") == 1
+
+    # Unrelated function should never be pulled into the fragment.
+    assert "def unrelated():" not in result

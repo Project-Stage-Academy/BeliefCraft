@@ -6,7 +6,7 @@ These tests use lightweight mock Weaviate objects so no real DB connection is ne
 
 from unittest.mock import MagicMock
 
-from rag_service.code_entity_processor import CodeDefinitionProcessor
+from rag_service.code_entity_processor import WeaviateCodeDefinitionProcessor
 from rag_service.models import Document
 
 # ------------------------------------------------------------------ #
@@ -95,7 +95,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_functions": _make_ref([fn])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
+        docs = WeaviateCodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
 
         assert len(docs) == 1
         assert docs[0].id == FUNCTION_UUID
@@ -109,7 +109,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_methods": _make_ref([method])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
+        docs = WeaviateCodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
 
         # Expect: class emitted before method
         ids = [d.id for d in docs]
@@ -125,7 +125,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_methods": _make_ref([method])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
+        docs = WeaviateCodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
 
         class_doc = next(d for d in docs if d.id == CLASS_UUID)
         assert class_doc.content == CLASS_CONTENT
@@ -144,7 +144,9 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_functions": _make_ref([fn])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root1, root2], [ALGORITH_UUID])
+        docs = WeaviateCodeDefinitionProcessor.collect_code_definitions(
+            [root1, root2], [ALGORITH_UUID]
+        )
 
         ids = [d.id for d in docs]
         assert ids.count(FUNCTION_UUID) == 1
@@ -163,7 +165,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={"referenced_functions": _make_ref([caller])},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
+        docs = WeaviateCodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
 
         ids = [d.id for d in docs]
         assert ids.index(CALLEE_FN_UUID) < ids.index(FUNCTION_UUID)
@@ -175,7 +177,7 @@ class TestCollectCodeDefinitions:
             properties={},
             references={},
         )
-        docs = CodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
+        docs = WeaviateCodeDefinitionProcessor.collect_code_definitions([root], [ALGORITH_UUID])
         assert docs == []
 
 
@@ -210,7 +212,7 @@ class TestRestoreCodeFragment:
 
     def test_single_function(self):
         docs = [self._make_fn_doc("f1", "def foo():\n    pass")]
-        result = CodeDefinitionProcessor.restore_code_fragment(docs)
+        result = WeaviateCodeDefinitionProcessor.restore_code_fragment(docs)
         assert "def foo():" in result
 
     def test_class_with_init_and_method(self):
@@ -225,7 +227,7 @@ class TestRestoreCodeFragment:
             "Bar",
         )
         docs = [class_doc, method_doc]
-        result = CodeDefinitionProcessor.restore_code_fragment(docs)
+        result = WeaviateCodeDefinitionProcessor.restore_code_fragment(docs)
 
         # Class header with __init__ must be present
         assert "class Bar:" in result
@@ -239,7 +241,7 @@ class TestRestoreCodeFragment:
         doc = self._make_fn_doc("f1", "def foo():\n    pass")
         # Pass duplicates
         docs = [doc, doc]
-        result = CodeDefinitionProcessor.restore_code_fragment(docs)
+        result = WeaviateCodeDefinitionProcessor.restore_code_fragment(docs)
         assert result.count("def foo():") == 1
 
     def test_callee_before_caller_in_output(self):
@@ -247,11 +249,11 @@ class TestRestoreCodeFragment:
         caller = self._make_fn_doc("f2", "def caller():\n    return callee()")
         # callee comes first in post-order list
         docs = [callee, caller]
-        result = CodeDefinitionProcessor.restore_code_fragment(docs)
+        result = WeaviateCodeDefinitionProcessor.restore_code_fragment(docs)
         assert result.index("def callee()") < result.index("def caller()")
 
     def test_empty_documents(self):
-        result = CodeDefinitionProcessor.restore_code_fragment([])
+        result = WeaviateCodeDefinitionProcessor.restore_code_fragment([])
         assert result == ""
 
     def test_class_without_methods(self):
@@ -260,6 +262,6 @@ class TestRestoreCodeFragment:
             "Solo",
             "class Solo:\n    def __init__(self):\n        pass",
         )
-        result = CodeDefinitionProcessor.restore_code_fragment([class_doc])
+        result = WeaviateCodeDefinitionProcessor.restore_code_fragment([class_doc])
         assert "class Solo:" in result
         assert "def __init__" in result
