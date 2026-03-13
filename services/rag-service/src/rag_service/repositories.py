@@ -597,7 +597,10 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         ]
 
     def _sub_refs_for_code_def_field(self, field: str, max_depth: int) -> list[QueryReference]:
-        """Return sub-references for one nested code-def field, or None for leaves."""
+        """Return sub-references for one code-definition reference field.
+
+        Leaf fields (``initialized_classes`` or exhausted ``max_depth``) return an empty list.
+        """
         if field == CodeEntityRef.INITIALIZED_CLASSES or max_depth == 0:
             return []
         sub_refs = self._build_nested_code_def_refs(max_depth - 1)
