@@ -1,64 +1,69 @@
-import os
+import argparse
+import html
 import io
 import json
+import os
 import re
-import html
-import argparse
-import shutil
 import tempfile
-from typing import List, Dict, Optional, Any, Tuple
-
-import requests
-from pydantic import BaseModel, Field
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Image,
-    Table,
-    PageBreak,
-    Flowable,
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.lib.units import inch
 from collections import defaultdict
 from enum import Enum
-from PIL import Image as PILImage
-import ziamath as zm
-from tqdm import tqdm
+from typing import Any
+
 import fitz
-from svglib.svglib import svg2rlg
+import requests
+import ziamath as zm
+from PIL import Image as PILImage
+from pydantic import BaseModel, Field
 from reportlab.graphics import renderPM
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    Flowable,
+    Image,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+)
+from svglib.svglib import svg2rlg
+from tqdm import tqdm
+
 
 class RenderMode(str, Enum):
     RENDERED = "rendered"  # latex as rendered images
     TEXT = "text"  # latex as text
 
+
 class Chunk(BaseModel):
     chunk_id: str
     chunk_type: str
-    entity_id: Optional[str] = None
+    entity_id: str | None = None
     content: str
     page: int
-    part: Optional[str] = None
-    part_title: Optional[str] = None
-    section_title: Optional[str] = None
-    section_number: Optional[str] = None
-    subsection_title: Optional[str] = None
-    subsection_number: Optional[str] = None
-    subsubsection_title: Optional[str] = None
-    subsubsection_number: Optional[str] = None
-    image_links: List[str] = Field(default_factory=list)
-    declarations: List[str] = Field(default_factory=list)
+    part: str | None = None
+    part_title: str | None = None
+    section_title: str | None = None
+    section_number: str | None = None
+    subsection_title: str | None = None
+    subsection_number: str | None = None
+    subsubsection_title: str | None = None
+    subsubsection_number: str | None = None
+    image_links: list[str] = Field(default_factory=list)
+    declarations: list[str] = Field(default_factory=list)
     used_functions: Any = Field(default_factory=list)
     used_structs: Any = Field(default_factory=list)
-    referenced_algorithms: List[str] = Field(default_factory=list)
-    referenced_figures: List[str] = Field(default_factory=list)
-    referenced_formulas: List[str] = Field(default_factory=list)
+    referenced_algorithms: list[str] = Field(default_factory=list)
+    referenced_figures: list[str] = Field(default_factory=list)
+    referenced_formulas: list[str] = Field(default_factory=list)
+
 
 class PDFRenderer:
-    def __init__(self, output_path: str, mode: RenderMode = RenderMode.RENDERED, pdf_with_figures: str = "dm-figures.pdf"):
+    def __init__(
+        self,
+        output_path: str,
+        mode: RenderMode = RenderMode.RENDERED,
+        pdf_with_figures: str = "dm-figures.pdf",
+    ):
         self.output_path = output_path
         self.mode = mode
         self.styles = getSampleStyleSheet()
@@ -67,22 +72,34 @@ class PDFRenderer:
 
     def _setup_styles(self):
         self.meta_style = ParagraphStyle(
-            'Metadata', parent=self.styles['Normal'], fontSize=7,
-            textColor=colors.grey, leading=8, spaceAfter=2
+            "Metadata",
+            parent=self.styles["Normal"],
+            fontSize=7,
+            textColor=colors.grey,
+            leading=8,
+            spaceAfter=2,
         )
         self.content_style = ParagraphStyle(
-            'Content', parent=self.styles['Normal'], fontSize=9,
-            leading=11, alignment=0, spaceBefore=4, spaceAfter=4
+            "Content",
+            parent=self.styles["Normal"],
+            fontSize=9,
+            leading=11,
+            alignment=0,
+            spaceBefore=4,
+            spaceAfter=4,
         )
         self.header_style = ParagraphStyle(
-            'Header', parent=self.styles['Heading2'], fontSize=11,
-            textColor=colors.navy, spaceAfter=6
+            "Header",
+            parent=self.styles["Heading2"],
+            fontSize=11,
+            textColor=colors.navy,
+            spaceAfter=6,
         )
 
     def get_placeholder_image(self) -> bytes:
-        img = PILImage.new('RGB', (200, 100), color='red')
+        img = PILImage.new("RGB", (200, 100), color="red")
         img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='PNG')
+        img.save(img_byte_arr, format="PNG")
         return img_byte_arr.getvalue()
 
     def get_image_bytes(self, link: str) -> bytes:
@@ -100,7 +117,7 @@ class PDFRenderer:
                 print(f"Failed to download image from {link}: {e}")
                 return self.get_placeholder_image()
         filename = os.path.basename(link)
-        page_num_match = re.search(r'(\d+)', filename)
+        page_num_match = re.search(r"(\d+)", filename)
         if page_num_match:
             page_num = int(page_num_match.group(1))
             try:
@@ -113,11 +130,11 @@ class PDFRenderer:
                 print(f"Failed to extract image from {self.pdf_with_figures} for {link}: {e}")
         return self.get_placeholder_image()
 
-    def rasterize_latex(self, latex_str: str, temp_dir: str) -> Tuple[str, float, float]:
+    def rasterize_latex(self, latex_str: str, temp_dir: str) -> tuple[str, float, float]:
         latex_str = html.unescape(latex_str).strip()
-        while latex_str.startswith('$'):
+        while latex_str.startswith("$"):
             latex_str = latex_str[1:]
-        while latex_str.endswith('$'):
+        while latex_str.endswith("$"):
             latex_str = latex_str[:-1]
 
         if not latex_str:
@@ -129,7 +146,7 @@ class PDFRenderer:
             drawing = svg2rlg(io.StringIO(svg_str))
 
             img_path = os.path.join(temp_dir, f"formula_{abs(hash(latex_str))}.png")
-            renderPM.drawToFile(drawing, img_path, fmt='PNG', dpi=150)
+            renderPM.drawToFile(drawing, img_path, fmt="PNG", dpi=150)
 
             # Use drawing width/height directly
             return img_path, float(drawing.width), float(drawing.height)
@@ -139,17 +156,17 @@ class PDFRenderer:
 
     def parse_content_to_html(self, content: str, temp_dir: str) -> str:
         # Sanitize HTML tags but keep formatting
-        content = re.sub(r'<(?!/?(b|i|u|br|code)\b)[^>]*>', '', content)
+        content = re.sub(r"<(?!/?(b|i|u|br|code)\b)[^>]*>", "", content)
 
         def replace_latex(match):
             latex_full = match.group(0)
-            is_block = latex_full.startswith('$$')
+            is_block = latex_full.startswith("$$")
             unescaped = html.unescape(latex_full)
 
             if self.mode == RenderMode.TEXT:
                 return f"<code>{html.escape(unescaped)}</code>"
 
-            latex_inner = unescaped.strip('$')
+            latex_inner = unescaped.strip("$")
             img_path, w, h = self.rasterize_latex(latex_inner, temp_dir)
             if not img_path:
                 return f"<code>{html.escape(unescaped)}</code>"
@@ -164,19 +181,30 @@ class PDFRenderer:
             img_tag = f'<img src="{img_path}" width="{w}" height="{h}" valign="middle"/>'
             # Avoid nesting <para> tags. Just use <br/> for block separation.
             if is_block:
-                return f'<br/>&nbsp;&nbsp;&nbsp;&nbsp;{img_tag}<br/>'
+                return f"<br/>&nbsp;&nbsp;&nbsp;&nbsp;{img_tag}<br/>"
             return img_tag
 
-        return re.sub(r'(\$\$.*?\$\$|\$.*?\$)', replace_latex, content, flags=re.DOTALL)
+        return re.sub(r"(\$\$.*?\$\$|\$.*?\$)", replace_latex, content, flags=re.DOTALL)
 
-    def generate_page(self, page_num: int, chunks: List[Chunk], temp_dir: str) -> str:
+    def generate_page(self, page_num: int, chunks: list[Chunk], temp_dir: str) -> str:
         temp_file = os.path.join(temp_dir, f"page_{page_num}.pdf")
-        doc = SimpleDocTemplate(temp_file, pagesize=(595, 842),
-                                leftMargin=30, rightMargin=30, topMargin=30, bottomMargin=30)
+        doc = SimpleDocTemplate(
+            temp_file,
+            pagesize=(595, 842),
+            leftMargin=30,
+            rightMargin=30,
+            topMargin=30,
+            bottomMargin=30,
+        )
         story: list[Flowable] = [Paragraph(f"Page {page_num}", self.header_style)]
 
         for chunk in chunks:
-            hierarchy = [chunk.part_title, chunk.section_title, chunk.subsection_title, chunk.subsubsection_title]
+            hierarchy = [
+                chunk.part_title,
+                chunk.section_title,
+                chunk.subsection_title,
+                chunk.subsubsection_title,
+            ]
             hierarchy = [h for h in hierarchy if h]
             chunk_type = chunk.chunk_type or "unknown"
             if chunk_type != "text":
@@ -189,18 +217,22 @@ class PDFRenderer:
                 story.append(Paragraph(html_content, self.content_style))
             except Exception as e:
                 print(f"Paragraph error on page {page_num}: {e}")
-                story.append(Paragraph(f"<font color='red'>ERROR: {html.escape(str(e))}</font>", self.content_style))
+                story.append(
+                    Paragraph(
+                        f"<font color='red'>ERROR: {html.escape(str(e))}</font>", self.content_style
+                    )
+                )
                 story.append(Paragraph(html.escape(chunk.content), self.content_style))
 
             for img_link in chunk.image_links:
                 img_data = self.get_image_bytes(img_link)
-                story.append(Image(io.BytesIO(img_data), width=1.5*inch, height=0.75*inch))
+                story.append(Image(io.BytesIO(img_data), width=1.5 * inch, height=0.75 * inch))
             story.append(Spacer(1, 0.1 * inch))
 
         doc.build(story)
         return temp_file
 
-    def generate(self, chunks: List[Chunk]):
+    def generate(self, chunks: list[Chunk]):
         pages_map = defaultdict(list)
         for chunk in chunks:
             pages_map[chunk.page].append(chunk)
@@ -225,18 +257,33 @@ class PDFRenderer:
             final_doc.close()
             print("Done!")
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_json", help="Path to the input JSON file containing chunks")
-    parser.add_argument("--mode", choices=["rendered", "text"], default="text", help="Rendering mode for LaTeX content")
-    parser.add_argument("--figures_pdf", default="dm-figures.pdf", help="Path to the PDF containing figures from book. It is needed if the image chunks are not referencing S3")
+    parser.add_argument(
+        "--mode",
+        choices=["rendered", "text"],
+        default="text",
+        help="Rendering mode for LaTeX content",
+    )
+    parser.add_argument(
+        "--figures_pdf",
+        default="dm-figures.pdf",
+        help="Path to the PDF containing figures from book. It is needed if the image chunks are not referencing S3",
+    )
     args = parser.parse_args()
 
-    with open(args.input_json, 'r') as f:
+    with open(args.input_json) as f:
         data = json.load(f)
     chunks = [Chunk(**c) for c in data]
-    renderer = PDFRenderer("ULTIMATE_BOOK_VERIFICATION.pdf", mode=RenderMode(args.mode), pdf_with_figures=args.figures_pdf)
+    renderer = PDFRenderer(
+        "ULTIMATE_BOOK_VERIFICATION.pdf",
+        mode=RenderMode(args.mode),
+        pdf_with_figures=args.figures_pdf,
+    )
     renderer.generate(chunks)
+
 
 if __name__ == "__main__":
     main()
