@@ -1,10 +1,11 @@
 from pathlib import Path
-from app.services.react_agent import ReActAgent
 
+from app.services.react_agent import ReActAgent
 
 script_dir = Path(__file__).resolve().parent
 repo_root = script_dir.parent.parent
 docs_dir = repo_root / "docs" / "agent-service"
+
 
 def generate_mermaid():
     docs_dir.mkdir(parents=True, exist_ok=True)

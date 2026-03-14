@@ -1,7 +1,8 @@
 openapi: 3.1.0
 info:
-  title: FastAPI
-  version: 0.1.0
+  title: Environment API
+  description: API contract for the Environment service.
+  version: 1.0.0
 paths:
   /health:
     get:
@@ -401,6 +402,300 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/warehouses:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology List Warehouses
+      operationId: topology_list_warehouses_api_v1_smart_query_topology_warehouses_get
+      parameters:
+      - name: region
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+      - name: name_like
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name Like
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology List Warehouses Api V1 Smart Query Topology
+                  Warehouses Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/warehouses/{warehouse_id}:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology Get Warehouse
+      operationId: topology_get_warehouse_api_v1_smart_query_topology_warehouses__warehouse_id__get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Warehouse Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology Get Warehouse Api V1 Smart Query Topology
+                  Warehouses  Warehouse Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/locations:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology List Locations
+      operationId: topology_list_locations_api_v1_smart_query_topology_locations_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/TopologyLocationType'
+          - type: 'null'
+          title: Type
+      - name: parent_location_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Location Id
+      - name: code_like
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code Like
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology List Locations Api V1 Smart Query Topology
+                  Locations Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/locations/{location_id}:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology Get Location
+      operationId: topology_get_location_api_v1_smart_query_topology_locations__location_id__get
+      parameters:
+      - name: location_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Location Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology Get Location Api V1 Smart Query Topology
+                  Locations  Location Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/warehouses/{warehouse_id}/locations-tree:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology Get Locations Tree
+      operationId: topology_get_locations_tree_api_v1_smart_query_topology_warehouses__warehouse_id__locations_tree_get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Warehouse Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology Get Locations Tree Api V1 Smart Query Topology
+                  Warehouses  Warehouse Id  Locations Tree Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/warehouses/{warehouse_id}/capacity-utilization:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology Capacity Utilization
+      operationId: topology_capacity_utilization_api_v1_smart_query_topology_warehouses__warehouse_id__capacity_utilization_get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Warehouse Id
+      - name: snapshot_at
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Snapshot At
+      - name: observed_from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Observed From
+      - name: observed_to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Observed To
+      - name: lookback_hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 720
+          minimum: 1
+          default: 24
+          title: Lookback Hours
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/TopologyLocationType'
+          - type: 'null'
+          title: Type
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology Capacity Utilization Api V1 Smart Query Topology
+                  Warehouses  Warehouse Id  Capacity Utilization Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/smart-query/inventory/current:
     get:
       tags:
@@ -474,6 +769,203 @@ paths:
                 additionalProperties: true
                 title: Response Current Inventory Api V1 Smart Query Inventory Current
                   Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/moves:
+    get:
+      tags:
+      - smart-query
+      summary: Inventory List Moves
+      operationId: inventory_list_moves_api_v1_smart_query_inventory_moves_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: move_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Move Type
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: To Ts
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory List Moves Api V1 Smart Query Inventory
+                  Moves Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/moves/{move_id}:
+    get:
+      tags:
+      - smart-query
+      summary: Inventory Get Move
+      operationId: inventory_get_move_api_v1_smart_query_inventory_moves__move_id__get
+      parameters:
+      - name: move_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Move Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Get Move Api V1 Smart Query Inventory Moves  Move
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/moves/{move_id}/audit-trace:
+    get:
+      tags:
+      - smart-query
+      summary: Inventory Get Move Audit Trace
+      operationId: inventory_get_move_audit_trace_api_v1_smart_query_inventory_moves__move_id__audit_trace_get
+      parameters:
+      - name: move_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Move Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Get Move Audit Trace Api V1 Smart Query
+                  Inventory Moves  Move Id  Audit Trace Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/adjustments-summary:
+    get:
+      tags:
+      - smart-query
+      summary: Inventory Adjustments Summary
+      operationId: inventory_adjustments_summary_api_v1_smart_query_inventory_adjustments_summary_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: To Ts
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Adjustments Summary Api V1 Smart Query Inventory
+                  Adjustments Summary Get
         '422':
           description: Validation Error
           content:
@@ -728,6 +1220,15 @@ components:
       - supplier
       - warehouse_supplier
       title: ProcurementGroupBy
+    TopologyLocationType:
+      type: string
+      enum:
+      - shelf
+      - bin
+      - pallet_pos
+      - dock
+      - virtual
+      title: TopologyLocationType
     ValidationError:
       properties:
         loc:
