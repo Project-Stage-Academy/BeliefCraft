@@ -49,12 +49,12 @@ The packages/database/.env is pinned in discord chat.
    *Provide your `AWS Access Key ID`, `AWS Secret Access Key`, and Default region (e.g., `us-east-1`) when prompted.*
 
 2. **Load credentials into your active terminal session**:
-   
+
    Linux/macOS:
    ~~~bash
    . scripts/aws-env.sh
    ~~~
-   
+
    PowerShell:
    ~~~powershell
    . .\scripts\aws-env.ps1
