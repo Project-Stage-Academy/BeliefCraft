@@ -14,7 +14,7 @@ def generate_mermaid():
     mermaid_code = agent.graph.get_graph().draw_mermaid()
 
     output_path = docs_dir / "react_agent_graph.mmd"
-    with open(output_path, "w") as f:
+    with Path.open(output_path, "w") as f:
         f.write(mermaid_code)
 
     print(f"Saved diagram to: {output_path}")
