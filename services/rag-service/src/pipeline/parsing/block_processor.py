@@ -116,7 +116,22 @@ class CaptionFinder:
                 continue
 
             first_line_text = "".join(span["text"] for span in first_line["spans"])
-            block_type = self.classify_text(first_line_text)
+            normalized_first_line = first_line_text.strip().lower()
+
+            block_first_lines = first_line_text
+            if normalized_first_line in ("example", "algorithm"):
+                if len(block["lines"]) <= 1:
+                    continue
+
+                second_line = block["lines"][1]
+                if "spans" not in second_line:
+                    continue
+                if second_line:
+                    block_first_lines += " " + "".join(
+                        span["text"] for span in second_line["spans"]
+                    )
+
+            block_type = self.classify_text(block_first_lines)
 
             if block_type == BlockType.OTHER.value:
                 continue
@@ -137,7 +152,10 @@ class CaptionFinder:
                     prev_line_bbox = line_bbox
                     line_rect = fitz.Rect(line_bbox)
                     caption_rect = line_rect if caption_rect is None else (caption_rect | line_rect)
-                    caption_text += " ".join(span["text"] for span in line["spans"]) + " "
+                    caption_text += (
+                        " ".join(span["text"] for span in line["spans"] if span["text"].strip())
+                        + " "
+                    )
 
             if caption_text and caption_rect:
                 captions.append(
