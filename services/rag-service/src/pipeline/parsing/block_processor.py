@@ -118,6 +118,7 @@ class CaptionFinder:
             first_line_text = "".join(span["text"] for span in first_line["spans"])
             normalized_first_line = first_line_text.strip().lower()
 
+            block_first_lines = first_line_text
             if normalized_first_line in ("example", "algorithm"):
                 if len(block["lines"]) <= 1:
                     continue
@@ -125,10 +126,12 @@ class CaptionFinder:
                 second_line = block["lines"][1]
                 if "spans" not in second_line:
                     continue
+                if second_line:
+                    block_first_lines += " " + "".join(
+                        span["text"] for span in second_line["spans"]
+                    )
 
-                first_line_text += " " + "".join(span["text"] for span in second_line["spans"])
-
-            block_type = self.classify_text(first_line_text)
+            block_type = self.classify_text(block_first_lines)
 
             if block_type == BlockType.OTHER.value:
                 continue
