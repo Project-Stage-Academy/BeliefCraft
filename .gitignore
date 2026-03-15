@@ -2,6 +2,9 @@
 .weaviate_data/
 .weaviate_backups/
 
+# rag parser data
+data_source/
+
 # JetBrains
 .idea/
 
@@ -236,3 +239,6 @@ out/
 docker-compose.override.yml
 **/.docker/
 *.tar
+
+# MacOS
+.DS_Store

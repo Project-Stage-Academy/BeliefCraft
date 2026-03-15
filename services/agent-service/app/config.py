@@ -67,6 +67,13 @@ class Settings(BaseSettings):
         default=["*"], description="Allowed CORS origins (comma-separated in env)"
     )
 
+    # LangSmith tracing
+    LANGCHAIN_TRACING_V2: bool = Field(default=False, description="Enable LangSmith tracing")
+    LANGCHAIN_API_KEY: str | None = Field(default=None, description="LangSmith API key")
+    LANGCHAIN_PROJECT: str | None = Field(
+        default=None, description="LangSmith project name for grouping traces"
+    )
+
     # Logging
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
 

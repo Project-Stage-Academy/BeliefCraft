@@ -3,7 +3,7 @@
 ## Overview
 `rag-service` is a FastAPI service exposing:
 - `GET /health`
-- MCP endpoint at `/mcp` with 3 tools (`search_knowledge_base`, `expand_graph_by_ids`, `get_entity_by_number`)
+- MCP endpoint at `/mcp` with 4 tools (`search_knowledge_base`, `expand_graph_by_ids`, `get_entity_by_number`, `get_related_code_definitions`)
 
 Important current-state note:
 - RAG access is MCP-based in the running implementation.
@@ -29,6 +29,7 @@ Use an MCP client (for example `fastmcp`) and call tools:
 - `search_knowledge_base`
 - `expand_graph_by_ids`
 - `get_entity_by_number`
+- `get_related_code_definitions`
 
 ## Configuration
 From `services/rag-service/.env.example`:

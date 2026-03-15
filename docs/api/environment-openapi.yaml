@@ -1,0 +1,1257 @@
+openapi: 3.1.0
+info:
+  title: Environment API
+  description: API contract for the Environment service.
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Health Health Get
+  /api/v1/smart-query/procurement/suppliers:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Procurement List Suppliers
+      operationId: procurement_list_suppliers_api_v1_smart_query_procurement_suppliers_get
+      parameters:
+      - name: region
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+      - name: reliability_min
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Reliability Min
+      - name: reliability_max
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Reliability Max
+      - name: name_like
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name Like
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Procurement List Suppliers Api V1 Smart Query Procurement
+                  Suppliers Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/procurement/suppliers/{supplier_id}:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Procurement Get Supplier
+      operationId: procurement_get_supplier_api_v1_smart_query_procurement_suppliers__supplier_id__get
+      parameters:
+      - name: supplier_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Supplier Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Procurement Get Supplier Api V1 Smart Query Procurement
+                  Suppliers  Supplier Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/procurement/purchase-orders:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Procurement List Purchase Orders
+      operationId: procurement_list_purchase_orders_api_v1_smart_query_procurement_purchase_orders_get
+      parameters:
+      - name: supplier_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Supplier Id
+      - name: destination_warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Destination Warehouse Id
+      - name: status_in
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/POStatus'
+          - type: 'null'
+          title: Status In
+      - name: created_after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created After
+      - name: created_before
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created Before
+      - name: expected_after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expected After
+      - name: expected_before
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expected Before
+      - name: include_names
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Include Names
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Procurement List Purchase Orders Api V1 Smart Query
+                  Procurement Purchase Orders Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/procurement/purchase-orders/{purchase_order_id}:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Procurement Get Purchase Order
+      operationId: procurement_get_purchase_order_api_v1_smart_query_procurement_purchase_orders__purchase_order_id__get
+      parameters:
+      - name: purchase_order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Purchase Order Id
+      - name: include_names
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Include Names
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Procurement Get Purchase Order Api V1 Smart Query
+                  Procurement Purchase Orders  Purchase Order Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/procurement/po-lines:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Procurement List Po Lines
+      operationId: procurement_list_po_lines_api_v1_smart_query_procurement_po_lines_get
+      parameters:
+      - name: purchase_order_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Purchase Order Id
+      - name: purchase_order_ids
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          title: Purchase Order Ids
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: include_product_fields
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Include Product Fields
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Procurement List Po Lines Api V1 Smart Query Procurement
+                  Po Lines Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/procurement/pipeline-summary:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Procurement Pipeline Summary
+      operationId: procurement_pipeline_summary_api_v1_smart_query_procurement_pipeline_summary_get
+      parameters:
+      - name: destination_warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Destination Warehouse Id
+      - name: supplier_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Supplier Id
+      - name: status_in
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/POStatus'
+          - type: 'null'
+          title: Status In
+      - name: horizon_days
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 365
+            minimum: 1
+          - type: 'null'
+          title: Horizon Days
+      - name: group_by
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/ProcurementGroupBy'
+          default: warehouse_supplier
+      - name: include_names
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Include Names
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Procurement Pipeline Summary Api V1 Smart Query Procurement
+                  Pipeline Summary Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/warehouses:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology List Warehouses
+      operationId: topology_list_warehouses_api_v1_smart_query_topology_warehouses_get
+      parameters:
+      - name: region
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+      - name: name_like
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name Like
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology List Warehouses Api V1 Smart Query Topology
+                  Warehouses Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/warehouses/{warehouse_id}:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology Get Warehouse
+      operationId: topology_get_warehouse_api_v1_smart_query_topology_warehouses__warehouse_id__get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Warehouse Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology Get Warehouse Api V1 Smart Query Topology
+                  Warehouses  Warehouse Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/locations:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology List Locations
+      operationId: topology_list_locations_api_v1_smart_query_topology_locations_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/TopologyLocationType'
+          - type: 'null'
+          title: Type
+      - name: parent_location_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Location Id
+      - name: code_like
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code Like
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology List Locations Api V1 Smart Query Topology
+                  Locations Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/locations/{location_id}:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology Get Location
+      operationId: topology_get_location_api_v1_smart_query_topology_locations__location_id__get
+      parameters:
+      - name: location_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Location Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology Get Location Api V1 Smart Query Topology
+                  Locations  Location Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/warehouses/{warehouse_id}/locations-tree:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology Get Locations Tree
+      operationId: topology_get_locations_tree_api_v1_smart_query_topology_warehouses__warehouse_id__locations_tree_get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Warehouse Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology Get Locations Tree Api V1 Smart Query Topology
+                  Warehouses  Warehouse Id  Locations Tree Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/topology/warehouses/{warehouse_id}/capacity-utilization:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Topology Capacity Utilization
+      operationId: topology_capacity_utilization_api_v1_smart_query_topology_warehouses__warehouse_id__capacity_utilization_get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Warehouse Id
+      - name: snapshot_at
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Snapshot At
+      - name: observed_from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Observed From
+      - name: observed_to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Observed To
+      - name: lookback_hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 720
+          minimum: 1
+          default: 24
+          title: Lookback Hours
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/TopologyLocationType'
+          - type: 'null'
+          title: Type
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Topology Capacity Utilization Api V1 Smart Query Topology
+                  Warehouses  Warehouse Id  Capacity Utilization Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/current:
+    get:
+      tags:
+      - smart-query
+      summary: Current Inventory
+      operationId: current_inventory_api_v1_smart_query_inventory_current_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: location_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Location Id
+      - name: sku
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sku
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: include_reserved
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Include Reserved
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Current Inventory Api V1 Smart Query Inventory Current
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/moves:
+    get:
+      tags:
+      - smart-query
+      summary: Inventory List Moves
+      operationId: inventory_list_moves_api_v1_smart_query_inventory_moves_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: move_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Move Type
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: To Ts
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory List Moves Api V1 Smart Query Inventory
+                  Moves Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/moves/{move_id}:
+    get:
+      tags:
+      - smart-query
+      summary: Inventory Get Move
+      operationId: inventory_get_move_api_v1_smart_query_inventory_moves__move_id__get
+      parameters:
+      - name: move_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Move Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Get Move Api V1 Smart Query Inventory Moves  Move
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/moves/{move_id}/audit-trace:
+    get:
+      tags:
+      - smart-query
+      summary: Inventory Get Move Audit Trace
+      operationId: inventory_get_move_audit_trace_api_v1_smart_query_inventory_moves__move_id__audit_trace_get
+      parameters:
+      - name: move_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Move Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Get Move Audit Trace Api V1 Smart Query
+                  Inventory Moves  Move Id  Audit Trace Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/adjustments-summary:
+    get:
+      tags:
+      - smart-query
+      summary: Inventory Adjustments Summary
+      operationId: inventory_adjustments_summary_api_v1_smart_query_inventory_adjustments_summary_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: To Ts
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Adjustments Summary Api V1 Smart Query Inventory
+                  Adjustments Summary Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/shipments/delay-summary:
+    get:
+      tags:
+      - smart-query
+      summary: Shipments Delay Summary
+      operationId: shipments_delay_summary_api_v1_smart_query_shipments_delay_summary_get
+      parameters:
+      - name: date_from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+          title: Date From
+      - name: date_to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+          title: Date To
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: route_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Route Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Shipments Delay Summary Api V1 Smart Query Shipments
+                  Delay Summary Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/observations/compare-balances:
+    get:
+      tags:
+      - smart-query
+      summary: Observations Compare Balances
+      operationId: observations_compare_balances_api_v1_smart_query_observations_compare_balances_get
+      parameters:
+      - name: observed_from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+          title: Observed From
+      - name: observed_to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+          title: Observed To
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: location_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Location Id
+      - name: sku
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sku
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Observations Compare Balances Api V1 Smart Query Observations
+                  Compare Balances Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/orders/at-risk:
+    get:
+      tags:
+      - smart-query
+      summary: At Risk Orders
+      operationId: at_risk_orders_api_v1_smart_query_orders_at_risk_get
+      parameters:
+      - name: horizon_hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 720
+          minimum: 1
+          default: 48
+          title: Horizon Hours
+      - name: min_sla_priority
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          default: 0.7
+          title: Min Sla Priority
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: top_missing_skus_limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 5
+          title: Top Missing Skus Limit
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response At Risk Orders Api V1 Smart Query Orders At Risk Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    POStatus:
+      type: string
+      enum:
+      - draft
+      - submitted
+      - partial
+      - received
+      - closed
+      title: POStatus
+    ProcurementGroupBy:
+      type: string
+      enum:
+      - warehouse
+      - supplier
+      - warehouse_supplier
+      title: ProcurementGroupBy
+    TopologyLocationType:
+      type: string
+      enum:
+      - shelf
+      - bin
+      - pallet_pos
+      - dock
+      - virtual
+      title: TopologyLocationType
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

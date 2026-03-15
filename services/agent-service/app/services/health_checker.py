@@ -2,11 +2,16 @@
 
 import os
 
+import boto3
+import botocore.exceptions  # type: ignore[import-untyped]
 import httpx
 import redis
 from app.config import Settings
 from app.core.constants import ERROR_PREFIX, HTTP_OK_STATUS, HealthStatus
 from common.http_client import TracedHttpClient
+from common.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class HealthChecker:
@@ -60,7 +65,11 @@ class HealthChecker:
 
     def check_bedrock_config(self) -> str:
         """
-        Check if AWS Bedrock is configured
+        Check if AWS Bedrock is properly configured and credentials are valid.
+
+        Performs a lightweight sts:GetCallerIdentity call to verify that
+        the configured credentials can actually authenticate with AWS.
+        Falls back to config-only checks if STS is unreachable.
         """
         if not (self.settings.BEDROCK_MODEL_ID and self.settings.BEDROCK_MODEL_ID.strip()):
             return HealthStatus.MISSING_CONFIG
@@ -73,7 +82,42 @@ class HealthChecker:
         ):
             return HealthStatus.MISSING_KEY
 
-        return HealthStatus.CONFIGURED
+        return self._verify_aws_credentials()
+
+    def _verify_aws_credentials(self) -> str:
+        """Verify AWS credentials via sts:GetCallerIdentity."""
+        try:
+            sts = self._build_sts_client()
+            sts.get_caller_identity()
+            return HealthStatus.HEALTHY
+        except botocore.exceptions.NoCredentialsError:
+            logger.warning("aws_credentials_missing")
+            return HealthStatus.MISSING_KEY
+        except botocore.exceptions.ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            logger.warning("aws_credentials_invalid", error_code=error_code)
+            return f"{ERROR_PREFIX}invalid credentials ({error_code})"
+        except botocore.exceptions.EndpointConnectionError:
+            logger.warning("aws_sts_unreachable_falling_back_to_config_check")
+            return HealthStatus.CONFIGURED
+        except Exception as e:
+            logger.warning("aws_credential_check_failed", error=str(e))
+            return f"{ERROR_PREFIX}{e}"
+
+    def _build_sts_client(self) -> boto3.client:
+        """Build a boto3 STS client using the same auth strategy as LLMService."""
+        region = self.settings.AWS_DEFAULT_REGION
+
+        if getattr(self.settings, "AWS_PROFILE", None):
+            session = boto3.Session(profile_name=self.settings.AWS_PROFILE, region_name=region)
+            return session.client("sts")
+
+        kwargs: dict[str, str] = {"service_name": "sts", "region_name": region}
+        if self.settings.AWS_ACCESS_KEY_ID and self.settings.AWS_SECRET_ACCESS_KEY:
+            kwargs["aws_access_key_id"] = self.settings.AWS_ACCESS_KEY_ID
+            kwargs["aws_secret_access_key"] = self.settings.AWS_SECRET_ACCESS_KEY
+
+        return boto3.client(**kwargs)
 
     async def check_all_dependencies(self) -> dict[str, str]:
         """
@@ -105,3 +149,26 @@ class HealthChecker:
         healthy_statuses = {HealthStatus.HEALTHY, HealthStatus.CONFIGURED}
         all_healthy = all(status in healthy_statuses for status in dependencies.values())
         return HealthStatus.HEALTHY if all_healthy else HealthStatus.DEGRADED
+
+
+def verify_aws_credentials_at_startup(settings: Settings) -> None:
+    """Verify AWS credentials during startup. Logs a warning if invalid.
+
+    This is a fail-fast check: in production it raises ConfigurationError;
+    in dev/local it logs a warning so the service can still start for
+    non-LLM work (environment tools, testing, etc.).
+    """
+    from app.core.exceptions import ConfigurationError
+
+    checker = HealthChecker(settings, redis_client=None, http_client=None)  # type: ignore[arg-type]
+    status = checker._verify_aws_credentials()
+
+    if status in {HealthStatus.HEALTHY, HealthStatus.CONFIGURED}:
+        logger.info("aws_credentials_verified", status=status)
+        return
+
+    message = f"AWS credential check returned: {status}"
+    if os.getenv("ENV") == "production":
+        raise ConfigurationError(message)
+
+    logger.warning("aws_credentials_not_verified", status=status, message=message)

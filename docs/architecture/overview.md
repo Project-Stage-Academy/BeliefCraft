@@ -31,7 +31,7 @@ BeliefCraft is a multi-service system for warehouse analytics with a ReAct-based
 ### 4. RAG Service (`services/rag-service`)
 - FastAPI service on port `8001`
 - Exposes `GET /health` and MCP endpoint `/mcp`
-- MCP tools: `search_knowledge_base`, `expand_graph_by_ids`, `get_entity_by_number`
+- MCP tools: `search_knowledge_base`, `expand_graph_by_ids`, `get_entity_by_number`, `get_related_code_definitions`
 - Current repository backend is `FakeDataRepository` (mock JSON data); Weaviate is provisioned but not wired into runtime retrieval yet
 
 ### 5. Data/Infra Services

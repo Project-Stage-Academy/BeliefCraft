@@ -193,3 +193,51 @@ api_key: "${API_KEY}"
         ConfigLoader(service_root=fake_service).load(
             schema=SampleSettings,
         )
+
+
+def test_var_with_default_uses_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """${VAR:-fallback} should use fallback when VAR is not set."""
+    monkeypatch.delenv("API_KEY", raising=False)
+    _write(
+        tmp_path / "config" / "default.yaml",
+        """
+app:
+  name: "svc"
+  env: "local"
+server:
+  host: "127.0.0.1"
+  port: 8000
+logging:
+  level: "INFO"
+api_key: "${API_KEY:-default-key}"
+""".strip(),
+    )
+    settings = ConfigLoader(service_root=tmp_path).load(
+        schema=SampleSettings,
+        dotenv_mode="none",
+    )
+    assert settings.api_key == "default-key"
+
+
+def test_var_with_default_prefers_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """${VAR:-fallback} should prefer the env var when it is set."""
+    monkeypatch.setenv("API_KEY", "real-key")
+    _write(
+        tmp_path / "config" / "default.yaml",
+        """
+app:
+  name: "svc"
+  env: "local"
+server:
+  host: "127.0.0.1"
+  port: 8000
+logging:
+  level: "INFO"
+api_key: "${API_KEY:-default-key}"
+""".strip(),
+    )
+    settings = ConfigLoader(service_root=tmp_path).load(
+        schema=SampleSettings,
+        dotenv_mode="none",
+    )
+    assert settings.api_key == "real-key"

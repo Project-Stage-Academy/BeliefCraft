@@ -161,9 +161,14 @@ class ListPurchaseOrdersTool(APIClientTool):
                     },
                     "status_in": {
                         "type": "array",
-                        "items": {"type": "string"},
+                        "items": {
+                            "type": "string",
+                            "enum": ["draft", "submitted", "partial", "received", "closed"],
+                        },
                         "description": (
-                            "Optional: Filter by status list " "(e.g., ['pending', 'confirmed'])"
+                            "Optional: Filter by status list. "
+                            "Valid statuses are: 'draft', 'submitted', 'partial', "
+                            "'received', 'closed'. (e.g., ['submitted', 'partial'])"
                         ),
                     },
                     "created_after": {

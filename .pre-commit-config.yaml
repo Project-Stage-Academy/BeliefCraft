@@ -28,9 +28,21 @@ repos:
       - id: isort
 
 
-  #mypy
+  #mypy, sync mcp config, and sync skills
   - repo: local
     hooks:
+      - id: sync-mcp-config
+        name: sync-mcp-config
+        entry: uv run python scripts/sync_mcp_config.py
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: sync-skills
+        name: sync-skills
+        entry: uv run python scripts/sync_skills.py
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: mypy
         name: mypy
         entry: uv run mypy packages services
