@@ -1,3 +1,9 @@
+from .devices import (
+    fetch_device_anomaly_candidate_rows,
+    fetch_device_health_summary_rows,
+    fetch_sensor_device_row,
+    fetch_sensor_device_rows,
+)
 from .inventory import fetch_current_inventory_rows
 from .inventory_moves import (
     fetch_inventory_adjustments_summary,
@@ -6,6 +12,7 @@ from .inventory_moves import (
     fetch_inventory_move_rows,
 )
 from .observations import fetch_observation_vs_balance_rows
+from .observed_inventory import fetch_observed_inventory_snapshot_rows
 from .orders import fetch_at_risk_order_rows
 from .procurement import (
     fetch_po_line_rows,
@@ -27,6 +34,11 @@ from .topology import (
 
 __all__ = [
     "fetch_current_inventory_rows",
+    "fetch_sensor_device_rows",
+    "fetch_sensor_device_row",
+    "fetch_device_health_summary_rows",
+    "fetch_device_anomaly_candidate_rows",
+    "fetch_observed_inventory_snapshot_rows",
     "fetch_inventory_move_rows",
     "fetch_inventory_move_row",
     "fetch_inventory_move_audit_trace_rows",

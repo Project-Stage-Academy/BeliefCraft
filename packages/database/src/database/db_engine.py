@@ -30,6 +30,7 @@ def get_engine() -> Engine:
             pool_recycle=1800,
             pool_pre_ping=True,
             connect_args=connect_args,
+            isolation_level="REPEATABLE READ",
         )
         _engine_config = config_key
 

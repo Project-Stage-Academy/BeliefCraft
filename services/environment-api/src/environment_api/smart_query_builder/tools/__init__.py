@@ -1,3 +1,9 @@
+from .devices_tools import (
+    get_device_anomalies,
+    get_device_health_summary,
+    get_sensor_device,
+    list_sensor_devices,
+)
 from .inventory_history_tools import (
     get_inventory_adjustments_summary,
     get_inventory_move,
@@ -6,6 +12,7 @@ from .inventory_history_tools import (
 )
 from .inventory_tools import get_current_inventory
 from .observation_tools import compare_observations_to_balances
+from .observed_inventory_tools import get_observed_inventory_snapshot
 from .order_tools import get_at_risk_orders
 from .procurement_tools import (
     get_procurement_pipeline_summary,
@@ -27,6 +34,11 @@ from .topology_tools import (
 
 __all__ = [
     "get_current_inventory",
+    "list_sensor_devices",
+    "get_sensor_device",
+    "get_device_health_summary",
+    "get_device_anomalies",
+    "get_observed_inventory_snapshot",
     "list_inventory_moves",
     "get_inventory_move",
     "get_inventory_move_audit_trace",
