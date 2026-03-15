@@ -31,6 +31,13 @@ _PROCUREMENT_TABLES: dict[str, FromClause] = {
 }
 
 
+def _load_tables(session: Session) -> dict[str, FromClause]:
+    if session.get_bind() is None:
+        raise RuntimeError("Database session is not bound.")
+
+    return _PROCUREMENT_TABLES.copy()
+
+
 def _build_optional_name_columns(
     include_names: bool, suppliers: Any, warehouses: Any
 ) -> tuple[Any, Any]:
@@ -170,13 +177,6 @@ def _build_procurement_pipeline_grouping_spec(
     return _procurement_pipeline_grouping_by_warehouse_supplier(
         include_names, purchase_orders, suppliers, warehouses
     )
-
-
-def _load_tables(session: Session) -> dict[str, FromClause]:
-    if session.get_bind() is None:
-        raise RuntimeError("Database session is not bound.")
-
-    return _PROCUREMENT_TABLES.copy()
 
 
 def _status_values(statuses: Sequence[object]) -> list[str]:
