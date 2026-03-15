@@ -3,20 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query
+
+from .common import execute_tool
 
 router = APIRouter(tags=["smart-query"])
-
-_LEGACY_DETAIL = (
-    "This endpoint is deprecated and temporarily kept for compatibility while clients migrate."
-)
-
-
-def _deprecated_response() -> dict[str, Any]:
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail=_LEGACY_DETAIL,
-    )
 
 
 @router.get("/inventory/current", deprecated=True)
@@ -29,7 +20,19 @@ def current_inventory_legacy(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    return _deprecated_response()
+    from environment_api.api.smart_query import get_current_inventory
+
+    return execute_tool(
+        lambda: get_current_inventory(
+            warehouse_id=warehouse_id,
+            location_id=location_id,
+            sku=sku,
+            product_id=product_id,
+            include_reserved=include_reserved,
+            limit=limit,
+            offset=offset,
+        )
+    )
 
 
 @router.get("/shipments/delay-summary", deprecated=True)
@@ -40,7 +43,17 @@ def shipments_delay_summary_legacy(
     route_id: str | None = None,
     status_filter: str | None = Query(default=None, alias="status"),
 ) -> dict[str, Any]:
-    return _deprecated_response()
+    from environment_api.api.smart_query import get_shipments_delay_summary
+
+    return execute_tool(
+        lambda: get_shipments_delay_summary(
+            date_from=date_from,
+            date_to=date_to,
+            warehouse_id=warehouse_id,
+            route_id=route_id,
+            status=status_filter,
+        )
+    )
 
 
 @router.get("/observations/compare-balances", deprecated=True)
@@ -54,7 +67,20 @@ def observations_compare_balances_legacy(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    return _deprecated_response()
+    from environment_api.api.smart_query import compare_observations_to_balances
+
+    return execute_tool(
+        lambda: compare_observations_to_balances(
+            observed_from=observed_from,
+            observed_to=observed_to,
+            warehouse_id=warehouse_id,
+            location_id=location_id,
+            sku=sku,
+            product_id=product_id,
+            limit=limit,
+            offset=offset,
+        )
+    )
 
 
 @router.get("/orders/at-risk", deprecated=True)
@@ -66,4 +92,15 @@ def at_risk_orders_legacy(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    return _deprecated_response()
+    from environment_api.api.smart_query import get_at_risk_orders
+
+    return execute_tool(
+        lambda: get_at_risk_orders(
+            horizon_hours=horizon_hours,
+            min_sla_priority=min_sla_priority,
+            status=status_filter,
+            top_missing_skus_limit=top_missing_skus_limit,
+            limit=limit,
+            offset=offset,
+        )
+    )

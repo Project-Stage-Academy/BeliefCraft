@@ -8,6 +8,12 @@ from environment_api.api.smart_query_routes import (
     procurement_router,
     topology_router,
 )
+from environment_api.smart_query_builder.tools.inventory_tools import get_current_inventory
+from environment_api.smart_query_builder.tools.observation_tools import (
+    compare_observations_to_balances,
+)
+from environment_api.smart_query_builder.tools.order_tools import get_at_risk_orders
+from environment_api.smart_query_builder.tools.shipment_tools import get_shipments_delay_summary
 from fastapi import APIRouter
 
 router = APIRouter(prefix="/smart-query", tags=["smart-query"])
