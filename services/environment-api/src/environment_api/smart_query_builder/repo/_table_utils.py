@@ -24,7 +24,10 @@ def load_reflected_tables(
     bind = session.get_bind()
     metadata = MetaData()
 
-    return {name: Table(table_name, metadata, autoload_with=bind) for name, table_name in table_names.items()}
+    return {
+        name: Table(table_name, metadata, autoload_with=bind)
+        for name, table_name in table_names.items()
+    }
 
 
 def load_table(session: Session, table: FromClause) -> FromClause:
