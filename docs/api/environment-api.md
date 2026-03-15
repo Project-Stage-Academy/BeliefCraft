@@ -40,59 +40,195 @@ Example:
 }
 ```
 
-### GET `/api/v1/smart-query/inventory/current`
-Returns current inventory rows sorted by available qty ascending.
+### GET `/api/v1/smart-query/inventory/moves`
+Returns inventory movement records.
 
 Query params:
 - `warehouse_id` (optional)
-- `location_id` (optional)
-- `sku` (optional)
 - `product_id` (optional)
-- `include_reserved` (default: `true`)
+- `move_type` (optional)
+- `from_ts` (optional datetime)
+- `to_ts` (optional datetime)
 - `limit` (`1..500`, default `50`)
 - `offset` (`>=0`, default `0`)
 
-### GET `/api/v1/smart-query/shipments/delay-summary`
-Returns aggregate shipment delay KPIs and delayed shipment list.
+### GET `/api/v1/smart-query/inventory/moves/{move_id}`
+Returns a single inventory move by id.
+
+Path params:
+- `move_id`
+
+### GET `/api/v1/smart-query/inventory/moves/{move_id}/audit-trace`
+Returns the audit trace for a single inventory move.
+
+Path params:
+- `move_id`
+
+### GET `/api/v1/smart-query/inventory/adjustments-summary`
+Returns aggregated inventory adjustment data.
 
 Query params:
-- `date_from` (required datetime)
-- `date_to` (required datetime)
 - `warehouse_id` (optional)
-- `route_id` (optional)
+- `product_id` (optional)
+- `from_ts` (optional datetime)
+- `to_ts` (optional datetime)
+
+### GET `/api/v1/smart-query/inventory/observed-snapshot`
+Returns the observed inventory snapshot.
+
+Query params:
+- `quality_status_in` (optional CSV list)
+- `dev_mode` (default `false`)
+
+### GET `/api/v1/smart-query/devices`
+Returns sensor devices.
+
+Query params:
+- `warehouse_id` (optional)
+- `device_type` (optional)
 - `status` (optional)
 
-### GET `/api/v1/smart-query/observations/compare-balances`
-Compares weighted observed quantities vs inventory balances.
+### GET `/api/v1/smart-query/devices/health-summary`
+Returns device health summary metrics.
 
 Query params:
-- `observed_from` (required datetime)
-- `observed_to` (required datetime)
 - `warehouse_id` (optional)
-- `location_id` (optional)
-- `sku` (optional)
-- `product_id` (optional)
-- `limit` (`1..500`, default `50`)
-- `offset` (`>=0`, default `0`)
+- `since_ts` (optional datetime)
+- `as_of` (optional datetime)
 
-### GET `/api/v1/smart-query/orders/at-risk`
-Returns near-term at-risk orders with penalty exposure and top missing SKUs.
+### GET `/api/v1/smart-query/devices/anomalies`
+Returns detected device anomalies.
 
 Query params:
-- `horizon_hours` (`1..720`, default `48`)
-- `min_sla_priority` (`0..1`, default `0.7`)
-- `status` (optional)
-- `top_missing_skus_limit` (`1..50`, default `5`)
+- `warehouse_id` (optional)
+- `window` (`1..720`, default `24`)
+
+### GET `/api/v1/smart-query/devices/{device_id}`
+Returns a single sensor device by id.
+
+Path params:
+- `device_id`
+
+### GET `/api/v1/smart-query/procurement/suppliers`
+Returns suppliers.
+
+Query params:
+- `region` (optional)
+- `reliability_min` (`0.0..1.0`, optional)
+- `reliability_max` (`0.0..1.0`, optional)
+- `name_like` (optional)
+- `limit` (`1..1000`, default `100`)
+- `offset` (`>=0`, default `0`)
+
+### GET `/api/v1/smart-query/procurement/suppliers/{supplier_id}`
+Returns a single supplier by id.
+
+Path params:
+- `supplier_id`
+
+### GET `/api/v1/smart-query/procurement/purchase-orders`
+Returns purchase orders.
+
+Query params:
+- `supplier_id` (optional)
+- `destination_warehouse_id` (optional)
+- `status_in` (optional repeated query param)
+- `created_after` (optional datetime)
+- `created_before` (optional datetime)
+- `expected_after` (optional datetime)
+- `expected_before` (optional datetime)
+- `include_names` (default `false`)
+- `limit` (`1..1000`, default `100`)
+- `offset` (`>=0`, default `0`)
+
+### GET `/api/v1/smart-query/procurement/purchase-orders/{purchase_order_id}`
+Returns a single purchase order by id.
+
+Path params:
+- `purchase_order_id`
+
+Query params:
+- `include_names` (default `false`)
+
+### GET `/api/v1/smart-query/procurement/po-lines`
+Returns purchase order lines.
+
+Query params:
+- `purchase_order_id` (optional)
+- `purchase_order_ids` (optional repeated query param)
+- `product_id` (optional)
+- `include_product_fields` (default `false`)
+
+### GET `/api/v1/smart-query/procurement/pipeline-summary`
+Returns procurement pipeline summary data.
+
+Query params:
+- `destination_warehouse_id` (optional)
+- `supplier_id` (optional)
+- `status_in` (optional repeated query param)
+- `horizon_days` (`1..365`, optional)
+- `group_by` (default `warehouse_supplier`)
+- `include_names` (default `false`)
+
+### GET `/api/v1/smart-query/topology/warehouses`
+Returns warehouses.
+
+Query params:
+- `region` (optional)
+- `name_like` (optional)
 - `limit` (`1..500`, default `50`)
 - `offset` (`>=0`, default `0`)
+
+### GET `/api/v1/smart-query/topology/warehouses/{warehouse_id}`
+Returns a single warehouse by id.
+
+Path params:
+- `warehouse_id`
+
+### GET `/api/v1/smart-query/topology/locations`
+Returns locations.
+
+Query params:
+- `warehouse_id` (optional)
+- `type` (optional)
+- `parent_location_id` (optional)
+- `code_like` (optional)
+- `limit` (`1..500`, default `50`)
+- `offset` (`>=0`, default `0`)
+
+### GET `/api/v1/smart-query/topology/locations/{location_id}`
+Returns a single location by id.
+
+Path params:
+- `location_id`
+
+### GET `/api/v1/smart-query/topology/warehouses/{warehouse_id}/locations-tree`
+Returns the warehouse location tree.
+
+Path params:
+- `warehouse_id`
+
+### GET `/api/v1/smart-query/topology/warehouses/{warehouse_id}/capacity-utilization`
+Returns capacity utilization for a warehouse snapshot.
+
+Path params:
+- `warehouse_id`
+
+Query params:
+- `snapshot_at` (optional datetime)
+- `observed_from` (optional datetime)
+- `observed_to` (optional datetime)
+- `lookback_hours` (`1..720`, default `24`)
+- `type` (optional)
 
 ## Data Contracts
 Canonical request/response schemas are in:
 - `packages/common/src/common/schemas/common.py`
+- `packages/common/src/common/schemas/devices.py`
 - `packages/common/src/common/schemas/inventory.py`
-- `packages/common/src/common/schemas/shipments.py`
-- `packages/common/src/common/schemas/observations.py`
-- `packages/common/src/common/schemas/orders.py`
+- `packages/common/src/common/schemas/observed_inventory.py`
+- `packages/common/src/common/schemas/procurement.py`
+- `packages/common/src/common/schemas/topology.py`
 
 ## Configuration
 - `.env` example: `services/environment-api/.env.example`
