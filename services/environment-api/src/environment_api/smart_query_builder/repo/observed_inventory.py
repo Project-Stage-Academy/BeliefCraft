@@ -11,17 +11,12 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import FromClause
 
+from ._table_utils import load_tables
+
 _OBSERVED_INVENTORY_TABLES: dict[str, FromClause] = {
     "observations": Observation.__table__,
     "inventory_balances": InventoryBalance.__table__,
 }
-
-
-def _load_tables(session: Session) -> dict[str, FromClause]:
-    if session.get_bind() is None:
-        raise RuntimeError("Database session is not bound.")
-
-    return _OBSERVED_INVENTORY_TABLES.copy()
 
 
 def _enum_storage_value(value: object) -> str:
@@ -101,6 +96,6 @@ def fetch_observed_inventory_snapshot_rows(
     request: GetObservedInventorySnapshotRequest,
 ) -> Sequence[RowMapping]:
     """Entry point: load tables, build query, execute, return mapped rows."""
-    tables = _load_tables(session)
+    tables = load_tables(session, _OBSERVED_INVENTORY_TABLES)
     stmt = _build_snapshot_stmt(tables, request)
     return session.execute(stmt).mappings().all()

@@ -18,6 +18,8 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import FromClause
 
+from ._table_utils import load_tables
+
 _DEVICE_TABLES: dict[str, FromClause] = {
     "sensor_devices": SensorDevice.__table__,
     "observations": Observation.__table__,
@@ -25,13 +27,6 @@ _DEVICE_TABLES: dict[str, FromClause] = {
 _MAX_ANOMALY_WINDOW_HOURS = 24 * 30  # 30 days are max for the window size
 _ALLOWED_DEVICE_TYPE_FILTERS = frozenset(device_type.value for device_type in SchemaDeviceType)
 _ALLOWED_DEVICE_STATUS_FILTERS = frozenset(status.value for status in SchemaDeviceStatus)
-
-
-def _load_tables(session: Session) -> dict[str, FromClause]:
-    if session.get_bind() is None:
-        raise RuntimeError("Database session is not bound.")
-
-    return _DEVICE_TABLES.copy()
 
 
 def _validated_device_type_filter(value: object) -> str:
@@ -72,7 +67,7 @@ def fetch_sensor_device_rows(
     if request.status is not None:
         status_filter = _validated_device_status_filter(request.status)
 
-    tables = _load_tables(session)
+    tables = load_tables(session, _DEVICE_TABLES)
     sensor_devices = tables["sensor_devices"]
 
     stmt = (
@@ -103,7 +98,7 @@ def fetch_sensor_device_row(
     session: Session,
     request: GetSensorDeviceRequest,
 ) -> RowMapping | None:
-    tables = _load_tables(session)
+    tables = load_tables(session, _DEVICE_TABLES)
     sensor_devices = tables["sensor_devices"]
 
     stmt = (
@@ -128,7 +123,7 @@ def fetch_device_health_summary_rows(
     session: Session,
     request: GetDeviceHealthSummaryRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _DEVICE_TABLES)
     sensor_devices = tables["sensor_devices"]
     observations = tables["observations"]
 
@@ -185,7 +180,7 @@ def fetch_device_anomaly_candidate_rows(
     request: GetDeviceAnomaliesRequest,
 ) -> Sequence[RowMapping]:
     window_hours = _validate_anomaly_window_hours(request.window)
-    tables = _load_tables(session)
+    tables = load_tables(session, _DEVICE_TABLES)
     sensor_devices = tables["sensor_devices"]
     observations = tables["observations"]
 

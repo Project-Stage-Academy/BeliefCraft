@@ -22,6 +22,8 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import FromClause
 
+from ._table_utils import load_tables
+
 _PROCUREMENT_TABLES: dict[str, FromClause] = {
     "suppliers": Supplier.__table__,
     "purchase_orders": PurchaseOrder.__table__,
@@ -29,13 +31,6 @@ _PROCUREMENT_TABLES: dict[str, FromClause] = {
     "products": Product.__table__,
     "warehouses": Warehouse.__table__,
 }
-
-
-def _load_tables(session: Session) -> dict[str, FromClause]:
-    if session.get_bind() is None:
-        raise RuntimeError("Database session is not bound.")
-
-    return _PROCUREMENT_TABLES.copy()
 
 
 def _build_optional_name_columns(
@@ -193,7 +188,7 @@ def fetch_supplier_rows(
     session: Session,
     request: ListSuppliersRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _PROCUREMENT_TABLES)
     suppliers = tables["suppliers"]
 
     stmt = (
@@ -225,7 +220,7 @@ def fetch_supplier_row(
     session: Session,
     request: GetSupplierRequest,
 ) -> RowMapping | None:
-    tables = _load_tables(session)
+    tables = load_tables(session, _PROCUREMENT_TABLES)
     suppliers = tables["suppliers"]
 
     stmt = (
@@ -246,7 +241,7 @@ def fetch_purchase_order_rows(
     session: Session,
     request: ListPurchaseOrdersRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _PROCUREMENT_TABLES)
     purchase_orders = tables["purchase_orders"]
     suppliers = tables["suppliers"]
     warehouses = tables["warehouses"]
@@ -301,7 +296,7 @@ def fetch_purchase_order_row(
     session: Session,
     request: GetPurchaseOrderRequest,
 ) -> RowMapping | None:
-    tables = _load_tables(session)
+    tables = load_tables(session, _PROCUREMENT_TABLES)
     purchase_orders = tables["purchase_orders"]
     suppliers = tables["suppliers"]
     warehouses = tables["warehouses"]
@@ -337,7 +332,7 @@ def fetch_po_line_rows(
     session: Session,
     request: ListPoLinesRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _PROCUREMENT_TABLES)
     po_lines = tables["po_lines"]
     products = tables["products"]
 
@@ -395,7 +390,7 @@ def fetch_procurement_pipeline_summary_rows(
     session: Session,
     request: ProcurementPipelineSummaryRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _PROCUREMENT_TABLES)
     purchase_orders = tables["purchase_orders"]
     po_lines = tables["po_lines"]
     suppliers = tables["suppliers"]

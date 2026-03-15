@@ -3,31 +3,30 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from common.schemas.observations import CompareObservationsToBalancesRequest
-from sqlalchemy import MetaData, Table, func, select
+from database.inventory import InventoryBalance, Location, Product
+from database.logistics import Warehouse
+from database.observations import Observation
+from sqlalchemy import func, select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.selectable import FromClause
 
+from ._table_utils import load_tables
 
-def _load_tables(session: Session) -> dict[str, Table]:
-    bind = session.get_bind()
-    if bind is None:
-        raise RuntimeError("Database session is not bound.")
-
-    metadata = MetaData()
-    return {
-        "observations": Table("observations", metadata, autoload_with=bind),
-        "products": Table("products", metadata, autoload_with=bind),
-        "locations": Table("locations", metadata, autoload_with=bind),
-        "warehouses": Table("warehouses", metadata, autoload_with=bind),
-        "inventory_balances": Table("inventory_balances", metadata, autoload_with=bind),
-    }
+_OBSERVATION_TABLES: dict[str, FromClause] = {
+    "observations": Observation.__table__,
+    "products": Product.__table__,
+    "locations": Location.__table__,
+    "warehouses": Warehouse.__table__,
+    "inventory_balances": InventoryBalance.__table__,
+}
 
 
 def fetch_observation_vs_balance_rows(
     session: Session,
     request: CompareObservationsToBalancesRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _OBSERVATION_TABLES)
     observations = tables["observations"]
     products = tables["products"]
     locations = tables["locations"]

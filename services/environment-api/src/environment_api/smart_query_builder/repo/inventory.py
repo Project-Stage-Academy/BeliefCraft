@@ -9,23 +9,20 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import FromClause
 
+from ._table_utils import load_tables
 
-def _load_tables(session: Session) -> dict[str, FromClause]:
-    if session.get_bind() is None:
-        raise RuntimeError("Database session is not bound.")
-
-    return {
-        "inventory_balances": InventoryBalance.__table__,
-        "products": Product.__table__,
-        "locations": Location.__table__,
-    }
+_INVENTORY_TABLES: dict[str, FromClause] = {
+    "inventory_balances": InventoryBalance.__table__,
+    "products": Product.__table__,
+    "locations": Location.__table__,
+}
 
 
 def fetch_current_inventory_rows(
     session: Session,
     request: GetCurrentInventoryRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _INVENTORY_TABLES)
     inventory_balances = tables["inventory_balances"]
     products = tables["products"]
     locations = tables["locations"]

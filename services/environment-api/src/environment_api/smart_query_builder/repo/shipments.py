@@ -10,6 +10,8 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import FromClause
 
+from ._table_utils import load_table
+
 DELAY_THRESHOLD_HOURS = 48
 DELAYED_SHIPMENTS_LIMIT = 20
 IN_TRANSIT_OVER_THRESHOLD_REASON = f"In transit over {DELAY_THRESHOLD_HOURS} hours"
@@ -20,18 +22,11 @@ NOT_DELAYED_REASON = "Not delayed"
 _SHIPMENTS_TABLE: FromClause = Shipment.__table__
 
 
-def _load_shipments_table(session: Session) -> FromClause:
-    if session.get_bind() is None:
-        raise RuntimeError("Database session is not bound.")
-
-    return _SHIPMENTS_TABLE
-
-
 def fetch_shipments_delay_summary(
     session: Session,
     request: GetShipmentsDelaySummaryRequest,
 ) -> tuple[RowMapping, Sequence[RowMapping]]:
-    shipments = _load_shipments_table(session)
+    shipments = load_table(session, _SHIPMENTS_TABLE)
     delayed_cutoff = datetime.now(UTC) - timedelta(hours=DELAY_THRESHOLD_HOURS)
 
     transit_hours_expr = case(
