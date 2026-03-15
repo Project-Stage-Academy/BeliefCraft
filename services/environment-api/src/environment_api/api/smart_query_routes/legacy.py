@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from datetime import datetime
 from typing import Any
 
@@ -20,7 +21,8 @@ def current_inventory_legacy(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    from environment_api.api.smart_query import get_current_inventory
+    smart_query = importlib.import_module("environment_api.api.smart_query")
+    get_current_inventory = smart_query.get_current_inventory
 
     return execute_tool(
         lambda: get_current_inventory(
@@ -43,7 +45,8 @@ def shipments_delay_summary_legacy(
     route_id: str | None = None,
     status_filter: str | None = Query(default=None, alias="status"),
 ) -> dict[str, Any]:
-    from environment_api.api.smart_query import get_shipments_delay_summary
+    smart_query = importlib.import_module("environment_api.api.smart_query")
+    get_shipments_delay_summary = smart_query.get_shipments_delay_summary
 
     return execute_tool(
         lambda: get_shipments_delay_summary(
@@ -67,7 +70,8 @@ def observations_compare_balances_legacy(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    from environment_api.api.smart_query import compare_observations_to_balances
+    smart_query = importlib.import_module("environment_api.api.smart_query")
+    compare_observations_to_balances = smart_query.compare_observations_to_balances
 
     return execute_tool(
         lambda: compare_observations_to_balances(
@@ -92,7 +96,8 @@ def at_risk_orders_legacy(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    from environment_api.api.smart_query import get_at_risk_orders
+    smart_query = importlib.import_module("environment_api.api.smart_query")
+    get_at_risk_orders = smart_query.get_at_risk_orders
 
     return execute_tool(
         lambda: get_at_risk_orders(
