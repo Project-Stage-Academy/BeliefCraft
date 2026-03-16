@@ -1,3 +1,4 @@
+# pragma: no cover
 import argparse
 import html
 import io
@@ -6,15 +7,12 @@ import os
 import re
 import tempfile
 from collections import defaultdict
-from enum import Enum
 from typing import Any
 
 import fitz
 import requests
-import ziamath as zm
 from PIL import Image as PILImage
 from pydantic import BaseModel, Field
-from reportlab.graphics import renderPM
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
@@ -25,13 +23,7 @@ from reportlab.platypus import (
     SimpleDocTemplate,
     Spacer,
 )
-from svglib.svglib import svg2rlg
 from tqdm import tqdm
-
-
-class RenderMode(str, Enum):
-    RENDERED = "rendered"  # latex as rendered images
-    TEXT = "text"  # latex as text
 
 
 class Chunk(BaseModel):
@@ -61,11 +53,9 @@ class PDFRenderer:
     def __init__(
         self,
         output_path: str,
-        mode: RenderMode = RenderMode.RENDERED,
         pdf_with_figures: str = "dm-figures.pdf",
     ):
         self.output_path = output_path
-        self.mode = mode
         self.styles = getSampleStyleSheet()
         self._setup_styles()
         self.pdf_with_figures = pdf_with_figures
@@ -130,59 +120,14 @@ class PDFRenderer:
                 print(f"Failed to extract image from {self.pdf_with_figures} for {link}: {e}")
         return self.get_placeholder_image()
 
-    def rasterize_latex(self, latex_str: str, temp_dir: str) -> tuple[str, float, float]:
-        latex_str = html.unescape(latex_str).strip()
-        while latex_str.startswith("$"):
-            latex_str = latex_str[1:]
-        while latex_str.endswith("$"):
-            latex_str = latex_str[:-1]
-
-        if not latex_str:
-            return "", 0, 0
-
-        try:
-            latex_obj = zm.Latex(latex_str, size=14)
-            svg_str = latex_obj.svg()
-            drawing = svg2rlg(io.StringIO(svg_str))
-
-            img_path = os.path.join(temp_dir, f"formula_{abs(hash(latex_str))}.png")
-            renderPM.drawToFile(drawing, img_path, fmt="PNG", dpi=150)
-
-            # Use drawing width/height directly
-            return img_path, float(drawing.width), float(drawing.height)
-        except Exception as e:
-            print(f"Rasterization error for '{latex_str}': {e}")
-            return "", 0, 0
-
-    def parse_content_to_html(self, content: str, temp_dir: str) -> str:
+    def parse_content_to_html(self, content: str) -> str:
         # Sanitize HTML tags but keep formatting
         content = re.sub(r"<(?!/?(b|i|u|br|code)\b)[^>]*>", "", content)
 
         def replace_latex(match):
             latex_full = match.group(0)
-            is_block = latex_full.startswith("$$")
             unescaped = html.unescape(latex_full)
-
-            if self.mode == RenderMode.TEXT:
-                return f"<code>{html.escape(unescaped)}</code>"
-
-            latex_inner = unescaped.strip("$")
-            img_path, w, h = self.rasterize_latex(latex_inner, temp_dir)
-            if not img_path:
-                return f"<code>{html.escape(unescaped)}</code>"
-
-            # Robust scaling to prevent 'list index out of range' crashes
-            max_w = 480
-            if w > max_w:
-                scale = max_w / w
-                w = max_w
-                h *= scale
-
-            img_tag = f'<img src="{img_path}" width="{w}" height="{h}" valign="middle"/>'
-            # Avoid nesting <para> tags. Just use <br/> for block separation.
-            if is_block:
-                return f"<br/>&nbsp;&nbsp;&nbsp;&nbsp;{img_tag}<br/>"
-            return img_tag
+            return f"<code>{html.escape(unescaped)}</code>"
 
         return re.sub(r"(\$\$.*?\$\$|\$.*?\$)", replace_latex, content, flags=re.DOTALL)
 
@@ -212,7 +157,7 @@ class PDFRenderer:
             meta = f"ID: {chunk.chunk_id} | Type: {chunk_type} | Hierarchy: {" > ".join(hierarchy)}"
             story.append(Paragraph(meta, self.meta_style))
 
-            html_content = self.parse_content_to_html(chunk.content, temp_dir)
+            html_content = self.parse_content_to_html(chunk.content)
             try:
                 story.append(Paragraph(html_content, self.content_style))
             except Exception as e:
@@ -239,7 +184,7 @@ class PDFRenderer:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_files = []
-            for p_num in tqdm(sorted(pages_map.keys()), desc=f"Mode: {self.mode}"):
+            for p_num in tqdm(sorted(pages_map.keys())):
                 try:
                     temp_files.append(self.generate_page(p_num, pages_map[p_num], temp_dir))
                 except Exception as e:
@@ -262,12 +207,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_json", help="Path to the input JSON file containing chunks")
     parser.add_argument(
-        "--mode",
-        choices=["rendered", "text"],
-        default="text",
-        help="Rendering mode for LaTeX content",
-    )
-    parser.add_argument(
         "--figures_pdf",
         default="dm-figures.pdf",
         help="Path to the PDF containing figures from book. It is needed if the image chunks are not referencing S3",
@@ -279,7 +218,6 @@ def main():
     chunks = [Chunk(**c) for c in data]
     renderer = PDFRenderer(
         "ULTIMATE_BOOK_VERIFICATION.pdf",
-        mode=RenderMode(args.mode),
         pdf_with_figures=args.figures_pdf,
     )
     renderer.generate(chunks)
