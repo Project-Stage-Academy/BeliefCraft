@@ -1,0 +1,5 @@
+[mcp_servers.weaviate-docs]
+url = "https://weaviate-docs.mcp.kapa.ai"
+
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"

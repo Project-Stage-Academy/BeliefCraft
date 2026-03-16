@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "weaviate-docs": {
+      "url": "https://weaviate-docs.mcp.kapa.ai",
+      "type": "http"
+    },
+    "context7": {
+      "url": "https://mcp.context7.com/mcp",
+      "type": "http"
+    }
+  }
+}
