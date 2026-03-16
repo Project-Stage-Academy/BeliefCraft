@@ -9,7 +9,7 @@ from typing import Any
 ID_PATTERN = re.compile(r"^([A-Z0-9]+)\.([A-Z0-9]+)(?:\.([A-Z0-9]+))?$", re.IGNORECASE)
 
 
-def _segment_sort_key(s: str):
+def _segment_sort_key(s: str) -> tuple[int, str | int]:
     """Sort numerically if digit-only, otherwise alphabetically after all numbers."""
     return (0, int(s)) if s.isdigit() else (1, s.upper())
 
@@ -61,7 +61,7 @@ def collect_ids_by_type(
     return ids_by_type, invalid_rows
 
 
-def _sort_key(parts: tuple[str, ...]):
+def _sort_key(parts: tuple[str, ...]) -> tuple[tuple[int, str | int], ...]:
     return tuple(_segment_sort_key(s) for s in parts)
 
 
@@ -81,7 +81,7 @@ def detect_gaps(ids: list[tuple[str, ...]]) -> list[dict[str, Any]]:
         if not ordered:
             continue
 
-        for current, nxt in zip(ordered, ordered[1:]):
+        for current, nxt in zip(ordered, ordered[1:], strict=False):
             c, n = int(current), int(nxt)
             if n > c + 1:
                 missing = [".".join((*parent, str(value))) for value in range(c + 1, n)]

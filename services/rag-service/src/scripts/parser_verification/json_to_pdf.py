@@ -3,27 +3,27 @@ import argparse
 import html
 import io
 import json
-import os
 import re
 import tempfile
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
-import fitz
-import requests
+import fitz  # type: ignore[import-untyped]
+import requests  # type: ignore[import-untyped]
 from PIL import Image as PILImage
 from pydantic import BaseModel, Field
-from reportlab.lib import colors
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.platypus import (
+from reportlab.lib import colors  # type: ignore[import-untyped]
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # type: ignore[import-untyped]
+from reportlab.lib.units import inch  # type: ignore[import-untyped]
+from reportlab.platypus import (  # type: ignore[import-untyped]
     Flowable,
     Image,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
 )
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore[import-untyped]
 
 
 class Chunk(BaseModel):
@@ -54,13 +54,13 @@ class PDFRenderer:
         self,
         output_path: str,
         pdf_with_figures: str = "dm-figures.pdf",
-    ):
+    ) -> None:
         self.output_path = output_path
         self.styles = getSampleStyleSheet()
         self._setup_styles()
         self.pdf_with_figures = pdf_with_figures
 
-    def _setup_styles(self):
+    def _setup_styles(self) -> None:
         self.meta_style = ParagraphStyle(
             "Metadata",
             parent=self.styles["Normal"],
@@ -95,18 +95,20 @@ class PDFRenderer:
     def get_image_bytes(self, link: str) -> bytes:
         """Get image bytes from a link.
 
-        If it's an HTTP link, download it. If it's a local reference, try to extract the corresponding page from
-        pdf with figures based on the number in the filename. If all else fails, return a placeholder image.
+        If it's an HTTP link, download it. If it's a local reference, try to extract the
+        corresponding page from pdf with figures based on the number in the filename.
+        If all else fails, return a placeholder image.
         """
         if link.startswith("http"):
             try:
-                response = requests.get(link)
+                response = requests.get(link, timeout=10)
                 response.raise_for_status()
-                return response.content
+                return response.content  # type: ignore[no-any-return]
             except Exception as e:
                 print(f"Failed to download image from {link}: {e}")
                 return self.get_placeholder_image()
-        filename = os.path.basename(link)
+
+        filename = Path(link).name
         page_num_match = re.search(r"(\d+)", filename)
         if page_num_match:
             page_num = int(page_num_match.group(1))
@@ -115,7 +117,7 @@ class PDFRenderer:
                     if page_num - 1 < len(doc):
                         page = doc.load_page(page_num - 1)
                         pix = page.get_pixmap()
-                        return pix.tobytes()
+                        return pix.tobytes()  # type: ignore[no-any-return]
             except Exception as e:
                 print(f"Failed to extract image from {self.pdf_with_figures} for {link}: {e}")
         return self.get_placeholder_image()
@@ -124,7 +126,7 @@ class PDFRenderer:
         # Sanitize HTML tags but keep formatting
         content = re.sub(r"<(?!/?(b|i|u|br|code)\b)[^>]*>", "", content)
 
-        def replace_latex(match):
+        def replace_latex(match: Any) -> str:
             latex_full = match.group(0)
             unescaped = html.unescape(latex_full)
             return f"<code>{html.escape(unescaped)}</code>"
@@ -132,7 +134,7 @@ class PDFRenderer:
         return re.sub(r"(\$\$.*?\$\$|\$.*?\$)", replace_latex, content, flags=re.DOTALL)
 
     def generate_page(self, page_num: int, chunks: list[Chunk], temp_dir: str) -> str:
-        temp_file = os.path.join(temp_dir, f"page_{page_num}.pdf")
+        temp_file = str(Path(temp_dir) / f"page_{page_num}.pdf")
         doc = SimpleDocTemplate(
             temp_file,
             pagesize=(595, 842),
@@ -144,17 +146,20 @@ class PDFRenderer:
         story: list[Flowable] = [Paragraph(f"Page {page_num}", self.header_style)]
 
         for chunk in chunks:
-            hierarchy = [
+            raw_hierarchy = [
                 chunk.part_title,
                 chunk.section_title,
                 chunk.subsection_title,
                 chunk.subsubsection_title,
             ]
-            hierarchy = [h for h in hierarchy if h]
+            hierarchy: list[str] = [h for h in raw_hierarchy if h is not None]
             chunk_type = chunk.chunk_type or "unknown"
             if chunk_type != "text":
                 chunk_type += f":{chunk.entity_id}"
-            meta = f"ID: {chunk.chunk_id} | Type: {chunk_type} | Hierarchy: {" > ".join(hierarchy)}"
+            meta = (
+                f"ID: {chunk.chunk_id} | Type: {chunk_type} | "
+                f"Hierarchy: {' > '.join(hierarchy)}"
+            )
             story.append(Paragraph(meta, self.meta_style))
 
             html_content = self.parse_content_to_html(chunk.content)
@@ -177,7 +182,7 @@ class PDFRenderer:
         doc.build(story)
         return temp_file
 
-    def generate(self, chunks: list[Chunk]):
+    def generate(self, chunks: list[Chunk]) -> None:
         pages_map = defaultdict(list)
         for chunk in chunks:
             pages_map[chunk.page].append(chunk)
@@ -203,17 +208,20 @@ class PDFRenderer:
             print("Done!")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("input_json", help="Path to the input JSON file containing chunks")
     parser.add_argument(
         "--figures_pdf",
         default="dm-figures.pdf",
-        help="Path to the PDF containing figures from book. It is needed if the image chunks are not referencing S3",
+        help=(
+            "Path to the PDF containing figures from book. "
+            "It is needed if the image chunks are not referencing S3"
+        ),
     )
     args = parser.parse_args()
 
-    with open(args.input_json) as f:
+    with Path(args.input_json).open() as f:
         data = json.load(f)
     chunks = [Chunk(**c) for c in data]
     renderer = PDFRenderer(
