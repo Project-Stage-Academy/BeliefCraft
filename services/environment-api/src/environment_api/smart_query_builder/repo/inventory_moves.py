@@ -17,18 +17,15 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import FromClause
 
+from ._table_utils import load_tables
 
-def _load_tables(session: Session) -> dict[str, FromClause]:
-    if session.get_bind() is None:
-        raise RuntimeError("Database session is not bound.")
-
-    return {
-        "inventory_moves": InventoryMove.__table__,
-        "products": Product.__table__,
-        "locations": Location.__table__,
-        "warehouses": Warehouse.__table__,
-        "observations": Observation.__table__,
-    }
+_INVENTORY_MOVES_TABLES: dict[str, FromClause] = {
+    "inventory_moves": InventoryMove.__table__,
+    "products": Product.__table__,
+    "locations": Location.__table__,
+    "warehouses": Warehouse.__table__,
+    "observations": Observation.__table__,
+}
 
 
 def _build_warehouse_filter_clause(
@@ -64,7 +61,7 @@ def fetch_inventory_move_rows(
     session: Session,
     request: ListInventoryMovesRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _INVENTORY_MOVES_TABLES)
     moves = tables["inventory_moves"]
     locations = tables["locations"]
 
@@ -112,7 +109,7 @@ def fetch_inventory_move_row(
     session: Session,
     request: GetInventoryMoveRequest,
 ) -> RowMapping | None:
-    tables = _load_tables(session)
+    tables = load_tables(session, _INVENTORY_MOVES_TABLES)
     moves = tables["inventory_moves"]
 
     stmt = (
@@ -140,7 +137,7 @@ def fetch_inventory_move_audit_trace_rows(
     session: Session,
     request: GetInventoryMoveAuditTraceRequest,
 ) -> tuple[RowMapping | None, Sequence[RowMapping]]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _INVENTORY_MOVES_TABLES)
     observations = tables["observations"]
 
     move_row = fetch_inventory_move_row(
@@ -174,7 +171,7 @@ def fetch_inventory_adjustments_summary(
     session: Session,
     request: GetInventoryAdjustmentsSummaryRequest,
 ) -> tuple[RowMapping, Sequence[RowMapping]]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _INVENTORY_MOVES_TABLES)
     moves = tables["inventory_moves"]
     locations = tables["locations"]
 
