@@ -20,18 +20,13 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import FromClause
 
+from ._table_utils import load_tables
+
 _TOPOLOGY_TABLES: dict[str, FromClause] = {
     "warehouses": Warehouse.__table__,
     "locations": Location.__table__,
     "observations": Observation.__table__,
 }
-
-
-def _load_tables(session: Session) -> dict[str, FromClause]:
-    if session.get_bind() is None:
-        raise RuntimeError("Database session is not bound.")
-
-    return _TOPOLOGY_TABLES.copy()
 
 
 def _enum_storage_value(value: object) -> str:
@@ -46,7 +41,7 @@ def fetch_warehouse_rows(
     session: Session,
     request: ListWarehousesRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _TOPOLOGY_TABLES)
     warehouses = tables["warehouses"]
 
     stmt = (
@@ -74,7 +69,7 @@ def fetch_warehouse_row(
     session: Session,
     request: GetWarehouseRequest,
 ) -> RowMapping | None:
-    tables = _load_tables(session)
+    tables = load_tables(session, _TOPOLOGY_TABLES)
     warehouses = tables["warehouses"]
 
     stmt = (
@@ -96,7 +91,7 @@ def fetch_location_rows(
     session: Session,
     request: ListLocationsRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _TOPOLOGY_TABLES)
     locations = tables["locations"]
 
     stmt = (
@@ -130,7 +125,7 @@ def fetch_location_row(
     session: Session,
     request: GetLocationRequest,
 ) -> RowMapping | None:
-    tables = _load_tables(session)
+    tables = load_tables(session, _TOPOLOGY_TABLES)
     locations = tables["locations"]
 
     stmt = (
@@ -154,7 +149,7 @@ def fetch_warehouse_location_rows(
     session: Session,
     request: GetWarehouseLocationsTreeRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _TOPOLOGY_TABLES)
     locations = tables["locations"]
 
     stmt = (
@@ -298,7 +293,7 @@ def fetch_capacity_utilization_rows(
     session: Session,
     request: GetWarehouseCapacityUtilizationRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _TOPOLOGY_TABLES)
     locations = tables["locations"]
     observations = tables["observations"]
 
