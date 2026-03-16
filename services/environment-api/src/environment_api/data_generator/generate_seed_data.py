@@ -26,6 +26,7 @@ Dependencies:
     - SimulationEngine for dynamic event generation.
 """
 
+import argparse
 from datetime import UTC, datetime, timedelta
 
 from common.logging import configure_logging, get_logger
@@ -140,7 +141,21 @@ class SimulationRunner:
         session.commit()
 
 
-if __name__ == "__main__":
+def run_simulation() -> None:
+    parser = argparse.ArgumentParser(description="Database Management Script")
+    parser.add_argument(
+        "--force-wipe", action="store_true", help="Wipe and repopulate the database"
+    )
+    args = parser.parse_args()
+
+    if not args.force_wipe:
+        print("Safety check: --force-wipe flag not detected. No changes made.")
+        return
+
     engine = get_engine()
     runner = SimulationRunner(engine)
     runner.run(days=settings.simulation.default_days)
+
+
+if __name__ == "__main__":
+    run_simulation()

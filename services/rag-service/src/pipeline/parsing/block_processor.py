@@ -499,5 +499,5 @@ def open_block_processor(
 
 if __name__ == "__main__":
     processor: BlockProcessor
-    with open_block_processor("dm.pdf", "ocr_json") as processor:
+    with open_block_processor("data_source/dm.pdf", "ocr_json") as processor:
         processor.run()

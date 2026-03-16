@@ -234,7 +234,7 @@ class EnvironmentAPIClient(BaseAPIClient):
         if destination_warehouse_id:
             params["destination_warehouse_id"] = destination_warehouse_id
         if status_in:
-            params["status_in"] = ",".join(status_in)
+            params["status_in"] = status_in
         if created_after:
             params["created_after"] = created_after
         if expected_before:
@@ -285,7 +285,7 @@ class EnvironmentAPIClient(BaseAPIClient):
         if supplier_id:
             params["supplier_id"] = supplier_id
         if status_in:
-            params["status_in"] = ",".join(status_in)
+            params["status_in"] = status_in
         if horizon_days is not None:
             params["horizon_days"] = horizon_days
 
@@ -507,5 +507,5 @@ class EnvironmentAPIClient(BaseAPIClient):
             params["quality_status_in"] = ",".join(quality_status_in)
 
         return await self.get(
-            "/api/v1/smart-query/inventory/observed-snapshot", params=params, timeout=timeout
+            "/api/v1/smart-query/inventory/current", params=params, timeout=timeout
         )

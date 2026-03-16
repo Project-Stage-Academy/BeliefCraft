@@ -43,6 +43,29 @@ RAG_API_URL=http://localhost:8001
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
+### LangSmith Tracing (Optional)
+
+[LangSmith](https://smith.langchain.com/) provides tracing, debugging, and evaluation for all LLM calls made by the agent.
+
+**Setup:**
+
+1. Create a free account at https://smith.langchain.com/ and obtain an API key.
+2. Add the following variables to your `.env` file:
+
+```bash
+# Enable tracing
+LANGCHAIN_TRACING_V2=true
+# Your LangSmith API key
+LANGCHAIN_API_KEY=ls__your_api_key_here
+# Project name that will group traces in the dashboard
+LANGCHAIN_PROJECT=beliefcraft-dev
+```
+
+3. Restart the service. On startup you will see `langsmith_tracing_enabled` in the logs.
+4. Open https://smith.langchain.com/ and navigate to your project to inspect traces.
+
+When `LANGCHAIN_TRACING_V2` is `false` or `LANGCHAIN_API_KEY` is unset, tracing is silently skipped and the service runs normally.
+
 See [Configuration Guide](../../docs/agent-service/CONFIGURATION.md) for all options.
 
 ## API Endpoints

@@ -138,7 +138,7 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        with args.file_path.open() as f:
+        with args.file_path.open(encoding="utf-8") as f:
             chunks = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"Failed to load JSON file: {e}")
