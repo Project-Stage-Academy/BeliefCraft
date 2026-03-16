@@ -3,7 +3,6 @@ from __future__ import annotations
 from environment_api.api.smart_query_routes import (
     device_monitoring_router,
     inventory_audit_router,
-    legacy_router,
     observed_inventory_router,
     procurement_router,
     topology_router,
@@ -16,4 +15,3 @@ router.include_router(observed_inventory_router)
 router.include_router(device_monitoring_router)
 router.include_router(procurement_router)
 router.include_router(topology_router)
-router.include_router(legacy_router)
