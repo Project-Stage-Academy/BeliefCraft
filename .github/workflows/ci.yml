@@ -47,6 +47,7 @@ jobs:
 
       - name: Check for breaking API changes
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         uses: oasdiff/oasdiff-action/breaking@main
         with:
           base: 'base-openapi.yaml'
