@@ -56,7 +56,7 @@ class DocumentAssembler:
         )
 
         self.paddle_pages = self._load_all_paddle_jsons(self.paddle_dir)
-        self.image_map = self._load_and_offset(self.figures_json, "page", offset=PAGE_OFFSET)
+        self.image_map = self._load_and_offset(self.figures_json, "page", offset=0)
         self.block_map = self._load_and_offset(self.blocks_json, "page", offset=0)
         self.table_map = self._load_and_offset(self.tables_json, "page", offset=0)
         self.formula_map = self._safe_load_json(self.formulas_json)
@@ -177,7 +177,7 @@ class DocumentAssembler:
 
             if "image_index" in v_obj:
                 chunk["image_links"] = [
-                    f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']}.png"
+                    f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
                 ]
 
             self.final_chunks.append(chunk)
