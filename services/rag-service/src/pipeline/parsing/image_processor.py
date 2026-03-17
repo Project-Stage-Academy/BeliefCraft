@@ -29,14 +29,19 @@ SIDE_NOTE_WIDTH = 200
 BLOCK_CONTENT_PADDING = 20
 
 CAPTION_OFFSET_Y_MINUS_EXPANDED = 300
-CAPTION_OFFSET_X_MINUS_EXPANDED = 800
+CAPTION_OFFSET_PLUS_X_EXPANDED = 800
 CAPTION_HEIGHT_EXPANDED = 400
 
 FIGURES_BBOX_OVERRIDE = {
     # image on page 267 of dm-figures.pdf contains empty space that confuses matching;
-    # override with manually
+    # override manually
     266: ((242, 1040), 300, 327)
 }
+
+SKIP_COMBINATIONS = [
+    (9, 48),
+    (194, 348),
+]
 
 SCALES = np.concatenate(
     [[1.0, 1.05, 1.1], np.arange(1.0, 0.49, -0.01)]  # Different scales to try for template matching
@@ -73,8 +78,8 @@ def get_advanced_caption(page: Any, rect_coords: tuple[float, float, float, floa
     blocks = page.get_text("blocks")
 
     for y_offset_minus, x_offset, y_offset in [
-        (CAPTION_OFFSET_Y_MINUS, CAPTION_OFFSET_X_MINUS, CAPTION_HEIGHT),
-        (CAPTION_OFFSET_Y_MINUS_EXPANDED, CAPTION_OFFSET_X_MINUS_EXPANDED, CAPTION_HEIGHT_EXPANDED),
+        (CAPTION_OFFSET_Y_MINUS, CAPTION_OFFSET_X_PLUS, CAPTION_HEIGHT),
+        (CAPTION_OFFSET_Y_MINUS_EXPANDED, CAPTION_OFFSET_PLUS_X_EXPANDED, CAPTION_HEIGHT_EXPANDED),
     ]:
         caption_area = fitz.Rect(
             img_rect.x0 - CAPTION_OFFSET_X_MINUS,
@@ -256,9 +261,23 @@ def process_pdf(
             matched = False
             while page_ptr < len(dm_doc):
                 logger.debug("Scanning page %s", page_ptr + 1)
+
+                if (page_ptr, idx) in SKIP_COMBINATIONS:
+                    logger.info(
+                        "Skipping known difficult combination: dm_page=%s fig_page=%s",
+                        page_ptr + 1,
+                        idx + 1,
+                    )
+                    page_ptr += 1
+                    continue
+
                 if page_ptr not in page_gray_cache:
                     page_img = pdf_page_to_img(dm_doc, page_ptr)
                     page_gray_cache[page_ptr] = cv2.cvtColor(page_img, cv2.COLOR_BGR2GRAY)
+
+                    keys_to_remove = [k for k in page_gray_cache if k < page_ptr]
+                    for k in keys_to_remove:
+                        del page_gray_cache[k]
 
                 page_obj = dm_doc.load_page(page_ptr)
                 page_gray = page_gray_cache[page_ptr]
