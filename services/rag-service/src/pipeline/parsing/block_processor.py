@@ -451,7 +451,7 @@ class BlockProcessor:
 
     @staticmethod
     def _extract_entity_id(caption_text: str) -> str | None:
-        match = re.search(r"(\d+|[A-G]\.\d+)", caption_text)
+        match = re.search(r"((?:\d+|[A-G])\.\d+)", caption_text)
         return match.group(1) if match else None
 
     def run(self, output_path: str | Path = "blocks_metadata.json") -> None:
