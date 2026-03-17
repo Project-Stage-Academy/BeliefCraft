@@ -39,7 +39,7 @@ FIGURES_BBOX_OVERRIDE = {
 }
 
 SCALES = np.concatenate(
-    [[1.0, 1.05, 1.1], np.arange(1, 0.49, -0.01)]  # Different scales to try for template matching
+    [[1.0, 1.05, 1.1], np.arange(1.0, 0.49, -0.01)]  # Different scales to try for template matching
 )
 
 
@@ -240,8 +240,6 @@ def process_pdf(
         logger.info(f"Processing {len(dm_doc)} pages against {len(figs_doc)} prompt_templates...")
 
         for idx, _fig in tqdm(enumerate(figs_doc), desc="Searching prompt_templates"):
-            # for idx, _fig in tqdm(enumerate(figs_doc[70:], start=70),
-            #                       desc="Searching prompt_templates"):
             logger.info("Processing figure page %s of %s", idx + 1, len(figs_doc))
             if idx in already_found:
                 continue
