@@ -171,7 +171,9 @@ class DocumentAssembler:
             )
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
-            chunk = self._create_chunk_obj(v_obj["chunk_type"], clean_content, page_num, meta_res)
+            chunk = self._create_chunk_obj(
+                v_obj["chunk_type"].lower(), clean_content, page_num, meta_res
+            )
 
             chunk.update({"entity_id": eid, "caption": full_caption})
 
