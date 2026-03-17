@@ -22,10 +22,15 @@ logger = get_logger(__name__)
 # Local geometric constants
 SIMILARITY_THRESHOLD = 0.6
 CAPTION_OFFSET_X_MINUS = 10
+CAPTION_OFFSET_Y_MINUS = 0
 CAPTION_OFFSET_X_PLUS = 150
 CAPTION_HEIGHT = 90
 SIDE_NOTE_WIDTH = 200
 BLOCK_CONTENT_PADDING = 20
+
+CAPTION_OFFSET_Y_MINUS_EXPANDED = 300
+CAPTION_OFFSET_X_MINUS_EXPANDED = 800
+CAPTION_HEIGHT_EXPANDED = 400
 
 SCALES = np.concatenate(
     [[1.0, 1.05, 1.1], np.arange(1, 0.49, -0.01)]  # Different scales to try for template matching
@@ -62,8 +67,8 @@ def get_advanced_caption(page: Any, rect_coords: tuple[float, float, float, floa
     blocks = page.get_text("blocks")
 
     for y_offset_minus, x_offset, y_offset in [
-        (0, CAPTION_OFFSET_X_MINUS, CAPTION_HEIGHT),
-        (300, 800, 400),
+        (CAPTION_OFFSET_Y_MINUS, CAPTION_OFFSET_X_MINUS, CAPTION_HEIGHT),
+        (CAPTION_OFFSET_Y_MINUS_EXPANDED, CAPTION_OFFSET_X_MINUS_EXPANDED, CAPTION_HEIGHT_EXPANDED),
     ]:
         caption_area = fitz.Rect(
             img_rect.x0 - CAPTION_OFFSET_X_MINUS,
@@ -108,8 +113,6 @@ def get_advanced_caption(page: Any, rect_coords: tuple[float, float, float, floa
             full_content = page.get_text("text", clip=content_rect).strip()
             return f"[BLOCK {header_type} CONTENT]:\n{full_content}"
 
-    # if len(blocks) > 0:
-    #     return str(blocks[0][4].strip().replace("\n", " "))
     return "Image without specific caption or block header"
 
 
