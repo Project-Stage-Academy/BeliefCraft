@@ -22,6 +22,8 @@ logger = get_logger(__name__)
 logger.info("service_started", message="RAG Service is up and running")
 
 PAGE_OFFSET = 18
+START_PAGE = 23
+LAST_PAGE = 648
 BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
 
@@ -133,34 +135,22 @@ class DocumentAssembler:
     def assemble(self) -> None:
         logger.info(f"[*] Starting assembly of {len(self.paddle_pages)} pages...")
         for page_idx, page_data in enumerate(self.paddle_pages):
-            self._process_page(page_idx, page_data)
+            if START_PAGE <= page_idx + 1 <= LAST_PAGE:
+                self._process_page(page_idx, page_data)
         self._save()
 
     def _process_page(self, page_idx: int, page_data: dict[str, Any]) -> None:
         page_num = int(page_data.get("page_num") or (page_idx + 1))
 
-        markdown_data = page_data.get("markdown", {})
-        full_markdown_text = markdown_data.get("text", "")
         blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
 
+        if not blocks:
+            return
         used_indices: set[int] = set()
 
-        if blocks:
-            used_indices.update(self._handle_visual_objects(page_num, blocks))
-            self._handle_tables(page_num)
-
-        if full_markdown_text:
-            meta_res = self.meta_extractor.process_content_and_get_meta(full_markdown_text)
-            chunk = self._create_chunk_obj("text", full_markdown_text, page_num, meta_res)
-            if hasattr(self.meta_extractor, "get_references"):
-                refs = self.meta_extractor.get_references(full_markdown_text)
-                chunk.update(refs)
-            self.final_chunks.append(chunk)
-            logger.info(f"Page {page_num}: Processed using high-quality Markdown.")
-        else:
-            self._handle_text_stream(page_num, blocks, used_indices)
-
-        return
+        used_indices.update(self._handle_visual_objects(page_num, blocks))
+        self._handle_tables(page_num)
+        self._handle_text_stream(page_num, blocks, used_indices)
 
     def _handle_visual_objects(self, page_num: int, blocks: list[dict[str, Any]]) -> set[int]:
         used: set[int] = set()
@@ -263,7 +253,7 @@ class DocumentAssembler:
         meta_now = self.meta_extractor.process_content_and_get_meta("")
         formula_content = self.formula_map.get(f"({f_id})", f"Formula {f_id}")
         f_chunk = self._create_chunk_obj("numbered_formula", formula_content, page_num, meta_now)
-        f_chunk["link_id"] = f_id
+        f_chunk["entity_id"] = f_id
         self.final_chunks.append(f_chunk)
 
     def _handle_tables(self, page_num: int) -> None:
