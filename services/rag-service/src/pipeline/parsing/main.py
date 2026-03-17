@@ -244,7 +244,7 @@ class DocumentAssembler:
                 self._flush(acc, page_num)
                 acc = []
 
-            if content and label not in ["footer", "number"]:
+            if content and label not in ["footer", "number", "header", "image"]:
                 acc.append(content)
         if acc:
             self._flush(acc, page_num)
