@@ -32,6 +32,12 @@ CAPTION_OFFSET_Y_MINUS_EXPANDED = 300
 CAPTION_OFFSET_X_MINUS_EXPANDED = 800
 CAPTION_HEIGHT_EXPANDED = 400
 
+FIGURES_BBOX_OVERRIDE = {
+    # image on page 267 of dm-figures.pdf contains empty space that confuses matching;
+    # override with manually
+    266: ((242, 1040), 300, 327)
+}
+
 SCALES = np.concatenate(
     [[1.0, 1.05, 1.1], np.arange(1, 0.49, -0.01)]  # Different scales to try for template matching
 )
@@ -287,10 +293,9 @@ def process_pdf(
                     )
                     all_entries.append(entry)
                     already_found.add(idx)
-                    if idx == 266:
-                        max_loc = (242, 1040)
-                        matched_w = 300
-                        matched_h = 327
+
+                    if idx in FIGURES_BBOX_OVERRIDE:
+                        max_loc, matched_w, matched_h = FIGURES_BBOX_OVERRIDE[idx]
 
                     _mask_matched_region(page_gray, max_loc, matched_w, matched_h)
 
