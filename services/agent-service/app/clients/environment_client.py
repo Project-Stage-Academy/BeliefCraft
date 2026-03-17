@@ -483,7 +483,7 @@ class EnvironmentAPIClient(BaseAPIClient):
         window: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]:
-        """Detect anomalous device behavior."""
+        """Detect anomalous device behavior within a window measured in hours."""
         params: dict[str, Any] = {}
         if warehouse_id:
             params["warehouse_id"] = warehouse_id
@@ -507,5 +507,7 @@ class EnvironmentAPIClient(BaseAPIClient):
             params["quality_status_in"] = ",".join(quality_status_in)
 
         return await self.get(
-            "/api/v1/smart-query/inventory/current", params=params, timeout=timeout
+            "/api/v1/smart-query/inventory/observed-snapshot",
+            params=params,
+            timeout=timeout,
         )

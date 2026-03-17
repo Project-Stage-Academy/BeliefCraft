@@ -346,11 +346,11 @@ class TestEnvironmentAPIClient:
             client = EnvironmentAPIClient()
 
             with patch.object(client, "get", return_value={}) as mock_get:
-                await client.get_device_anomalies(warehouse_id="WH1", window=60)
+                await client.get_device_anomalies(warehouse_id="WH1", window=24)
 
                 mock_get.assert_called_once_with(
                     "/api/v1/smart-query/devices/anomalies",
-                    params={"warehouse_id": "WH1", "window": 60},
+                    params={"warehouse_id": "WH1", "window": 24},
                     timeout=None,
                 )
 
@@ -368,7 +368,7 @@ class TestEnvironmentAPIClient:
                 )
 
                 mock_get.assert_called_once_with(
-                    "/api/v1/smart-query/inventory/current",
+                    "/api/v1/smart-query/inventory/observed-snapshot",
                     params={"quality_status_in": "good,inspected"},
                     timeout=None,
                 )
