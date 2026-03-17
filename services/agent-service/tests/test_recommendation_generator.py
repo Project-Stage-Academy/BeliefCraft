@@ -248,6 +248,28 @@ class TestGenerate:
         result = await generator.generate(state)
         assert "search_knowledge_base" in result.tools_used
 
+    @pytest.mark.asyncio
+    async def test_iterations_match_reasoning_trace_when_final_thought_has_no_tool_call(
+        self, generator: RecommendationGenerator
+    ) -> None:
+        thoughts = [
+            _make_thought("Collect data"),
+            _make_thought("Synthesize final answer"),
+        ]
+        tool_calls = [
+            _make_tool_call("search_knowledge_base", result={"documents": [{"id": "chunk-1"}]})
+        ]
+        state = _base_agent_state(
+            iteration=1,
+            thoughts=thoughts,
+            tool_calls=tool_calls,
+        )
+
+        result = await generator.generate(state)
+
+        assert len(result.reasoning_trace) == 2
+        assert result.iterations == 2
+
 
 # ---------------------------------------------------------------------------
 # Fallback when no final answer
@@ -296,6 +318,31 @@ class TestFallbackResponse:
         state = _base_agent_state(final_answer=None, status="failed", error=None)
         result = await generator.generate(state)
         assert "Unknown error" in result.warnings
+
+    @pytest.mark.asyncio
+    async def test_fallback_iterations_match_reasoning_trace_length(
+        self, generator: RecommendationGenerator
+    ) -> None:
+        thoughts = [
+            _make_thought("Collect data"),
+            _make_thought("Encountered failure"),
+        ]
+        tool_calls = [
+            _make_tool_call("search_knowledge_base", result={"documents": [{"id": "chunk-1"}]})
+        ]
+        state = _base_agent_state(
+            final_answer=None,
+            status="failed",
+            error="Timeout",
+            iteration=1,
+            thoughts=thoughts,
+            tool_calls=tool_calls,
+        )
+
+        result = await generator.generate(state)
+
+        assert len(result.reasoning_trace) == 2
+        assert result.iterations == 2
 
 
 # ---------------------------------------------------------------------------

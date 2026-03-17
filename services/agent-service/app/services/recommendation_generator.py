@@ -132,6 +132,7 @@ class RecommendationGenerator:
         ]
 
         reasoning_trace = self.reasoning_trace_formatter.format(agent_state)
+        iterations = self._count_iterations(agent_state, reasoning_trace)
         warnings = self._detect_warnings(agent_state, structured)
         execution_time = self._calc_execution_time(agent_state)
 
@@ -155,7 +156,7 @@ class RecommendationGenerator:
             status=_coerce_status(agent_state["status"]),
             confidence=structured.get("confidence"),
             reasoning_trace=reasoning_trace,
-            iterations=agent_state["iteration"],
+            iterations=iterations,
             total_tokens=agent_state["total_tokens"],
             execution_time_seconds=execution_time,
             tools_used=list(set(tools_used)),
@@ -306,6 +307,8 @@ class RecommendationGenerator:
     def _generate_fallback_response(self, agent_state: AgentState) -> AgentRecommendationResponse:
         """Generate a minimal response when the agent failed or produced no output."""
         error_message = agent_state.get("error") or "Unknown error"
+        reasoning_trace = self.reasoning_trace_formatter.format(agent_state)
+        iterations = self._count_iterations(agent_state, reasoning_trace)
 
         return AgentRecommendationResponse(
             request_id=agent_state["request_id"],
@@ -320,13 +323,20 @@ class RecommendationGenerator:
                 )
             ],
             status="failed",
-            reasoning_trace=self.reasoning_trace_formatter.format(agent_state),
-            iterations=agent_state["iteration"],
+            reasoning_trace=reasoning_trace,
+            iterations=iterations,
             total_tokens=agent_state["total_tokens"],
             execution_time_seconds=0.0,
             tools_used=[],
             warnings=[error_message],
         )
+
+    @staticmethod
+    def _count_iterations(agent_state: AgentState, reasoning_trace: list[dict[str, Any]]) -> int:
+        """Report iterations using the public reasoning trace when available."""
+        if reasoning_trace:
+            return len(reasoning_trace)
+        return agent_state["iteration"]
 
     @staticmethod
     def _calc_execution_time(agent_state: AgentState) -> float:
