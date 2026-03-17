@@ -26,6 +26,7 @@ START_PAGE = 23
 LAST_PAGE = 648
 BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
+PART_SEQUENCE = ["I", "II", "III", "IV", "V", "Appendices"]
 
 
 def load_bucket_url_from_env() -> str | None:
@@ -63,6 +64,8 @@ class DocumentAssembler:
 
         self.meta_extractor = MetadataExtractor()
         self.final_chunks: list[dict[str, Any]] = []
+        self._part_index = -1
+        self._last_part_title: str | None = None
 
         self.figures_bucket_url: str | None = None
 
@@ -132,10 +135,30 @@ class DocumentAssembler:
         prefix = f"{chunk_type}_{entity_id}" if entity_id else chunk_type
         return f"{prefix}_{content_hash}"
 
+    def _update_part_from_doc_title(self, page_data: dict[str, Any]) -> None:
+        blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
+        for block in blocks:
+            label = block.get("block_label", "").lower()
+            if label != "doc_title":
+                continue
+
+            raw_title = block.get("block_content", "")
+            part_title = raw_title.strip()
+            if not part_title or part_title == self._last_part_title:
+                continue
+
+            self._part_index += 1
+            part_value = PART_SEQUENCE[min(self._part_index, len(PART_SEQUENCE) - 1)]
+            self.meta_extractor.set_part(part_value, part_title)
+            self._last_part_title = part_title
+
+            break
+
     def assemble(self) -> None:
         logger.info(f"[*] Starting assembly of {len(self.paddle_pages)} pages...")
         for page_idx, page_data in enumerate(self.paddle_pages):
             if START_PAGE <= page_idx + 1 <= LAST_PAGE:
+                self._update_part_from_doc_title(page_data)
                 self._process_page(page_idx, page_data)
         self._save()
 
