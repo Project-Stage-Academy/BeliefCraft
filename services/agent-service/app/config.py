@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     BEDROCK_MAX_TOKENS: int = Field(
         default=4000, ge=1, le=100000, description="Maximum tokens for completion"
     )
+    BEDROCK_CONNECT_TIMEOUT_SECONDS: int = Field(
+        default=60, ge=1, le=300, description="Timeout for establishing Bedrock connections"
+    )
+    BEDROCK_READ_TIMEOUT_SECONDS: int = Field(
+        default=300, ge=1, le=900, description="Timeout for reading Bedrock responses"
+    )
 
     AWS_PROFILE: str | None = Field(
         default=None,

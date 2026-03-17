@@ -28,6 +28,7 @@ from app.models.responses import (
     Recommendation,
 )
 from app.services.llm_service import LLMService
+from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
 from app.services.recommendation_generator import RecommendationGenerator
 
 # ---------------------------------------------------------------------------
@@ -656,6 +657,78 @@ class TestReasoningTrace:
         state = _base_agent_state(thoughts=[], tool_calls=[])
         result = await generator.generate(state)
         assert result.reasoning_trace == []
+
+    @pytest.mark.asyncio
+    async def test_trace_keeps_multiple_actions_within_one_iteration(
+        self, generator: RecommendationGenerator
+    ) -> None:
+        thoughts = [_make_thought("Collect diagnostics")]
+        tool_calls = [
+            _make_tool_call("get_inventory_data", result={"items": [1, 2, 3]}),
+            _make_tool_call(
+                "search_knowledge_base",
+                result={"documents": [{"id": "chunk-1"}, {"id": "chunk-2"}]},
+            ),
+        ]
+        state = _base_agent_state(
+            thoughts=thoughts,
+            tool_calls=tool_calls,
+            messages=[
+                {
+                    "role": "assistant",
+                    "content": "<thinking>Collect diagnostics</thinking>",
+                    "tool_calls": [
+                        {
+                            "id": "tc_1",
+                            "type": "function",
+                            "function": {
+                                "name": "get_inventory_data",
+                                "arguments": '{"warehouse_id": "WH-001"}',
+                            },
+                        },
+                        {
+                            "id": "tc_2",
+                            "type": "function",
+                            "function": {
+                                "name": "search_knowledge_base",
+                                "arguments": '{"query": "inventory discrepancy"}',
+                            },
+                        },
+                    ],
+                }
+            ],
+        )
+
+        result = await generator.generate(state)
+
+        assert len(result.reasoning_trace) == 1
+        assert result.reasoning_trace[0]["iteration"] == 1
+        assert result.reasoning_trace[0]["thought"] == "Collect diagnostics"
+        assert len(result.reasoning_trace[0]["actions"]) == 2
+        assert result.reasoning_trace[0]["actions"][0]["tool"] == "get_inventory_data"
+        assert result.reasoning_trace[0]["actions"][1]["tool"] == "search_knowledge_base"
+        assert result.reasoning_trace[0]["actions"][1]["observation"] == "Received 2 documents"
+
+    @pytest.mark.asyncio
+    async def test_trace_is_delegated_to_reasoning_trace_formatter(
+        self,
+        mock_llm: MagicMock,
+        mock_formula_extractor: MagicMock,
+        mock_citation_extractor: MagicMock,
+    ) -> None:
+        formatter = MagicMock(spec=ReasoningTraceFormatter)
+        formatter.format.return_value = [{"iteration": 99, "thought": "Delegated"}]
+        generator = RecommendationGenerator(
+            llm=mock_llm,
+            formula_extractor=mock_formula_extractor,
+            citation_extractor=mock_citation_extractor,
+            reasoning_trace_formatter=formatter,
+        )
+
+        result = await generator.generate(_base_agent_state())
+
+        formatter.format.assert_called_once()
+        assert result.reasoning_trace == [{"iteration": 99, "thought": "Delegated"}]
 
 
 # ---------------------------------------------------------------------------

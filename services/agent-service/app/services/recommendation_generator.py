@@ -23,6 +23,7 @@ from app.services.extractors.tool_result_utils import (
     tool_call_field,
 )
 from app.services.llm_service import LLMService
+from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
 from common.logging import get_logger
 from pydantic import BaseModel, ConfigDict
 
@@ -100,11 +101,13 @@ class RecommendationGenerator:
         formula_extractor: FormulaExtractor | None = None,
         citation_extractor: CitationExtractor | None = None,
         code_extractor: CodeExtractor | None = None,
+        reasoning_trace_formatter: ReasoningTraceFormatter | None = None,
     ) -> None:
         self.llm = llm or LLMService()
         self.formula_extractor = formula_extractor or FormulaExtractor()
         self.citation_extractor = citation_extractor or CitationExtractor()
         self.code_extractor = code_extractor or CodeExtractor()
+        self.reasoning_trace_formatter = reasoning_trace_formatter or ReasoningTraceFormatter()
 
     async def generate(self, agent_state: AgentState) -> AgentRecommendationResponse:
         """Generate structured recommendation from agent's final state."""
@@ -128,7 +131,7 @@ class RecommendationGenerator:
             if tool_call_field(tc, "tool_name")
         ]
 
-        reasoning_trace = self._build_reasoning_trace(agent_state)
+        reasoning_trace = self.reasoning_trace_formatter.format(agent_state)
         warnings = self._detect_warnings(agent_state, structured)
         execution_time = self._calc_execution_time(agent_state)
 
@@ -266,37 +269,6 @@ class RecommendationGenerator:
             tool_calls=agent_state["tool_calls"],
         )
 
-    def _build_reasoning_trace(self, agent_state: AgentState) -> list[dict[str, Any]]:
-        """Build a concise reasoning trace from thoughts + tool calls."""
-        trace: list[dict[str, Any]] = []
-
-        for i, (thought, tool_call) in enumerate(
-            zip(agent_state["thoughts"], agent_state["tool_calls"], strict=False)
-        ):
-            thought_text = thought.thought if hasattr(thought, "thought") else str(thought)
-
-            step: dict[str, Any] = {
-                "iteration": i + 1,
-                "thought": thought_text,
-                "action": {
-                    "tool": tool_call_field(tool_call, "tool_name"),
-                    "arguments": tool_call_field(tool_call, "arguments"),
-                },
-            }
-
-            result = tool_call_field(tool_call, "result")
-            if result:
-                if isinstance(result, dict) and "documents" in result:
-                    step["observation"] = f"Received {len(result['documents'])} documents"
-                elif isinstance(result, dict):
-                    step["observation"] = f"Received {len(result)} data points"
-                else:
-                    step["observation"] = "Success"
-
-            trace.append(step)
-
-        return trace
-
     def _detect_warnings(self, agent_state: AgentState, structured: dict[str, Any]) -> list[str]:
         """Detect potential issues and limitations."""
         warnings: list[str] = []
@@ -348,7 +320,7 @@ class RecommendationGenerator:
                 )
             ],
             status="failed",
-            reasoning_trace=self._build_reasoning_trace(agent_state),
+            reasoning_trace=self.reasoning_trace_formatter.format(agent_state),
             iterations=agent_state["iteration"],
             total_tokens=agent_state["total_tokens"],
             execution_time_seconds=0.0,

@@ -2,7 +2,8 @@
 
 from typing import Any
 
-from app.models.agent_state import AgentState, ThoughtStep, ToolCall
+from app.models.agent_state import AgentState
+from app.prompts.system_prompts import build_iteration_history
 
 
 class ReasoningTraceFormatter:
@@ -18,44 +19,68 @@ class ReasoningTraceFormatter:
         Returns:
             List of trace entries, each containing iteration, thought, and optional action
         """
-        reasoning_trace = []
-        thoughts = final_state["thoughts"]
-        tool_calls_list = final_state["tool_calls"]
+        reasoning_trace: list[dict[str, Any]] = []
 
-        for i, thought in enumerate(thoughts):
-            entry = self._format_entry(i, thought, tool_calls_list)
+        for iteration in build_iteration_history(final_state):
+            entry = self._format_entry(iteration)
             reasoning_trace.append(entry)
 
         return reasoning_trace
 
     def _format_entry(
         self,
-        index: int,
-        thought: ThoughtStep,
-        tool_calls_list: list[ToolCall],
+        iteration: dict[str, Any],
     ) -> dict[str, Any]:
         """
         Format a single trace entry with thought and optional action.
 
         Args:
-            index: Zero-based iteration index
-            thought: The thought step for this iteration
-            tool_calls_list: List of all tool calls from execution
+            iteration: Iteration history entry from build_iteration_history().
 
         Returns:
             Dictionary with iteration number, thought, and optional action details
         """
         entry: dict[str, Any] = {
-            "iteration": index + 1,
-            "thought": thought.thought,
+            "iteration": iteration["iteration"],
+            "thought": iteration["thought"],
         }
+        actions = [self._format_action(action) for action in iteration["actions"]]
 
-        if index < len(tool_calls_list):
-            tool_call = tool_calls_list[index]
+        if len(actions) == 1:
             entry["action"] = {
-                "tool": tool_call.tool_name,
-                "arguments": tool_call.arguments,
-                "result": tool_call.result,
+                "tool": actions[0]["tool"],
+                "arguments": actions[0]["arguments"],
             }
+            if "observation" in actions[0]:
+                entry["observation"] = actions[0]["observation"]
+        elif actions:
+            entry["actions"] = actions
 
         return entry
+
+    @staticmethod
+    def _format_action(action: dict[str, Any]) -> dict[str, Any]:
+        """Format a single tool action for the public trace."""
+        formatted_action: dict[str, Any] = {
+            "tool": action.get("tool"),
+            "arguments": action.get("arguments"),
+        }
+
+        if "observation" not in action:
+            return formatted_action
+
+        observation = action["observation"]
+        if isinstance(observation, dict):
+            if "error" in observation:
+                formatted_action["observation"] = f"Error: {observation['error']}"
+            elif "documents" in observation:
+                formatted_action["observation"] = (
+                    f"Received {len(observation['documents'])} documents"
+                )
+            else:
+                formatted_action["observation"] = f"Received {len(observation)} data points"
+            return formatted_action
+
+        formatted_action["observation"] = "Success"
+
+        return formatted_action
