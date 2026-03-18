@@ -247,7 +247,7 @@ class DocumentAssembler:
                 continue
             content = block.get("block_content", "").strip()
             label = block.get("block_label", "").lower()
-            if label in ["footer", "number", "header", "image", "footnote"]:
+            if label in ["footer", "number", "header", "image", "footnote", "doc_title"]:
                 continue
 
             # Capture hierarchy state before processing the current block.
