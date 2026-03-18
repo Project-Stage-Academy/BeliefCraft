@@ -303,7 +303,7 @@ class DocumentAssembler:
             "chunk_id": self._generate_deterministic_id(
                 final_type, meta.get("subsubsection_number"), content
             ),
-            "entity_id": meta.get("subsubsection_number") or self._extract_id(content),
+            "entity_id": self._extract_id(content),
             "part": meta.get("part"),
             "part_title": meta.get("part_title"),
             "section_title": meta.get("section_title"),
