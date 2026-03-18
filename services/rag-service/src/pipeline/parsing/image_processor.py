@@ -262,7 +262,7 @@ def process_pdf(
             while page_ptr < len(dm_doc):
                 logger.debug("Scanning page %s", page_ptr + 1)
 
-                if (page_ptr, idx) in SKIP_COMBINATIONS:
+                if (idx, page_ptr) in SKIP_COMBINATIONS:
                     logger.info(
                         "Skipping known difficult combination: dm_page=%s fig_page=%s",
                         page_ptr + 1,
