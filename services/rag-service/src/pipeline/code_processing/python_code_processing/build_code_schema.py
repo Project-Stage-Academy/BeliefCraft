@@ -26,7 +26,7 @@ MethodRecord:
     "algorithm_number":     "1.1",            # entity_id of the defining algorithm
     "code":                 "<source of the method>",
     "class":                "cls:ClassName",  # ref -> ClassRecord.id
-    "initialized_classes":  ["cls:X", ...],
+    "referenced_classes":   ["cls:X", ...],
     "referenced_functions": ["fn:foo", ...],
     "referenced_methods":   ["mth:Bar.baz", ...],
   }
@@ -37,7 +37,7 @@ FunctionRecord:
     "name":                 "function_name",
     "algorithm_number":     "1.1",            # entity_id of the defining algorithm
     "code":                 "<source of the function>",
-    "initialized_classes":  ["cls:X", ...],
+    "referenced_classes":   ["cls:X", ...],
     "referenced_functions": ["fn:foo", ...],
     "referenced_methods":   ["mth:Bar.baz", ...],
   }
@@ -190,9 +190,9 @@ def _refs_from_edges(
     known: _KnownIds,
     analyzer: CodeAnalyzer,
 ) -> tuple[list[str], list[str], list[str]]:
-    """Return ``(initialized_classes, referenced_functions, referenced_methods)`` for *caller*.
+    """Return ``(referenced_classes, referenced_functions, referenced_methods)`` for *caller*.
 
-    ``initialized_classes`` includes both explicit constructor calls *and* classes
+    ``referenced_classes`` includes both explicit constructor calls *and* classes
     that appear as parameter type annotations — i.e. the function signature alone
     declares a dependency on those classes.
     """
@@ -215,7 +215,7 @@ def _refs_from_edges(
             if ref in known.methods:
                 meths.append(ref)
 
-    # 2. Parameter type annotations → add to initialized_classes
+    # 2. Parameter type annotations → add to referenced_classes
     for var, typ in analyzer._local_vars.get(caller, {}).items():
         if var in _SKIP_PARAM_NAMES:
             continue
