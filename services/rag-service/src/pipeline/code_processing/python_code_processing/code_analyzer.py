@@ -93,6 +93,7 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.current_class = prev_class
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Register a function/method definition and recurse into its body."""
         self._handle_function(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
@@ -114,6 +115,7 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.current_function = prev_function
 
     def _register_definition(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+        """Add the node to ``functions`` or ``methods`` and return its qualified name."""
         name = f"{self.current_class}.{node.name}" if self.current_class else node.name
 
         if self.current_function is None:
@@ -126,10 +128,12 @@ class CodeAnalyzer(ast.NodeVisitor):
         return name
 
     def _track_init_fragment(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        """Record which fragment contains ``__init__`` for the current class."""
         if self.current_class and node.name == "__init__":
             self._class_init_fragment[self.current_class] = self.current_fragment_idx
 
     def _register_nested_def(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        """Track locally-defined names so they are excluded from call resolution."""
         if self.current_function is not None:
             self._local_definitions[self.current_function].add(node.name)
 
@@ -225,6 +229,7 @@ class CodeAnalyzer(ast.NodeVisitor):
     # ------------------------------------------------------------------ #
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        """Record annotated variable types at local or module scope."""
         if isinstance(node.target, ast.Name):
             typ = self._extract_simple_type(node.annotation)
             if typ:
@@ -309,6 +314,7 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _resolve_call(self, node: ast.expr) -> tuple[str | None, str]:
+        """Return ``(call_name, kind)`` for a call target node."""
         if isinstance(node, ast.Name):
             return node.id, "bare"
         if isinstance(node, ast.Attribute):
@@ -361,6 +367,7 @@ class CodeAnalyzer(ast.NodeVisitor):
     # ------------------------------------------------------------------ #
 
     def _resolve_var_type(self, var_name: str) -> str | None:
+        """Look up the type of *var_name*, checking local scope before module scope."""
         if self.current_function:
             local = self._local_vars.get(self.current_function, {})
             if var_name in local:
@@ -368,6 +375,7 @@ class CodeAnalyzer(ast.NodeVisitor):
         return self.var_types.get(var_name)
 
     def _get_chain_root(self, node: ast.expr) -> str | None:
+        """Return the leftmost name in a dotted chain (``a.b.c`` → ``"a"``), or ``None``."""
         if isinstance(node, ast.Name):
             return node.id
         if isinstance(node, ast.Attribute):
@@ -381,6 +389,7 @@ class CodeAnalyzer(ast.NodeVisitor):
 
 
 def _build_short_name_index(definitions: set[str]) -> defaultdict[str, list[str]]:
+    """Map unqualified names to all fully-qualified definitions that share that short name."""
     index: defaultdict[str, list[str]] = defaultdict(list)
     for d in definitions:
         index[d.split(".")[-1]].append(d)
@@ -393,6 +402,10 @@ def _resolve_bare(
     analyzer: CodeAnalyzer,
     index: defaultdict[str, list[str]],
 ) -> list[tuple[str, str]]:
+    """Resolve an unqualified call name to ``(target, kind)`` pairs.
+    Resolution priority: locally-defined names are skipped, then classes,
+    then functions, then methods (only when unambiguous).
+    """
     if short in analyzer._local_definitions.get(caller, set()):
         return []
 

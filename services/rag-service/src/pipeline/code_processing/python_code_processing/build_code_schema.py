@@ -246,10 +246,8 @@ def _build_classes(
 ) -> list[dict[str, Any]]:
     result = []
     for name, node in analyzer.classes.items():
-        # батьківські класи
         parent_refs = _parent_class_refs(node, known)
 
-        # зв'язки з __init__
         init_key = f"{name}.__init__"
         init_inits, init_funcs, init_meths = _refs_from_edges(init_key, graph, known, analyzer)
 

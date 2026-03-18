@@ -573,6 +573,12 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         return ""
 
     def _build_nested_code_def_refs(self, max_depth: int = 5) -> list[QueryReference]:
+        """
+        Build recursive QueryReference objects for the three nested
+        code-definition cross-reference fields.
+        ``initialized_classes`` is always a leaf. ``referenced_methods`` and
+        ``referenced_functions`` are expanded up to *max_depth* levels.
+        """
         fields = (
             CodeEntityRef.REFERENCED_CLASSES,
             CodeEntityRef.REFERENCED_METHODS,
@@ -589,7 +595,9 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         ]
 
     def _sub_refs_for_code_def_field(self, field: str, max_depth: int) -> list[QueryReference]:
-        # CodeClass тепер теж має залежності — більше не є leaf
+        """Return sub-references for one code-definition reference field.
+        Leaf fields return an empty list.
+        """
         if max_depth == 0:
             return []
         sub_refs = self._build_nested_code_def_refs(max_depth - 1)

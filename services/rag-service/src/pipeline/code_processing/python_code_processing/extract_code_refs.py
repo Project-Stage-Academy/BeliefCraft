@@ -75,6 +75,7 @@ class SchemaIndex:
 
 
 def _is_code_line(line: str) -> bool:
+    """Heuristic: does this line look like Python code rather than prose."""
     stripped = line.strip()
     if not stripped:
         return False
@@ -88,10 +89,12 @@ def _is_code_line(line: str) -> bool:
 
 
 def _extract_fenced_blocks(text: str) -> list[str]:
+    """Return the contents of fenced ```python blocks found in the text."""
     return [m.group(1) for m in _CODE_BLOCK_RE.finditer(text)]
 
 
 def _extract_consecutive_code_lines(text: str) -> list[str]:
+    """Collect consecutive lines that look like code into code blocks."""
     blocks, current = [], []
     for line in text.splitlines():
         if _is_code_line(line):
@@ -106,6 +109,7 @@ def _extract_consecutive_code_lines(text: str) -> list[str]:
 
 
 def _extract_inline_assignments(text: str) -> list[str]:
+    """Extract inline 'var = func(' patterns from prose and return minimal valid snippets."""
     return [f"{m.group(1)} = {m.group(2)}()" for m in _INLINE_ASSIGN_RE.finditer(text)]
 
 

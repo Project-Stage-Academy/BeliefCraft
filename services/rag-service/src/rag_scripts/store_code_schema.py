@@ -288,7 +288,7 @@ def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> Re
     for cls in classes:
         from_uuid = uuid_for_schema_id(cls["id"])
         refs.extend(_algorithm_ref(from_uuid, cls))
-        refs.extend(_cross_refs(from_uuid, cls))  # initialized_classes + referenced_*
+        refs.extend(_cross_refs(from_uuid, cls))
     return refs
 
 
@@ -360,9 +360,7 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
     if not references:
         logger.info("No references to add for %s.", label)
         return
-    logger.info(
-        "Adding %d references for %s: %s", len(references), label, references[:3]
-    )  # перші 3
+    logger.info("Adding %d references for %s: %s", len(references), label, references[:3])
     try:
         collection.data.reference_add_many(references)
         logger.info("Added %d references for %s.", len(references), label)
