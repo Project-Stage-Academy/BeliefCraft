@@ -247,10 +247,14 @@ class DocumentAssembler:
                 continue
             content = block.get("block_content", "").strip()
             label = block.get("block_label", "").lower()
+            if label in ["footer", "number", "header", "image", "footnote"]:
+                continue
 
+            # Capture hierarchy state before processing the current block.
+            prev_meta = self.meta_extractor.get_meta()
             temp_meta = self.meta_extractor.process_content_and_get_meta(content)
             if temp_meta.get("force_new_chunk") and acc:
-                self._flush(acc, page_num)
+                self._flush(acc, page_num, meta_override=prev_meta)
                 acc = []
 
             f_match = re.search(r"\((\d+\.\d+)\)", content)
@@ -265,17 +269,13 @@ class DocumentAssembler:
 
                     self._add_formula_chunk(formula_id, page_num)
 
-            if label in ["header", "title"] and acc:
-                self._flush(acc, page_num)
-                acc = []
-
-            if content and label not in ["footer", "number", "header", "image", "footnote"]:
+            if content:
                 acc.append(content)
         if acc:
             self._flush(acc, page_num)
 
     def _add_formula_chunk(self, f_id: str, page_num: int) -> None:
-        meta_now = self.meta_extractor.process_content_and_get_meta("")
+        meta_now = self.meta_extractor.get_meta()
         formula_content = self.formula_map.get(f"({f_id})", f"Formula {f_id}")
         f_chunk = self._create_chunk_obj("numbered_formula", formula_content, page_num, meta_now)
         f_chunk["entity_id"] = f_id
@@ -328,10 +328,29 @@ class DocumentAssembler:
             and b1[3] <= b2[3] + BBOX_PADDING
         )
 
-    def _flush(self, acc: list[str], page: int) -> None:
+    def _flush(
+        self,
+        acc: list[str],
+        page: int,
+        meta_override: dict[str, Any] | None = None,
+    ) -> None:
         raw_text = "\n".join(acc)
-        meta_res = self.meta_extractor.process_content_and_get_meta(raw_text)
-        if not meta_res.get("clean_content"):
+        meta_res = self.meta_extractor.process_content_and_get_meta(raw_text, update_meta=False)
+
+        if meta_override is not None:
+            for key in (
+                "part",
+                "part_title",
+                "section_title",
+                "section_number",
+                "subsection_title",
+                "subsection_number",
+                "subsubsection_title",
+                "subsubsection_number",
+            ):
+                meta_res[key] = meta_override.get(key)
+
+        if not raw_text:
             return
         chunk = self._create_chunk_obj("text", meta_res["clean_content"], page, meta_res)
         if hasattr(self.meta_extractor, "get_references"):

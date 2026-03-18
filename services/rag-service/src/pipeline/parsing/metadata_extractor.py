@@ -26,7 +26,13 @@ class MetadataExtractor:
         self.current_section_num = None
         self._reset_lower_levels()
 
-    def process_content_and_get_meta(self, content: str) -> dict[str, Any]:
+    def get_meta(self) -> dict[str, Any]:
+        """Get current metadata state without content."""
+        return self._get_current_dict("")
+
+    def process_content_and_get_meta(
+        self, content: str, update_meta: bool = True
+    ) -> dict[str, Any]:
         """
         Analyzes raw text to detect headers and update the current hierarchy state.
         Filters out metadata-only lines (like page numbers) from the clean content.
@@ -37,9 +43,6 @@ class MetadataExtractor:
         Returns:
             dict: Current metadata state including cleaned text and a 'force_new_chunk' flag.
         """
-        if not content:
-            return self._get_current_dict("")
-
         lines = content.split("\n")
         clean_lines: list[str] = []
         force_new_chunk = False
@@ -53,28 +56,26 @@ class MetadataExtractor:
                 r"^#+\s*([\dA-Z]+(?:\.[\dA-Z]+){0,2})\.?(?:\s+(.*))?$", stripped
             )
             if header_match:
+                if not update_meta:
+                    continue
                 number = header_match.group(1)
                 title = (header_match.group(2) or "").strip()
                 depth = number.count(".")
 
                 if depth == 0:
                     self.current_section_num = number
-                    self.current_section_title = f"{number} {title}".strip()
+                    self.current_section_title = title.strip()
                     self._reset_lower_levels()
                 elif depth == 1:
                     self.current_subsection_num = number
-                    self.current_subsection_title = f"{number} {title}".strip()
+                    self.current_subsection_title = title.strip()
                     self.current_subsubsection_title = None
                     self.current_subsubsection_num = None
                 elif depth == 2:
                     self.current_subsubsection_num = number
-                    self.current_subsubsection_title = f"{number} {title}".strip()
+                    self.current_subsubsection_title = title.strip()
 
                 force_new_chunk = True
-                continue
-
-            # STANDALONE NUMBERS
-            if re.match(r"^#+\s*\d+\s*$", stripped):
                 continue
 
             clean_lines.append(line)
