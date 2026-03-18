@@ -198,7 +198,7 @@ class DocumentAssembler:
                 v_obj["chunk_type"].lower(), clean_content, page_num, meta_res
             )
 
-            chunk.update({"entity_id": eid, "caption": full_caption})
+            chunk.update({"entity_id": eid})
 
             if "image_index" in v_obj:
                 chunk["image_links"] = [
