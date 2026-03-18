@@ -143,7 +143,7 @@ class DocumentAssembler:
                 continue
 
             raw_title = block.get("block_content", "")
-            part_title = raw_title.strip()
+            part_title = raw_title.strip("#").strip()
             if not part_title or part_title == self._last_part_title:
                 continue
 
