@@ -218,6 +218,56 @@ class TestThinkNode:
         assert result["messages"][0]["role"] == "user"
         assert result["messages"][1]["role"] == "assistant"
 
+    def test_build_llm_messages_preserves_all_actions_from_single_turn(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
+        initial_state["thoughts"] = [
+            {"thought": "Collect diagnostics", "next_action": "tool_use"}  # type: ignore[list-item]
+        ]
+        initial_state["messages"] = [
+            {
+                "role": "assistant",
+                "content": "<thinking>Collect diagnostics</thinking>",
+                "tool_calls": [
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_inventory_data",
+                            "arguments": '{"warehouse_id": "WH-001"}',
+                        },
+                    },
+                    {
+                        "id": "tc_2",
+                        "type": "function",
+                        "function": {
+                            "name": "search_knowledge_base",
+                            "arguments": '{"query": "inventory discrepancy"}',
+                        },
+                    },
+                ],
+            }
+        ]
+        initial_state["tool_calls"] = [
+            {
+                "tool_name": "get_inventory_data",
+                "arguments": {"warehouse_id": "WH-001"},
+                "result": {"items": [1, 2, 3]},
+            },  # type: ignore[list-item]
+            {
+                "tool_name": "search_knowledge_base",
+                "arguments": {"query": "inventory discrepancy"},
+                "result": {"documents": [{"id": "chunk-1"}]},
+            },  # type: ignore[list-item]
+        ]
+
+        messages = agent._build_llm_messages(initial_state)
+
+        prompt = messages[1]["content"]
+        assert prompt.count("<action tool=") == 2
+        assert '<action tool="get_inventory_data">' in prompt
+        assert '<action tool="search_knowledge_base">' in prompt
+
 
 # ---------------------------------------------------------------------------
 # Act node
