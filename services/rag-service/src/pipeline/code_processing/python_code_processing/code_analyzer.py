@@ -16,6 +16,30 @@ KIND_FUNCTION = "function"
 KIND_METHOD = "method"
 KIND_UNKNOWN = "unknown"
 
+TYPING_TYPES = (
+    # typing module
+    "Optional",
+    "List",
+    "Sequence",
+    "Iterable",
+    "Set",
+    "FrozenSet",
+    "Iterator",
+    "Generator",
+    "Type",
+    "ClassVar",
+    "Deque",
+    "Queue",
+    # builtins (Python 3.9+)
+    "list",
+    "set",
+    "frozenset",
+    "tuple",
+    "deque",
+)
+
+TYPING_MAP_TYPES = ("dict", "Dict", "Mapping", "MutableMapping")
+
 
 # ------------------------------------------------------------------ #
 # CodeAnalyzer
@@ -45,6 +69,9 @@ class CodeAnalyzer(ast.NodeVisitor):
         self._self_attr_types: defaultdict[str, dict[str, str]] = defaultdict(dict)
         self._local_definitions: defaultdict[str, set[str]] = defaultdict(set)
 
+        # return-type annotations: function_name → return type string
+        self._return_types: dict[str, str] = {}
+
         self.fragment_idx: dict[str, object] = {}
         self.current_fragment_idx: object = 0
         self._class_init_fragment: dict[str, object] = {}
@@ -72,13 +99,13 @@ class CodeAnalyzer(ast.NodeVisitor):
         self._handle_function(node)
 
     def _handle_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        """Register a function/method definition and recurse into its body."""
         if not getattr(node, "name", None):
             return
 
         name = self._register_definition(node)
         self._track_init_fragment(node)
         self._register_nested_def(node)
+        self._collect_return_type(node, name)
 
         prev_function = self.current_function
         self.current_function = name
@@ -87,7 +114,6 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.current_function = prev_function
 
     def _register_definition(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-        """Add the node to ``functions`` or ``methods`` and return its qualified name."""
         name = f"{self.current_class}.{node.name}" if self.current_class else node.name
 
         if self.current_function is None:
@@ -100,42 +126,112 @@ class CodeAnalyzer(ast.NodeVisitor):
         return name
 
     def _track_init_fragment(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        """Record which fragment contains ``__init__`` for the current class."""
         if self.current_class and node.name == "__init__":
             self._class_init_fragment[self.current_class] = self.current_fragment_idx
 
     def _register_nested_def(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        """Track locally-defined names so they are excluded from call resolution."""
         if self.current_function is not None:
             self._local_definitions[self.current_function].add(node.name)
 
     def _collect_param_types(
         self, node: ast.FunctionDef | ast.AsyncFunctionDef, func_name: str
     ) -> None:
-        """Populate ``_local_vars`` with parameter types inferred from annotations."""
+        """Populate ``_local_vars`` with parameter types inferred from annotations.
+
+        Handles both positional args and keyword-only args.
+        Also handles ``self`` → current class, and ``cls`` → current class
+        (for class methods).
+        """
         args = getattr(node, "args", None)
         if not args:
             return
-        arg_list = getattr(args, "args", [])
-        if arg_list and arg_list[0].arg == "self" and self.current_class:
-            self._local_vars[func_name]["self"] = self.current_class
-        for arg in arg_list:
-            if getattr(arg, "annotation", None) and isinstance(arg.arg, str):
-                typ = ast.unparse(arg.annotation)
-                self._local_vars[func_name][arg.arg] = typ
+
+        all_args = list(getattr(args, "args", []))
+        all_args += list(getattr(args, "kwonlyargs", []))
+        all_args += list(getattr(args, "posonlyargs", []))
+        vararg = getattr(args, "vararg", None)
+        kwarg = getattr(args, "kwarg", None)
+        if vararg:
+            all_args.append(vararg)
+        if kwarg:
+            all_args.append(kwarg)
+
+        for arg in all_args:
+            if not isinstance(arg.arg, str):
+                continue
+            # self / cls → current class
+            if arg.arg in ("self", "cls") and self.current_class:
+                self._local_vars[func_name][arg.arg] = self.current_class
+                continue
+            ann = getattr(arg, "annotation", None)
+            if ann is not None:
+                typ = self._extract_simple_type(ann)
+                if typ:
+                    self._local_vars[func_name][arg.arg] = typ
+
+    def _collect_return_type(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef, func_name: str
+    ) -> None:
+        """Store the return annotation so call-sites can use it for type inference."""
+        ret = getattr(node, "returns", None)
+        if ret is not None:
+            typ = self._extract_simple_type(ret)
+            if typ:
+                self._return_types[func_name] = typ
+
+    @staticmethod
+    def _extract_simple_type(ann: ast.expr) -> str | None:
+        """Extract a plain class name from a type annotation node.
+
+        Handles: ``Name``, ``Attribute``, ``Subscript`` (e.g. ``list[X]`` → ``X``),
+        ``BinOp`` (``X | Y`` → first non-None branch), ``Constant`` (forward ref).
+        Returns ``None`` when the type cannot be reduced to a single class name.
+        """
+        if isinstance(ann, ast.Name):
+            return ann.id if ann.id not in ("None", "Any", "Optional") else None
+        if isinstance(ann, ast.Constant) and isinstance(ann.value, str):
+            # forward reference string
+            return ann.value.strip("'\"") or None
+        if isinstance(ann, ast.Attribute):
+            # e.g. module.ClassName — only return the attribute part when the
+            # module is NOT a known external library (nx.DiGraph → skip,
+            # but MyModule.MyClass → keep).
+            if isinstance(ann.value, ast.Name) and ann.value.id in EXTERNAL_MODULES:
+                return None
+            return ann.attr
+        if isinstance(ann, ast.Subscript):
+            # Single-type containers: unwrap and recurse into the inner type.
+            # Covers both uppercase typing aliases (List, Optional, …) and
+            # lowercase built-in generics (list, set, frozenset, … — PEP 585).
+            if isinstance(ann.value, ast.Name) and ann.value.id in TYPING_TYPES:
+                return CodeAnalyzer._extract_simple_type(ann.slice)
+            # dict / Dict — try the value type (second element)
+            if isinstance(ann.value, ast.Name) and ann.value.id in TYPING_MAP_TYPES:
+                slice_node = ann.slice
+                # In Python 3.9+ slice is a Tuple node for dict[K, V]
+                if isinstance(slice_node, ast.Tuple) and len(slice_node.elts) == 2:
+                    return CodeAnalyzer._extract_simple_type(slice_node.elts[1])
+                return None
+            return None
+        if isinstance(ann, ast.BinOp) and isinstance(ann.op, ast.BitOr):
+            # X | None  →  X
+            left = CodeAnalyzer._extract_simple_type(ann.left)
+            right = CodeAnalyzer._extract_simple_type(ann.right)
+            return left or right
+        return None
 
     # ------------------------------------------------------------------ #
     # Variable type tracking
     # ------------------------------------------------------------------ #
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        """Record annotated variable types at local or module scope."""
         if isinstance(node.target, ast.Name):
-            typ = ast.unparse(node.annotation)
-            if self.current_function:
-                self._local_vars[self.current_function][node.target.id] = typ
-            else:
-                self.var_types[node.target.id] = typ
+            typ = self._extract_simple_type(node.annotation)
+            if typ:
+                if self.current_function:
+                    self._local_vars[self.current_function][node.target.id] = typ
+                else:
+                    self.var_types[node.target.id] = typ
         self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign) -> None:
@@ -144,7 +240,6 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _infer_assignment(self, target: ast.expr, value: ast.expr) -> None:
-        """Infer and store the type of a local variable or ``self`` attribute from its RHS."""
         typ = self._infer_type_from_expr(value)
         if not typ:
             return
@@ -160,18 +255,46 @@ class CodeAnalyzer(ast.NodeVisitor):
             self._self_attr_types[self.current_class][target.attr] = typ
 
     def _infer_type_from_expr(self, node: ast.expr) -> str | None:
-        """Return the class name when *node* is a constructor call, else ``None``."""
+        """Return a class name when *node* produces a typed value.
+
+        Handles:
+        - Constructor calls:  ``Foo(...)`` → ``"Foo"``
+        - Static / class calls: ``Foo.bar(...)`` → uses return annotation of ``Foo.bar``
+        - Plain function calls: ``foo(...)`` → uses return annotation of ``foo``
+        """
         if not isinstance(node, ast.Call):
             return None
+
         func = node.func
+
+        # Plain constructor: Foo(...)
         if isinstance(func, ast.Name):
-            return func.id
-        if (
-            isinstance(func, ast.Attribute)
-            and isinstance(func.value, ast.Name)
-            and func.value.id not in EXTERNAL_MODULES
-        ):
-            return func.attr
+            if func.id not in EXTERNAL_MODULES:
+                # Could be a constructor or a plain function with known return type
+                ret = self._return_types.get(func.id)
+                return ret if ret else func.id  # optimistic: assume constructor
+            return None
+
+        # Attribute call: obj.method(...) or ClassName.method(...)
+        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+            receiver = func.value.id
+            method = func.attr
+            if receiver in EXTERNAL_MODULES:
+                return None
+            # Try qualified name first
+            qualified = f"{receiver}.{method}"
+            ret = self._return_types.get(qualified)
+            if ret:
+                return ret
+            # Also try resolving receiver as a type variable
+            typ = self._resolve_var_type(receiver)
+            if typ:
+                qualified2 = f"{typ}.{method}"
+                ret2 = self._return_types.get(qualified2)
+                if ret2:
+                    return ret2
+            return None
+
         return None
 
     # ------------------------------------------------------------------ #
@@ -186,7 +309,6 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _resolve_call(self, node: ast.expr) -> tuple[str | None, str]:
-        """Return ``(call_name, kind)`` for a call target node."""
         if isinstance(node, ast.Name):
             return node.id, "bare"
         if isinstance(node, ast.Attribute):
@@ -194,16 +316,11 @@ class CodeAnalyzer(ast.NodeVisitor):
         return None, KIND_UNKNOWN
 
     def _resolve_attribute_call(self, node: ast.Attribute) -> tuple[str | None, str]:
-        """Resolve a dotted call expression to ``(qualified_name_or_method, KIND_METHOD)``.
+        """Resolve a dotted call expression.
 
-        Handles three shapes:
-
-        - ``obj.method()``       — qualifies with the inferred type of ``obj`` when known.
-        - ``self.attr.method()`` — qualifies with the stored type of the ``self`` attribute.
-        - ``a.b.c.method()``     — returns bare ``method`` name (root checked against external
-                                                                                        modules).
-
-        Returns ``(None, KIND_UNKNOWN)`` when the receiver is an external module.
+        New: recognises ``ClassName.method(...)`` as a static/class method call
+        even when no instance variable is present (receiver matches a known class
+        name directly).
         """
         method = node.attr
 
@@ -211,8 +328,17 @@ class CodeAnalyzer(ast.NodeVisitor):
             obj = node.value.id
             if obj in EXTERNAL_MODULES:
                 return None, KIND_UNKNOWN
+
+            # Check if `obj` is directly a known class name → static call
+            # We don't have access to self.classes here yet (analyzer builds
+            # incrementally), but we can mark it as KIND_METHOD with a qualified
+            # name and let build_graph validate existence.
             typ = self._resolve_var_type(obj)
-            return (f"{typ}.{method}" if typ else method), KIND_METHOD
+            if typ:
+                return f"{typ}.{method}", KIND_METHOD
+            # No type info for `obj` — it might still be a class name (static call).
+            # Emit a qualified name; build_graph will verify.
+            return f"{obj}.{method}", KIND_METHOD
 
         if isinstance(node.value, ast.Attribute):
             inner = node.value
@@ -235,7 +361,6 @@ class CodeAnalyzer(ast.NodeVisitor):
     # ------------------------------------------------------------------ #
 
     def _resolve_var_type(self, var_name: str) -> str | None:
-        """Look up the type of *var_name*, checking local scope before module scope."""
         if self.current_function:
             local = self._local_vars.get(self.current_function, {})
             if var_name in local:
@@ -243,7 +368,6 @@ class CodeAnalyzer(ast.NodeVisitor):
         return self.var_types.get(var_name)
 
     def _get_chain_root(self, node: ast.expr) -> str | None:
-        """Return the leftmost name in a dotted chain (``a.b.c`` → ``"a"``), or ``None``."""
         if isinstance(node, ast.Name):
             return node.id
         if isinstance(node, ast.Attribute):
@@ -257,7 +381,6 @@ class CodeAnalyzer(ast.NodeVisitor):
 
 
 def _build_short_name_index(definitions: set[str]) -> defaultdict[str, list[str]]:
-    """Map unqualified names to all fully-qualified definitions that share that short name."""
     index: defaultdict[str, list[str]] = defaultdict(list)
     for d in definitions:
         index[d.split(".")[-1]].append(d)
@@ -270,11 +393,6 @@ def _resolve_bare(
     analyzer: CodeAnalyzer,
     index: defaultdict[str, list[str]],
 ) -> list[tuple[str, str]]:
-    """Resolve an unqualified call name to ``(target, kind)`` pairs.
-
-    Resolution priority: locally-defined names are skipped, then classes,
-    then functions, then methods (only when unambiguous).
-    """
     if short in analyzer._local_definitions.get(caller, set()):
         return []
 
@@ -297,18 +415,44 @@ def _resolve_qualified(
     call_name: str,
     definitions: set[str],
     index: defaultdict[str, list[str]],
+    classes: set[str],
 ) -> list[tuple[str, str]]:
-    """Resolve a ``Class.method`` call to ``(target, KIND_METHOD)`` pairs.
+    """Resolve a ``Class.method`` or ``instance_type.method`` call.
 
-    Tries exact match first, then candidates filtered by class prefix,
-    then falls back to any single unambiguous match on the method name.
+    Returns ``(target, kind)`` pairs.  ``kind`` is ``KIND_CLASS_INIT`` when the
+    call resolves to a class constructor (i.e. ``Foo.new`` style isn't used in
+    Python, but ``Factor.prod`` may be a classmethod that returns a ``Factor``),
+    otherwise ``KIND_METHOD``.
+
+    New: if the left-hand side of the dot is a known class name and the right-hand
+    side matches a method in that class, this is treated as a static/class-method
+    call and always emits an edge (bias toward false positive over false negative).
     """
     cls_name, method_name = call_name.split(".", 1)
+
+    # Exact qualified match
     if call_name in definitions:
         return [(call_name, KIND_METHOD)]
+
+    # Search by class prefix
     by_class = [d for d in index.get(method_name, []) if d.split(".")[0] == cls_name]
     if by_class:
         return [(c, KIND_METHOD) for c in by_class]
+
+    # If cls_name is a known class, emit a tentative edge even without a
+    # confirmed method — the method may live in an incomplete fragment.
+    # This satisfies "better false positive than false negative."
+    if cls_name in classes:
+        # Still verify that *something* with that method name exists anywhere
+        all_method_candidates = index.get(method_name, [])
+        if all_method_candidates:
+            return [(c, KIND_METHOD) for c in all_method_candidates]
+        # No method by that name anywhere — still emit but mark as unknown
+        # so callers can decide.  We use the original qualified form so
+        # build_code_schema can still cross-reference.
+        return [(call_name, KIND_METHOD)]
+
+    # Fallback: single unambiguous match on method name
     all_cands = index.get(method_name, [])
     if len(all_cands) == 1:
         return [(all_cands[0], KIND_METHOD)]
@@ -316,10 +460,17 @@ def _resolve_qualified(
 
 
 def build_graph(analyzer: CodeAnalyzer) -> dict[str, dict[str, str]]:
-    """Build a dependency graph ``{caller: {target: kind}}`` from collected calls."""
+    """Build a dependency graph ``{caller: {target: kind}}`` from collected calls.
+
+    Validation pass:
+    - Edges whose target is not in *any* known definition set are kept only when
+      the receiver is a known class (static-call heuristic) — bias toward recall.
+    - Unknown-kind edges are downgraded, not dropped.
+    """
     graph: defaultdict[str, dict[str, str]] = defaultdict(dict)
 
-    definitions: set[str] = set(analyzer.functions) | set(analyzer.methods) | set(analyzer.classes)
+    all_classes: set[str] = set(analyzer.classes)
+    definitions: set[str] = set(analyzer.functions) | set(analyzer.methods) | all_classes
     index = _build_short_name_index(definitions)
 
     for caller, calls in analyzer.calls.items():
@@ -327,9 +478,15 @@ def build_graph(analyzer: CodeAnalyzer) -> dict[str, dict[str, str]]:
             parts = call_name.split(".")
 
             if len(parts) == 2:
-                for target, kind in _resolve_qualified(caller, call_name, definitions, index):
+                resolved = _resolve_qualified(caller, call_name, definitions, index, all_classes)
+                for target, kind in resolved:
                     if graph[caller].get(target) in (None, KIND_UNKNOWN):
-                        graph[caller][target] = kind
+                        # Only keep if target is known OR if receiver is a known class
+                        receiver = parts[0]
+                        target_known = target in definitions
+                        receiver_is_class = receiver in all_classes
+                        if target_known or receiver_is_class:
+                            graph[caller][target] = kind
 
             elif raw_kind == "bare":
                 for target, kind in _resolve_bare(caller, parts[-1], analyzer, index):
@@ -359,26 +516,18 @@ def build_graph(analyzer: CodeAnalyzer) -> dict[str, dict[str, str]]:
 def analyze_fragments(
     fragments: Sequence[object],
 ) -> tuple[CodeAnalyzer, dict[str, dict[str, str]]]:
-    """Analyze a sequence of code fragments and return ``(analyzer, graph)``.
-
-    Each item may be a plain Python source string, or a dict with at least
-    a ``"code"`` key and an optional ``"algorithm_number"`` used as the
-    fragment index.
-    """
+    """Analyze a sequence of code fragments and return ``(analyzer, graph)``."""
     analyzer = CodeAnalyzer()
 
     for idx, item in enumerate(fragments):
-        try:
-            if isinstance(item, dict):
-                code = item.get("code", "")
-                analyzer.current_fragment_idx = item.get("algorithm_number", idx)
-            else:
-                code = str(item)
-                analyzer.current_fragment_idx = idx
+        if isinstance(item, dict):
+            code = item.get("code", "")
+            analyzer.current_fragment_idx = item.get("algorithm_number", idx)
+        else:
+            code = str(item)
+            analyzer.current_fragment_idx = idx
 
-            analyzer.visit(ast.parse(code))
-        except SyntaxError:
-            pass
+        analyzer.visit(ast.parse(code))
 
     return analyzer, build_graph(analyzer)
 

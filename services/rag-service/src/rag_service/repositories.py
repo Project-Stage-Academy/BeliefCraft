@@ -20,7 +20,6 @@ from .constants import (
     ENTITY_TYPE_TO_CHUNK_TYPE,
     REFERENCE_TYPE_MAP,
     TRAVERSE_TYPE_TO_REFERENCE_FIELD,
-    ChunkCodeRef,
     CodeEntityRef,
 )
 from .models import Document, EntityType, MetadataFilter, MetadataFilterOperator, MetadataFilters
@@ -573,16 +572,9 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             return WeaviateCodeDefinitionProcessor.restore_code_fragment(docs)
         return ""
 
-    def _build_nested_code_def_refs(self, max_depth: int = 10) -> list[QueryReference]:
-        """
-        Build recursive QueryReference objects for the three nested
-        code-definition cross-reference fields.
-
-        ``initialized_classes`` is always a leaf. ``referenced_methods`` and
-        ``referenced_functions`` are expanded up to *max_depth* levels.
-        """
+    def _build_nested_code_def_refs(self, max_depth: int = 5) -> list[QueryReference]:
         fields = (
-            CodeEntityRef.INITIALIZED_CLASSES,
+            CodeEntityRef.REFERENCED_CLASSES,
             CodeEntityRef.REFERENCED_METHODS,
             CodeEntityRef.REFERENCED_FUNCTIONS,
         )
@@ -597,11 +589,8 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         ]
 
     def _sub_refs_for_code_def_field(self, field: str, max_depth: int) -> list[QueryReference]:
-        """Return sub-references for one code-definition reference field.
-
-        Leaf fields (``initialized_classes`` or exhausted ``max_depth``) return an empty list.
-        """
-        if field == CodeEntityRef.INITIALIZED_CLASSES or max_depth == 0:
+        # CodeClass тепер теж має залежності — більше не є leaf
+        if max_depth == 0:
             return []
         sub_refs = self._build_nested_code_def_refs(max_depth - 1)
         if field == CodeEntityRef.REFERENCED_METHODS:
@@ -615,14 +604,13 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """
         return [
             QueryReference(
-                link_on=ChunkCodeRef.REFERENCED_CLASSES,
+                link_on=CodeEntityRef.REFERENCED_CLASSES,
                 return_properties=True,
-                return_references=[
-                    QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)
-                ],
+                return_references=self._build_nested_code_def_refs()
+                + [QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)],
             ),
             QueryReference(
-                link_on=ChunkCodeRef.REFERENCED_METHODS,
+                link_on=CodeEntityRef.REFERENCED_METHODS,
                 return_properties=True,
                 return_references=self._build_nested_code_def_refs()
                 + [
@@ -631,7 +619,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
                 ],
             ),
             QueryReference(
-                link_on=ChunkCodeRef.REFERENCED_FUNCTIONS,
+                link_on=CodeEntityRef.REFERENCED_FUNCTIONS,
                 return_properties=True,
                 return_references=self._build_nested_code_def_refs()
                 + [QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)],

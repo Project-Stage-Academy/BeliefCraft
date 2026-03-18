@@ -10,7 +10,7 @@ we only collect calls and resolve them against an already-known schema.
 
 Result:
   {
-    "initialized_classes":  ["cls:X", ...],
+    "referenced_classes":   ["cls:X", ...],
     "referenced_functions": ["fn:foo", ...],
     "referenced_methods":   ["mth:Bar.baz", ...],
   }
@@ -23,7 +23,12 @@ from dataclasses import dataclass, field
 
 from common.logging import get_logger
 from pipeline.code_processing.python_code_processing.build_code_schema import build_code_schema
-from pipeline.code_processing.python_code_processing.constants import EXTERNAL_MODULES
+from pipeline.code_processing.python_code_processing.code_analyzer import (
+    KIND_CLASS_INIT,
+    KIND_FUNCTION,
+    KIND_METHOD,
+    analyze_fragments,
+)
 
 logger = get_logger(__name__)
 
@@ -57,8 +62,10 @@ class SchemaIndex:
         classes: set[str] = {str(c["name"]) for c in schema["classes"]}
         functions: set[str] = {str(f["name"]) for f in schema["functions"]}
         methods: set[str] = {str(m["qualified_name"]) for m in schema["methods"]}
-        method_index = _build_method_index(methods)
-        return cls(classes=classes, functions=functions, methods=methods, method_index=method_index)
+        index: dict[str, list[str]] = defaultdict(list)
+        for m in methods:
+            index[m.split(".")[-1]].append(m)
+        return cls(classes=classes, functions=functions, methods=methods, method_index=index)
 
 
 # ------------------------------------------------------------------ #
@@ -67,7 +74,6 @@ class SchemaIndex:
 
 
 def _is_code_line(line: str) -> bool:
-    """Heuristic: does this line look like Python code rather than prose."""
     stripped = line.strip()
     if not stripped:
         return False
@@ -81,19 +87,10 @@ def _is_code_line(line: str) -> bool:
 
 
 def _extract_fenced_blocks(text: str) -> list[str]:
-    """Return the contents of fenced ```python blocks found in the text."""
     return [m.group(1) for m in _CODE_BLOCK_RE.finditer(text)]
 
 
-def _strip_non_code(text: str) -> str:
-    """Remove fenced code and math blocks/inline math from text."""
-    text = _CODE_BLOCK_RE.sub("\n", text)
-    text = _MATH_BLOCK_RE.sub(" ", text)
-    return _MATH_INLINE_RE.sub(" ", text)
-
-
 def _extract_consecutive_code_lines(text: str) -> list[str]:
-    """Collect consecutive lines that look like code into code blocks."""
     blocks, current = [], []
     for line in text.splitlines():
         if _is_code_line(line):
@@ -108,32 +105,38 @@ def _extract_consecutive_code_lines(text: str) -> list[str]:
 
 
 def _extract_inline_assignments(text: str) -> list[str]:
-    """Extract inline 'var = func(' patterns from prose and return minimal valid snippets."""
     return [f"{m.group(1)} = {m.group(2)}()" for m in _INLINE_ASSIGN_RE.finditer(text)]
 
 
 def extract_code_blocks(text: str) -> list[str]:
     """
-    Extract Python code from text in three passes:
+    Extract Python code from text in up to four passes:
+    0. Whole text parses as valid Python → return it directly.
     1. Explicit ```python ... ``` fenced blocks.
     2. Consecutive lines outside blocks that parse as valid Python.
     3. Inline 'var = func(' patterns in prose.
     """
+    # Pass 0: entire text is valid Python (plain algorithm chunks)
+    try:
+        ast.parse(text)
+        return [text]
+    except SyntaxError:
+        pass
+
     blocks: list[str] = []
 
     # Pass 1: fenced python blocks
     fenced = _extract_fenced_blocks(text)
     blocks.extend(fenced)
 
-    # Remove fenced blocks from the working text to avoid overlap with later passes
-    working = _CODE_BLOCK_RE.sub("\n", text)
+    # if fenced blocks found — skip consecutive/inline to avoid duplication
+    if fenced:
+        return blocks
 
-    # Pass 2: consecutive lines that look like code in the remaining text
+    working = _CODE_BLOCK_RE.sub("\n", text)
     consecutive = _extract_consecutive_code_lines(working)
     blocks.extend(consecutive)
 
-    # Remove the consecutive code lines from the working text so inline extraction
-    # won't pick up the same code again. We remove by line (matching stripped form).
     if consecutive:
         code_line_set = {line for block in consecutive for line in block.splitlines()}
         new_lines: list[str] = []
@@ -144,7 +147,6 @@ def extract_code_blocks(text: str) -> list[str]:
                 new_lines.append(line)
         working = "\n".join(new_lines)
 
-    # Pass 3: inline assignments from the remaining prose-only lines
     prose_lines = [line for line in working.splitlines() if not _is_code_line(line)]
     inline = _extract_inline_assignments("\n".join(prose_lines))
     if inline:
@@ -154,185 +156,95 @@ def extract_code_blocks(text: str) -> list[str]:
 
 
 # ------------------------------------------------------------------ #
-# Lightweight call collector
+# Core resolution
 # ------------------------------------------------------------------ #
 
 
-class _CallCollector(ast.NodeVisitor):
-    """Traverse an AST and collect all function/method/class calls.
-
-    Does not register any definitions — only collects call sites for later
-    resolution against a known schema.
-    """
-
-    def __init__(self, local_types: dict[str, str] | None = None):
-        # Maps variable name -> inferred class name, e.g. {"foo": "Foo"} after `foo = Foo()`.
-        self.local_types: dict[str, str] = local_types or {}
-        self.calls: list[tuple[str, str]] = []
-
-    def visit_Assign(self, node: ast.Assign) -> None:
-        """Record the inferred type of a variable when it is assigned from a constructor call."""
-        if len(node.targets) == 1:
-            target = node.targets[0]
-            if isinstance(target, ast.Name):
-                typ = self._infer_type(node.value)
-                if typ:
-                    self.local_types[target.id] = typ
-        self.generic_visit(node)
-
-    def visit_Call(self, node: ast.Call) -> None:
-        """Collect (name, kind) for every Call node in the tree."""
-        name, kind = self._resolve(node.func)
-        if name:
-            self.calls.append((name, kind))
-        self.generic_visit(node)
-
-    def _infer_type(self, node: ast.expr) -> str | None:
-        """Return the called class name for a bare constructor call, e.g. ``Foo()`` → ``'Foo'``."""
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            return node.func.id
-        return None
-
-    def _resolve(self, node: ast.expr) -> tuple[str | None, str]:
-        """Resolve a call target expression to a (name, kind) pair.
-
-        kind is one of ``"bare"`` (plain name) or ``"method"`` (attribute access).
-        Returns ``(None, "unknown")`` for unresolvable nodes.
-        """
-        if isinstance(node, ast.Name):
-            return node.id, "bare"
-        if isinstance(node, ast.Attribute):
-            return self._resolve_attribute(node)
-        return None, "unknown"
-
-    def _resolve_attribute(self, node: ast.Attribute) -> tuple[str | None, str]:
-        """Resolve an attribute call to a method name, qualifying it when the receiver type is known
-
-        Calls on known external modules (e.g. ``np.array``) are ignored and
-        return ``(None, "unknown")``.
-
-        Examples::
-
-            foo.bar()          # local_types has no entry for foo  →  ("bar",       "method")
-            foo.bar()          # local_types["foo"] == "Foo"       →  ("Foo.bar",   "method")
-            np.array()         # np in EXTERNAL_MODULES            →  (None,        "unknown")
-        """
-        method = node.attr
-        if isinstance(node.value, ast.Name):
-            obj = node.value.id
-            if obj in EXTERNAL_MODULES:
-                return None, "unknown"
-            typ = self.local_types.get(obj)
-            return (f"{typ}.{method}" if typ else method), "method"
-        root = self._chain_root(node.value)
-        if root in EXTERNAL_MODULES:
-            return None, "unknown"
-        return method, "method"
-
-    def _chain_root(self, node: ast.expr) -> str | None:
-        """Return the leftmost name in a dotted chain (``a.b.c`` → ``"a"``), or ``None``."""
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute):
-            return self._chain_root(node.value)
-        return None
-
-
-# ------------------------------------------------------------------ #
-# Resolve calls against known schema
-# ------------------------------------------------------------------ #
-
-
-def _build_method_index(known_methods: set[str]) -> dict[str, list[str]]:
-    """Build an index mapping unqualified method names to fully-qualified candidates.
-
-    Example: ``{"baz": ["Bar.baz", "Qux.baz"]}``
-    """
-    index: dict[str, list[str]] = defaultdict(list)
-    for m in known_methods:
-        index[str(m).split(".")[-1]].append(str(m))
-    return index
-
-
-def _resolve_dotted_method_call(call_name: str, index: SchemaIndex) -> list[str]:
-    """Resolve a ``Class.method`` call string to a list of matching ``mth:`` refs.
-
-    First tries an exact match in the schema; if that fails, falls back to
-    candidates where the class name prefix matches.
-    """
-    cls_name, method_name = call_name.split(".", 1)
-    if call_name in index.methods:
-        return [f"mth:{call_name}"]
-    candidates = [m for m in index.method_index.get(method_name, []) if m.split(".")[0] == cls_name]
-    return [f"mth:{c}" for c in candidates]
-
-
-def _resolve_unqualified_call(
-    call_name: str,
-    kind: str,
+def _refs_from_blocks(
+    blocks: list[str],
     index: SchemaIndex,
-    local_definitions: set[str],
-) -> str | None:
-    """Map a single unqualified call to a schema ref string, or ``None`` if unrecognised.
-
-    Resolution priority:
-    1. Skip names defined locally in the same code block.
-    2. Class instantiation  → ``"cls:<name>"``
-    3. Module-level function → ``"fn:<name>"``
-    4. Unqualified method (``kind == "method"``) with exactly one candidate → ``"mth:<Class.name>"``
-
-    Returns ``None`` when the call cannot be mapped to any known definition.
-    """
-    if call_name in local_definitions:
-        return None
-    if call_name in index.classes:
-        return f"cls:{call_name}"
-    if call_name in index.functions:
-        return f"fn:{call_name}"
-    if kind == "method":
-        candidates = index.method_index.get(call_name, [])
-        if len(candidates) == 1:
-            return f"mth:{candidates[0]}"
-    return None
-
-
-def _resolve_calls(
-    calls: list[tuple[str, str]],
-    index: SchemaIndex,
-    local_definitions: set[str],
 ) -> dict[str, list[str]]:
-    """Resolve collected (name, kind) call pairs against the known schema.
+    """Analyze code blocks and resolve calls against the known schema index.
 
-    Returns a dict with three sorted lists of ref strings::
+    Uses ``analyze_fragments`` so type annotation resolution, static calls,
+    and base class detection are identical to ``build_code_schema``.
 
-        {
-            "initialized_classes":  ["cls:Foo", ...],
-            "referenced_functions": ["fn:bar", ...],
-            "referenced_methods":   ["mth:Baz.qux", ...],
-        }
+    Resolution has two passes:
+    1. Graph edges (inter-local calls already resolved by build_graph).
+    2. Raw calls from analyzer.calls resolved directly against the index
+       (catches calls to external definitions not present in the blocks).
     """
-    inits: set[str] = set()
-    funcs: set[str] = set()
-    meths: set[str] = set()
+    analyzer, graph = analyze_fragments(blocks)
 
-    for call_name, kind in calls:
-        if "." in call_name:
-            meths.update(_resolve_dotted_method_call(call_name, index))
-        else:
-            ref = _resolve_unqualified_call(call_name, kind, index, local_definitions)
-            if ref is None:
-                pass
-            elif ref.startswith("cls:"):
-                inits.add(ref)
-            elif ref.startswith("fn:"):
-                funcs.add(ref)
-            elif ref.startswith("mth:"):
-                meths.add(ref)
+    local_classes: set[str] = set(analyzer.classes)
+    local_functions: set[str] = set(analyzer.functions)
+    local_methods: set[str] = set(analyzer.methods)
+
+    referenced_classes: set[str] = set()
+    referenced_functions: set[str] = set()
+    referenced_methods: set[str] = set()
+
+    # Pass 1: graph edges between local definitions that point to external schema entries
+    for edges in graph.values():
+        for target, kind in edges.items():
+            if kind == KIND_CLASS_INIT:
+                if target not in local_classes and target in index.classes:
+                    referenced_classes.add(f"cls:{target}")
+            elif kind == KIND_FUNCTION:
+                if target not in local_functions and target in index.functions:
+                    referenced_functions.add(f"fn:{target}")
+            elif kind == KIND_METHOD and target not in local_methods and target in index.methods:
+                referenced_methods.add(f"mth:{target}")
+
+    # Pass 2: raw calls resolved against the external schema index
+    for calls in analyzer.calls.values():
+        for call_name, _argc, raw_kind in calls:
+            parts = call_name.split(".")
+            if len(parts) == 2:
+                # Class.method or resolved_type.method
+                cls_name, method_name = parts
+                qualified = call_name
+                if qualified in index.methods and qualified not in local_methods:
+                    referenced_methods.add(f"mth:{qualified}")
+                else:
+                    for candidate in index.method_index.get(method_name, []):
+                        if candidate not in local_methods:
+                            referenced_methods.add(f"mth:{candidate}")
+            else:
+                short = parts[-1]
+                if short in local_classes or short in local_functions:
+                    continue
+                if short in index.classes:
+                    referenced_classes.add(f"cls:{short}")
+                elif short in index.functions:
+                    referenced_functions.add(f"fn:{short}")
+                elif raw_kind == "method":
+                    for candidate in index.method_index.get(short, []):
+                        if candidate not in local_methods:
+                            referenced_methods.add(f"mth:{candidate}")
+
+    # Pass 3: base class inheritance
+    for cls_node in analyzer.classes.values():
+        for base in cls_node.bases:
+            if isinstance(base, ast.Name) and base.id in index.classes:
+                referenced_classes.add(f"cls:{base.id}")
+
+    # Pass 4: parameter type annotations and return types
+    for local_vars in analyzer._local_vars.values():
+        for var, typ in local_vars.items():
+            if var in ("self", "cls"):
+                continue
+            if typ in index.classes and typ not in local_classes:
+                referenced_classes.add(f"cls:{typ}")
+
+    for ret_type in analyzer._return_types.values():
+        if ret_type in index.classes and ret_type not in local_classes:
+            referenced_classes.add(f"cls:{ret_type}")
 
     return {
-        "initialized_classes": sorted(inits),
-        "referenced_functions": sorted(funcs),
-        "referenced_methods": sorted(meths),
+        "referenced_classes": sorted(referenced_classes),
+        "referenced_functions": sorted(referenced_functions),
+        "referenced_methods": sorted(referenced_methods),
     }
 
 
@@ -352,22 +264,8 @@ def extract_code_refs_with_index(
     """
     blocks = extract_code_blocks(text)
     if not blocks:
-        return {"initialized_classes": [], "referenced_functions": [], "referenced_methods": []}
-
-    collector = _CallCollector()
-    local_definitions: set[str] = set()
-
-    for block in blocks:
-        try:
-            tree = ast.parse(block)
-        except SyntaxError:
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                local_definitions.add(node.name)
-        collector.visit(tree)
-
-    return _resolve_calls(collector.calls, index, local_definitions)
+        return {"referenced_classes": [], "referenced_functions": [], "referenced_methods": []}
+    return _refs_from_blocks(blocks, index)
 
 
 def extract_code_refs(
@@ -379,15 +277,6 @@ def extract_code_refs(
     (prose with embedded ``python`` code blocks). Builds a :class:`SchemaIndex`
     from *schema* on every call. When processing many chunks against the same
     schema, use :func:`extract_code_refs_with_index` with a shared index instead.
-
-    Args:
-        text:   Python source string or prose with optional ``python`` code blocks.
-        schema: Result of ``build_code_schema()`` —
-                ``{"classes": [...], "methods": [...], "functions": [...]}``.
-
-    Returns:
-        ``{"initialized_classes": [...], "referenced_functions": [...],
-        "referenced_methods": [...]}``.
     """
     return extract_code_refs_with_index(text, SchemaIndex.from_schema(schema))
 
@@ -423,6 +312,6 @@ if __name__ == "__main__":
         if any(refs[k] for k in refs):
             logger.info("Example: %s", example_number)
             logger.info("  Blocks found:           %d", len(extract_code_blocks(text)))
-            logger.info("  initialized_classes:    %s", refs["initialized_classes"])
+            logger.info("  referenced_classes:     %s", refs["referenced_classes"])
             logger.info("  referenced_functions:   %s", refs["referenced_functions"])
             logger.info("  referenced_methods:     %s", refs["referenced_methods"])

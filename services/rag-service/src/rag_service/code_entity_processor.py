@@ -2,12 +2,10 @@ from typing import Any
 
 from rag_service.constants import ALGORITHM_REF_FIELD
 
-from .constants import CLASS_REF_FIELD, ChunkCodeRef, CodeEntityRef
+from .constants import CLASS_REF_FIELD, CodeEntityRef
 from .models import Document
 
-_CODE_DEF_EXPANSION_FIELDS = [option.value for option in ChunkCodeRef]
-
-_CODE_DEF_NESTED_FIELDS = [option.value for option in CodeEntityRef]
+_CODE_DEF_FIELDS = [option.value for option in CodeEntityRef]
 
 
 class WeaviateCodeDefinitionProcessor:
@@ -49,7 +47,7 @@ class WeaviateCodeDefinitionProcessor:
         documents: list[Document] = []
 
         for obj in weaviate_objects:
-            for field in _CODE_DEF_EXPANSION_FIELDS:
+            for field in _CODE_DEF_FIELDS:
                 if not obj.references:
                     continue
                 field_ref = obj.references.get(field)
@@ -79,7 +77,8 @@ class WeaviateCodeDefinitionProcessor:
         seen_uuids.add(obj.uuid)
 
         if (
-            ALGORITHM_REF_FIELD in obj.references
+            obj.references
+            and ALGORITHM_REF_FIELD in obj.references
             and len(obj.references[ALGORITHM_REF_FIELD].objects) > 0
             and str(obj.references[ALGORITHM_REF_FIELD].objects[0].uuid) in root_document_ids
         ):
@@ -88,10 +87,8 @@ class WeaviateCodeDefinitionProcessor:
         collection: str | None = getattr(obj, "collection", None)
         doc, class_name = WeaviateCodeDefinitionProcessor._to_document(obj, collection)
 
-        # Post-order: visit dependencies BEFORE appending self.
-        # CodeClass is a leaf — its methods point to it, not the reverse.
-        if collection != "CodeClass" and obj.references is not None:
-            for field in _CODE_DEF_NESTED_FIELDS:
+        if obj.references is not None:
+            for field in _CODE_DEF_FIELDS:
                 nested_ref = obj.references.get(field)
                 if not nested_ref:
                     continue
@@ -168,15 +165,8 @@ class WeaviateCodeDefinitionProcessor:
         ):
             return
 
-        seen_uuids.add(class_obj.uuid)
-        cls_props: dict[str, Any] = dict(class_obj.properties or {})
-        cls_content = cls_props.pop("content", "")
-        documents.append(
-            Document(
-                id=str(class_obj.uuid),
-                content=cls_content,
-                metadata={**cls_props, "collection": "CodeClass"},
-            )
+        WeaviateCodeDefinitionProcessor._traverse(
+            class_obj, seen_uuids, root_document_ids, documents
         )
 
     @staticmethod

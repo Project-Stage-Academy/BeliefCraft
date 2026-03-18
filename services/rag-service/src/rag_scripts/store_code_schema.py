@@ -63,7 +63,6 @@ from rag_service.constants import (
     CODE_FUNCTION_COLLECTION,
     CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
-    ChunkCodeRef,
     CodeEntityRef,
 )
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
@@ -140,18 +139,21 @@ def _common_properties(extra: list[Property] | None = None) -> list[Property]:
 
 
 def _add_missing_refs(collection: Collection, refs: list[tuple[str, str]]) -> None:
-    """Add reference properties to *collection* that are not yet configured."""
     existing = _existing_reference_names(collection)
+    logger.info("Collection %s existing refs: %s", collection.name, existing)
     for ref_name, target in refs:
         if ref_name not in existing:
+            logger.info("Adding ref %s -> %s to %s", ref_name, target, collection.name)
             collection.config.add_reference(
                 ReferenceProperty(name=ref_name, target_collection=target)
             )
+        else:
+            logger.info("Ref %s already exists on %s", ref_name, collection.name)
 
 
 # Cross-collection references shared by both CodeMethod and CodeFunction.
 _CROSS_REFS = [
-    (CodeEntityRef.INITIALIZED_CLASSES.value, CODE_CLASS_COLLECTION),
+    (CodeEntityRef.REFERENCED_CLASSES.value, CODE_CLASS_COLLECTION),
     (CodeEntityRef.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
     (CodeEntityRef.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
 ]
@@ -201,7 +203,7 @@ def setup_collections(
     )
 
     logger.info("Adding cross-collection references …")
-    _add_missing_refs(cls_col, [_ALGORITHM_REF])
+    _add_missing_refs(cls_col, _CROSS_REFS + [_ALGORITHM_REF])
     _add_missing_refs(mth_col, _CROSS_REFS + [_ALGORITHM_REF])
     _add_missing_refs(fn_col, _CROSS_REFS + [_ALGORITHM_REF])
 
@@ -230,8 +232,8 @@ def _cross_refs(from_uuid: str, item: dict[str, Any]) -> RefList:
     refs.extend(
         _id_list_refs(
             from_uuid,
-            CodeEntityRef.INITIALIZED_CLASSES.value,
-            item.get(CodeEntityRef.INITIALIZED_CLASSES.value, []),
+            CodeEntityRef.REFERENCED_CLASSES.value,
+            item.get(CodeEntityRef.REFERENCED_CLASSES.value, []),
         )
     )
     refs.extend(
@@ -271,7 +273,6 @@ def _algorithm_ref(from_uuid: str, entity: dict[str, Any]) -> RefList:
 
 
 def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> RefList:
-    """Batch-insert class objects and return their ``algorithm_ref`` references."""
     with collection.batch.dynamic() as batch:
         for cls in classes:
             batch.add_object(
@@ -287,6 +288,7 @@ def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> Re
     for cls in classes:
         from_uuid = uuid_for_schema_id(cls["id"])
         refs.extend(_algorithm_ref(from_uuid, cls))
+        refs.extend(_cross_refs(from_uuid, cls))  # initialized_classes + referenced_*
     return refs
 
 
@@ -355,13 +357,16 @@ def _insert_functions(collection: Collection, functions: list[dict[str, Any]]) -
 
 
 def _add_references_safely(collection: Collection, references: RefList, label: str) -> None:
-    """Call ``reference_add_many`` and log a warning instead of raising on failure."""
     if not references:
+        logger.info("No references to add for %s.", label)
         return
+    logger.info(
+        "Adding %d references for %s: %s", len(references), label, references[:3]
+    )  # перші 3
     try:
         collection.data.reference_add_many(references)
         logger.info("Added %d references for %s.", len(references), label)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Some references for %s could not be added: %s", label, exc)
 
 
@@ -370,18 +375,11 @@ def _add_references_safely(collection: Collection, references: RefList, label: s
 # ---------------------------------------------------------------------------
 
 # Reference properties added to unified_collection chunks (both algorithm and example).
-_CHUNK_CODE_REFS = [
-    (ChunkCodeRef.REFERENCED_CLASSES.value, CODE_CLASS_COLLECTION),
-    (ChunkCodeRef.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
-    (ChunkCodeRef.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
+_CODE_ENTITY_REFS = [
+    (CodeEntityRef.REFERENCED_CLASSES.value, CODE_CLASS_COLLECTION),
+    (CodeEntityRef.REFERENCED_METHODS.value, CODE_METHOD_COLLECTION),
+    (CodeEntityRef.REFERENCED_FUNCTIONS.value, CODE_FUNCTION_COLLECTION),
 ]
-
-# Maps extract_code_refs output keys to the Weaviate property names on the chunk.
-_REFS_KEY_TO_PROP = {
-    CodeEntityRef.INITIALIZED_CLASSES.value: ChunkCodeRef.REFERENCED_CLASSES.value,
-    CodeEntityRef.REFERENCED_METHODS.value: ChunkCodeRef.REFERENCED_METHODS.value,
-    CodeEntityRef.REFERENCED_FUNCTIONS.value: ChunkCodeRef.REFERENCED_FUNCTIONS.value,
-}
 
 
 def _ensure_chunk_code_ref_properties(client: weaviate.WeaviateClient) -> None:
@@ -390,7 +388,7 @@ def _ensure_chunk_code_ref_properties(client: weaviate.WeaviateClient) -> None:
         logger.warning("%s not found; skipping chunk-code ref setup.", COLLECTION_NAME)
         return
     unified = client.collections.use(COLLECTION_NAME)
-    _add_missing_refs(unified, _CHUNK_CODE_REFS)
+    _add_missing_refs(unified, _CODE_ENTITY_REFS)
 
 
 def _build_chunk_code_references(
@@ -424,8 +422,8 @@ def _build_chunk_code_references(
         refs = extract_code_refs(chunk.get(text_key, ""), schema)
         from_uuid = uuid_fn(entity_id)
 
-        for ref_key, prop in _REFS_KEY_TO_PROP.items():
-            references.extend(_id_list_refs(from_uuid, prop, refs.get(ref_key, [])))
+        for ref in CodeEntityRef:
+            references.extend(_id_list_refs(from_uuid, ref.value, refs.get(ref.value, [])))
 
     return references
 
@@ -448,7 +446,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--algorithms_file_path",
-        default="translated_algorithms.json",
+        default="translated_algorithms_updated.json",
         help="Path to the translated_algorithms.json file.",
         type=Path,
     )

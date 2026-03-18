@@ -12,7 +12,6 @@ from rag_service.constants import (
     CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
     REFERENCE_TYPE_MAP,
-    ChunkCodeRef,
     CodeEntityRef,
 )
 from rag_service.models import EntityType, MetadataFilter, MetadataFilters
@@ -98,18 +97,18 @@ async def _create_collections(client):
 
 async def _configure_cross_collection_refs(collection, code_classes, code_methods, code_functions):
     await _add_reference_if_missing(
-        collection, ChunkCodeRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
+        collection, CodeEntityRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
     )
     await _add_reference_if_missing(
-        collection, ChunkCodeRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
+        collection, CodeEntityRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
     )
     await _add_reference_if_missing(
-        collection, ChunkCodeRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
+        collection, CodeEntityRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
     )
 
     for code_collection in (code_classes, code_methods, code_functions):
         await _add_reference_if_missing(
-            code_collection, CodeEntityRef.INITIALIZED_CLASSES, CODE_CLASS_COLLECTION
+            code_collection, CodeEntityRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
         )
         await _add_reference_if_missing(
             code_collection, CodeEntityRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
@@ -224,12 +223,12 @@ async def _seed_references(collection, code_methods, code_functions):
 
     await collection.data.reference_add(
         from_uuid=ROOT_UUID,
-        from_property=ChunkCodeRef.REFERENCED_METHODS,
+        from_property=CodeEntityRef.REFERENCED_METHODS,
         to=CODE_METHOD_UUID,
     )
     await collection.data.reference_add(
         from_uuid=ROOT_UUID,
-        from_property=ChunkCodeRef.REFERENCED_FUNCTIONS,
+        from_property=CodeEntityRef.REFERENCED_FUNCTIONS,
         to=CODE_CALLER_UUID,
     )
 
