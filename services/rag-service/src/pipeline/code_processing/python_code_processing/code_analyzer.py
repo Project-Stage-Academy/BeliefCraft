@@ -100,6 +100,7 @@ class CodeAnalyzer(ast.NodeVisitor):
         self._handle_function(node)
 
     def _handle_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        """Register a function/method definition and recurse into its body."""
         if not getattr(node, "name", None):
             return
 

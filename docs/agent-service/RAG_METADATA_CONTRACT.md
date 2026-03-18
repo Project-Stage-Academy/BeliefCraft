@@ -34,6 +34,20 @@ Supported result envelopes:
 - `expanded`
 - `document` (single document)
 
+## Non-Document Utility Tool Contract
+
+The following RAG tool intentionally does not return document envelopes and
+is therefore not consumed by citation/formula/code post-processing extractors:
+
+- `get_related_code_definitions(document_ids: list[str]) -> str`
+
+Behavior contract:
+
+- Returns a single Python source fragment string.
+- May return a sentinel comment when no related definitions are found:
+  `# No related code definitions found for the provided document IDs.`
+- Treated as direct LLM context, not extractor metadata input.
+
 ## Required Fields
 
 Minimal required fields for reliable extraction:

@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from typing import Any
 
-from app.services.extractors.tool_result_utils import collect_result_documents
+from app.services.extractors.tool_result_utils import (
+    collect_result_documents,
+    is_rag_tool_call,
+)
 
 
 @dataclass
@@ -117,3 +120,18 @@ def test_collect_result_documents_handles_loose_metadata_payload() -> None:
 def test_collect_result_documents_ignores_non_document_payloads() -> None:
     documents = collect_result_documents({"documents": [{"unexpected": "shape"}]})
     assert documents == []
+
+
+def test_collect_result_documents_ignores_string_utility_payload() -> None:
+    source_fragment = "def helper():\n    return 1"
+
+    documents = collect_result_documents(source_fragment)
+
+    assert documents == []
+
+
+def test_get_related_code_definitions_not_legacy_rag_by_name_fallback() -> None:
+    # Keep extractor fallback scoped to legacy document-envelope RAG tools only.
+    tool_call = {"tool_name": "get_related_code_definitions"}
+
+    assert is_rag_tool_call(tool_call) is False
