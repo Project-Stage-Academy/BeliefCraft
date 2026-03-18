@@ -38,7 +38,7 @@ FIGURES_BBOX_OVERRIDE = {
     266: ((242, 1040), 300, 327)
 }
 
-SKIP_COMBINATIONS = [
+SKIP_COMBINATIONS = [  # Known difficult combinations of (fig_page_idx, dm_page_idx)
     (9, 48),
     (194, 348),
 ]
