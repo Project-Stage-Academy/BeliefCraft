@@ -27,6 +27,7 @@ from pipeline.code_processing.python_code_processing.code_analyzer import (
     KIND_CLASS_INIT,
     KIND_FUNCTION,
     KIND_METHOD,
+    CodeAnalyzer,
     analyze_fragments,
 )
 
@@ -160,91 +161,158 @@ def extract_code_blocks(text: str) -> list[str]:
 # ------------------------------------------------------------------ #
 
 
-def _refs_from_blocks(
-    blocks: list[str],
+_Refs = tuple[set[str], set[str], set[str]]  # (classes, functions, methods)
+
+
+def _collect_from_graph(
+    graph: dict[str, dict[str, str]],
     index: SchemaIndex,
-) -> dict[str, list[str]]:
-    """Analyze code blocks and resolve calls against the known schema index.
+    local_classes: set[str],
+    local_functions: set[str],
+    local_methods: set[str],
+) -> _Refs:
+    """Pass 1: graph edges between local definitions → external schema entries."""
+    classes: set[str] = set()
+    functions: set[str] = set()
+    methods: set[str] = set()
+    for edges in graph.values():
+        for target, kind in edges.items():
+            if kind == KIND_CLASS_INIT and target not in local_classes and target in index.classes:
+                classes.add(f"cls:{target}")
+            elif (
+                kind == KIND_FUNCTION
+                and target not in local_functions
+                and target in index.functions
+            ):
+                functions.add(f"fn:{target}")
+            elif kind == KIND_METHOD and target not in local_methods and target in index.methods:
+                methods.add(f"mth:{target}")
+    return classes, functions, methods
 
-    Uses ``analyze_fragments`` so type annotation resolution, static calls,
-    and base class detection are identical to ``build_code_schema``.
 
-    Resolution has two passes:
-    1. Graph edges (inter-local calls already resolved by build_graph).
-    2. Raw calls from analyzer.calls resolved directly against the index
-       (catches calls to external definitions not present in the blocks).
+def _resolve_dotted_call(
+    qualified: str,
+    method_name: str,
+    index: SchemaIndex,
+    local_methods: set[str],
+    methods: set[str],
+) -> None:
+    """Resolve a ``Class.method`` call into *methods*."""
+    if qualified in index.methods and qualified not in local_methods:
+        methods.add(f"mth:{qualified}")
+    else:
+        for candidate in index.method_index.get(method_name, []):
+            if candidate not in local_methods:
+                methods.add(f"mth:{candidate}")
+
+
+def _resolve_bare_call(
+    short: str,
+    raw_kind: str,
+    index: SchemaIndex,
+    local_classes: set[str],
+    local_functions: set[str],
+    local_methods: set[str],
+    classes: set[str],
+    functions: set[str],
+    methods: set[str],
+) -> None:
+    """Resolve an unqualified call name into the appropriate ref set."""
+    if short in local_classes or short in local_functions:
+        return
+    if short in index.classes:
+        classes.add(f"cls:{short}")
+    elif short in index.functions:
+        functions.add(f"fn:{short}")
+    elif raw_kind == "method":
+        for candidate in index.method_index.get(short, []):
+            if candidate not in local_methods:
+                methods.add(f"mth:{candidate}")
+
+
+def _collect_from_raw_calls(
+    analyzer: CodeAnalyzer,
+    index: SchemaIndex,
+    local_classes: set[str],
+    local_functions: set[str],
+    local_methods: set[str],
+) -> _Refs:
+    """Pass 2: raw calls resolved directly against the index.
+
+    Catches external definitions not present in the blocks (e.g. functions
+    defined in other algorithm chunks).
     """
+    classes: set[str] = set()
+    functions: set[str] = set()
+    methods: set[str] = set()
+    for calls in analyzer.calls.values():
+        for call_name, _argc, raw_kind in calls:
+            parts = call_name.split(".")
+            if len(parts) == 2:
+                _resolve_dotted_call(call_name, parts[1], index, local_methods, methods)
+            else:
+                _resolve_bare_call(
+                    parts[-1],
+                    raw_kind,
+                    index,
+                    local_classes,
+                    local_functions,
+                    local_methods,
+                    classes,
+                    functions,
+                    methods,
+                )
+    return classes, functions, methods
+
+
+def _collect_from_bases(analyzer: CodeAnalyzer, index: SchemaIndex) -> set[str]:
+    """Pass 3: base class inheritance → external class refs."""
+    classes: set[str] = set()
+    for cls_node in analyzer.classes.values():
+        for base in cls_node.bases:
+            if isinstance(base, ast.Name) and base.id in index.classes:
+                classes.add(f"cls:{base.id}")
+    return classes
+
+
+def _collect_from_annotations(
+    analyzer: CodeAnalyzer,
+    index: SchemaIndex,
+    local_classes: set[str],
+) -> set[str]:
+    """Pass 4: parameter type annotations and return types → external class refs."""
+    classes: set[str] = set()
+    for local_vars in analyzer._local_vars.values():
+        for var, typ in local_vars.items():
+            if var not in ("self", "cls") and typ in index.classes and typ not in local_classes:
+                classes.add(f"cls:{typ}")
+    for ret_type in analyzer._return_types.values():
+        if ret_type in index.classes and ret_type not in local_classes:
+            classes.add(f"cls:{ret_type}")
+    return classes
+
+
+def _refs_from_blocks(blocks: list[str], index: SchemaIndex) -> dict[str, list[str]]:
+    """Analyze code blocks and resolve calls against the known schema index."""
     analyzer, graph = analyze_fragments(blocks)
 
     local_classes: set[str] = set(analyzer.classes)
     local_functions: set[str] = set(analyzer.functions)
     local_methods: set[str] = set(analyzer.methods)
 
-    referenced_classes: set[str] = set()
-    referenced_functions: set[str] = set()
-    referenced_methods: set[str] = set()
-
-    # Pass 1: graph edges between local definitions that point to external schema entries
-    for edges in graph.values():
-        for target, kind in edges.items():
-            if kind == KIND_CLASS_INIT:
-                if target not in local_classes and target in index.classes:
-                    referenced_classes.add(f"cls:{target}")
-            elif kind == KIND_FUNCTION:
-                if target not in local_functions and target in index.functions:
-                    referenced_functions.add(f"fn:{target}")
-            elif kind == KIND_METHOD and target not in local_methods and target in index.methods:
-                referenced_methods.add(f"mth:{target}")
-
-    # Pass 2: raw calls resolved against the external schema index
-    for calls in analyzer.calls.values():
-        for call_name, _argc, raw_kind in calls:
-            parts = call_name.split(".")
-            if len(parts) == 2:
-                # Class.method or resolved_type.method
-                cls_name, method_name = parts
-                qualified = call_name
-                if qualified in index.methods and qualified not in local_methods:
-                    referenced_methods.add(f"mth:{qualified}")
-                else:
-                    for candidate in index.method_index.get(method_name, []):
-                        if candidate not in local_methods:
-                            referenced_methods.add(f"mth:{candidate}")
-            else:
-                short = parts[-1]
-                if short in local_classes or short in local_functions:
-                    continue
-                if short in index.classes:
-                    referenced_classes.add(f"cls:{short}")
-                elif short in index.functions:
-                    referenced_functions.add(f"fn:{short}")
-                elif raw_kind == "method":
-                    for candidate in index.method_index.get(short, []):
-                        if candidate not in local_methods:
-                            referenced_methods.add(f"mth:{candidate}")
-
-    # Pass 3: base class inheritance
-    for cls_node in analyzer.classes.values():
-        for base in cls_node.bases:
-            if isinstance(base, ast.Name) and base.id in index.classes:
-                referenced_classes.add(f"cls:{base.id}")
-
-    # Pass 4: parameter type annotations and return types
-    for local_vars in analyzer._local_vars.values():
-        for var, typ in local_vars.items():
-            if var in ("self", "cls"):
-                continue
-            if typ in index.classes and typ not in local_classes:
-                referenced_classes.add(f"cls:{typ}")
-
-    for ret_type in analyzer._return_types.values():
-        if ret_type in index.classes and ret_type not in local_classes:
-            referenced_classes.add(f"cls:{ret_type}")
+    cls1, fn1, mth1 = _collect_from_graph(
+        graph, index, local_classes, local_functions, local_methods
+    )
+    cls2, fn2, mth2 = _collect_from_raw_calls(
+        analyzer, index, local_classes, local_functions, local_methods
+    )
+    cls3 = _collect_from_bases(analyzer, index)
+    cls4 = _collect_from_annotations(analyzer, index, local_classes)
 
     return {
-        "referenced_classes": sorted(referenced_classes),
-        "referenced_functions": sorted(referenced_functions),
-        "referenced_methods": sorted(referenced_methods),
+        "referenced_classes": sorted(cls1 | cls2 | cls3 | cls4),
+        "referenced_functions": sorted(fn1 | fn2),
+        "referenced_methods": sorted(mth1 | mth2),
     }
 
 
