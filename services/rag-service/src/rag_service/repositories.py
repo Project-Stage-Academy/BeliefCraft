@@ -576,8 +576,9 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """
         Build recursive QueryReference objects for the three nested
         code-definition cross-reference fields.
-        ``initialized_classes`` is always a leaf. ``referenced_methods`` and
-        ``referenced_functions`` are expanded up to *max_depth* levels.
+        ``referenced_classes``, ``referenced_methods``, and
+        ``referenced_functions`` are all expanded recursively up to
+        *max_depth* levels.
         """
         fields = (
             CodeEntityRef.REFERENCED_CLASSES,
