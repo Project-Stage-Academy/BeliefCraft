@@ -444,7 +444,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--algorithms_file_path",
-        default="translated_algorithms_updated.json",
+        default="translated_algorithms.json",
         help="Path to the translated_algorithms.json file.",
         type=Path,
     )
