@@ -215,6 +215,7 @@ def test_algorithm_number_populated_from_dict_fragment():
 
 def test_algorithm_number_empty_for_plain_string_fragment():
     schema = build_code_schema(["def foo(): pass"])
+    # Plain string fragments have no algorithm_number; field is present but empty.
     assert schema["functions"][0]["algorithm_number"] == ""
 
 

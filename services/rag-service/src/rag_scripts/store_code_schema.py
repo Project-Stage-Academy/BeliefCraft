@@ -273,6 +273,7 @@ def _algorithm_ref(from_uuid: str, entity: dict[str, Any]) -> RefList:
 
 
 def _insert_classes(collection: Collection, classes: list[dict[str, Any]]) -> RefList:
+    """Batch-insert class objects and return their ``algorithm_ref`` references."""
     with collection.batch.dynamic() as batch:
         for cls in classes:
             batch.add_object(
