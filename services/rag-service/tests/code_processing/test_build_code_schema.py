@@ -2,7 +2,6 @@
 Unit tests for build_code_schema.py
 """
 
-import pytest
 from pipeline.code_processing.python_code_processing.build_code_schema import (
     build_code_schema,
 )
@@ -219,9 +218,11 @@ def test_algorithm_number_empty_for_plain_string_fragment():
     assert schema["functions"][0]["algorithm_number"] == ""
 
 
-def test_syntax_error_fragment_raises():
-    with pytest.raises(SyntaxError):
-        build_code_schema(["def broken(", "def good(): pass"])
+def test_syntax_error_fragment_skipped():
+    fragments = ["def broken(", "def good(): pass"]
+    schema = build_code_schema(fragments)
+    names = {f["name"] for f in schema["functions"]}
+    assert "good" in names
 
 
 def test_no_duplicate_refs():
