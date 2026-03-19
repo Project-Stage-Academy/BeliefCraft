@@ -529,7 +529,17 @@ def analyze_fragments(
             code = str(item)
             analyzer.current_fragment_idx = idx
 
-        analyzer.visit(ast.parse(code))
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as exc:
+            logger.warning(
+                "Skipping fragment %s due to SyntaxError: %s",
+                analyzer.current_fragment_idx,
+                exc,
+            )
+            continue
+
+        analyzer.visit(tree)
 
     return analyzer, build_graph(analyzer)
 
