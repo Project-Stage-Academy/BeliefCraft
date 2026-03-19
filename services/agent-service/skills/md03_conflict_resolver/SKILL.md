@@ -3,10 +3,14 @@ name: signal-conflict-resolver
 description: "Detects and resolves conflicts between signals before a decision is committed. Handles three conflict types: Type A (quantity conflict — two sensors report values more than 2σ apart), Type B (action conflict — two ranked pipelines recommend incompatible actions), Type C (model conflict — upstream belief and regime are inconsistent). Returns a resolved quantity or resolved action, the resolution method used, a downgraded confidence delta, and an escalation flag. Use whenever multiple independent signals feed the same decision variable. Questions like 'Sensor A says 140, sensor B says 320 — which do we trust?', 'One pipeline says reorder, another says hold — now what?', 'The signals are contradicting each other.'"
 version: "1.0"
 tags: [conflict, sensor-fusion, belief-propagation, particle-injection, resolution, meta-decision]
-dependencies: [SKILL-IA-01, SKILL-IA-03, SKILL-DS-01, SKILL-RE-03]
+dependencies:
+  - bayesian-sensor-belief-updater
+  - signal-reliability-estimator
+  - expected-utility-action-ranker
+  - inventory-flow-regime-detector
 ---
 
-# SKILL-MD-03 · Signal Conflict Resolver
+# Signal Conflict Resolver
 
 ## When to Use This Skill
 
@@ -35,7 +39,7 @@ P(c | o₁:ₙ) ∝ P(c) ∏ᵢ P(oᵢ | c)     (eq. 3.4 + 3.8)
 ```
 
 Each sensor's reading is one observation. Reliability score `rᵢ` from
-SKILL-IA-03 plays the role of `P(oᵢ | c)` — higher reliability → higher
+`signal-reliability-estimator` plays the role of `P(oᵢ | c)` — higher reliability → higher
 weight in the posterior. The resolved quantity is the reliability-weighted
 mean across non-outlier sensors, normalised by their total weight.
 
@@ -132,10 +136,10 @@ get_entity_by_number(number="19.29")
 ### Step 3: Detect conflict type
 
 Collect all competing signal values. Sources:
-- `SKILL-IA-01` outputs: one `posterior_mean` + `posterior_std` per sensor/pipeline
-- `SKILL-IA-03` outputs: `reliability_score` per device
-- `SKILL-DS-01` outputs: `top_action_id` + `trigger_event` per pipeline
-- `SKILL-RE-03` outputs: `baseline_mean`, `baseline_std` (regime model)
+- `bayesian-sensor-belief-updater` outputs: one `posterior_mean` + `posterior_std` per sensor/pipeline
+- `signal-reliability-estimator` outputs: `reliability_score` per device
+- `expected-utility-action-ranker` outputs: `top_action_id` + `trigger_event` per pipeline
+- `inventory-flow-regime-detector` outputs: `baseline_mean`, `baseline_std` (regime model)
 
 #### Type A — Quantity conflict
 
@@ -174,8 +178,8 @@ type_B_detected = any(
 
 ```
 # After Type A resolution, check resolved quantity against regime model
-# (requires SKILL-RE-03 baseline_mean and baseline_std)
-μ_regime  = baseline_mean   # from SKILL-RE-03
+# (requires inventory-flow-regime-detector baseline_mean and baseline_std)
+μ_regime  = baseline_mean   # from inventory-flow-regime-detector
 σ_regime  = baseline_std
 
 type_C_detected = (
@@ -219,7 +223,7 @@ resolution_method_A = SINGLE_SOURCE_FALLBACK
 #### Resolve Type B — Priority hierarchy
 
 Apply a strict priority order grounded in STOCKOUT_IMMINENT bypass rule
-from SKILL-MD-02 (critical states always override normal states):
+from `decision-deferral-controller` (critical states always override normal states):
 
 ```
 PRIORITY = {
@@ -231,7 +235,7 @@ PRIORITY = {
 
 resolved_action = pipeline with highest PRIORITY[trigger_event]
 
-# Tiebreak: higher action_utility_score from SKILL-DS-01
+# Tiebreak: higher action_utility_score from expected-utility-action-ranker
 if tie: resolved_action = pipeline with higher action_utility_score
 
 resolution_method_B = PRIORITY_HIERARCHY
@@ -255,7 +259,7 @@ resolution_method_C = BELIEF_RESET_ESCALATE
 ### Step 5: Compute confidence downgrade
 
 Each detected conflict type reduces decision confidence by a fixed delta,
-applied additively to the `decision_confidence_score` from SKILL-MD-01:
+applied additively to the `decision_confidence_score` from `decision-confidence-estimator`:
 
 ```
 confidence_delta = 0.0
@@ -289,7 +293,7 @@ if type_C_detected:
 | `resolved_action` | `top_action_id` after Type B resolution |
 | `resolution_method` | Per type: `RELIABILITY_WEIGHTED_MEAN` / `SINGLE_SOURCE_FALLBACK` / `PRIORITY_HIERARCHY` / `BELIEF_RESET_ESCALATE` |
 | `outlier_sensor_id` | Device ID of the outlier sensor (Type A only) |
-| `confidence_delta` | Negative adjustment to apply to SKILL-MD-01 score |
+| `confidence_delta` | Negative adjustment to apply to `decision-confidence-estimator` score |
 | `escalation_required` | `True` if Type C detected (belief reset triggered) |
 
 ---
@@ -300,8 +304,8 @@ if type_C_detected:
 |---|---|
 | Only one sensor available | `type_A_detected=False`; no conflict possible; pass through as-is |
 | All sensors have `reliability_score < 0.2` | No reliable source to weight; `resolution_method=SINGLE_SOURCE_FALLBACK` using highest-reliability sensor; add warning |
-| `SKILL-RE-03` not run (no regime baseline) | Skip Type C check; `type_C_detected=False`; add `regime_check_skipped=True` |
-| `SKILL-DS-01` not run (no action scores) | Type B tiebreak falls back to trigger_event priority only |
+| `inventory-flow-regime-detector` not run (no regime baseline) | Skip Type C check; `type_C_detected=False`; add `regime_check_skipped=True` |
+| `expected-utility-action-ranker` not run (no action scores) | Type B tiebreak falls back to trigger_event priority only |
 | Type A and Type B both detected | Resolve independently; combine `confidence_delta`; use resolved_quantity for Type B re-evaluation if needed |
 | All sensor weights sum to zero | Treat as belief collapse; set `escalation_required=True`, return `resolution_method=BELIEF_RESET_ESCALATE` |
 
@@ -365,7 +369,7 @@ Step 4 — Resolve Type A:
       = sqrt(7023.5) = 83.8 units
 
     Check Type C vs regime:
-    μ_regime = 210, σ_regime = 35  (from SKILL-RE-03)
+    μ_regime = 210, σ_regime = 35  (from `inventory-flow-regime-detector`)
     |197.2 − 210| = 12.8 < 3 × 35 = 105  → Type C NOT detected
 
 Step 5 — Confidence downgrade:
@@ -395,11 +399,11 @@ Schedule a physical cycle count to determine ground truth.
 
 ## Feeds Into
 
-- `SKILL-MD-01` — apply `confidence_delta` to `decision_confidence_score`
+- `decision-confidence-estimator` — apply `confidence_delta` to `decision_confidence_score`
   before classifying confidence class; may push ADEQUATE → LOW_CONFIDENCE
-- `SKILL-IA-01` — `resolved_quantity` replaces the conflicted posterior mean
+- `bayesian-sensor-belief-updater` — `resolved_quantity` replaces the conflicted posterior mean
   as the canonical inventory estimate for all downstream calculations
-- `SKILL-MD-02` — `escalation_required=True` (Type C) is equivalent to
+- `decision-deferral-controller` — `escalation_required=True` (Type C) is equivalent to
   `INSUFFICIENT` confidence; deferral controller must trigger ESCALATE
-- `SKILL-DS-01` — after Type B resolution, re-run ranking with only the
+- `expected-utility-action-ranker` — after Type B resolution, re-run ranking with only the
   `resolved_action`'s pipeline to confirm the utility scores are consistent

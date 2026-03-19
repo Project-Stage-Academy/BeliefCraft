@@ -6,7 +6,7 @@ tags: [inventory, regime, anomaly, adjustments, shrinkage, model-update]
 dependencies: []
 ---
 
-# SKILL-RE-03 · Inventory Flow Regime Detector
+# Inventory Flow Regime Detector
 
 ## When to Use This Skill
 
@@ -259,7 +259,7 @@ mostly coded as shrinkage. Not yet a confirmed regime shift (Bayesian confidence
 
 ## Feeds Into
 
-- `SKILL-MD-03` — uses `regime_label` to weight signal conflict resolution
-- `SKILL-MD-01` — applies confidence penalty when `regime_label = REGIME_SHIFT`
-- `SKILL-PU-02` — elevated regime triggers VOI recalculation (gather more info first)
-- `SKILL-DS-03` — `REGIME_SHIFT` overrides threshold trigger to conservative mode
+- `signal-conflict-resolver` — uses `regime_label` to weight signal conflict resolution
+- `decision-confidence-estimator` — applies confidence penalty when `regime_label = REGIME_SHIFT`
+- `value-of-information` — elevated regime triggers VOI recalculation (gather more info first)
+- `threshold-based-trigger-decision` — `REGIME_SHIFT` overrides threshold trigger to conservative mode

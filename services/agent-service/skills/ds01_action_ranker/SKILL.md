@@ -3,10 +3,13 @@ name: expected-utility-action-ranker
 description: "Ranks candidate actions by expected utility and selects the best admissible action, accounting for uncertainty via confidence intervals. Filters out INFEASIBLE actions before ranking. Returns a ranked list with decision confidence (HIGH / MARGINAL / TIE). Use as the final selection step after scoring and constraint validation. Questions like 'Which action should we take?', 'What is the best replenishment option?', 'Rank these supplier choices.'"
 version: "1.0"
 tags: [action-ranking, MEU, decision, greedy, confidence, beam-search]
-dependencies: [SKILL-PU-01, SKILL-PU-03, SKILL-RE-01]
+dependencies:
+  - multi-attribute-utility-scorer
+  - constraint-satisfaction-validator
+  - inventory-uncertainty-quantifier
 ---
 
-# SKILL-DS-01 · Expected-Utility Action Ranker
+# Expected-Utility Action Ranker
 
 ## When to Use This Skill
 
@@ -35,10 +38,10 @@ function (Ch.7 §7.3, eq. 7.14):
 π(s) = argmax_a Q(s, a)     (eq. 7.14)
 ```
 
-Under uncertainty (`posterior_std > 0` from `SKILL-RE-01`), the utility
+Under uncertainty (`posterior_std > 0` from `inventory-uncertainty-quantifier`), the utility
 score has a confidence interval. If two actions' CIs overlap, the decision
 is MARGINAL or TIE and should be flagged for human review or escalated to
-`SKILL-MD-01`.
+`decision-confidence-estimator`.
 
 The **advantage function** (Ch.7 §7.3, eq. 7.15) provides the decision margin:
 
@@ -96,9 +99,9 @@ search_knowledge_base(
 ### Step 3: Collect scored and validated candidates
 
 Requires from upstream skills for each candidate action:
-- `action_utility_score` from `SKILL-PU-01`
-- `feasibility_status` from `SKILL-PU-03`
-- `uncertainty_index` from `SKILL-RE-01`
+- `action_utility_score` from `multi-attribute-utility-scorer`
+- `feasibility_status` from `constraint-satisfaction-validator`
+- `uncertainty_index` from `inventory-uncertainty-quantifier`
 
 **Filter step — eliminate inadmissible actions:**
 ```
@@ -116,7 +119,7 @@ Using the advantage function framing from Step 1:
 
 ```
 for each candidate a:
-    score(a)    = action_utility_score from SKILL-PU-01
+    score(a)    = action_utility_score from multi-attribute-utility-scorer
     ci_lower(a) = score(a) − 1.96 × uncertainty_index × 0.1
     ci_upper(a) = score(a) + 1.96 × uncertainty_index × 0.1
 
@@ -140,11 +143,11 @@ if margin > 0.10:
 elif margin > 0.02:
     decision_confidence = MARGINAL
 else:
-    decision_confidence = TIE    # escalate to SKILL-MD-03
+    decision_confidence = TIE    # escalate to signal-conflict-resolver
 
 # Tie-break when margin ≤ 0.02:
 #   1st: highest sla_priority
-#   2nd: highest posterior_mean_reliability (from SKILL-IA-02)
+#   2nd: highest posterior_mean_reliability (from supplier-reliability-aggregator)
 ```
 
 ---
@@ -169,7 +172,7 @@ else:
 |---|---|
 | All candidates INFEASIBLE | Return empty ranking, `data_gap_flag=True`, escalate |
 | Only one candidate | `margin=1.0`, `decision_confidence=HIGH` by default |
-| `SKILL-PU-01` not run | Cannot rank — require upstream scoring first |
+| `multi-attribute-utility-scorer` not run | Cannot rank — require upstream scoring first |
 | `uncertainty_index` unavailable | Use `CI = score ± 0.05` as conservative default |
 | All scores identical | `TIE`, apply tie-break rules, flag for human review |
 
@@ -227,16 +230,16 @@ Result:
   decision_confidence = MARGINAL
 
 Action A is recommended but the margin is very narrow (0.02).
-Action D is nearly equivalent — consider escalating to SKILL-MD-01
+Action D is nearly equivalent — consider escalating to `decision-confidence-estimator`
 to assess whether decision confidence is sufficient to execute,
-or to SKILL-MD-03 if signal conflict may explain the tie.
+or to `signal-conflict-resolver` if signal conflict may explain the tie.
 ```
 
 ---
 
 ## Feeds Into
 
-- `SKILL-MD-01` — uses `decision_confidence` and `margin` for overall confidence score
-- `SKILL-MD-03` — called when `decision_confidence = TIE` to resolve conflicts
-- `SKILL-MD-02` — called when `decision_confidence = MARGINAL` to evaluate deferral
-- `SKILL-PU-02` — if `TIE`, recomputes VOI to check if more info would break the tie
+- `decision-confidence-estimator` — uses `decision_confidence` and `margin` for overall confidence score
+- `signal-conflict-resolver` — called when `decision_confidence = TIE` to resolve conflicts
+- `decision-deferral-controller` — called when `decision_confidence = MARGINAL` to evaluate deferral
+- `value-of-information` — if `TIE`, recomputes VOI to check if more info would break the tie

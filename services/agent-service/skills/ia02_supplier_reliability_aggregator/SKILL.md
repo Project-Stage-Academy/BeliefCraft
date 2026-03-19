@@ -6,7 +6,7 @@ tags: [supplier, reliability, bayesian, procurement, risk]
 dependencies: []
 ---
 
-# SKILL-IA-02 · Supplier Reliability Evidence Aggregator
+# Supplier Reliability Evidence Aggregator
 
 ## When to Use This Skill
 
@@ -245,6 +245,6 @@ penalty clauses given the 63% conservative lower bound.
 
 ## Feeds Into
 
-- `SKILL-RE-02` — uses `posterior_mean_reliability` to inflate lead-time variance
-- `SKILL-PU-01` — uses `posterior_mean_reliability` as `u_sla` input for utility scoring
-- `SKILL-DS-01` — used in tie-breaking when two suppliers have equal utility scores
+- `leadtime-risk-estimator` — uses `posterior_mean_reliability` to inflate lead-time variance
+- `multi-attribute-utility-scorer` — uses `posterior_mean_reliability` as `u_sla` input for utility scoring
+- `expected-utility-action-ranker` — used in tie-breaking when two suppliers have equal utility scores
