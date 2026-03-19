@@ -1,9 +1,5 @@
-"""
-Main recommendation generator – assembles structured agent responses from raw AgentState.
-"""
+"""Main recommendation generator – assembles structured agent responses from raw AgentState."""
 
-import json
-import re
 from typing import Any, Literal
 
 from app.models.agent_state import AgentState
@@ -16,6 +12,7 @@ from app.models.responses import (
 )
 from app.services.extractors.citation_extractor import CitationExtractor
 from app.services.extractors.code_extractor import CodeExtractor
+from app.services.extractors.final_answer_parser import FinalAnswerParser
 from app.services.extractors.formula_extractor import FormulaExtractor
 from app.services.extractors.tool_result_utils import (
     collect_result_documents,
@@ -25,7 +22,6 @@ from app.services.extractors.tool_result_utils import (
 from app.services.llm_service import LLMService
 from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
 from common.logging import get_logger
-from pydantic import BaseModel, ConfigDict
 
 logger = get_logger(__name__)
 
@@ -36,55 +32,7 @@ def _coerce_status(status: str) -> _ResponseStatus:
     """Map AgentState status to the narrower AgentRecommendationResponse status."""
     if status in {"completed", "partial", "failed", "max_iterations"}:
         return status  # type: ignore[return-value]
-    # 'running' or any unexpected value treated as partial
     return "partial"
-
-
-_PARSE_SYSTEM_PROMPT = "You are a data extraction assistant. Always return valid JSON."
-
-_PARSE_USER_PROMPT = """\
-Extract structured information from the following agent response.
-
-Agent response:
-{final_answer}
-
-Extract and return JSON with these fields:
-{{
-  "task": "High-level task (e.g., 'Inventory Replenishment', 'Risk Assessment')",
-  "analysis": "Summary of the situation analysis",
-  "algorithm": "Algorithm name/number if mentioned (e.g., 'Algorithm 3.2 - (s,S) Policy')",
-  "recommendations": [
-    {{
-      "action": "Specific action to take",
-      "priority": "high|medium|low",
-      "rationale": "Why this action",
-      "expected_outcome": "Expected result"
-    }}
-  ],
-  "confidence": "high|medium|low"
-}}
-
-Return ONLY valid JSON, no other text.
-"""
-
-
-class _RecommendationParseModel(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    action: str
-    priority: Literal["high", "medium", "low"]
-    rationale: str
-    expected_outcome: str | None = None
-
-
-class _ParsedFinalAnswerModel(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    task: str
-    analysis: str
-    algorithm: str | None = None
-    recommendations: list[_RecommendationParseModel]
-    confidence: Literal["high", "medium", "low"] | None = None
 
 
 class RecommendationGenerator:
@@ -101,12 +49,14 @@ class RecommendationGenerator:
         formula_extractor: FormulaExtractor | None = None,
         citation_extractor: CitationExtractor | None = None,
         code_extractor: CodeExtractor | None = None,
+        final_answer_parser: FinalAnswerParser | None = None,
         reasoning_trace_formatter: ReasoningTraceFormatter | None = None,
     ) -> None:
-        self.llm = llm or LLMService()
+        resolved_llm = llm or LLMService()
         self.formula_extractor = formula_extractor or FormulaExtractor()
         self.citation_extractor = citation_extractor or CitationExtractor()
         self.code_extractor = code_extractor or CodeExtractor()
+        self.final_answer_parser = final_answer_parser or FinalAnswerParser(resolved_llm)
         self.reasoning_trace_formatter = reasoning_trace_formatter or ReasoningTraceFormatter()
 
     async def generate(self, agent_state: AgentState) -> AgentRecommendationResponse:
@@ -118,8 +68,12 @@ class RecommendationGenerator:
         if not final_answer:
             return self._generate_fallback_response(agent_state)
 
-        # Parse final answer into structured components via LLM
-        structured = await self._parse_final_answer(final_answer)
+        structured = await self.final_answer_parser.parse(final_answer)
+        task = structured.get("task") or "Analysis"
+        analysis = structured.get("analysis") or final_answer
+        algorithm = structured.get("algorithm")
+        recommendations = structured.get("recommendations") or []
+        confidence = structured.get("confidence")
 
         formulas = self._extract_formulas(agent_state, final_answer)
         code_snippets = self._extract_code_snippets(agent_state, final_answer)
@@ -133,28 +87,26 @@ class RecommendationGenerator:
 
         reasoning_trace = self.reasoning_trace_formatter.format(agent_state)
         iterations = self._count_iterations(agent_state, reasoning_trace)
-        warnings = self._detect_warnings(agent_state, structured)
+        warnings = self._detect_warnings(
+            agent_state,
+            algorithm=algorithm,
+            confidence=confidence,
+        )
         execution_time = self._calc_execution_time(agent_state)
 
         response = AgentRecommendationResponse(
             request_id=agent_state["request_id"],
             query=agent_state["user_query"],
-            task=structured.get("task") or "Analysis",
-            analysis=structured.get("analysis") or final_answer,
-            algorithm=structured.get("algorithm"),
+            final_answer=final_answer,
+            task=task,
+            analysis=analysis,
+            algorithm=algorithm,
             formulas=formulas,
             code_snippets=code_snippets,
-            recommendations=structured.get("recommendations")
-            or [
-                Recommendation(
-                    action="Review agent output manually",
-                    priority="medium",
-                    rationale="Could not extract structured recommendations",
-                )
-            ],
+            recommendations=recommendations,
             citations=citations,
             status=_coerce_status(agent_state["status"]),
-            confidence=structured.get("confidence"),
+            confidence=confidence,
             reasoning_trace=reasoning_trace,
             iterations=iterations,
             total_tokens=agent_state["total_tokens"],
@@ -171,71 +123,6 @@ class RecommendationGenerator:
             citations_count=len(citations),
         )
         return response
-
-    async def _parse_final_answer(self, final_answer: str) -> dict[str, Any]:
-        """Use LLM to parse the final answer into a structured dict."""
-        messages = [
-            {"role": "system", "content": _PARSE_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": _PARSE_USER_PROMPT.format(final_answer=final_answer),
-            },
-        ]
-
-        if isinstance(self.llm, LLMService):
-            try:
-                structured_result = await self.llm.structured_completion(
-                    messages=messages,
-                    schema=_ParsedFinalAnswerModel,
-                )
-                if isinstance(structured_result, _ParsedFinalAnswerModel):
-                    structured = structured_result.model_dump()
-                elif isinstance(structured_result, dict):
-                    structured = structured_result
-                else:
-                    structured = dict(structured_result)
-
-                structured["recommendations"] = [
-                    Recommendation(**rec) for rec in structured.get("recommendations", [])
-                ]
-                return structured
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("final_answer_structured_parsing_failed", error=str(exc))
-
-        try:
-            response = await self.llm.chat_completion(messages=messages, tools=None)
-            content: str = response["message"]["content"]
-
-            # Strip optional markdown fences
-            json_match = re.search(r"```json\n(.*?)```", content, re.DOTALL)
-            if json_match:
-                content = json_match.group(1)
-
-            parsed_content: dict[str, Any] = json.loads(content)
-
-            # Convert recommendation dicts to Pydantic models
-            if "recommendations" in parsed_content and isinstance(
-                parsed_content["recommendations"], list
-            ):
-                parsed_content["recommendations"] = [
-                    Recommendation(**rec) for rec in parsed_content["recommendations"]
-                ]
-
-            return parsed_content
-
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("final_answer_parsing_failed", error=str(exc))
-            return {
-                "task": "Analysis",
-                "analysis": final_answer,
-                "recommendations": [
-                    Recommendation(
-                        action="Review agent output manually",
-                        priority="medium",
-                        rationale="Automated parsing failed",
-                    )
-                ],
-            }
 
     def _extract_formulas(self, agent_state: AgentState, final_answer: str) -> list[Formula]:
         """Extract formulas from final answer text and RAG tool results."""
@@ -270,7 +157,13 @@ class RecommendationGenerator:
             tool_calls=agent_state["tool_calls"],
         )
 
-    def _detect_warnings(self, agent_state: AgentState, structured: dict[str, Any]) -> list[str]:
+    def _detect_warnings(
+        self,
+        agent_state: AgentState,
+        *,
+        algorithm: str | None,
+        confidence: Literal["high", "medium", "low"] | None,
+    ) -> list[str]:
         """Detect potential issues and limitations."""
         warnings: list[str] = []
 
@@ -280,10 +173,10 @@ class RecommendationGenerator:
                 "Results may be partial. Consider refining your query."
             )
 
-        if not structured.get("algorithm"):
+        if not algorithm:
             warnings.append(
                 "No specific algorithm from the knowledge base was identified. "
-                "Recommendations are based on general analysis."
+                "Response is based on general analysis."
             )
 
         failed_tools = [
@@ -297,7 +190,7 @@ class RecommendationGenerator:
                 "Results may be incomplete."
             )
 
-        if structured.get("confidence") == "low":
+        if confidence == "low":
             warnings.append(
                 "Confidence in recommendations is low due to data uncertainty or ambiguity."
             )
@@ -313,6 +206,7 @@ class RecommendationGenerator:
         return AgentRecommendationResponse(
             request_id=agent_state["request_id"],
             query=agent_state["user_query"],
+            final_answer=agent_state.get("final_answer"),
             task="Analysis Failed",
             analysis=f"Unable to complete analysis. Error: {error_message}",
             recommendations=[
