@@ -258,6 +258,7 @@ def _build_classes(
                 "algorithm_number": _fragment_algorithm_number(analyzer, name),
                 "code": _class_init_source(node, known.classes),
                 "referenced_classes": sorted(set(parent_refs) | set(init_inits)),
+                "initialized_classes": sorted(set(parent_refs) | set(init_inits)),
                 "referenced_functions": init_funcs,
                 "referenced_methods": init_meths,
             }
@@ -291,6 +292,7 @@ def _build_methods(
                 "code": ast.unparse(node),
                 "class": cls_ref,
                 "referenced_classes": inits,
+                "initialized_classes": inits,
                 "referenced_functions": funcs,
                 "referenced_methods": meths,
             }
@@ -314,6 +316,7 @@ def _build_functions(
                 "algorithm_number": _fragment_algorithm_number(analyzer, name),
                 "code": ast.unparse(node),
                 "referenced_classes": inits,
+                "initialized_classes": inits,
                 "referenced_functions": funcs,
                 "referenced_methods": meths,
             }
