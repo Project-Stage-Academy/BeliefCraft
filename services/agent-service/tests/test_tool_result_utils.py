@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from app.services.extractors.tool_result_utils import (
-    collect_result_documents,
-)
+from app.services.extractors.tool_result_utils import collect_result_documents
 
 
 @dataclass
