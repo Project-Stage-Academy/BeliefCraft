@@ -14,6 +14,7 @@ from rag_service.constants import (
     REFERENCE_TYPE_MAP,
     CodeEntityRef,
 )
+from rag_service.mcp_tools import RagTools
 from rag_service.models import Document, EntityType, MetadataFilter, MetadataFilters
 from rag_service.repositories import WeaviateRepository
 from requests import HTTPError, Response, get
@@ -483,6 +484,36 @@ async def test_weaviate_get_related_code_definitions(repo):
     )
 
     result = await repo.get_related_code_definitions([ROOT_UUID])
+
+    assert isinstance(result, Document)
+    assert result.id is None
+    assert result.metadata is None
+    assert result.cosine_similarity is None
+
+    assert "def helper():" in result.content
+    assert "def execute():" in result.content
+    assert "class Runner:" in result.content
+    assert "def run(self):" in result.content
+
+    # Dependencies should appear before their callers in reconstructed source.
+    assert result.content.index("def helper():") < result.content.index("def execute():")
+
+    # Caller is referenced from both root and method, but should only appear once.
+    assert result.content.count("def execute():") == 1
+
+    # Unrelated function should never be pulled into the fragment.
+    assert "def unrelated():" not in result.content
+
+
+@pytest.mark.asyncio
+async def test_rag_tools_get_related_code_definitions_integration(repo):
+    """Verify RagTools delegates code-definition retrieval correctly against real Weaviate."""
+    repo._build_nested_code_def_refs = (  # type: ignore[method-assign]
+        lambda max_depth=10: WeaviateRepository._build_nested_code_def_refs(repo, min(max_depth, 1))
+    )
+
+    rag_tools = RagTools(repo)
+    result = await rag_tools.get_related_code_definitions([ROOT_UUID])
 
     assert isinstance(result, Document)
     assert result.id is None
