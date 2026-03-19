@@ -29,6 +29,9 @@ def _base_payload() -> dict:
 
 def test_structured_response_accepts_valid_payload() -> None:
     payload = _base_payload()
+    payload["final_answer"] = (
+        "## Inventory Risk Mitigation\n\n### Analysis\nCurrent inventory risk is elevated."
+    )
     payload["code_snippets"] = [
         {
             "language": "python",
@@ -42,6 +45,7 @@ def test_structured_response_accepts_valid_payload() -> None:
     assert response.request_id == "req-123"
     assert len(response.recommendations) == 1
     assert response.code_snippets[0].validated is True
+    assert response.final_answer == payload["final_answer"]
 
 
 def test_structured_response_trusts_extractor_managed_validation_flag() -> None:
@@ -61,15 +65,21 @@ def test_structured_response_trusts_extractor_managed_validation_flag() -> None:
     assert response.code_snippets[0].validated is False
 
 
-def test_structured_response_requires_recommendations() -> None:
+def test_structured_response_accepts_empty_recommendations() -> None:
     payload = _base_payload()
     payload["recommendations"] = []
 
-    try:
-        AgentRecommendationResponse(**payload)
-        raise AssertionError("Expected ValidationError was not raised")
-    except ValidationError as exc:
-        assert "at least 1 item" in str(exc)
+    response = AgentRecommendationResponse(**payload)
+
+    assert response.recommendations == []
+
+
+def test_structured_response_accepts_missing_final_answer() -> None:
+    payload = _base_payload()
+
+    response = AgentRecommendationResponse(**payload)
+
+    assert response.final_answer is None
 
 
 def test_recommendation_priority_is_constrained() -> None:

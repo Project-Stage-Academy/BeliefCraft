@@ -14,6 +14,14 @@ class TestWarehouseAdvisorSystemPrompt:
     def test_contains_thinking_tag_instruction(self) -> None:
         assert "<thinking>" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
 
+    def test_direct_evidence_constraints_override_default_template(self) -> None:
+        assert "Follow the user's output constraints exactly" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        assert "direct evidence from tools" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        assert "omit algorithms, formulas, code snippets, and recommendations" in (
+            WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        )
+        assert "unless the user explicitly requests them" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+
     def test_contains_algorithm_references(self) -> None:
         assert "MDP" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
         assert "POMDP" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
