@@ -202,6 +202,9 @@ class WeaviateCodeDefinitionProcessor:
         seen: set[str] = set()
         result: list[Document] = []
         for doc in documents:
+            if doc.id is None:
+                result.append(doc)
+                continue
             if doc.id not in seen:
                 seen.add(doc.id)
                 result.append(doc)
@@ -229,9 +232,10 @@ class WeaviateCodeDefinitionProcessor:
         fn_entries: list[tuple[int, Document]] = []
 
         for idx, doc in enumerate(unique_docs):
-            collection = doc.metadata.get("collection", "")
-            class_name = doc.metadata.get("class_name")
-            name = doc.metadata.get("name", "")
+            metadata = doc.metadata or {}
+            collection = metadata.get("collection", "")
+            class_name = metadata.get("class_name")
+            name = metadata.get("name", "")
 
             if class_name:
                 methods_by_class.setdefault(class_name, []).append(doc)
@@ -246,8 +250,9 @@ class WeaviateCodeDefinitionProcessor:
 
         # Second pass: catch CodeClass docs that arrived before any of their methods.
         for idx, doc in enumerate(unique_docs):
-            if doc.metadata.get("collection") == "CodeClass":
-                name = doc.metadata.get("name", "")
+            metadata = doc.metadata or {}
+            if metadata.get("collection") == "CodeClass":
+                name = metadata.get("name", "")
                 if name and name not in class_docs:
                     class_docs[name] = doc
                     class_last_idx[name] = max(class_last_idx.get(name, idx), idx)
@@ -296,9 +301,11 @@ class WeaviateCodeDefinitionProcessor:
 
         method_parts: list[str] = []
         for mth_doc in methods_by_class.get(class_name, []):
-            if mth_doc.id in emitted_method_ids:
-                continue
-            emitted_method_ids.add(mth_doc.id)
+            method_id = mth_doc.id
+            if method_id is not None:
+                if method_id in emitted_method_ids:
+                    continue
+                emitted_method_ids.add(method_id)
             method_parts.append(_indent(mth_doc.content.rstrip()))
 
         if not method_parts:

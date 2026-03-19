@@ -14,7 +14,7 @@ from rag_service.constants import (
     REFERENCE_TYPE_MAP,
     CodeEntityRef,
 )
-from rag_service.models import EntityType, MetadataFilter, MetadataFilters
+from rag_service.models import Document, EntityType, MetadataFilter, MetadataFilters
 from rag_service.repositories import WeaviateRepository
 from requests import HTTPError, Response, get
 from testcontainers.core.waiting_utils import wait_container_is_ready
@@ -477,24 +477,28 @@ async def test_weaviate_search_with_expansion(repo):
 
 @pytest.mark.asyncio
 async def test_weaviate_get_related_code_definitions(repo):
-    """Verify code-definition graph traversal returns ordered, deduplicated source."""
+    """Verify code-definition graph traversal returns one wrapped content document."""
     repo._build_nested_code_def_refs = (  # type: ignore[method-assign]
         lambda max_depth=10: WeaviateRepository._build_nested_code_def_refs(repo, min(max_depth, 1))
     )
 
     result = await repo.get_related_code_definitions([ROOT_UUID])
 
-    assert result
-    assert "def helper():" in result
-    assert "def execute():" in result
-    assert "class Runner:" in result
-    assert "def run(self):" in result
+    assert isinstance(result, Document)
+    assert result.id is None
+    assert result.metadata is None
+    assert result.cosine_similarity is None
 
-    # Dependencies should appear before their callers.
-    assert result.index("def helper():") < result.index("def execute():")
+    assert "def helper():" in result.content
+    assert "def execute():" in result.content
+    assert "class Runner:" in result.content
+    assert "def run(self):" in result.content
+
+    # Dependencies should appear before their callers in reconstructed source.
+    assert result.content.index("def helper():") < result.content.index("def execute():")
 
     # Caller is referenced from both root and method, but should only appear once.
-    assert result.count("def execute():") == 1
+    assert result.content.count("def execute():") == 1
 
     # Unrelated function should never be pulled into the fragment.
-    assert "def unrelated():" not in result
+    assert "def unrelated():" not in result.content
