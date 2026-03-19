@@ -533,3 +533,39 @@ async def test_rag_tools_get_related_code_definitions_integration(repo):
 
     # Unrelated function should never be pulled into the fragment.
     assert "def unrelated():" not in result.content
+
+
+@pytest.mark.asyncio
+async def test_rag_tools_get_related_code_definitions_integration_empty_ids(repo):
+    """Verify RagTools returns an empty wrapped content document for empty IDs."""
+    rag_tools = RagTools(repo)
+
+    result = await rag_tools.get_related_code_definitions([])
+
+    assert isinstance(result, Document)
+    assert result.id is None
+    assert result.metadata is None
+    assert result.cosine_similarity is None
+    assert result.content == ""
+
+
+@pytest.mark.asyncio
+async def test_rag_tools_get_related_code_definitions_integration_two_ids(repo):
+    """Verify RagTools handles multiple IDs while preserving reconstructed source output."""
+    repo._build_nested_code_def_refs = (  # type: ignore[method-assign]
+        lambda max_depth=10: WeaviateRepository._build_nested_code_def_refs(repo, min(max_depth, 1))
+    )
+
+    rag_tools = RagTools(repo)
+    result = await rag_tools.get_related_code_definitions([ROOT_UUID, OTHER_UUID])
+
+    assert isinstance(result, Document)
+    assert result.id is None
+    assert result.metadata is None
+    assert result.cosine_similarity is None
+
+    assert "def helper():" in result.content
+    assert "def execute():" in result.content
+    assert "class Runner:" in result.content
+    assert "def run(self):" in result.content
+    assert "def unrelated():" not in result.content
