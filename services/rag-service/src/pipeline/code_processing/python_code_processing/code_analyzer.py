@@ -457,13 +457,6 @@ def _resolve_qualified(
     # confirmed method — the method may live in an incomplete fragment.
     # This satisfies "better false positive than false negative."
     if cls_name in classes:
-        # Still verify that *something* with that method name exists anywhere
-        all_method_candidates = index.get(method_name, [])
-        if all_method_candidates:
-            return [(c, KIND_METHOD) for c in all_method_candidates]
-        # No method by that name anywhere — still emit but mark as unknown
-        # so callers can decide.  We use the original qualified form so
-        # build_code_schema can still cross-reference.
         return [(call_name, KIND_METHOD)]
 
     # Fallback: single unambiguous match on method name
@@ -494,13 +487,8 @@ def build_graph(analyzer: CodeAnalyzer) -> dict[str, dict[str, str]]:
             if len(parts) == 2:
                 resolved = _resolve_qualified(caller, call_name, definitions, index, all_classes)
                 for target, kind in resolved:
-                    if graph[caller].get(target) in (None, KIND_UNKNOWN):
-                        # Only keep if target is known OR if receiver is a known class
-                        receiver = parts[0]
-                        target_known = target in definitions
-                        receiver_is_class = receiver in all_classes
-                        if target_known or receiver_is_class:
-                            graph[caller][target] = kind
+                    if graph[caller].get(target) in (None, KIND_UNKNOWN) and target in definitions:
+                        graph[caller][target] = kind
 
             elif raw_kind == "bare":
                 for target, kind in _resolve_bare(caller, parts[-1], analyzer, index):

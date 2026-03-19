@@ -4,6 +4,7 @@ Unit tests for code_analyzer.py
 
 import ast
 
+import pytest
 from pipeline.code_processing.python_code_processing.code_analyzer import (
     KIND_CLASS_INIT,
     KIND_FUNCTION,
@@ -237,10 +238,9 @@ def test_analyze_fragments_dict_missing_algorithm_number_defaults_to_index():
     assert analyzer.fragment_idx["baz"] == 0
 
 
-def test_analyze_fragments_syntax_error_skipped():
-    fragments = ["def broken(", "def ok(): pass"]
-    analyzer, graph = analyze_fragments(fragments)
-    assert "ok" in analyzer.functions
+def test_analyze_fragments_syntax_error_raises():
+    with pytest.raises(SyntaxError):
+        analyze_fragments(["def broken(", "def ok(): pass"])
 
 
 def test_analyze_fragments_multiple_accumulated():

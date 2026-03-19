@@ -204,9 +204,11 @@ def _resolve_dotted_call(
     """Resolve a ``Class.method`` call into *methods*."""
     if qualified in index.methods and qualified not in local_methods:
         methods.add(f"mth:{qualified}")
-    else:
+
+    cls_name = qualified.split(".")[0]
+    if cls_name in index.classes:
         for candidate in index.method_index.get(method_name, []):
-            if candidate not in local_methods:
+            if candidate.split(".")[0] == cls_name and candidate not in local_methods:
                 methods.add(f"mth:{candidate}")
 
 

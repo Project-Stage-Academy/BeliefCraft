@@ -94,3 +94,19 @@ async def test_get_related_code_definitions_empty_ids(rag_tools, mock_repo):
 
     mock_repo.get_related_code_definitions.assert_called_once_with([])
     assert result == "# No related code definitions found for the provided document IDs."
+
+
+@pytest.mark.asyncio
+async def test_get_related_code_definitions_multiple_ids(rag_tools, mock_repo):
+    """Verify get_related_code_definitions delegates correctly with multiple IDs."""
+    mock_repo.get_related_code_definitions.return_value = (
+        "def foo():\n    pass\n\n" "def bar():\n    return 1"
+    )
+
+    result = await rag_tools.get_related_code_definitions(
+        document_ids=["doc-uuid-001", "doc-uuid-002"]
+    )
+
+    mock_repo.get_related_code_definitions.assert_called_once_with(["doc-uuid-001", "doc-uuid-002"])
+    assert isinstance(result, str)
+    assert result == "def foo():\n    pass\n\ndef bar():\n    return 1"
