@@ -27,14 +27,11 @@ LAST_PAGE = 648
 BBOX_PADDING = 35
 ID_PREFIX_LIMIT = 100
 PART_SEQUENCE = ["I", "II", "III", "IV", "V", "Appendices"]
-BLOCKS_KY = 1.991228
-BLOCKS_BX = 4.300860
-BLOCKS_KX = 1.991404
-BLOCKS_BY = 1.701754
-IMAGES_KY = 0.710317
-IMAGES_BY = 10.083333
-IMAGES_KX = 0.721003
-IMAGES_BX = -0.178683
+IMAGE_SCALE = 0.36  # 72 points per inch / 200 dpi
+FITZ_WIDTH = 576
+FITZ_HEIGHT = 648
+PADDLE_WIDTH = 1152
+PADDLE_HEIGHT = 1296
 
 
 def load_bucket_url_from_env() -> str | None:
@@ -70,20 +67,15 @@ class DocumentAssembler:
         self.table_map = self._load_and_offset(self.tables_json, "page", offset=0)
         self.formula_map = self._safe_load_json(self.formulas_json)
 
-        self._apply_bbox_transform_to_map(
-            self.block_map,
-            kx=BLOCKS_KX,
-            bx=BLOCKS_BX,
-            ky=BLOCKS_KY,
-            by=BLOCKS_BY,
-        )
-        self._apply_bbox_transform_to_map(
-            self.image_map,
-            kx=IMAGES_KX,
-            bx=IMAGES_BX,
-            ky=IMAGES_KY,
-            by=IMAGES_BY,
-        )
+        # Blocks are in FITZ space, scale up to Paddle
+        kx_b = PADDLE_WIDTH / FITZ_WIDTH
+        ky_b = PADDLE_HEIGHT / FITZ_HEIGHT
+        self._apply_bbox_transform_to_map(self.block_map, kx_b, ky_b)
+
+        # Images are in pixels (200 DPI), scale to FITZ then to Paddle
+        kx_i = (PADDLE_WIDTH / FITZ_WIDTH) * IMAGE_SCALE
+        ky_i = (PADDLE_HEIGHT / FITZ_HEIGHT) * IMAGE_SCALE
+        self._apply_bbox_transform_to_map(self.image_map, kx_i, ky_i)
 
         self.meta_extractor = MetadataExtractor()
         self.final_chunks: list[dict[str, Any]] = []
@@ -101,31 +93,22 @@ class DocumentAssembler:
         self,
         bbox: list[float],
         kx: float,
-        bx: float,
         ky: float,
-        by: float,
     ) -> list[float]:
         x1, y1, x2, y2 = bbox
-        return [
-            kx * x1 + bx,
-            ky * y1 + by,
-            kx * x2 + bx,
-            ky * y2 + by,
-        ]
+        return [x1 * kx, y1 * ky, x2 * kx, y2 * ky]
 
     def _apply_bbox_transform_to_map(
         self,
         data_map: dict[int, list[dict[str, Any]]],
         kx: float,
-        bx: float,
         ky: float,
-        by: float,
     ) -> None:
         for page_items in data_map.values():
             for item in page_items:
                 bbox = item.get("bbox")
                 if bbox and len(bbox) == 4:
-                    item["bbox"] = self._transform_bbox(bbox, kx, bx, ky, by)
+                    item["bbox"] = self._transform_bbox(bbox, kx, ky)
 
     def _validate_files(self, file_paths: list[Path]) -> None:
         for path in file_paths:
