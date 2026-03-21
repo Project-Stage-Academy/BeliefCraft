@@ -115,15 +115,20 @@ class MetadataExtractor:
         if not text:
             return {}
         lt = text.lower()
-        return {
-            "referenced_parts": list(set(re.findall(r"part\s+([ivxcdlm]+)", lt))),
-            "referenced_figures": list(set(re.findall(r"figure\s+(\d+\.\d+)", lt))),
-            "referenced_tables": list(set(re.findall(r"table\s+(\d+\.\d+)", lt))),
+        result = {
+            "referenced_parts": list(set(re.findall(r"part\s+([ivxcdlm]+)\b", lt))),
+            "referenced_figures": list(set(re.findall(r"figure\s+([a-z\d]+\.\d+)", lt))),
+            "referenced_tables": list(set(re.findall(r"table\s+([a-z\d]+\.\d+)", lt))),
             "referenced_formulas": list(
-                set(re.findall(r"(?:equation|formula|eq\.)\s+\(?(\d+\.\d+)\)?", lt))
+                set(re.findall(r"(?:equation|formula|eq\.)\s+\(?([a-z\d]+\.\d+)\)?", lt))
             ),
-            "referenced_algorithms": list(set(re.findall(r"algorithm\s+(\d+\.\d+)", lt))),
-            "referenced_examples": list(set(re.findall(r"example\s+(\d+\.\d+)", lt))),
-            "referenced_exercises": list(set(re.findall(r"exercise\s+(\d+\.\d+)", lt))),
-            "referenced_sections": list(set(re.findall(r"section\s+(\d+\.\d+(?:\.\d+)?)", lt))),
+            "referenced_algorithms": list(set(re.findall(r"algorithm\s+([a-z\d]+\.\d+)", lt))),
+            "referenced_examples": list(set(re.findall(r"example\s+([a-z\d]+\.\d+)", lt))),
+            "referenced_exercises": list(set(re.findall(r"exercise\s+([a-z\d]+\.\d+)", lt))),
+            "referenced_sections": list(
+                set(re.findall(r"section\s+([a-z\d]+\.\d+(?:\.\d+)?)", lt))
+            ),
         }
+        for key, value in result.items():
+            result[key] = [v.upper() for v in value]
+        return result
