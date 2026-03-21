@@ -318,6 +318,19 @@ main {
 .chunk-content p { margin-bottom: .75em; }
 .chunk-content p:last-child { margin-bottom: 0; }
 
+/* Referenced metadata */
+.chunk-referenced {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.referenced-item { margin-bottom: 1px; }
+.referenced-key { font-weight: 600; color: var(--text-faint); margin-right: 4px; }
+
 .chunk-content h1, .chunk-content h2, .chunk-content h3,
 .chunk-content h4, .chunk-content h5 {
   font-family: 'Inter', sans-serif;
@@ -651,6 +664,24 @@ function buildChunkCard(chunk) {
   contentDiv.className = 'chunk-content';
   contentDiv.innerHTML = md.render(chunk.content || '');
   body.appendChild(contentDiv);
+
+  // Referenced metadata
+  const refEntries = Object.entries(chunk).filter(([key, val]) => {
+    if (!key.startsWith('referenced_')) return false;
+    if (val === null || val === undefined) return false;
+    if (typeof val === 'string' && val.trim() === '') return false;
+    if (Array.isArray(val) && val.length === 0) return false;
+    if (typeof val === 'object' && Object.keys(val).length === 0) return false;
+    return true;
+  });
+  if (refEntries.length > 0) {
+    const refDiv = document.createElement('div');
+    refDiv.className = 'chunk-referenced';
+    refDiv.innerHTML = refEntries.map(([k, v]) =>
+      `<div class="referenced-item"><span class="referenced-key">${escHtml(k)}:</span> ${escHtml(v)}</div>`
+    ).join('');
+    body.appendChild(refDiv);
+  }
 
   // Images
   const links = chunk.image_links || [];
