@@ -42,8 +42,6 @@ def _detect_gaps(values: Iterable[str]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, ...], set[str]] = defaultdict(set)
 
     for parts in parsed:
-        if len(parts) < 2:
-            continue
         parent = parts[:-1]
         grouped[parent].add(parts[-1])
 
@@ -55,6 +53,21 @@ def _detect_gaps(values: Iterable[str]) -> list[dict[str, Any]]:
             continue
 
         ordered = sorted(tails, key=lambda x: int(x))
+        if not ordered:
+            continue
+
+        # Check if numbering starts at 1
+        first_val = int(ordered[0])
+        if first_val > 1:
+            missing = [".".join((*parent, str(i))) for i in range(1, first_val)]
+            gaps.append(
+                {
+                    "parent": ".".join(parent),
+                    "after": "start",
+                    "before": ".".join((*parent, ordered[0])),
+                    "missing": missing,
+                }
+            )
 
         for a, b in zip(ordered, ordered[1:], strict=False):
             ai, bi = int(a), int(b)
