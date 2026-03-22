@@ -207,6 +207,11 @@ class DocumentAssembler:
 
         blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
 
+        def sort_by_height(b: dict[str, Any]) -> float:
+            return b.get("block_bbox", [0, 0, 0, 0])[1] if b.get("block_bbox") else 0
+
+        blocks = sorted(blocks, key=sort_by_height)
+
         if not blocks:
             return
         used_indices: set[int] = set()
@@ -297,11 +302,7 @@ class DocumentAssembler:
 
         last_numbered_formula_chunks = []
 
-        def sort_by_height(b: dict[str, Any]) -> float:
-            return b.get("block_bbox", [0, 0, 0, 0])[1] if b.get("block_bbox") else 0
-
-        sorted_blocks = sorted(blocks, key=sort_by_height)
-        for idx, block in enumerate(sorted_blocks):
+        for idx, block in enumerate(blocks):
             if idx in used_indices:
                 continue
             content = block.get("block_content", "").strip()
