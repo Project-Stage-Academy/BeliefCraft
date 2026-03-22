@@ -304,17 +304,13 @@ class DocumentAssembler:
                 if was_numbered_table:
                     continue
 
-            f_match = re.search(r"\((\d+\.\d+)\)", content)
-            if f_match:
-                formula_key = f_match.group(0)
-                formula_id = f_match.group(1)
+            if label == "formula_number" and content in self.formula_map:
+                formula_id = content[1:-1]  # Remove parentheses
+                if acc:
+                    self._flush(acc, page_num)
+                    acc.clear()
 
-                if formula_key in self.formula_map:
-                    if acc:
-                        self._flush(acc, page_num)
-                        acc.clear()
-
-                    self._add_formula_chunk(formula_id, page_num)
+                self._add_formula_chunk(formula_id, page_num)
 
             if content:
                 acc.append(content)
