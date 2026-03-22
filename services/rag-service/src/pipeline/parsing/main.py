@@ -437,7 +437,8 @@ class DocumentAssembler:
             ):
                 meta_res[key] = meta_override.get(key)
 
-        if not meta_res["clean_content"]:
+        is_part_chunk = re.match(r"^PART\s[IV]+$", meta_res["clean_content"].strip())
+        if not meta_res["clean_content"] or is_part_chunk:
             return None
         chunk = self._create_chunk_obj("text", meta_res["clean_content"], page, meta_res)
         if hasattr(self.meta_extractor, "get_references"):
