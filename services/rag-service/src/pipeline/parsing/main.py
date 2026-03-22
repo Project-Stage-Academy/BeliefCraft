@@ -27,7 +27,7 @@ PAGE_OFFSET = 18
 START_PAGE = 23
 LAST_PAGE = 648
 BBOX_PADDING = 5
-MAX_CHUNK_CHAR_LENGTH = 2000
+MAX_CHUNK_CHAR_LENGTH = 1000
 
 ID_PREFIX_LIMIT = 100
 PART_SEQUENCE = ["I", "II", "III", "IV", "V", "Appendices"]
@@ -341,7 +341,7 @@ class DocumentAssembler:
                 if matched_key:
                     special_accs[matched_key]["content"].append(content)
                 else:
-                    if len("\n".join(acc + [content])) > MAX_CHUNK_CHAR_LENGTH:
+                    if acc and len("\n".join(acc + [content])) > MAX_CHUNK_CHAR_LENGTH:
                         chunk = self._flush(acc, page_num)
                         if chunk and chunk["chunk_type"] == "text":
                             for formula_chunk in last_numbered_formula_chunks:
@@ -354,7 +354,6 @@ class DocumentAssembler:
             if chunk and chunk["chunk_type"] == "text":
                 for formula_chunk in last_numbered_formula_chunks:
                     formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
-                last_numbered_formula_chunks = []
         return special_accs
 
     def _process_table(self, content: str, page_num: int, temp_meta: dict[str, Any]) -> bool:
@@ -438,7 +437,7 @@ class DocumentAssembler:
             ):
                 meta_res[key] = meta_override.get(key)
 
-        if not raw_text:
+        if not meta_res["clean_content"]:
             return None
         chunk = self._create_chunk_obj("text", meta_res["clean_content"], page, meta_res)
         if hasattr(self.meta_extractor, "get_references"):
