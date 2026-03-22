@@ -103,6 +103,11 @@ def insert_chunks(
         for chunk in chunks:
             chunk.pop("chunk_id", "")
             uuid = generate_deterministic_uuid(chunk)
+            if "defined_in_chunk" in chunk:
+                referenced_chunk = next(
+                    ch for ch in chunks if ch["chunk_id"] == chunk["defined_in_chunk"]
+                )
+                chunk["defined_in_chunk"] = generate_deterministic_uuid(referenced_chunk)
             chunk_references = extract_references_from_chunk(chunk, reference_map)
             batch.add_object(
                 properties=chunk,

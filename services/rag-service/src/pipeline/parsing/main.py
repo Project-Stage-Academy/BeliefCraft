@@ -295,6 +295,7 @@ class DocumentAssembler:
             for sr in special_regions
         }
 
+        last_numbered_formula_chunks = []
         for idx, block in enumerate(blocks):
             if idx in used_indices:
                 continue
@@ -334,18 +335,26 @@ class DocumentAssembler:
 
             if label == "formula_number" and content in self.formula_map:
                 formula_id = content[1:-1]  # Remove parentheses
-                self._add_formula_chunk(formula_id, page_num)
+                last_numbered_formula_chunks.append(self._add_formula_chunk(formula_id, page_num))
 
             if content:
                 if matched_key:
                     special_accs[matched_key]["content"].append(content)
                 else:
                     if len("\n".join(acc + [content])) > MAX_CHUNK_CHAR_LENGTH:
-                        self._flush(acc, page_num)
+                        chunk = self._flush(acc, page_num)
+                        if chunk and chunk["chunk_type"] == "text":
+                            for formula_chunk in last_numbered_formula_chunks:
+                                formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
+                            last_numbered_formula_chunks = []
                         acc = []
                     acc.append(content)
         if acc:
-            self._flush(acc, page_num)
+            chunk = self._flush(acc, page_num)
+            if chunk and chunk["chunk_type"] == "text":
+                for formula_chunk in last_numbered_formula_chunks:
+                    formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
+                last_numbered_formula_chunks = []
         return special_accs
 
     def _process_table(self, content: str, page_num: int, temp_meta: dict[str, Any]) -> bool:
@@ -365,12 +374,13 @@ class DocumentAssembler:
                 return True
         return False
 
-    def _add_formula_chunk(self, f_id: str, page_num: int) -> None:
+    def _add_formula_chunk(self, f_id: str, page_num: int) -> dict[str, Any]:
         meta_now = self.meta_extractor.get_meta()
         formula_content = self.formula_map.get(f"({f_id})", f"Formula {f_id}")
         f_chunk = self._create_chunk_obj("numbered_formula", formula_content, page_num, meta_now)
         f_chunk["entity_id"] = f_id
         self.final_chunks.append(f_chunk)
+        return f_chunk
 
     def _create_chunk_obj(
         self, c_type: str, content: str, page: int, meta: dict[str, Any]
@@ -411,7 +421,7 @@ class DocumentAssembler:
         acc: list[str],
         page: int,
         meta_override: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> dict[str, Any] | None:
         raw_text = "\n".join(acc)
         meta_res = self.meta_extractor.process_content_and_get_meta(raw_text, update_meta=False)
 
@@ -429,12 +439,13 @@ class DocumentAssembler:
                 meta_res[key] = meta_override.get(key)
 
         if not raw_text:
-            return
+            return None
         chunk = self._create_chunk_obj("text", meta_res["clean_content"], page, meta_res)
         if hasattr(self.meta_extractor, "get_references"):
             refs = self.meta_extractor.get_references(meta_res["clean_content"])
             chunk.update(refs)
         self.final_chunks.append(chunk)
+        return chunk
 
     def _extract_id(self, text: str | None) -> str | None:
         if not text:

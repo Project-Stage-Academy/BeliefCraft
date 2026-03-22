@@ -667,7 +667,7 @@ function buildChunkCard(chunk) {
 
   // Referenced metadata
   const refEntries = Object.entries(chunk).filter(([key, val]) => {
-    if (!key.startsWith('referenced_')) return false;
+    if (key !== 'defined_in_chunk' && !key.startsWith('referenced_')) return false;
     if (val === null || val === undefined) return false;
     if (typeof val === 'string' && val.trim() === '') return false;
     if (Array.isArray(val) && val.length === 0) return false;
@@ -677,9 +677,10 @@ function buildChunkCard(chunk) {
   if (refEntries.length > 0) {
     const refDiv = document.createElement('div');
     refDiv.className = 'chunk-referenced';
-    refDiv.innerHTML = refEntries.map(([k, v]) =>
-      `<div class="referenced-item"><span class="referenced-key">${escHtml(k)}:</span> ${escHtml(v)}</div>`
-    ).join('');
+    refDiv.innerHTML = refEntries.map(([k, v]) => {
+      const displayVal = Array.isArray(v) ? v.join(', ') : v;
+      return `<div class="referenced-item"><span class="referenced-key">${escHtml(k)}:</span> ${escHtml(displayVal)}</div>`;
+    }).join('');
     body.appendChild(refDiv);
   }
 
