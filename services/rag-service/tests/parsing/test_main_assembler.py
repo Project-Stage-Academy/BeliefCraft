@@ -312,7 +312,7 @@ def test_handle_visual_objects_overlap(mock_data_env):
         },
     ]
 
-    used = assembler._handle_visual_objects(1, blocks_from_paddle)
+    used = assembler._handle_images(1, blocks_from_paddle)
 
     assert 0 in used
     assert 1 not in used

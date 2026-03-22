@@ -26,7 +26,7 @@ logger.info("service_started", message="RAG Service is up and running")
 PAGE_OFFSET = 18
 START_PAGE = 23
 LAST_PAGE = 648
-BBOX_PADDING = 0
+BBOX_PADDING = 5
 ID_PREFIX_LIMIT = 100
 PART_SEQUENCE = ["I", "II", "III", "IV", "V", "Appendices"]
 IMAGE_SCALE = 0.36  # 72 points per inch / 200 dpi
@@ -209,26 +209,47 @@ class DocumentAssembler:
             return
         used_indices: set[int] = set()
 
-        used_indices.update(self._handle_visual_objects(page_num, blocks))
-        self._handle_text_stream(page_num, blocks, used_indices)
+        not_captioned_images: list[dict[str, Any]] = []
+        used_indices.update(self._handle_images(page_num, blocks, not_captioned_images))
+        special_accs = self._handle_text_stream(page_num, blocks, used_indices)
 
-    def _handle_visual_objects(self, page_num: int, blocks: list[dict[str, Any]]) -> set[int]:
+        for (eid, _), data in special_accs.items():
+            full_text = "\n".join(data["content"])
+            meta = self.meta_extractor.process_content_and_get_meta(full_text, update_meta=False)
+            chunk = self._create_chunk_obj(data["chunk_type"], full_text, page_num, meta)
+            chunk["entity_id"] = eid
+
+            for img_chunk in list(not_captioned_images):
+                if (
+                    img_chunk.get("entity_id") == eid
+                    and img_chunk.get("chunk_type", "").lower() == data["chunk_type"]
+                ):
+                    chunk["image_links"].append(
+                        f"{FIGURES_BUCKET_URL}figures/figure_{img_chunk['image_index']-1}.png"
+                    )
+                    not_captioned_images.remove(img_chunk)
+
+            self.final_chunks.append(chunk)
+
+    def _handle_images(
+        self,
+        page_num: int,
+        blocks: list[dict[str, Any]],
+        not_captioned_images: list[dict[str, Any]],
+    ) -> set[int]:
         used: set[int] = set()
-        visual_items = self.block_map.get(page_num, []) + self.image_map.get(page_num, [])
-        merged_visuals = self._merge_visual_items(visual_items)
+        visual_items = self.image_map.get(page_num, [])
+        captioned_images = []
 
-        for eid, v_obj in merged_visuals.items():
+        for eid, v_obj in zip(
+            (v.get("entity_id") for v in visual_items), visual_items, strict=False
+        ):
             for idx, block in enumerate(blocks):
                 bbox = block.get("block_bbox")
                 if bbox and self._is_inside(bbox, v_obj.get("bbox", [])):
                     used.add(idx)
 
-            full_caption = v_obj.get("caption", v_obj.get("content", ""))
-            clean_content = (
-                full_caption.replace("[BLOCK EXERCISE CONTENT]:", "")
-                .replace("[BLOCK EXAMPLE CONTENT]:", "")
-                .strip()
-            )
+            clean_content = v_obj.get("caption", v_obj.get("content", "")).strip()
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
             chunk = self._create_chunk_obj(
@@ -242,43 +263,36 @@ class DocumentAssembler:
                     f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
                 ]
 
-            self.final_chunks.append(chunk)
-        return used
-
-    def _merge_visual_items(self, items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-        merged: dict[str, dict[str, Any]] = {}
-        for item in items:
-            eid = item.get("entity_id") or self._extract_id(item.get("caption", ""))
-            if eid is None:
-                continue
-            if eid not in merged:
-                merged[eid] = item
+            if chunk["chunk_type"] == "captioned_image":
+                captioned_images.append(chunk)
             else:
-                if "image_index" in item:
-                    merged[eid]["image_index"] = item["image_index"]
-                if (
-                    "bbox" in item
-                    and isinstance(item["bbox"], (list, tuple))
-                    and len(item["bbox"]) == 4
-                ):
-                    b2 = item["bbox"]
-                    b1 = merged[eid].get("bbox")
+                not_captioned_images.append(v_obj)
 
-                    if b1 and isinstance(b1, (list, tuple)) and len(b1) == 4:
-                        merged[eid]["bbox"] = [
-                            min(b1[0], b2[0]),
-                            min(b1[1], b2[1]),
-                            max(b1[2], b2[2]),
-                            max(b1[3], b2[3]),
-                        ]
-                    else:
-                        merged[eid]["bbox"] = list(b2)
-        return merged
+        # deduplicate captioned images by entity_id, merging image links if necessary
+        for img_chunk in captioned_images:
+            existing = next(
+                (c for c in captioned_images if c.get("entity_id") == img_chunk["entity_id"]), None
+            )
+            if existing and existing is not img_chunk:
+                existing["image_links"].extend(img_chunk.get("image_links", []))
+            else:
+                self.final_chunks.append(img_chunk)
+        return used
 
     def _handle_text_stream(
         self, page_num: int, blocks: list[dict[str, Any]], used_indices: set[int]
-    ) -> None:
+    ) -> dict[tuple[str | None, str], dict[str, Any]]:
         acc: list[str] = []
+        special_regions = self.block_map.get(page_num, [])
+        special_accs: dict[tuple[str | None, str], dict[str, Any]] = {
+            (sr.get("entity_id"), str(sr.get("chunk_type", "")).lower()): {
+                **sr,
+                "content": [sr.get("caption", "")],
+                "chunk_type": str(sr.get("chunk_type", "")).lower(),
+            }
+            for sr in special_regions
+        }
+
         for idx, block in enumerate(blocks):
             if idx in used_indices:
                 continue
@@ -287,9 +301,21 @@ class DocumentAssembler:
             if label in ["footer", "number", "header", "image", "footnote", "doc_title"]:
                 continue
 
+            matched_key = None
+            bbox = block.get("block_bbox")
+            if bbox:
+                for sr in special_regions:
+                    if self._is_inside(bbox, sr.get("bbox", [])):
+                        matched_key = (
+                            sr.get("entity_id"),
+                            str(sr.get("chunk_type", "")).lower(),
+                        )
+                        break
+
             text = BeautifulSoup(content, "html.parser").get_text().strip().lower()
-            if re.search(r"^table\s+([a-z\d]+\.\d+)\.", text):
-                # this is table caption, will be added to numbered table chunk, ignore here
+            if re.search(r"^(example|algorithm|figure|table)\s+([a-z\d]+\.\d+)\.", text):
+                # this is caption, it will be added to corresponding
+                # numbered entity chunk, ignore here
                 continue
 
             # Capture hierarchy state before processing the current block.
@@ -313,9 +339,13 @@ class DocumentAssembler:
                 self._add_formula_chunk(formula_id, page_num)
 
             if content:
-                acc.append(content)
+                if matched_key:
+                    special_accs[matched_key]["content"].append(content)
+                else:
+                    acc.append(content)
         if acc:
             self._flush(acc, page_num)
+        return special_accs
 
     def _process_table(self, content: str, page_num: int, temp_meta: dict[str, Any]) -> bool:
         for possible_table in self.table_map.get(page_num, []):
