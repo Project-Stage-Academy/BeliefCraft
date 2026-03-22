@@ -27,6 +27,8 @@ PAGE_OFFSET = 18
 START_PAGE = 23
 LAST_PAGE = 648
 BBOX_PADDING = 5
+MAX_CHUNK_CHAR_LENGTH = 2000
+
 ID_PREFIX_LIMIT = 100
 PART_SEQUENCE = ["I", "II", "III", "IV", "V", "Appendices"]
 IMAGE_SCALE = 0.36  # 72 points per inch / 200 dpi
@@ -332,16 +334,15 @@ class DocumentAssembler:
 
             if label == "formula_number" and content in self.formula_map:
                 formula_id = content[1:-1]  # Remove parentheses
-                if acc:
-                    self._flush(acc, page_num)
-                    acc.clear()
-
                 self._add_formula_chunk(formula_id, page_num)
 
             if content:
                 if matched_key:
                     special_accs[matched_key]["content"].append(content)
                 else:
+                    if len("\n".join(acc + [content])) > MAX_CHUNK_CHAR_LENGTH:
+                        self._flush(acc, page_num)
+                        acc = []
                     acc.append(content)
         if acc:
             self._flush(acc, page_num)
