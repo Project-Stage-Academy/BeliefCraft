@@ -5,8 +5,10 @@ import re
 from pathlib import Path
 from typing import Any
 
+from bs4 import BeautifulSoup
 from common.logging import configure_logging, get_logger
 from dotenv import load_dotenv
+from pipeline.parsing.math_table_engine import clean_html_attributes
 
 try:
     from .metadata_extractor import MetadataExtractor
@@ -64,7 +66,7 @@ class DocumentAssembler:
         self.paddle_pages = self._load_all_paddle_jsons(self.paddle_dir)
         self.image_map = self._load_and_offset(self.figures_json, "page", offset=0)
         self.block_map = self._load_and_offset(self.blocks_json, "page", offset=0)
-        self.table_map = self._load_and_offset(self.tables_json, "page", offset=0)
+        self.table_map = self._load_and_offset(self.tables_json, "page_number", offset=0)
         self.formula_map = self._safe_load_json(self.formulas_json)
 
         # Blocks are in FITZ space, scale up to Paddle
@@ -208,7 +210,6 @@ class DocumentAssembler:
         used_indices: set[int] = set()
 
         used_indices.update(self._handle_visual_objects(page_num, blocks))
-        self._handle_tables(page_num)
         self._handle_text_stream(page_num, blocks, used_indices)
 
     def _handle_visual_objects(self, page_num: int, blocks: list[dict[str, Any]]) -> set[int]:
@@ -286,12 +287,22 @@ class DocumentAssembler:
             if label in ["footer", "number", "header", "image", "footnote", "doc_title"]:
                 continue
 
+            text = BeautifulSoup(content, "html.parser").get_text().strip().lower()
+            if re.search(r"^table\s+([a-z\d]+\.\d+)\.", text):
+                # this is table caption, will be added to numbered table chunk, ignore here
+                continue
+
             # Capture hierarchy state before processing the current block.
             prev_meta = self.meta_extractor.get_meta()
             temp_meta = self.meta_extractor.process_content_and_get_meta(content)
             if temp_meta.get("force_new_chunk") and acc:
                 self._flush(acc, page_num, meta_override=prev_meta)
                 acc = []
+
+            if label == "table":
+                was_numbered_table = self._process_table(content, page_num, temp_meta)
+                if was_numbered_table:
+                    continue
 
             f_match = re.search(r"\((\d+\.\d+)\)", content)
             if f_match:
@@ -310,25 +321,29 @@ class DocumentAssembler:
         if acc:
             self._flush(acc, page_num)
 
+    def _process_table(self, content: str, page_num: int, temp_meta: dict[str, Any]) -> bool:
+        for possible_table in self.table_map.get(page_num, []):
+            if clean_html_attributes(content) == possible_table["table_content"].strip():
+                caption = re.sub("<[^<]+?>", "", possible_table.get("caption_content", ""))
+                chunk = self._create_chunk_obj(
+                    "numbered_table", clean_html_attributes(content), page_num, temp_meta
+                )
+                chunk.update(
+                    {
+                        "entity_id": self._extract_id(caption),
+                        "content": caption + "\n" + chunk["content"],
+                    }
+                )
+                self.final_chunks.append(chunk)
+                return True
+        return False
+
     def _add_formula_chunk(self, f_id: str, page_num: int) -> None:
         meta_now = self.meta_extractor.get_meta()
         formula_content = self.formula_map.get(f"({f_id})", f"Formula {f_id}")
         f_chunk = self._create_chunk_obj("numbered_formula", formula_content, page_num, meta_now)
         f_chunk["entity_id"] = f_id
         self.final_chunks.append(f_chunk)
-
-    def _handle_tables(self, page_num: int) -> None:
-        if page_num in self.table_map:
-            for tbl in self.table_map[page_num]:
-                caption = re.sub("<[^<]+?>", "", tbl.get("caption_content", ""))
-                meta_res = self.meta_extractor.process_content_and_get_meta(
-                    tbl.get("table_content", "")
-                )
-                chunk = self._create_chunk_obj(
-                    "numbered_table", meta_res["clean_content"], page_num, meta_res
-                )
-                chunk.update({"entity_id": self._extract_id(caption), "caption": caption})
-                self.final_chunks.append(chunk)
 
     def _create_chunk_obj(
         self, c_type: str, content: str, page: int, meta: dict[str, Any]
@@ -398,10 +413,12 @@ class DocumentAssembler:
         if not text:
             return None
         # Спочатку шукаємо за суворим шаблоном
-        m = re.search(r"(?:Exercise|Figure|Table|Algorithm|Example)\s+(\d+\.\d+)", str(text), re.I)
+        m = re.search(
+            r"(?:Exercise|Figure|Table|Algorithm|Example)\s+([a-zA-Z\d]+\.\d+)", str(text), re.I
+        )
         if not m:
             # Якщо не знайшли, шукаємо просто число формату X.X (наприклад, "4.4")
-            m = re.search(r"\b(\d+\.\d+)\b", str(text))
+            m = re.search(r"\b([a-zA-Z\d]+\.\d+)\b", str(text))
         return m.group(1) if m else None
 
     def _save(self) -> None:
