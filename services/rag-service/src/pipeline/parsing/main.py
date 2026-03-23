@@ -207,8 +207,9 @@ class DocumentAssembler:
 
         blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
 
-        def sort_by_height(b: dict[str, Any]) -> float:
-            return b.get("block_bbox", [0, 0, 0, 0])[1] if b.get("block_bbox") else 0
+        def sort_by_y_than_x(b: dict[str, Any]) -> tuple[float, float]:
+            bbox = b.get("block_bbox", [0, 0, 0, 0])
+            return bbox[1], bbox[0]
 
         # attach notes to correct blocks
         new_blocks = []
@@ -231,7 +232,7 @@ class DocumentAssembler:
             else:
                 new_blocks.append(block)
         blocks = new_blocks
-        blocks = sorted(blocks, key=sort_by_height)
+        blocks = sorted(blocks, key=sort_by_y_than_x)
 
         if not blocks:
             return
