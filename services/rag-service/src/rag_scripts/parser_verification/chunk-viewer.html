@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chunk Viewer</title>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- KaTeX -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+
+<style>
+:root {
+  --bg:         #f7f5f0;
+  --bg2:        #efede8;
+  --surface:    #ffffff;
+  --border:     #dedad3;
+  --border2:    #c9c4bc;
+  --text:       #1c1a17;
+  --text-dim:   #6b6660;
+  --text-faint: #a09a93;
+  --accent:     #2d6a4f;
+  --accent-dim: rgba(45,106,79,.08);
+  --header-h:   54px;
+  --radius-sm:  5px;
+  --radius:     8px;
+  --radius-lg:  10px;
+  /* type colors — muted, warm */
+  --c-text:      #2d6a4f;
+  --c-figure:    #a0522d;
+  --c-formula:   #5c4d8a;
+  --c-algo:      #2c5f8a;
+  --c-code:      #8a2c4d;
+  --c-table:     #4d7a3a;
+  --c-unknown:   #7a7268;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.8;
+  padding-top: var(--header-h);
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 6px; }
+
+/* ── HEADER ── */
+header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: rgba(247,245,240,.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 0;
+  z-index: 9000;
+}
+
+.hd-logo {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+  white-space: nowrap;
+  user-select: none;
+  letter-spacing: -.2px;
+}
+.hd-logo span { color: var(--text-dim); font-weight: 400; }
+
+.hd-pipe {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  margin: 0 18px;
+  flex-shrink: 0;
+}
+
+.hd-file-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 6px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  transition: border-color .15s, color .15s, background .15s;
+  white-space: nowrap;
+}
+.hd-file-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.hd-file-btn input { display: none; }
+
+.hd-filename {
+  margin-left: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hd-jump {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.hd-jump-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.hd-jump input[type="number"] {
+  width: 72px;
+  padding: 5px 9px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .15s;
+  -moz-appearance: textfield;
+}
+.hd-jump input::-webkit-inner-spin-button,
+.hd-jump input::-webkit-outer-spin-button { -webkit-appearance: none; }
+.hd-jump input:focus { border-color: var(--accent); }
+
+.hd-jump-btn {
+  padding: 6px 14px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.hd-jump-btn:hover { opacity: .85; }
+
+.hd-stats {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+  margin-left: 4px;
+}
+
+/* ── MAIN ── */
+main {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 40px 24px 100px;
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 68vh;
+  text-align: center;
+}
+.empty-icon {
+  width: 80px; height: 80px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px;
+}
+.empty-icon svg { opacity: .35; }
+.empty-state h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.empty-state p {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--text-dim);
+  max-width: 340px;
+  line-height: 1.65;
+}
+.empty-state p strong { color: var(--accent); font-weight: 600; }
+
+/* ── PAGE SECTION ── */
+.page-section { margin-bottom: 48px; }
+
+.page-ruler {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.page-ruler-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.page-ruler-num {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.page-ruler-count {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ── CHUNK CARD ── */
+.chunk-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.chunk-card[data-type="text"]      { border-left: 3px solid var(--c-text); }
+.chunk-card[data-type="figure"]    { border-left: 3px solid var(--c-figure); }
+.chunk-card[data-type="formula"]   { border-left: 3px solid var(--c-formula); }
+.chunk-card[data-type="algorithm"] { border-left: 3px solid var(--c-algo); }
+.chunk-card[data-type="code"]      { border-left: 3px solid var(--c-code); }
+.chunk-card[data-type="table"]     { border-left: 3px solid var(--c-table); }
+.chunk-card[data-type="unknown"]   { border-left: 3px solid var(--border2); }
+
+/* Meta strip */
+.chunk-meta {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.chunk-id-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.type-pill {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.pill-text      { color: var(--c-text);    background: rgba(45,106,79,.07);  border-color: rgba(45,106,79,.2); }
+.pill-figure    { color: var(--c-figure);  background: rgba(160,82,45,.07);  border-color: rgba(160,82,45,.2); }
+.pill-formula   { color: var(--c-formula); background: rgba(92,77,138,.07);  border-color: rgba(92,77,138,.2); }
+.pill-algorithm { color: var(--c-algo);    background: rgba(44,95,138,.07);  border-color: rgba(44,95,138,.2); }
+.pill-code      { color: var(--c-code);    background: rgba(138,44,77,.07);  border-color: rgba(138,44,77,.2); }
+.pill-table     { color: var(--c-table);   background: rgba(77,122,58,.07);  border-color: rgba(77,122,58,.2); }
+.pill-unknown   { color: var(--text-faint); background: rgba(0,0,0,.03);     border-color: var(--border); }
+
+.chunk-hierarchy {
+  font-family: 'Inter', sans-serif;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chunk-hierarchy .crumb { color: var(--text-dim); }
+.chunk-hierarchy .sep { color: var(--border2); margin: 0 4px; }
+
+/* Chunk body */
+.chunk-body { padding: 16px 18px; }
+
+/* ── Markdown content ── */
+.chunk-content {
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 15.5px;
+  line-height: 1.82;
+  color: var(--text);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.chunk-content p { margin-bottom: .75em; }
+.chunk-content p:last-child { margin-bottom: 0; }
+
+.chunk-content h1, .chunk-content h2, .chunk-content h3,
+.chunk-content h4, .chunk-content h5 {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.1em 0 .4em;
+  line-height: 1.35;
+}
+.chunk-content h1 { font-size: 1.25em; }
+.chunk-content h2 { font-size: 1.1em; }
+.chunk-content h3 { font-size: 1em; color: var(--text-dim); }
+
+.chunk-content a { color: var(--accent); }
+.chunk-content a:hover { text-decoration: underline; }
+
+.chunk-content code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--c-code);
+}
+.chunk-content pre {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+.chunk-content pre code {
+  background: none; border: none; padding: 0;
+  font-size: 12.5px; color: var(--text);
+}
+
+.chunk-content ul, .chunk-content ol { padding-left: 1.6em; margin: .5em 0; }
+.chunk-content li { margin-bottom: .2em; }
+
+.chunk-content blockquote {
+  border-left: 3px solid var(--border2);
+  margin: 10px 0;
+  padding: 4px 0 4px 16px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.chunk-content blockquote p { margin: 0; }
+
+.chunk-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13.5px;
+}
+.chunk-content thead { background: var(--bg2); }
+.chunk-content th {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.chunk-content td {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.chunk-content tr:nth-child(even) td { background: rgba(0,0,0,.018); }
+
+.chunk-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+/* KaTeX */
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 10px 0; margin: 0 !important; }
+.katex { font-size: 1em; }
+.katex-error { color: #c0392b !important; }
+
+/* Images */
+.chunk-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.chunk-img {
+  max-width: 320px; max-height: 220px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  object-fit: contain;
+  background: var(--bg);
+  display: block;
+}
+.img-error-box {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 5px;
+  width: 190px; height: 100px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border2);
+  background: var(--bg2);
+  color: var(--text-faint);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-align: center; padding: 12px;
+  word-break: break-all;
+}
+.img-error-box svg { opacity: .3; flex-shrink: 0; }
+
+/* Loading */
+.loading-wrap {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; padding: 60px 0;
+  color: var(--text-dim);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader-ring {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: var(--text);
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: var(--surface);
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.error { background: #b91c1c; }
+
+/* Error state */
+.parse-error {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 24px 28px;
+  background: rgba(185,28,28,.05);
+  border: 1px solid rgba(185,28,28,.25);
+  border-radius: var(--radius-lg);
+  margin-top: 40px;
+}
+.parse-error h3 { font-family: 'Inter', sans-serif; color: #b91c1c; font-size: 15px; }
+.parse-error pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--text-dim);
+  white-space: pre-wrap; word-break: break-all;
+}
+</style>
+</head>
+<body>
+
+<!-- ── FIXED HEADER ──────────────────────────────────────────────────────── -->
+<header>
+  <div class="hd-logo">Chunk<span>View</span></div>
+
+  <div class="hd-pipe"></div>
+
+  <label class="hd-file-btn" title="Load a JSON file with chunks">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    Load JSON
+    <input type="file" id="fileInput" accept=".json,application/json">
+  </label>
+  <span class="hd-filename" id="fileName">no file loaded</span>
+
+  <div class="hd-pipe"></div>
+
+  <div class="hd-jump">
+    <span class="hd-jump-label">Go to page</span>
+    <input type="number" id="pageInput" min="1" placeholder="—" title="Enter page number and press Enter or click Go">
+    <button class="hd-jump-btn" id="jumpBtn">Go</button>
+    <span class="hd-stats" id="statsLabel">—</span>
+  </div>
+</header>
+
+<!-- ── CONTENT ───────────────────────────────────────────────────────────── -->
+<main id="content">
+  <div class="empty-state">
+    <div class="empty-icon">
+      <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+    </div>
+    <h2>Nothing loaded yet</h2>
+    <p>Click <strong>Load JSON</strong> in the header to open a chunks file and render its content with full LaTeX and Markdown support.</p>
+  </div>
+</main>
+
+<!-- ── TOAST ─────────────────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<!-- ── SCRIPTS ───────────────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
+
+<script>
+'use strict';
+
+// ── markdown-it instance ───────────────────────────────────────────────────
+const md = window.markdownit({
+  html:        true,   // allow inline HTML (tables, etc.)
+  linkify:     true,
+  typographer: true,
+  breaks:      false,
+});
+
+// ── KaTeX auto-render options ──────────────────────────────────────────────
+const KATEX_OPTS = {
+  delimiters: [
+    { left: '$$',  right: '$$',  display: true  },
+    { left: '$',   right: '$',   display: false },
+    { left: '\\[', right: '\\]', display: true  },
+    { left: '\\(', right: '\\)', display: false },
+  ],
+  throwOnError: false,
+  errorColor:   '#ef4444',
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+const TYPE_KEY_MAP = {
+  text: 'text', figure: 'figure', image: 'figure',
+  formula: 'formula', equation: 'formula', math: 'formula',
+  algorithm: 'algorithm', code: 'code', listing: 'code',
+  table: 'table', numbered_formula: 'formula', example: 'text',
+  exercise: 'text', numbered_table: 'table'
+};
+
+function resolveTypeKey(raw) {
+  if (!raw) return 'unknown';
+  const t = raw.toLowerCase().split(':')[0].trim();
+  return TYPE_KEY_MAP[t] || 'unknown';
+}
+
+function buildHierarchyHtml(chunk) {
+  const parts = [
+    chunk.part_title,
+    chunk.section_title,
+    chunk.subsection_title,
+    chunk.subsubsection_title,
+  ].filter(Boolean);
+  if (!parts.length) return '<span style="opacity:.35">—</span>';
+  return parts
+    .map(p => `<span class="crumb">${escHtml(p)}</span>`)
+    .join('<span class="sep">›</span>');
+}
+
+function chunkTypeLabel(chunk) {
+  let label = chunk.chunk_type || 'unknown';
+  if (label !== 'text') {
+    label += ':' + (chunk.entity_id != null && chunk.entity_id !== '' ? chunk.entity_id : 'null');
+  }
+  return label;
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : '');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 2800);
+}
+
+// ── Render a single chunk card ─────────────────────────────────────────────
+function buildChunkCard(chunk) {
+  const typeKey = resolveTypeKey(chunk.chunk_type);
+  const typeLabel = chunkTypeLabel(chunk);
+
+  const card = document.createElement('div');
+  card.className = 'chunk-card';
+  card.dataset.type = typeKey;
+
+  // ── Meta strip
+  const meta = document.createElement('div');
+  meta.className = 'chunk-meta';
+  meta.innerHTML = `
+    <span class="chunk-id-label">${escHtml(chunk.chunk_id)}</span>
+    <span class="type-pill pill-${typeKey}">${escHtml(typeLabel)}</span>
+    <span class="chunk-hierarchy">${buildHierarchyHtml(chunk)}</span>
+  `;
+  card.appendChild(meta);
+
+  // ── Body
+  const body = document.createElement('div');
+  body.className = 'chunk-body';
+
+  // Content rendered via markdown-it
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'chunk-content';
+  contentDiv.innerHTML = md.render(chunk.content || '');
+  body.appendChild(contentDiv);
+
+  // Images
+  const links = chunk.image_links || [];
+  if (links.length > 0) {
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'chunk-images';
+
+    for (const link of links) {
+      if (link.startsWith('http://') || link.startsWith('https://')) {
+        const img = document.createElement('img');
+        img.className = 'chunk-img';
+        img.src = link;
+        img.alt = link;
+        img.loading = 'lazy';
+        img.onerror = () => {
+          const box = buildImgError(link, 'Failed to load');
+          img.replaceWith(box);
+        };
+        imgWrap.appendChild(img);
+      } else {
+        imgWrap.appendChild(buildImgError(link, 'Local path'));
+      }
+    }
+    body.appendChild(imgWrap);
+  }
+
+  card.appendChild(body);
+  return card;
+}
+
+function buildImgError(link, reason) {
+  const box = document.createElement('div');
+  box.className = 'img-error-box';
+  box.innerHTML = `
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+      <polyline points="21 15 16 10 5 21"/>
+    </svg>
+    <span>${escHtml(reason)}</span>
+    <span style="opacity:.6;word-break:break-all">${escHtml(link.length > 50 ? link.slice(0, 47) + '…' : link)}</span>
+  `;
+  return box;
+}
+
+// ── Render all pages ───────────────────────────────────────────────────────
+let allPages = []; // sorted page numbers for jump validation
+
+function renderChunks(chunks) {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="loading-wrap">
+      <div class="loader-ring"></div>
+      Rendering ${chunks.length.toLocaleString()} chunks…
+    </div>
+  `;
+
+  // Group by page
+  const pageMap = new Map();
+  for (const chunk of chunks) {
+    const p = (typeof chunk.page === 'number') ? chunk.page : 0;
+    if (!pageMap.has(p)) pageMap.set(p, []);
+    pageMap.get(p).push(chunk);
+  }
+
+  allPages = [...pageMap.keys()].sort((a, b) => a - b);
+
+  // Update header stats
+  document.getElementById('statsLabel').textContent =
+    `${allPages.length} pp · ${chunks.length.toLocaleString()} chunks`;
+  if (allPages.length > 0) {
+    document.getElementById('pageInput').max = allPages[allPages.length - 1];
+  }
+
+  // Build fragments in batches via rAF to keep UI responsive
+  content.innerHTML = '';
+  let i = 0;
+
+  function renderBatch() {
+    const BATCH = 8;
+    const end = Math.min(i + BATCH, allPages.length);
+    const frag = document.createDocumentFragment();
+
+    for (; i < end; i++) {
+      const pageNum = allPages[i];
+      const pageChunks = pageMap.get(pageNum);
+
+      const section = document.createElement('section');
+      section.className = 'page-section';
+      section.id = `page-${pageNum}`;
+      section.style.animationDelay = `${Math.min(i, 20) * 18}ms`;
+
+      // Page ruler header
+      const ruler = document.createElement('div');
+      ruler.className = 'page-ruler';
+      ruler.innerHTML = `
+        <span class="page-ruler-num">Page ${pageNum}</span>
+        <span class="page-ruler-count">${pageChunks.length} chunk${pageChunks.length !== 1 ? 's' : ''}</span>
+        <div class="page-ruler-line"></div>
+      `;
+      section.appendChild(ruler);
+
+      // Chunk cards
+      for (const chunk of pageChunks) {
+        section.appendChild(buildChunkCard(chunk));
+      }
+
+      frag.appendChild(section);
+    }
+
+    content.appendChild(frag);
+
+    if (i < allPages.length) {
+      requestAnimationFrame(renderBatch);
+    } else {
+      // All DOM is in place — run KaTeX auto-render
+      renderMath(content);
+      showToast(`Loaded ${chunks.length.toLocaleString()} chunks across ${allPages.length} pages`);
+    }
+  }
+
+  requestAnimationFrame(renderBatch);
+}
+
+// ── KaTeX pass ─────────────────────────────────────────────────────────────
+function renderMath(root) {
+  try {
+    renderMathInElement(root, KATEX_OPTS);
+  } catch (e) {
+    console.warn('KaTeX auto-render error:', e);
+  }
+}
+
+// ── File input ─────────────────────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  document.getElementById('fileName').textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    let data;
+    try {
+      data = JSON.parse(ev.target.result);
+    } catch (err) {
+      document.getElementById('content').innerHTML = `
+        <div class="parse-error">
+          <h3>JSON parse error</h3>
+          <pre>${escHtml(err.message)}</pre>
+        </div>`;
+      showToast('Failed to parse JSON', true);
+      return;
+    }
+    const chunks = Array.isArray(data) ? data : [];
+    if (chunks.length === 0) {
+      showToast('JSON loaded but array is empty', true);
+      return;
+    }
+    renderChunks(chunks);
+  };
+  reader.readAsText(file);
+
+  // Reset so same file can be re-loaded
+  e.target.value = '';
+});
+
+// ── Page jump ──────────────────────────────────────────────────────────────
+function jumpToPage() {
+  const raw = document.getElementById('pageInput').value.trim();
+  const num = parseInt(raw, 10);
+  if (isNaN(num)) { showToast('Enter a valid page number', true); return; }
+
+  const el = document.getElementById(`page-${num}`);
+  if (el) {
+    const headerH = parseInt(getComputedStyle(document.documentElement)
+      .getPropertyValue('--header-h'), 10) || 58;
+    const top = el.getBoundingClientRect().top + window.scrollY - headerH - 20;
+    window.scrollTo({ top, behavior: 'smooth' });
+    showToast(`Scrolled to page ${num}`);
+  } else {
+    // Nearest page fallback
+    if (allPages.length === 0) { showToast('No file loaded', true); return; }
+    const nearest = allPages.reduce((prev, cur) =>
+      Math.abs(cur - num) < Math.abs(prev - num) ? cur : prev
+    );
+    showToast(`Page ${num} not found — nearest is ${nearest}`, true);
+  }
+}
+
+document.getElementById('jumpBtn').addEventListener('click', jumpToPage);
+document.getElementById('pageInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') jumpToPage();
+});
+</script>
+
+</body>
+</html>

@@ -3,10 +3,12 @@ name: multi-attribute-utility-scorer
 description: "Scores candidate actions (replenishment orders, allocations, supplier selections) by computing a weighted multi-attribute utility that combines fill rate, penalty exposure, lead-time risk, and SLA priority into a single comparable scalar. Use before ranking actions or selecting the best option. Questions like 'Which replenishment action is best overall?', 'How good is this allocation decision?', 'Score these three supplier options.'"
 version: "1.0"
 tags: [utility, decision, multi-attribute, expected-utility, MEU, ranking]
-dependencies: [SKILL-IA-02, SKILL-RE-02]
+dependencies:
+  - supplier-reliability-aggregator
+  - leadtime-risk-estimator
 ---
 
-# SKILL-PU-01 · Multi-Attribute Utility Scorer
+# Multi-Attribute Utility Scorer
 
 ## When to Use This Skill
 
@@ -14,7 +16,7 @@ Activate this skill when the user asks about:
 - Which of several candidate actions is the best overall choice
 - Scoring a replenishment order, allocation, or supplier selection
 - Combining multiple competing objectives (fill rate, penalties, lead time, SLA) into one score
-- As input to `SKILL-DS-01` before final action ranking
+- As input to `expected-utility-action-ranker` before final action ranking
 - Questions like *"Which supplier option scores best given our priorities?"*
   or *"How good is this replenishment plan compared to the alternatives?"*
 
@@ -112,11 +114,11 @@ u_fill    = fill_rate                          # 0 = no fill, 1 = full fill
 penalty_exposure = service_level_penalty × max(qty_ordered - qty_allocated, 0)
 u_penalty = 1 / (1 + penalty_exposure / 1000)  # normalised: high penalty → low utility
 
-# u_lt — lead-time risk utility (from SKILL-RE-02 risk_class)
+# u_lt — lead-time risk utility (from `leadtime-risk-estimator` risk_class)
 u_lt = 1.0   if risk_class = ACCEPTABLE
        0.6   if risk_class = ELEVATED
        0.2   if risk_class = CRITICAL
-       1.0   if SKILL-RE-02 not available (no lead-time uncertainty)
+       1.0   if `leadtime-risk-estimator` not available (no lead-time uncertainty)
 
 # u_sla — SLA priority utility (direct normalisation of sla_priority)
 # sla_priority is typically 1 (highest) to 5 (lowest)
@@ -154,7 +156,7 @@ dominant_driver = attribute with highest weighted contribution:
 
 | Situation | Behaviour |
 |---|---|
-| `SKILL-RE-02` not run | `u_lt=1.0`, add warning that lead-time risk is not accounted for |
+| `leadtime-risk-estimator` not run | `u_lt=1.0`, add warning that lead-time risk is not accounted for |
 | `qty_ordered = 0` | `u_fill=1.0` (trivially satisfied), add warning |
 | `service_level_penalty` missing | `u_penalty=0.5` (neutral), add warning |
 | `sla_priority` missing | `u_sla=0.5` (neutral), add warning |
@@ -188,7 +190,7 @@ Step 3 — GET /purchase-orders for three candidate POs:
     Action B: qty_ordered=500, qty_allocated=350, sla_priority=2, service_level_penalty=20
     Action C: qty_ordered=300, qty_allocated=300, sla_priority=3, service_level_penalty=5
 
-Step 4 — SKILL-RE-02 results: A=ELEVATED, B=ACCEPTABLE, C=ACCEPTABLE
+Step 4 — `leadtime-risk-estimator` results: A=ELEVATED, B=ACCEPTABLE, C=ACCEPTABLE
 
 Compute utilities:
     Action A: u_fill=0.96, u_penalty=1/(1+400)=0.002, u_lt=0.6,  u_sla=1.0
@@ -210,14 +212,14 @@ Result:
 Action C scores highest despite smaller quantity — full fill with zero
 penalty exposure and low lead-time risk outweighs Action A's higher fill count.
 Recommend Action C. Note: if volume is a hard requirement, escalate to
-SKILL-PU-03 to check capacity constraints before committing.
+`constraint-satisfaction-validator` to check capacity constraints before committing.
 ```
 
 ---
 
 ## Feeds Into
 
-- `SKILL-DS-01` — uses `action_utility_score` to rank and select best action
-- `SKILL-DS-02` — uses `utility_breakdown` for stochastic dominance filtering
-- `SKILL-PU-02` — uses best `action_utility_score` as baseline EU for VOI calculation
-- `SKILL-MD-01` — uses scores spread to compute decision margin
+- `expected-utility-action-ranker` — uses `action_utility_score` to rank and select best action
+- `stochastic-dominance-filter` — uses `utility_breakdown` for stochastic dominance filtering
+- `value-of-information` — uses best `action_utility_score` as baseline EU for VOI calculation
+- `decision-confidence-estimator` — uses scores spread to compute decision margin

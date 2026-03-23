@@ -3,10 +3,14 @@ name: decision-confidence-estimator
 description: "Computes a composite confidence score for the current decision by aggregating four signals — sensor reliability, inventory regime stability, inventory uncertainty, and action margin — into a single scalar. Returns a confidence class and a recommended next step (EXECUTE / EXECUTE_WITH_FLAG / DEFER / ESCALATE). Use as the final meta-decision gate before executing any high-stakes action. Questions like 'How confident are we in this decision?', 'Should we execute or wait?', 'Is the data good enough to act on?'"
 version: "1.0"
 tags: [confidence, meta-decision, Bayesian, posterior, uncertainty, composite]
-dependencies: [SKILL-IA-03, SKILL-RE-01, SKILL-RE-03, SKILL-DS-01]
+dependencies:
+  - signal-reliability-estimator
+  - inventory-uncertainty-quantifier
+  - inventory-flow-regime-detector
+  - expected-utility-action-ranker
 ---
 
-# SKILL-MD-01 · Decision Confidence Estimator
+# Decision Confidence Estimator
 
 ## When to Use This Skill
 
@@ -14,7 +18,7 @@ Activate this skill when the user asks about:
 - How confident the agent is before executing a recommended action
 - Whether the current data quality is sufficient to act
 - Whether a decision should be executed, flagged, deferred, or escalated
-- As the final gate in any decision pipeline after SKILL-DS-01 has ranked actions
+- As the final gate in any decision pipeline after `expected-utility-action-ranker` has ranked actions
 - Questions like *"Are we confident enough to commit this order?"*
   or *"Should we execute now or wait for better sensor data?"*
 
@@ -96,14 +100,14 @@ get_entity_by_number(number="14.6")
 - This is the operational inverse of confidence: high relative SE → act with
   caution; low relative SE → sufficient precision to execute
 - Warehouse mapping: `c_uncertainty = 1 − uncertainty_index` is the
-  complement of the relative uncertainty quantified by SKILL-RE-01
+  complement of the relative uncertainty quantified by `inventory-uncertainty-quantifier`
 
 ---
 
-### Step 3: Get sensor reliability component from SKILL-IA-03
+### Step 3: Get sensor reliability component from `signal-reliability-estimator`
 
 Requires `reliability_score` per device and `low_reliability_device_count`
-from `SKILL-IA-03 · Signal Reliability Estimator`.
+from `signal-reliability-estimator`.
 
 ```
 # c_sensor: mean reliability across all active devices ∈ [0,1]
@@ -115,13 +119,13 @@ low_rel_count = count(d for d in devices if d.reliability_class == LOW)
 penalty_sensor = 0.15 × low_rel_count
 ```
 
-If SKILL-IA-03 not run: `c_sensor = 0.5` (neutral), `penalty_sensor = 0`.
+If `signal-reliability-estimator` not run: `c_sensor = 0.5` (neutral), `penalty_sensor = 0`.
 
 ---
 
-### Step 4: Get regime stability component from SKILL-RE-03
+### Step 4: Get regime stability component from `inventory-flow-regime-detector`
 
-Requires `regime_label` from `SKILL-RE-03 · Inventory Flow Regime Detector`.
+Requires `regime_label` from `inventory-flow-regime-detector`.
 
 ```
 # c_regime: stability of the inventory flow regime ∈ [0,1]
@@ -134,13 +138,13 @@ c_regime = {
 }[regime_label]
 ```
 
-If SKILL-RE-03 not run: `c_regime = 0.8` (assume stable, add warning).
+If `inventory-flow-regime-detector` not run: `c_regime = 0.8` (assume stable, add warning).
 
 ---
 
-### Step 5: Get inventory uncertainty component from SKILL-RE-01
+### Step 5: Get inventory uncertainty component from `inventory-uncertainty-quantifier`
 
-Requires `uncertainty_index` from `SKILL-RE-01 · Inventory Uncertainty Quantifier`.
+Requires `uncertainty_index` from `inventory-uncertainty-quantifier`.
 
 ```
 # c_uncertainty: complement of uncertainty index ∈ [0,1]
@@ -148,13 +152,13 @@ Requires `uncertainty_index` from `SKILL-RE-01 · Inventory Uncertainty Quantifi
 c_uncertainty = 1.0 - uncertainty_index
 ```
 
-If SKILL-RE-01 not run: `c_uncertainty = 0.5` (neutral), add warning.
+If `inventory-uncertainty-quantifier` not run: `c_uncertainty = 0.5` (neutral), add warning.
 
 ---
 
-### Step 6: Get action margin component from SKILL-DS-01
+### Step 6: Get action margin component from `expected-utility-action-ranker`
 
-Requires `margin` and `decision_confidence` from `SKILL-DS-01 · Expected-Utility Action Ranker`.
+Requires `margin` and `decision_confidence` from `expected-utility-action-ranker`.
 
 ```
 # c_margin: normalised advantage margin ∈ [0,1]
@@ -167,7 +171,7 @@ if decision_confidence_ds01 == TIE:
     c_margin = 0.0
 ```
 
-If SKILL-DS-01 not run: `c_margin = 0.5` (neutral), add warning.
+If `expected-utility-action-ranker` not run: `c_margin = 0.5` (neutral), add warning.
 
 ---
 
@@ -263,7 +267,7 @@ Step 2 — get_entity_by_number(number="4.27")
 → Retrieved: relative SE = σ̂/(μ̂√n)  (eq. 14.6)
   high relative SE → high uncertainty → lower confidence component
 
-Step 3 — SKILL-IA-03 result:
+Step 3 — `signal-reliability-estimator` result:
     device_1: reliability_score=0.82, class=MEDIUM
     device_2: reliability_score=0.91, class=HIGH
     device_3: reliability_score=0.34, class=LOW    ← penalty
@@ -271,15 +275,15 @@ Step 3 — SKILL-IA-03 result:
     low_rel_count = 1
     penalty_sensor = 0.15 × 1 = 0.15
 
-Step 4 — SKILL-RE-03 result:
+Step 4 — `inventory-flow-regime-detector` result:
     regime_label = ELEVATED_ADJUSTMENTS
     c_regime     = 0.6
 
-Step 5 — SKILL-RE-01 result:
+Step 5 — `inventory-uncertainty-quantifier` result:
     uncertainty_index = 0.41  (MODERATE)
     c_uncertainty     = 1 − 0.41 = 0.59
 
-Step 6 — SKILL-DS-01 result:
+Step 6 — `expected-utility-action-ranker` result:
     margin                = 0.13
     decision_confidence   = HIGH  (margin > 0.10)
     c_margin              = min(0.13 / 0.10, 1.0) = 1.0
@@ -313,9 +317,9 @@ cycle for this SKU.
 
 ## Feeds Into
 
-- `SKILL-MD-02` — receives `confidence_class` and `recommended_next_step`
+- `decision-deferral-controller` — receives `confidence_class` and `recommended_next_step`
   to decide whether to defer and how long to wait
 - Executor / human reviewer — `recommended_next_step` is the final output
   that determines whether the pipeline commits the action or pauses
-- `SKILL-PU-02` — if `DEFER`, re-evaluates VOI to determine whether
+- `value-of-information` — if `DEFER`, re-evaluates VOI to determine whether
   waiting is worth the delay cost

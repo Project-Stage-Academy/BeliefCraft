@@ -3,10 +3,11 @@ name: leadtime-risk-estimator
 description: "Estimates statistical lead-time risk for a purchase order by fitting a mixture distribution over the base delivery time and rare delay scenarios, then inflating variance based on supplier reliability. Returns expected lead time, P95/P99 quantiles, and probability of exceeding a planning horizon. Use before issuing a PO, comparing suppliers on delivery risk, or stress-testing replenishment plans. Questions like 'Will this supplier deliver on time?', 'What is the worst-case lead time for this order?', 'How likely is a delay beyond 14 days?'"
 version: "1.0"
 tags: [lead-time, risk, supplier, procurement, mixture-distribution, quantile]
-dependencies: [SKILL-IA-02]
+dependencies:
+  - supplier-reliability-aggregator
 ---
 
-# SKILL-RE-02 · Lead-Time Risk Estimator
+# Lead-Time Risk Estimator
 
 ## When to Use This Skill
 
@@ -34,7 +35,7 @@ p(LT) = (1 − ρ) × F_base(p1, p2) + ρ × F_shifted(p1, p2 + rare_delay_add_d
 where `ρ = p_rare_delay`. This captures both normal delivery and occasional
 severe delays in a single model.
 
-Supplier reliability from `SKILL-IA-02` then inflates the mixture variance:
+Supplier reliability from `supplier-reliability-aggregator` then inflates the mixture variance:
 ```
 Var[LT]_adjusted = Var[LT]_base × (1 + (1 − reliability))
 ```
@@ -122,11 +123,11 @@ GET /api/v1/smart-query/procurement/pipeline-summary
 
 ---
 
-### Step 5: Fetch supplier reliability from SKILL-IA-02
+### Step 5: Fetch supplier reliability from `supplier-reliability-aggregator`
 
-Requires `posterior_mean_reliability` from `SKILL-IA-02` output for this supplier.
+Requires `posterior_mean_reliability` from `supplier-reliability-aggregator` output for this supplier.
 
-If `SKILL-IA-02` was not run, use `suppliers.reliability_score` as a fallback.
+If `supplier-reliability-aggregator` was not run, use `suppliers.reliability_score` as a fallback.
 
 ---
 
@@ -155,7 +156,7 @@ Var_shifted = p2²
 Var_mixture = w_base × (Var_base + p1²) + w_delay × (Var_shifted + (p1 + rare_delay_add_days)²) − E[LT]²
 
 # 6. Reliability inflation (Ch.14 §14.3 robustness perturbation)
-reliability = posterior_mean_reliability  (from SKILL-IA-02)
+reliability = posterior_mean_reliability  (from `supplier-reliability-aggregator`)
 Var_adjusted = Var_mixture × (1 + (1 − reliability))
 σ_adjusted   = sqrt(Var_adjusted)
 
@@ -194,7 +195,7 @@ risk_class = ACCEPTABLE  if P(LT > horizon) < 0.05
 | Situation | Behaviour |
 |---|---|
 | No `leadtime_model_id` on PO | Fall back to global-scope model, add warning |
-| `SKILL-IA-02` result unavailable | Use static `reliability_score`, `evidence_weight="weak"` |
+| `supplier-reliability-aggregator` result unavailable | Use static `reliability_score`, `evidence_weight="weak"` |
 | `p_rare_delay = 0` | Single-component distribution, no mixture needed |
 | `dist_family` not recognised | Default to normal distribution, add warning |
 | `prob_exceed_horizon` unavailable (no horizon given) | Omit field, return quantiles only |
@@ -225,7 +226,7 @@ Step 3 — search_knowledge_base("robustness modeling errors sensitivity varianc
 Step 4 — GET /purchase-orders/po-uuid-abc → leadtime_model_id = LM-07
 → dist_family=normal, p1=7.0, p2=1.5, p_rare_delay=0.12, rare_delay_add_days=8
 
-Step 5 — SKILL-IA-02 result:
+Step 5 — `supplier-reliability-aggregator` result:
 → posterior_mean_reliability = 0.765
 
 Step 6 — Compute:
@@ -256,7 +257,7 @@ or place the order now with 6+ days buffer to absorb the tail risk.
 
 ## Feeds Into
 
-- `SKILL-PU-01` — uses `risk_class` as `u_lt` factor in utility scoring
-- `SKILL-MD-01` — uses `risk_class` in decision confidence assessment
-- `SKILL-DS-02` — uses full distribution for stochastic dominance comparison across suppliers
-- `SKILL-DS-03` — uses `expected_lead_time_days` for pipeline coverage calculation
+- `multi-attribute-utility-scorer` — uses `risk_class` as `u_lt` factor in utility scoring
+- `decision-confidence-estimator` — uses `risk_class` in decision confidence assessment
+- `stochastic-dominance-filter` — uses full distribution for stochastic dominance comparison across suppliers
+- `threshold-based-trigger-decision` — uses `expected_lead_time_days` for pipeline coverage calculation

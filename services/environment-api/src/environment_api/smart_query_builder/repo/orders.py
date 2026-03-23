@@ -4,32 +4,31 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from common.schemas import GetAtRiskOrdersRequest
-from sqlalchemy import MetaData, Table, and_, case, func, or_, select
+from database.inventory import Product
+from database.orders import Order, OrderLine
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.selectable import FromClause
+
+from ._table_utils import load_tables
 
 URGENT_PROMISE_WINDOW_HOURS = 24
 
 
-def _load_tables(session: Session) -> dict[str, Table]:
-    bind = session.get_bind()
-    if bind is None:
-        raise RuntimeError("Database session is not bound.")
-
-    metadata = MetaData()
-    return {
-        "orders": Table("orders", metadata, autoload_with=bind),
-        "order_lines": Table("order_lines", metadata, autoload_with=bind),
-        "products": Table("products", metadata, autoload_with=bind),
-    }
+_ORDER_TABLES: dict[str, FromClause] = {
+    "orders": Order.__table__,
+    "order_lines": OrderLine.__table__,
+    "products": Product.__table__,
+}
 
 
 def fetch_at_risk_order_rows(
     session: Session,
     request: GetAtRiskOrdersRequest,
 ) -> Sequence[RowMapping]:
-    tables = _load_tables(session)
+    tables = load_tables(session, _ORDER_TABLES)
     orders = tables["orders"]
     order_lines = tables["order_lines"]
     products = tables["products"]

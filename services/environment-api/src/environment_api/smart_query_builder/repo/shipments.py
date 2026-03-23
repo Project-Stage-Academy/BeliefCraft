@@ -4,9 +4,13 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from common.schemas.shipments import GetShipmentsDelaySummaryRequest
-from sqlalchemy import MetaData, Table, and_, case, func, literal, or_, select
+from database.logistics import Shipment
+from sqlalchemy import and_, case, func, literal, or_, select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.selectable import FromClause
+
+from ._table_utils import load_table
 
 DELAY_THRESHOLD_HOURS = 48
 DELAYED_SHIPMENTS_LIMIT = 20
@@ -15,20 +19,14 @@ TRANSIT_EXCEEDED_THRESHOLD_REASON = f"Transit exceeded {DELAY_THRESHOLD_HOURS} h
 NOT_DELAYED_REASON = "Not delayed"
 
 
-def _load_shipments_table(session: Session) -> Table:
-    bind = session.get_bind()
-    if bind is None:
-        raise RuntimeError("Database session is not bound.")
-
-    metadata = MetaData()
-    return Table("shipments", metadata, autoload_with=bind)
+_SHIPMENTS_TABLE: FromClause = Shipment.__table__
 
 
 def fetch_shipments_delay_summary(
     session: Session,
     request: GetShipmentsDelaySummaryRequest,
 ) -> tuple[RowMapping, Sequence[RowMapping]]:
-    shipments = _load_shipments_table(session)
+    shipments = load_table(session, _SHIPMENTS_TABLE)
     delayed_cutoff = datetime.now(UTC) - timedelta(hours=DELAY_THRESHOLD_HOURS)
 
     transit_hours_expr = case(

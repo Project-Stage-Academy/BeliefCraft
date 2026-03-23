@@ -92,3 +92,69 @@ def test_block_processor_simple():
     assert bp.BlockProcessor._extract_entity_id("Figure 10.5") == "10.5"
 
     assert bp.BlockType.ALGORITHM is not None
+
+
+def _make_page(blocks: list[dict]) -> object:
+    class _Page:
+        def get_text(self, mode: str):
+            assert mode == "dict"
+            return {"blocks": blocks}
+
+    return _Page()
+
+
+def test_extract_captions_collects_right_column_lines_and_stops_on_large_gap():
+    finder = bp.CaptionFinder(bp.algorithms_pattern, bp.example_pattern)
+    page = _make_page(
+        [
+            {
+                "lines": [
+                    {
+                        "bbox": (310, 10, 380, 20),
+                        "spans": [{"text": "Algorithm 2.1."}],
+                    },
+                    {
+                        "bbox": (310, 22, 430, 32),
+                        "spans": [{"text": "A caption line"}],
+                    },
+                    {
+                        "bbox": (310, 80, 440, 90),
+                        "spans": [{"text": "Should be ignored"}],
+                    },
+                ]
+            }
+        ]
+    )
+
+    captions = finder.extract_captions(page)
+
+    assert len(captions) == 1
+    assert captions[0]["type"] == bp.BlockType.ALGORITHM.value
+    assert captions[0]["text"] == "Algorithm 2.1. A caption line"
+    assert tuple(captions[0]["bbox"]) == (310.0, 10.0, 430.0, 32.0)
+
+
+def test_extract_captions_supports_algorithm_header_split_across_two_lines():
+    finder = bp.CaptionFinder(bp.algorithms_pattern, bp.example_pattern)
+    page = _make_page(
+        [
+            {
+                "lines": [
+                    {
+                        "bbox": (305, 10, 360, 20),
+                        "spans": [{"text": "Algorithm"}],
+                    },
+                    {
+                        "bbox": (305, 23, 430, 33),
+                        "spans": [{"text": "2.1. Split header"}],
+                    },
+                ]
+            }
+        ]
+    )
+
+    captions = finder.extract_captions(page)
+
+    assert len(captions) == 1
+    assert captions[0]["type"] == bp.BlockType.ALGORITHM.value
+    assert captions[0]["text"] == "Algorithm 2.1. Split header"

@@ -77,6 +77,7 @@ If you do not natively support agent skills, you MUST read the `SKILL.md` file f
 
 ## Critical Mandates
 - **uv Workspaces**: Always use `uv run` to execute scripts or tests within the workspace context.
+- **uv Sync**: Always use `uv sync --all-packages --all-groups --all-extras` to ensure all workspace dependencies are correctly resolved.
 - **Surgical Updates**: Check `packages/` if shared logic is involved in a service change.
 - **Database Migrations**: Use Alembic for all schema changes in `packages/database`.
 - **Read Before Write**: ALWAYS read the entire file content before attempting to edit or replace text.
@@ -86,7 +87,8 @@ If you do not natively support agent skills, you MUST read the `SKILL.md` file f
 - **Security**: NEVER read or commit secret environment variables or .env files, etc. NEVER send confidential data in web calls.
 - **No Residuals**: NEVER leave commented-out code or print statements in production code.
 - **NEVER** change anything outside the project codebase.
-- - **Testing:** New features MUST include tests. Integration tests use `testcontainers`.
+- **NEVER** use `sudo` or attempt to install system-level packages (e.g., via `apt`, `brew`, `yum`). If a task requires system dependencies, instruct the user to install them manually.
+- **Testing:** New features MUST include tests. Integration tests use `testcontainers`.
 - **Logging:** Use `structlog` logger from common package exclusively: `from common.logging import configure_logging, get_logger`
 - **Configuration:** Use `ConfigLoader(...).load(schema=Settings)` for YAML-based config; see `docs/configuration-workflow.md` for details.
 
@@ -125,3 +127,5 @@ If there was error with documentation MCP server, try calling it again. NEVER as
 - **Linux Environment**: Ryuk socket mount denials and socket connectivity: Use `TESTCONTAINERS_RYUK_DISABLED=true` and verify `DOCKER_HOST` (using generic paths like `unix://$HOME/.docker/desktop/docker.sock`) for all `testcontainers` operations.
 - **Architecture**: Adding redundant "just-in-case" logic that deviates from the established path.
 - **Integrity**: Skipping validation steps or ignoring linting/type-checking warnings.
+- **Correction Neglect**: Proceeding with implementation or using tools like `save_memory` after a user correction instead of activating `context-engineering`: ALWAYS activate the `context-engineering` skill immediately to encode the fix into procedural instructions.
+- **Loquacity**: Providing long explanations or repeating known constraints: ALWAYS be concise and follow the "Minimal Output" mandate.

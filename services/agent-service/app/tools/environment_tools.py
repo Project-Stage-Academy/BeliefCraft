@@ -944,7 +944,7 @@ class GetDeviceAnomaliesTool(APIClientTool):
                     },
                     "window": {
                         "type": "integer",
-                        "description": "Optional: Time window in minutes",
+                        "description": "Optional: Time window in hours",
                     },
                 },
                 "required": [],

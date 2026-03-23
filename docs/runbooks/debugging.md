@@ -34,8 +34,11 @@ docker compose logs -f agent-service
 ## 3. Environment API Query Debugging
 Test smart-query endpoints directly:
 ```bash
-curl -G 'http://localhost:8000/api/v1/smart-query/inventory/current' --data-urlencode 'limit=10'
-curl -G 'http://localhost:8000/api/v1/smart-query/orders/at-risk' --data-urlencode 'horizon_hours=48'
+curl -G 'http://localhost:8000/api/v1/smart-query/inventory/moves' --data-urlencode 'limit=10'
+curl -G 'http://localhost:8000/api/v1/smart-query/topology/warehouses' --data-urlencode 'limit=50'
+curl -G 'http://localhost:8000/api/v1/smart-query/shipments/delay-summary' \
+  --data-urlencode 'date_from=2025-01-01T00:00:00Z' \
+  --data-urlencode 'date_to=2025-01-02T00:00:00Z'
 ```
 
 If `agent-service` tool calls return `404`, compare client routes in:

@@ -3,10 +3,14 @@ name: decision-deferral-controller
 description: "Decides whether to defer the current decision — waiting for better data — or commit now. Uses VOI and decision confidence to determine if exploration still pays off, then computes an optimal wait duration. Enforces hard limits: STOCKOUT_IMMINENT bypasses deferral entirely; maximum 2 deferrals and 48h wait are enforced to prevent indefinite delay. Questions like 'Should we wait for a cycle count before acting?', 'Is it safe to defer this order?', 'How long should we wait before deciding?'"
 version: "1.0"
 tags: [deferral, explore-then-commit, VOI, confidence, stopping-rule, meta-decision]
-dependencies: [SKILL-PU-02, SKILL-MD-01, SKILL-RE-01, SKILL-DS-03]
+dependencies:
+  - value-of-information
+  - decision-confidence-estimator
+  - inventory-uncertainty-quantifier
+  - threshold-based-trigger-decision
 ---
 
-# SKILL-MD-02 · Decision Deferral Controller
+# Decision Deferral Controller
 
 ## When to Use This Skill
 
@@ -14,7 +18,7 @@ Activate this skill when the user asks about:
 - Whether to act now or wait for more/better information
 - How long the agent should delay before committing to a decision
 - Whether the current confidence level justifies deferral
-- As the final meta-decision gate after `SKILL-MD-01` returns `DEFER`
+- As the final meta-decision gate after `decision-confidence-estimator` returns `DEFER`
 - Questions like *"Should we hold off on this order until we recount?"*
   or *"Is it worth waiting 24 hours for a fresh sensor reading?"*
   or *"We've already deferred once — should we defer again?"*
@@ -116,7 +120,7 @@ Before any VOI or confidence calculation, evaluate absolute overrides:
 
 ```
 # Bypass 1 — STOCKOUT_IMMINENT: never defer when inventory is critical
-if trigger_event == STOCKOUT_IMMINENT:   # from SKILL-DS-03
+if trigger_event == STOCKOUT_IMMINENT:   # from `threshold-based-trigger-decision`
     return {
         deferral_decision: CANNOT_DEFER,
         bypass_reason:     STOCKOUT_IMMINENT,
@@ -137,9 +141,9 @@ if deferral_count >= MAX_DEFERRAL_COUNT:   # MAX_DEFERRAL_COUNT = 2
 ### Step 4: Evaluate VOI and confidence gate
 
 Requires from upstream skills:
-- `voi_net` from `SKILL-PU-02`
-- `confidence_class` from `SKILL-MD-01`
-- `uncertainty_index` from `SKILL-RE-01`
+- `voi_net` from `value-of-information`
+- `confidence_class` from `decision-confidence-estimator`
+- `uncertainty_index` from `inventory-uncertainty-quantifier`
 
 ```
 # Two conditions must BOTH hold to justify deferral
@@ -218,7 +222,7 @@ else:
 | `deferrals_remaining` | `MAX_DEFERRAL_COUNT − deferral_count` |
 | `hours_since_last_obs` | Staleness of latest inventory observation |
 | `voi_net_used` | `voi_net` value that drove the decision |
-| `confidence_class_used` | `confidence_class` from SKILL-MD-01 |
+| `confidence_class_used` | `confidence_class` from `decision-confidence-estimator` |
 | `recommended_next_step` | `WAIT_AND_REOBSERVE` / `EXECUTE` / `EXECUTE_WITH_FLAG` |
 
 ---
@@ -227,8 +231,8 @@ else:
 
 | Situation | Behaviour |
 |---|---|
-| `SKILL-PU-02` not run | Treat `voi_net = 0`; skip VOI gate → CANNOT_DEFER unless confidence forces deferral |
-| `SKILL-MD-01` not run | Treat `confidence_class = ADEQUATE`; skip confidence gate → CANNOT_DEFER |
+| `value-of-information` not run | Treat `voi_net = 0`; skip VOI gate → CANNOT_DEFER unless confidence forces deferral |
+| `decision-confidence-estimator` not run | Treat `confidence_class = ADEQUATE`; skip confidence gate → CANNOT_DEFER |
 | `trigger_event` unavailable | Skip bypass check; proceed with VOI+confidence gate only |
 | `last_count_at` unavailable | Use `hours_since_last_obs = 24h` (conservative); τ_optimal unchanged |
 | `uncertainty_index = 0` | `τ_optimal = 0h`; deferral not meaningful → CANNOT_DEFER |
@@ -264,19 +268,19 @@ Step 2 — get_entity_by_number(number="15.2")
   → equivalent to voi_net > 0 AND confidence is LOW
 
 Step 3 — Bypass checks:
-    trigger_event  = REORDER_TRIGGER  (from SKILL-DS-03, not STOCKOUT_IMMINENT)
+    trigger_event  = REORDER_TRIGGER  (from `threshold-based-trigger-decision`, not STOCKOUT_IMMINENT)
     deferral_count = 1  (already deferred once)
     MAX_DEFERRAL_COUNT = 2
     → Neither bypass fires; 1 deferral remaining
 
 Step 4 — VOI and confidence gate:
-    voi_net          = 0.03   (from SKILL-PU-02)  → voi_justifies_wait = True
-    confidence_class = LOW_CONFIDENCE  (from SKILL-MD-01, C=0.38)
+    voi_net          = 0.03   (from `value-of-information`)  → voi_justifies_wait = True
+    confidence_class = LOW_CONFIDENCE  (from `decision-confidence-estimator`, C=0.38)
     → confidence_low_enough = True
     → should_defer = True ✓
 
 Step 5 — Optimal wait duration:
-    uncertainty_index   = 0.61  (from SKILL-RE-01)
+    uncertainty_index   = 0.61  (from `inventory-uncertainty-quantifier`)
     τ_optimal           = 0.61 × 48 = 29.3h
     → rounded to 6h cycle: ceil(29.3/6) × 6 = 30h
 
@@ -310,9 +314,9 @@ be returned and the agent must commit regardless of confidence.
 
 - **Executor / orchestrator** — `deferral_decision` is the terminal output;
   `DEFER` suspends execution for `optimal_wait_hours`, then restarts pipeline
-- `SKILL-DS-03` — after the wait, re-run DS-03 to check if `trigger_event`
+- `threshold-based-trigger-decision` — after the wait, re-run it to check if `trigger_event`
   has escalated to STOCKOUT_IMMINENT (would bypass deferral on next call)
-- `SKILL-MD-01` — after the wait, re-run MD-01; rising confidence should
+- `decision-confidence-estimator` — after the wait, re-run it; rising confidence should
   eventually return ADEQUATE or CONFIDENT, allowing EXECUTE
-- `SKILL-PU-02` — after the wait, re-run PU-02; if new observation was
+- `value-of-information` — after the wait, re-run it; if new observation was
   gathered, `voi_net` should drop to ≤ 0, unlocking commitment

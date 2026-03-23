@@ -103,8 +103,9 @@ class ReActAgent:
         """Build the message list for LLM input.
 
         The formatted ReAct prompt encodes iteration info, user query, and
-        XML history of prior thoughts/actions. Raw conversation messages
-        are NOT appended separately to avoid duplicating context.
+        XML history reconstructed from the stored assistant/tool messages.
+        Raw conversation messages are NOT appended separately because the
+        formatter already preserves exact assistant-turn boundaries there.
 
         Args:
             state: Current agent state.
@@ -114,7 +115,7 @@ class ReActAgent:
         """
         return [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": format_react_prompt(state)},  # type: ignore[arg-type]
+            {"role": "user", "content": format_react_prompt(state)},
         ]
 
     async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
