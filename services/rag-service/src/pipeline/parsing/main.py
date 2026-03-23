@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import json
 import os
@@ -263,8 +264,9 @@ class DocumentAssembler:
         for (eid, ctype), data in special_accs.items():
             full_text = "\n".join(data["content"])
             meta = self.meta_extractor.process_content_and_get_meta(full_text, update_meta=False)
-            chunk = self._create_chunk_obj(data["chunk_type"], full_text, page_num, meta)
-            chunk["entity_id"] = eid
+            chunk = self._create_chunk_obj(
+                data["chunk_type"], full_text, page_num, meta, entity_id=eid
+            )
 
             for img_chunk in list(self._not_captioned_images):
                 if (
@@ -299,10 +301,8 @@ class DocumentAssembler:
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
             chunk = self._create_chunk_obj(
-                v_obj["chunk_type"].lower(), clean_content, page_num, meta_res
+                v_obj["chunk_type"].lower(), clean_content, page_num, meta_res, entity_id=eid
             )
-
-            chunk.update({"entity_id": eid})
 
             if "image_index" in v_obj:
                 img_link = f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
@@ -463,6 +463,8 @@ class DocumentAssembler:
                         "content": caption + "\n" + chunk["content"],
                     }
                 )
+                if hasattr(self.meta_extractor, "get_references"):
+                    chunk.update(self.meta_extractor.get_references(chunk["content"]))
                 self.final_chunks.append(chunk)
                 return True
         return False
@@ -486,10 +488,12 @@ class DocumentAssembler:
     ) -> dict[str, Any]:
         final_type = "exercise" if meta.get("is_exercise") or c_type == "exercise" else c_type
         extracted_id = entity_id or self._extract_id(content)
-        if final_type == "exercise":
-            content = re.sub(r"^Exercise\s+\d+\.\d+\.", "", content, flags=re.I).strip()
+        if final_type in ["exercise", "example", "algorithm", "captioned_image", "numbered_table"]:
+            content = re.sub(
+                r"^(Exercise|Figure|Table|Algorithm|Example)\s+\d+\.\d+\.", "", content, flags=re.I
+            ).strip()
 
-        return {
+        chunk: dict[str, Any] = {
             "chunk_id": self._generate_deterministic_id(
                 final_type, meta.get("subsubsection_number"), content
             ),
@@ -507,6 +511,20 @@ class DocumentAssembler:
             "page": page,
             "image_links": [],
         }
+
+        if hasattr(self.meta_extractor, "get_references"):
+            chunk.update(self.meta_extractor.get_references(content))
+
+        if (
+            chunk["chunk_type"] == "exercise"
+            and chunk.get("entity_id")
+            and "referenced_exercises" in chunk
+        ):
+            ref_exercises = chunk.get("referenced_exercises")
+            if isinstance(ref_exercises, list):
+                with contextlib.suppress(ValueError, KeyError):
+                    ref_exercises.remove(chunk["entity_id"])
+        return chunk
 
     def _is_inside(self, b1: list[float], b2: list[float]) -> bool:
         if not b1 or not b2 or len(b1) < 4 or len(b2) < 4:
@@ -561,16 +579,6 @@ class DocumentAssembler:
                     )
                     self._not_captioned_images.remove(img_chunk)
 
-        if hasattr(self.meta_extractor, "get_references"):
-            refs = self.meta_extractor.get_references(meta_res["clean_content"])
-            chunk.update(refs)
-        if chunk["chunk_type"] == "exercise":
-            try:
-                chunk["referenced_exercises"].remove(chunk["entity_id"])
-            except ValueError:
-                print(
-                    f"Warning: Exercise {chunk['entity_id']} not found in its own references list."
-                )
         self.final_chunks.append(chunk)
         return chunk
 
