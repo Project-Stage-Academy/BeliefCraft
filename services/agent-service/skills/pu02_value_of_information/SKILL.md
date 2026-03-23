@@ -3,10 +3,12 @@ name: value-of-information
 description: "Computes whether it is worth gathering more information (e.g. triggering a cycle count) before acting, or whether the agent should act now on current beliefs. Uses the VOI framework to compare expected utility with vs without additional observation, net of the cost of counting. Use before high-stakes decisions under HIGH uncertainty. Questions like 'Should we count stock before committing this order?', 'Is it worth waiting for more data?', 'Does gathering more information change our decision?'"
 version: "1.0"
 tags: [VOI, value-of-information, decision, uncertainty, count, defer]
-dependencies: [SKILL-PU-01, SKILL-RE-01]
+dependencies:
+  - multi-attribute-utility-scorer
+  - inventory-uncertainty-quantifier
 ---
 
-# SKILL-PU-02 · Trade-Off Evaluator (Value of Information)
+# Trade-Off Evaluator (Value of Information)
 
 ## When to Use This Skill
 
@@ -77,20 +79,20 @@ get_entity_by_number(number="6.9")
 
 ---
 
-### Step 3: Get current best EU from SKILL-PU-01
+### Step 3: Get current best EU from `multi-attribute-utility-scorer`
 
-Requires `action_utility_score` (best scoring action) from `SKILL-PU-01`.
+Requires `action_utility_score` (best scoring action) from `multi-attribute-utility-scorer`.
 This is `EU*(o)` — the utility of the best action given current information.
 
-If `SKILL-PU-01` was not run, use `uncertainty_index` from `SKILL-RE-01`
+If `multi-attribute-utility-scorer` was not run, use `uncertainty_index` from `inventory-uncertainty-quantifier`
 as a proxy: high uncertainty → assume current EU is suboptimal.
 
 ---
 
-### Step 4: Get uncertainty index from SKILL-RE-01
+### Step 4: Get uncertainty index from `inventory-uncertainty-quantifier`
 
 Requires `uncertainty_index` and `posterior_mean (μ)`, `posterior_std (σ)`
-from `SKILL-RE-01` / `SKILL-IA-01`.
+from `inventory-uncertainty-quantifier` / `bayesian-sensor-belief-updater`.
 
 These parameterise `P(o' | o)` — the predictive distribution over what
 a cycle count would reveal:
@@ -110,7 +112,7 @@ P(qty_low  | o) = 0.5
 For each simulated observation `o'` ∈ {qty_high, qty_low}:
 
 Re-score the best action using the updated fill rate and penalty exposure
-(same formula as `SKILL-PU-01 Step 4`) with `qty_allocated = min(qty_ordered, o')`:
+(same formula as `multi-attribute-utility-scorer` Step 4) with `qty_allocated = min(qty_ordered, o')`:
 
 ```
 EU*(o, qty_high) = utility score if true qty = μ + 2σ
@@ -180,7 +182,7 @@ if next shipment arrives within 2 days, waiting may be free (no count needed).
 
 | Situation | Behaviour |
 |---|---|
-| `SKILL-PU-01` not run | Use `uncertainty_index` as proxy; `voi_gross` is approximate |
+| `multi-attribute-utility-scorer` not run | Use `uncertainty_index` as proxy; `voi_gross` is approximate |
 | `uncertainty_index = 0` (CERTAIN) | `VOI_gross = 0`, `recommendation = ACT_NOW` immediately |
 | `posterior_std = 0` | No scenario spread possible, `VOI_gross = 0`, act now |
 | Pipeline endpoint unavailable | Skip enrichment, proceed with count recommendation only |
@@ -204,10 +206,10 @@ Step 1 — search_knowledge_base("value of information expected utility observat
 Step 2 — get_entity_by_number(number="6.9")
 → Confirmed: VOI = 0 if new observation changes no optimal action
 
-Step 3 — SKILL-PU-01 result:
+Step 3 — `multi-attribute-utility-scorer` result:
     EU*(o) = 0.71  (best action: commit 400 units, fill_rate=0.89)
 
-Step 4 — SKILL-RE-01 result:
+Step 4 — `inventory-uncertainty-quantifier` result:
     posterior_mean = 448.0,  posterior_std = 61.0
     uncertainty_index = 0.64  (HIGH)
 
@@ -247,6 +249,6 @@ not 400, to avoid penalty exposure under HIGH uncertainty.
 
 ## Feeds Into
 
-- `SKILL-MD-02` — uses `recommendation` and `voi_net` to decide whether to defer
-- `SKILL-DS-01` — if `GATHER_INFO`, pauses action ranking until new data arrives
-- `SKILL-MD-01` — uses `voi_net` as signal of decision readiness
+- `decision-deferral-controller` — uses `recommendation` and `voi_net` to decide whether to defer
+- `expected-utility-action-ranker` — if `GATHER_INFO`, pauses action ranking until new data arrives
+- `decision-confidence-estimator` — uses `voi_net` as signal of decision readiness
