@@ -127,7 +127,6 @@ def get_advanced_caption(page: Any, rect_coords: tuple[float, float, float, floa
 
     for b in blocks[:0:-1]:
         block_rect = fitz.Rect(b[:4])
-
         if block_rect.y0 < img_rect.y0:
             content_rect = fitz.Rect(
                 block_rect.x0,
