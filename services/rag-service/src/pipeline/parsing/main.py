@@ -89,6 +89,7 @@ class DocumentAssembler:
         self._acc: list[str] = []
         self._acc_start_page: int | None = None
         self._last_numbered_formula_chunks: list[dict[str, Any]] = []
+        self._not_captioned_images: list[dict[str, Any]] = []
 
         self.figures_bucket_url: str | None = None
 
@@ -256,25 +257,24 @@ class DocumentAssembler:
             return
         used_indices: set[int] = set()
 
-        not_captioned_images: list[dict[str, Any]] = []
-        used_indices.update(self._handle_images(page_num, blocks, not_captioned_images))
+        used_indices.update(self._handle_images(page_num, blocks))
         special_accs = self._handle_text_stream(page_num, blocks, used_indices)
 
-        for (eid, _), data in special_accs.items():
+        for (eid, ctype), data in special_accs.items():
             full_text = "\n".join(data["content"])
             meta = self.meta_extractor.process_content_and_get_meta(full_text, update_meta=False)
             chunk = self._create_chunk_obj(data["chunk_type"], full_text, page_num, meta)
             chunk["entity_id"] = eid
 
-            for img_chunk in list(not_captioned_images):
+            for img_chunk in list(self._not_captioned_images):
                 if (
                     img_chunk.get("entity_id") == eid
-                    and img_chunk.get("chunk_type", "").lower() == data["chunk_type"]
+                    and img_chunk.get("chunk_type", "").lower() == ctype.lower()
                 ):
                     chunk["image_links"].append(
                         f"{FIGURES_BUCKET_URL}figures/figure_{img_chunk['image_index']-1}.png"
                     )
-                    not_captioned_images.remove(img_chunk)
+                    self._not_captioned_images.remove(img_chunk)
 
             self.final_chunks.append(chunk)
 
@@ -282,7 +282,6 @@ class DocumentAssembler:
         self,
         page_num: int,
         blocks: list[dict[str, Any]],
-        not_captioned_images: list[dict[str, Any]],
     ) -> set[int]:
         used: set[int] = set()
         visual_items = self.image_map.get(page_num, [])
@@ -306,14 +305,28 @@ class DocumentAssembler:
             chunk.update({"entity_id": eid})
 
             if "image_index" in v_obj:
-                chunk["image_links"] = [
-                    f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
-                ]
+                img_link = f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
+                chunk["image_links"] = [img_link]
+
+                if eid and v_obj.get("chunk_type", "").lower() == "exercise":
+                    existing = next(
+                        (
+                            c
+                            for c in self.final_chunks
+                            if c.get("entity_id") == eid and c.get("chunk_type") == "exercise"
+                        ),
+                        None,
+                    )
+                    if existing:
+                        existing["image_links"].append(img_link)
+                        # skip adding a separate chunk for this image because
+                        # it's already linked to the exercise chunk
+                        continue
 
             if chunk["chunk_type"] == "captioned_image":
                 captioned_images.append(chunk)
             else:
-                not_captioned_images.append(v_obj)
+                self._not_captioned_images.append(v_obj)
 
         # deduplicate captioned images by entity_id, merging image links if necessary
         for img_chunk in captioned_images:
@@ -533,6 +546,19 @@ class DocumentAssembler:
         chunk = self._create_chunk_obj(
             c_type, meta_res["clean_content"], page, meta_res, entity_id=entity_id
         )
+
+        if chunk["chunk_type"] == "exercise" and chunk.get("entity_id"):
+            eid = chunk["entity_id"]
+            for img_chunk in list(self._not_captioned_images):
+                if (
+                    img_chunk.get("entity_id") == eid
+                    and img_chunk.get("chunk_type", "").lower() == "exercise"
+                ):
+                    chunk["image_links"].append(
+                        f"{FIGURES_BUCKET_URL}figures/figure_{img_chunk['image_index']-1}.png"
+                    )
+                    self._not_captioned_images.remove(img_chunk)
+
         if hasattr(self.meta_extractor, "get_references"):
             refs = self.meta_extractor.get_references(meta_res["clean_content"])
             chunk.update(refs)
