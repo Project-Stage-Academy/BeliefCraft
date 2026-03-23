@@ -487,7 +487,7 @@ async def test_weaviate_get_related_code_definitions(repo):
 
     assert isinstance(result, Document)
     assert result.id is None
-    assert result.metadata is None
+    assert result.metadata == {"chunk_type": "code_definitions"}
     assert result.cosine_similarity is None
 
     assert "def helper():" in result.content
@@ -517,7 +517,7 @@ async def test_rag_tools_get_related_code_definitions_integration(repo):
 
     assert isinstance(result, Document)
     assert result.id is None
-    assert result.metadata is None
+    assert result.metadata == {"chunk_type": "code_definitions"}
     assert result.cosine_similarity is None
 
     assert "def helper():" in result.content
@@ -544,7 +544,7 @@ async def test_rag_tools_get_related_code_definitions_integration_empty_ids(repo
 
     assert isinstance(result, Document)
     assert result.id is None
-    assert result.metadata is None
+    assert result.metadata == {"chunk_type": "code_definitions"}
     assert result.cosine_similarity is None
     assert result.content == ""
 
@@ -561,7 +561,7 @@ async def test_rag_tools_get_related_code_definitions_integration_two_ids(repo):
 
     assert isinstance(result, Document)
     assert result.id is None
-    assert result.metadata is None
+    assert result.metadata == {"chunk_type": "code_definitions"}
     assert result.cosine_similarity is None
 
     assert "def helper():" in result.content
