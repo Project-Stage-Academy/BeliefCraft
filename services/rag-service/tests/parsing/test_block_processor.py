@@ -3,12 +3,13 @@ from pathlib import Path
 
 import pytest
 from pipeline.parsing import block_processor as bp
+from pipeline.parsing.config import ALGORITHM_PATTERN, EXAMPLE_PATTERN
 
 fitz = pytest.importorskip("fitz")
 
 
 def test_caption_finder_classifies_text_and_block():
-    finder = bp.CaptionFinder(bp.algorithms_pattern, bp.example_pattern)
+    finder = bp.CaptionFinder(ALGORITHM_PATTERN, EXAMPLE_PATTERN)
 
     assert finder.classify_text("Algorithm 2.1.") == bp.BlockType.ALGORITHM.value
     assert finder.classify_text("Example 3.1.") == bp.BlockType.EXAMPLE.value

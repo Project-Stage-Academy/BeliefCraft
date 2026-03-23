@@ -10,7 +10,7 @@ def test_get_scale_factor():
 
 
 def test_create_entry_logic():
-    description = "[BLOCK EXAMPLE CONTENT]:\nExample 1.2 Analysis"
+    description = "Example 1.2 Analysis"
     max_loc = (10, 20)
     t_w, t_h = 100, 50
 
@@ -126,12 +126,12 @@ def test_save_to_json_error(tmp_path):
 
 def test_create_entry_various_descriptions():
     """Test the logic of _create_entry for different description formats."""
-    e1 = ip._create_entry("[BLOCK EXERCISE CONTENT]: 5.1", 0, 0, 0.9, (0, 0), 10, 10)
+    e1 = ip._create_entry("Exercise 5.1", 0, 0, 0.9, (0, 0), 10, 10)
     assert e1["chunk_type"] == "exercise"
     assert e1["entity_id"] == "5.1"
 
-    e2 = ip._create_entry("Figure 7 Header", 0, 0, 0.9, (0, 0), 10, 10)
-    assert e2["entity_id"] == "7"
+    e2 = ip._create_entry("Figure 7.3. Header", 0, 0, 0.9, (0, 0), 10, 10)
+    assert e2["entity_id"] == "7.3"
 
     e3 = ip._create_entry("Random image", 0, 0, 0.9, (0, 0), 10, 10)
     assert e3["entity_id"] is None

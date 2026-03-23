@@ -174,11 +174,7 @@ class DocumentAssembler:
                     used.add(idx)
 
             full_caption = v_obj.get("caption", v_obj.get("content", ""))
-            clean_content = (
-                full_caption.replace("[BLOCK EXERCISE CONTENT]:", "")
-                .replace("[BLOCK EXAMPLE CONTENT]:", "")
-                .strip()
-            )
+            clean_content = full_caption.strip()
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
             chunk = self._create_chunk_obj(v_obj["chunk_type"], clean_content, page_num, meta_res)
