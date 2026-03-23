@@ -11,7 +11,7 @@ from typing import Any
 
 import fitz  # type: ignore[import-untyped]
 import requests  # type: ignore[import-untyped]
-from PIL import Image as PILImage
+from PIL import Image as PILImage  # type: ignore
 from pydantic import BaseModel, Field
 from reportlab.lib import colors  # type: ignore[import-untyped]
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # type: ignore[import-untyped]

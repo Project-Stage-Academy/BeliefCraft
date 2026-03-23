@@ -104,7 +104,7 @@ def _make_page(blocks: list[dict]) -> object:
 
 
 def test_extract_captions_collects_right_column_lines_and_stops_on_large_gap():
-    finder = bp.CaptionFinder(bp.algorithms_pattern, bp.example_pattern)
+    finder = bp.CaptionFinder(ALGORITHM_PATTERN, EXAMPLE_PATTERN)
     page = _make_page(
         [
             {
@@ -135,7 +135,7 @@ def test_extract_captions_collects_right_column_lines_and_stops_on_large_gap():
 
 
 def test_extract_captions_supports_algorithm_header_split_across_two_lines():
-    finder = bp.CaptionFinder(bp.algorithms_pattern, bp.example_pattern)
+    finder = bp.CaptionFinder(ALGORITHM_PATTERN, EXAMPLE_PATTERN)
     page = _make_page(
         [
             {
