@@ -210,6 +210,27 @@ class DocumentAssembler:
         def sort_by_height(b: dict[str, Any]) -> float:
             return b.get("block_bbox", [0, 0, 0, 0])[1] if b.get("block_bbox") else 0
 
+        # attach notes to correct blocks
+        new_blocks = []
+        for block in blocks:
+            match = re.match(r"^\$+\s\^\{(\d+)}\s\$+", block.get("block_content", "").strip())
+            if match:
+                pattern = r"\$+\s\^\{" + re.escape(match.group(1)) + r"}\s\$+"
+                other_block = next(
+                    (
+                        b
+                        for b in blocks
+                        if re.search(pattern, b.get("block_content", "").strip()) and b is not block
+                    ),
+                    None,
+                )
+                if other_block:
+                    other_block["block_content"] += "\n" + block.get("block_content", "").strip()
+                else:
+                    new_blocks.append(block)
+            else:
+                new_blocks.append(block)
+        blocks = new_blocks
         blocks = sorted(blocks, key=sort_by_height)
 
         if not blocks:
