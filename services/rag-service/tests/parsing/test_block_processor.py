@@ -3,8 +3,21 @@ from pathlib import Path
 
 import pytest
 from pipeline.parsing import block_processor as bp
+from pipeline.parsing.block_processor import CaptionFinder
+from pipeline.parsing.config import ALGORITHM_PATTERN, EXAMPLE_PATTERN
 
 fitz = pytest.importorskip("fitz")
+
+
+def test_caption_finder_classifies_text_and_block():
+    finder = CaptionFinder(ALGORITHM_PATTERN, EXAMPLE_PATTERN)
+
+    assert finder.classify_text("Algorithm 2.1.") == bp.BlockType.ALGORITHM.value
+    assert finder.classify_text("Example 3.1.") == bp.BlockType.EXAMPLE.value
+    assert finder.classify_text("Something else") == bp.BlockType.OTHER.value
+
+    block = {"lines": [{"spans": [{"text": "Example 3.1."}]}]}
+    assert finder.classify_block(block) == bp.BlockType.EXAMPLE.value
 
 
 def test_extract_entity_id_from_caption():
