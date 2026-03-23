@@ -382,7 +382,7 @@ class DocumentAssembler:
             temp_meta = self.meta_extractor.process_content_and_get_meta(content)
 
             is_ex_sub = (temp_meta.get("subsection_title") or "").strip().lower() == "exercises"
-            is_new_ex = bool(re.match(r"^Exercise\s+\d+\.\d+", text, re.I))
+            is_new_ex = bool(re.match(r"^#*\s*Exercise\s+\d+\.\d+", text, re.I))
 
             if temp_meta.get("force_new_chunk") and self._acc:
                 prev_is_ex = (
