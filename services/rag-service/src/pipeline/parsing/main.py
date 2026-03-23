@@ -486,6 +486,8 @@ class DocumentAssembler:
     ) -> dict[str, Any]:
         final_type = "exercise" if meta.get("is_exercise") or c_type == "exercise" else c_type
         extracted_id = entity_id or self._extract_id(content)
+        if final_type == "exercise":
+            content = re.sub(r"^Exercise\s+\d+\.\d+\.", "", content, flags=re.I).strip()
 
         return {
             "chunk_id": self._generate_deterministic_id(
@@ -562,6 +564,13 @@ class DocumentAssembler:
         if hasattr(self.meta_extractor, "get_references"):
             refs = self.meta_extractor.get_references(meta_res["clean_content"])
             chunk.update(refs)
+        if chunk["chunk_type"] == "exercise":
+            try:
+                chunk["referenced_exercises"].remove(chunk["entity_id"])
+            except ValueError:
+                print(
+                    f"Warning: Exercise {chunk['entity_id']} not found in its own references list."
+                )
         self.final_chunks.append(chunk)
         return chunk
 
