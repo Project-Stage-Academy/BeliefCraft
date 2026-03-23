@@ -565,8 +565,15 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         Returns one wrapped document with reconstructed source in ``content``.
         Other fields are left ``null``.
         """
+        chunk_type = "code_definitions"
+
         if not document_ids:
-            return Document(content="", cosine_similarity=None)
+            return Document(
+                id=None,
+                content="",
+                cosine_similarity=None,
+                metadata={"chunk_type": chunk_type},
+            )
 
         results = await self._query(
             filters=Filter.by_id().contains_any(document_ids),
@@ -576,7 +583,12 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             results.objects, document_ids
         )
         source_fragment = WeaviateCodeDefinitionProcessor.restore_code_fragment(definitions)
-        return Document(content=source_fragment, cosine_similarity=None)
+        return Document(
+            id=None,
+            content=source_fragment,
+            cosine_similarity=None,
+            metadata={"chunk_type": chunk_type},
+        )
 
     def _build_nested_code_def_refs(self, max_depth: int = 5) -> list[QueryReference]:
         """
