@@ -10,9 +10,10 @@ from common.logging import get_logger
 from tqdm import tqdm  # type: ignore[import-untyped]
 
 from .config import (
-    BLOCK_KEYWORDS,
-    CAPTION_KEYWORDS,
     DPI_RENDER,
+    EXAMPLE_PATTERN,
+    EXERCISE_PATTERN,
+    FIGURE_PATTERN,
     FIGURES_PDF,
     MAIN_PDF,
 )
@@ -24,7 +25,7 @@ SIMILARITY_THRESHOLD = 0.6
 CAPTION_OFFSET_X_MINUS = 10
 CAPTION_OFFSET_Y_MINUS = 0
 CAPTION_OFFSET_X_PLUS = 150
-CAPTION_HEIGHT = 90
+CAPTION_HEIGHT = 30
 SIDE_NOTE_WIDTH = 200
 BLOCK_CONTENT_PADDING = 20
 
@@ -91,38 +92,51 @@ def get_advanced_caption(page: Any, rect_coords: tuple[float, float, float, floa
         side_area = fitz.Rect(img_rect.x1, img_rect.y0, img_rect.x1 + SIDE_NOTE_WIDTH, img_rect.y1)
 
         # 1. Strict Caption detection
-        for b in blocks:
+        for b in blocks[::-1]:
             block_rect = fitz.Rect(b[:4])
             text = b[4].strip()
 
-            if (
-                any(word in text.lower() for word in CAPTION_KEYWORDS)
-                and re.search(r"(figure|table|algorithm)\s+(?:\d+|[A-G])\.\d+", text, re.I)
-                and (block_rect.intersects(caption_area) or block_rect.intersects(side_area))
-            ):
-                return str(text.replace("\n", " "))
+            clean_text = text.replace("\n", " ")
+            match = FIGURE_PATTERN.search(clean_text)
+
+            if match and (block_rect.intersects(caption_area) or block_rect.intersects(side_area)):
+                return str(clean_text[match.start() :])
 
         # 2. Block detection (example / exercise)
-        candidate_header: Any | None = None
-        header_type = ""
-
-        for b in blocks:
+        for b in blocks[::-1]:
             block_rect = fitz.Rect(b[:4])
-            text = b[4].strip().lower()
+            text = b[4].strip()
 
-            if any(word in text for word in BLOCK_KEYWORDS) and block_rect.y0 < img_rect.y1:
-                candidate_header = block_rect
-                header_type = "EXAMPLE" if "example" in text else "EXERCISE"
+            if block_rect.y0 < img_rect.y1:
+                clean_text = text.replace("\n", " ")
 
-        if candidate_header:
+                match = EXERCISE_PATTERN.search(clean_text) or EXAMPLE_PATTERN.search(clean_text)
+
+                if match:
+                    candidate_header = block_rect
+                    content_rect = fitz.Rect(
+                        candidate_header.x0,
+                        candidate_header.y0,
+                        page.rect.width,
+                        img_rect.y1 + BLOCK_CONTENT_PADDING,
+                    )
+                    full_content = (
+                        page.get_text("text", clip=content_rect).strip().replace("\n", " ")
+                    )
+                    return str(full_content[match.start() :])
+
+    for b in blocks[:0:-1]:
+        block_rect = fitz.Rect(b[:4])
+
+        if block_rect.y0 < img_rect.y0:
             content_rect = fitz.Rect(
-                candidate_header.x0,
-                candidate_header.y0,
+                block_rect.x0,
+                block_rect.y0,
                 page.rect.width,
                 img_rect.y1 + BLOCK_CONTENT_PADDING,
             )
             full_content = page.get_text("text", clip=content_rect).strip()
-            return f"[BLOCK {header_type} CONTENT]:\n{full_content}"
+            return str(full_content)
 
     return "Image without specific caption or block header"
 
@@ -197,20 +211,27 @@ def _create_entry(
     Encapsulates the logic for determining chunk type, extracting entity ID, and constructing
     the metadata dictionary.
     """
-    img_type = "captioned_image"
-    if "[BLOCK EXAMPLE" in description:
+    text = description.replace("\n", " ")
+    if EXAMPLE_PATTERN.search(text):
         img_type = "example"
-    elif "[BLOCK EXERCISE" in description:
+    elif EXERCISE_PATTERN.search(text):
         img_type = "exercise"
+    elif FIGURE_PATTERN.search(text):
+        img_type = "captioned_image"
+    else:
+        img_type = "text"
 
     decimal_match = re.search(r"((?:\d+|[A-G])\.\d+)", description)
     integer_match = re.search(r"(\d+)", description)
 
-    entity_id = (
-        decimal_match.group(1)
-        if decimal_match
-        else integer_match.group(1) if integer_match else None
-    )
+    if img_type == "text":
+        entity_id = None
+    else:
+        entity_id = (
+            decimal_match.group(1)
+            if decimal_match
+            else integer_match.group(1) if integer_match else None
+        )
 
     return {
         "chunk_type": img_type,

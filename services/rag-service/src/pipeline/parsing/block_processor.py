@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import fitz  # type: ignore[import-untyped]
+from pipeline.parsing.config import ALGORITHM_PATTERN, EXAMPLE_PATTERN
 from tqdm import tqdm  # type: ignore[import-untyped]
 
 COLUMNS_DIVIDER_X = 300  # adjust this value based on the actual layout of the PDF
@@ -32,9 +33,6 @@ class BlockType(Enum):
     EXAMPLE = "Example"
     OTHER = "Other"
 
-
-algorithms_pattern = re.compile(r"^Algorithm\s+(?:\d+|[A-G])\.\d+", re.IGNORECASE)
-example_pattern = re.compile(r"^Example\s+(?:\d+|[A-G])\.\d+", re.IGNORECASE)
 
 BlockData = dict[str, Any]
 PyMuPDFBlock = dict[str, Any]
@@ -483,7 +481,7 @@ def open_block_processor(
     paddle_ocr_dir: str | Path,
 ) -> Iterator["BlockProcessor"]:
     """Yield a BlockProcessor with default collaborators wired."""
-    caption_finder = CaptionFinder(algorithms_pattern, example_pattern)
+    caption_finder = CaptionFinder(ALGORITHM_PATTERN, EXAMPLE_PATTERN)
     gray_block_matcher = GrayBlockMatcher()
     ocr_repo = OcrCaptionRepository(paddle_ocr_dir)
     block_hydrator = BlockHydrator(ocr_repo)
