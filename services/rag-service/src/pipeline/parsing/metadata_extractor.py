@@ -114,7 +114,7 @@ class MetadataExtractor:
         """
         if not text:
             return {}
-        lt = text.lower()
+        lt = text.lower().replace("$", "")
         result = {
             "referenced_parts": list(set(re.findall(r"part\s+([ivxcdlm]+)\b", lt))),
             "referenced_figures": list(set(re.findall(r"figure\s+([a-z\d]+\.\d+)", lt))),
