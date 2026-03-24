@@ -239,6 +239,7 @@ class DocumentAssembler:
         """Sometimes paddleocr moves text of note to random text block. This is partial fix."""
         blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
         correct_notes = set()
+
         for block in blocks:
             content = block.get("block_content", "").strip()
             if match := re.match(r"^\$+\s\^\{(\d+)}\s\$+", content):
