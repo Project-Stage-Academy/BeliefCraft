@@ -1,12 +1,12 @@
 ---
 name: constraint-satisfaction-validator
-description: "Validates whether a proposed warehouse action (replenishment, allocation, transfer) satisfies all hard physical and operational constraints before execution: capacity, quality status, shelf life, and allocation bounds. Blocks INFEASIBLE actions before they reach the utility scorer. Use as a pre-filter before SKILL-PU-01 or before committing any warehouse operation. Questions like 'Can we physically fit this order in Warehouse B?', 'Is this stock eligible for outbound shipment?', 'Will this allocation exceed our committed quantities?'"
+description: "Validates whether a proposed warehouse action (replenishment, allocation, transfer) satisfies all hard physical and operational constraints before execution: capacity, quality status, shelf life, and allocation bounds. Blocks INFEASIBLE actions before they reach the utility scorer. Use as a pre-filter before `multi-attribute-utility-scorer` or before committing any warehouse operation. Questions like 'Can we physically fit this order in Warehouse B?', 'Is this stock eligible for outbound shipment?', 'Will this allocation exceed our committed quantities?'"
 version: "1.0"
 tags: [constraint, feasibility, capacity, quality, allocation, validation]
 dependencies: []
 ---
 
-# SKILL-PU-03 · Constraint Satisfaction Validator
+# Constraint Satisfaction Validator
 
 ## When to Use This Skill
 
@@ -14,7 +14,7 @@ Activate this skill when the user asks about:
 - Whether a proposed action is physically possible given warehouse capacity
 - Whether stock quality status allows outbound shipment
 - Whether an allocation exceeds committed order quantities
-- As a mandatory pre-filter before scoring actions in `SKILL-PU-01`
+- As a mandatory pre-filter before scoring actions in `multi-attribute-utility-scorer`
 - Questions like *"Can Warehouse B physically hold this replenishment order?"*
   or *"Is this stock eligible for the customer shipment?"*
 
@@ -263,7 +263,7 @@ Result:
   remaining_capacity   = 1200 units after action
   quality_status       = good
 
-All constraints satisfied. Action is cleared for utility scoring in SKILL-PU-01.
+All constraints satisfied. Action is cleared for utility scoring in `multi-attribute-utility-scorer`.
 Available quantity (340 units) covers the requested 300 — proceed.
 ```
 
@@ -271,6 +271,6 @@ Available quantity (340 units) covers the requested 300 — proceed.
 
 ## Feeds Into
 
-- `SKILL-DS-01` — `INFEASIBLE` actions are filtered out before ranking
-- `SKILL-PU-01` — `soft_violation_score` can be subtracted from utility score
-- `SKILL-MD-01` — `CONDITIONAL` status adds a confidence penalty
+- `expected-utility-action-ranker` — `INFEASIBLE` actions are filtered out before ranking
+- `multi-attribute-utility-scorer` — `soft_violation_score` can be subtracted from utility score
+- `decision-confidence-estimator` — `CONDITIONAL` status adds a confidence penalty

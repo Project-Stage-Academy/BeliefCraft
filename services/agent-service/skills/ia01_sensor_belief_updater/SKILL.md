@@ -6,7 +6,7 @@ tags: [inventory, belief-update, sensor, uncertainty, bayesian]
 dependencies: []
 ---
 
-# SKILL-IA-01 · Bayesian Sensor Belief Updater
+# Bayesian Sensor Belief Updater
 
 ## When to Use This Skill
 
@@ -153,7 +153,7 @@ posterior_mean = max(0.0, posterior_mean)    # inventory cannot be negative
 ```
 <thinking>
 Before committing stock, I need to verify the true inventory level —
-the raw sensor reading may not be reliable. I'll run SKILL-IA-01.
+the raw sensor reading may not be reliable. I'll run `bayesian-sensor-belief-updater`.
 </thinking>
 
 Step 1 — search_knowledge_base("Kalman filter belief update posterior mean...")
@@ -188,6 +188,6 @@ before committing given moderate confidence (0.61).
 
 ## Feeds Into
 
-- `SKILL-RE-01` — uses `posterior_mean`, `posterior_std` to compute uncertainty index
-- `SKILL-MD-01` — uses `effective_confidence` in overall decision confidence
-- `SKILL-MD-03` — compares posteriors across devices to resolve conflicts
+- `inventory-uncertainty-quantifier` — uses `posterior_mean`, `posterior_std` to compute uncertainty index
+- `decision-confidence-estimator` — uses `effective_confidence` in overall decision confidence
+- `signal-conflict-resolver` — compares posteriors across devices to resolve conflicts

@@ -508,6 +508,9 @@ class TestGetDeviceAnomaliesTool:
         assert metadata.name == "get_device_anomalies"
         assert metadata.category == "environment"
         assert "anomal" in metadata.description.lower()
+        assert metadata.parameters["properties"]["window"]["description"] == (
+            "Optional: Time window in hours"
+        )
 
     @pytest.mark.asyncio
     async def test_execute_success(self, mock_env_client: AsyncMock) -> None:
@@ -525,7 +528,7 @@ class TestGetDeviceAnomaliesTool:
         with patch(
             "app.tools.environment_tools.EnvironmentAPIClient", return_value=mock_env_client
         ):
-            result = await tool.execute(warehouse_id="WH1", window=60)
+            result = await tool.execute(warehouse_id="WH1", window=24)
 
             assert result == mock_response
 

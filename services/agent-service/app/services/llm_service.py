@@ -6,6 +6,7 @@ from typing import Any
 import boto3
 from app.config import get_settings
 from app.core.exceptions import LLMServiceError
+from botocore.config import Config  # type: ignore[import-untyped]
 from common.logging import get_logger
 from langchain_aws import ChatBedrock
 from langchain_core.messages import (
@@ -51,6 +52,10 @@ class LLMService:
             Configured boto3 bedrock-runtime client.
         """
         region = self.settings.AWS_DEFAULT_REGION
+        client_config = Config(
+            connect_timeout=self.settings.BEDROCK_CONNECT_TIMEOUT_SECONDS,
+            read_timeout=self.settings.BEDROCK_READ_TIMEOUT_SECONDS,
+        )
 
         if getattr(self.settings, "AWS_PROFILE", None):
             logger.info("Using AWS profile '%s' for Bedrock client", self.settings.AWS_PROFILE)
@@ -58,11 +63,12 @@ class LLMService:
                 profile_name=self.settings.AWS_PROFILE,
                 region_name=region,
             )
-            return session.client("bedrock-runtime")
+            return session.client("bedrock-runtime", config=client_config)
 
         client_kwargs: dict[str, Any] = {
             "service_name": "bedrock-runtime",
             "region_name": region,
+            "config": client_config,
         }
 
         if self.settings.AWS_ACCESS_KEY_ID and self.settings.AWS_SECRET_ACCESS_KEY:

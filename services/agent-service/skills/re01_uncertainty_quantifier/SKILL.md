@@ -3,10 +3,11 @@ name: inventory-uncertainty-quantifier
 description: "Converts a posterior belief distribution over inventory quantity into a single interpretable uncertainty index, combining statistical spread (coefficient of variation), information-theoretic entropy, data staleness, and quality status. Use before any high-stakes decision to understand how much to trust the inventory estimate. Questions like 'How confident are we in this stock level?', 'Is this inventory estimate reliable enough to commit?', 'How stale is this data?'"
 version: "1.0"
 tags: [inventory, uncertainty, entropy, belief, POMDP, risk]
-dependencies: [SKILL-IA-01]
+dependencies:
+  - bayesian-sensor-belief-updater
 ---
 
-# SKILL-RE-01 · Inventory Uncertainty Quantifier
+# Inventory Uncertainty Quantifier
 
 ## When to Use This Skill
 
@@ -14,7 +15,7 @@ Activate this skill when the user asks about:
 - How reliable or trustworthy the current inventory estimate is
 - Whether the stock level estimate is precise enough to base a decision on
 - How stale the last physical count is and whether it affects confidence
-- As a prerequisite before `SKILL-PU-01`, `SKILL-DS-01`, `SKILL-MD-01`
+- As a prerequisite before `multi-attribute-utility-scorer`, `expected-utility-action-ranker`, `decision-confidence-estimator`
 - Questions like *"Can we trust this stock estimate for the allocation decision?"*
   or *"How uncertain is our inventory position for SKU-X in Warehouse Y?"*
 
@@ -22,7 +23,7 @@ Activate this skill when the user asks about:
 
 ## Core Concept
 
-A posterior belief `b(s) = N(μ, σ²)` from `SKILL-IA-01` quantifies what we know
+A posterior belief `b(s) = N(μ, σ²)` from `bayesian-sensor-belief-updater` quantifies what we know
 about the true inventory quantity. But the raw `σ` alone is not decision-ready —
 it needs to be combined with data staleness and quality status into a single
 normalised **uncertainty index** ∈ [0, 1].
@@ -78,12 +79,12 @@ expand_graph_by_ids(
 
 ---
 
-### Step 3: Retrieve SKILL-IA-01 outputs (upstream dependency)
+### Step 3: Retrieve `bayesian-sensor-belief-updater` outputs (upstream dependency)
 
-This skill requires the posterior from `SKILL-IA-01` as input.
+This skill requires the posterior from `bayesian-sensor-belief-updater` as input.
 If `data_gap_flag=True` is set on the upstream result, return safe default immediately.
 
-**Required fields from SKILL-IA-01:**
+**Required fields from `bayesian-sensor-belief-updater`:**
 `posterior_mean (μ)`, `posterior_std (σ)`, `effective_confidence`, `data_quality_label`
 
 ---
@@ -159,7 +160,7 @@ uncertainty_class = CERTAIN      if uncertainty_index <  0.10
 
 | Situation | Behaviour |
 |---|---|
-| SKILL-IA-01 `data_gap_flag=True` | Return `uncertainty_class=HIGH`, `uncertainty_index=1.0`, `data_gap_flag=True` |
+| `bayesian-sensor-belief-updater` `data_gap_flag=True` | Return `uncertainty_class=HIGH`, `uncertainty_index=1.0`, `data_gap_flag=True` |
 | `last_count_at` missing | Assume `staleness_days=30` (conservative) |
 | `posterior_mean=0` and `posterior_std=0` | `CV=0`, `uncertainty_class=CERTAIN` — flag as suspicious |
 | `quality_status=quarantine` or `damaged` | `quality_penalty=0.2`, add warning |
@@ -173,7 +174,7 @@ uncertainty_class = CERTAIN      if uncertainty_index <  0.10
 ```
 <thinking>
 I need to quantify how uncertain we are about the true inventory level
-before committing stock. I'll run SKILL-RE-01 on top of SKILL-IA-01 output.
+before committing stock. I'll run `inventory-uncertainty-quantifier` on top of `bayesian-sensor-belief-updater` output.
 </thinking>
 
 Step 1 — search_knowledge_base("entropy uncertainty measure belief distribution Gaussian differential entropy variance")
@@ -183,7 +184,7 @@ Step 2 — expand_graph_by_ids([doc_id_1, doc_id_2])
 → Confirmed: belief degrades without fresh observations (Ch.19 §19.1)
 → staleness penalty grows linearly at 0.02/day
 
-Step 3 — SKILL-IA-01 result:
+Step 3 — `bayesian-sensor-belief-updater` result:
     posterior_mean = 541.2,  posterior_std = 38.4
     effective_confidence = 0.73,  data_quality_label = "good"
 
@@ -214,7 +215,7 @@ Recommend: trigger a cycle count before committing, or apply safety buffer.
 
 ## Feeds Into
 
-- `SKILL-PU-02` — uses `uncertainty_index` to compute Value of Information (VOI)
-- `SKILL-DS-01` — uses `uncertainty_index` to compute confidence intervals around action scores
-- `SKILL-MD-01` — uses `uncertainty_class` as `c_uncertainty` factor in decision confidence
-- `SKILL-DS-03` — uses `uncertainty_index` to decide whether to defer or act immediately
+- `value-of-information` — uses `uncertainty_index` to compute Value of Information (VOI)
+- `expected-utility-action-ranker` — uses `uncertainty_index` to compute confidence intervals around action scores
+- `decision-confidence-estimator` — uses `uncertainty_class` as `c_uncertainty` factor in decision confidence
+- `threshold-based-trigger-decision` — uses `uncertainty_index` to decide whether to defer or act immediately

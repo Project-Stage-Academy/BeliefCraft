@@ -3,10 +3,11 @@ name: threshold-based-trigger-decision
 description: "Evaluates the current inventory state against a hierarchy of threshold conditions and returns a typed trigger event — STOCKOUT_IMMINENT, REORDER_TRIGGER, PIPELINE_RISK, or NORMAL — with a recommended action type. Use as the entry-point classifier before deeper decision logic; the trigger event constrains the action space for all downstream skills. Questions like 'Do we need to act on SKU-X right now?', 'Is the inventory level critical?', 'What kind of event is this — reorder or emergency?'"
 version: "1.0"
 tags: [threshold, trigger, inventory, stockout, reorder, policy, safety-stock]
-dependencies: [SKILL-IA-01]
+dependencies:
+  - bayesian-sensor-belief-updater
 ---
 
-# SKILL-DS-03 · Threshold-Based Trigger Decision
+# Threshold-Based Trigger Decision
 
 ## When to Use This Skill
 
@@ -42,7 +43,7 @@ when the state space is one-dimensional and the reward is monotone.
 Four threshold regions partition the state space into four trigger events:
 
 ```
-State s = available_qty (posterior mean from SKILL-IA-01)
+State s = available_qty (posterior mean from `bayesian-sensor-belief-updater`)
 
 s < safety_stock  AND  days_of_cover < 3   →  STOCKOUT_IMMINENT   (CRITICAL)
 s < safety_stock  OR   days_of_cover < 7   →  REORDER_TRIGGER     (HIGH)
@@ -90,16 +91,16 @@ get_entity_by_number(number="7.11")
 
 ---
 
-### Step 3: Get posterior inventory level from SKILL-IA-01
+### Step 3: Get posterior inventory level from `bayesian-sensor-belief-updater`
 
-Requires `posterior_mean` (μ) from `SKILL-IA-01 · Bayesian Sensor Belief Updater`.
+Requires `posterior_mean` (μ) from `bayesian-sensor-belief-updater`.
 This is the best current estimate of true on-hand quantity.
 
 ```
-available_qty = posterior_mean   # from SKILL-IA-01
+available_qty = posterior_mean   # from bayesian-sensor-belief-updater
 ```
 
-If `SKILL-IA-01` was not run, fall back to raw `observed_qty` from the
+If `bayesian-sensor-belief-updater` was not run, fall back to raw `observed_qty` from the
 observed-snapshot endpoint (less reliable):
 
 ```
@@ -212,7 +213,7 @@ else:
 |---|---|
 | `trigger_event` | `STOCKOUT_IMMINENT` / `REORDER_TRIGGER` / `PIPELINE_RISK` / `NORMAL` |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
-| `available_qty` | Posterior mean inventory (from SKILL-IA-01 or observed_qty) |
+| `available_qty` | Posterior mean inventory (from `bayesian-sensor-belief-updater` or observed_qty) |
 | `safety_stock` | Threshold used for comparison |
 | `daily_demand` | 30-day average daily demand rate |
 | `days_of_cover` | `available_qty / daily_demand` |
@@ -220,7 +221,7 @@ else:
 | `effective_coverage` | `(available_qty + pipeline_qty) / daily_demand` |
 | `days_to_next_arrival` | Days until next PO expected (if available) |
 | `recommended_action_type` | `EMERGENCY_ORDER` / `PLACE_ORDER` / `EXPEDITE_OR_MONITOR` / `MONITOR` |
-| `ia01_used` | `true` if SKILL-IA-01 posterior was used, `false` if raw observed_qty |
+| `ia01_used` | `true` if `bayesian-sensor-belief-updater` posterior was used, `false` if raw observed_qty |
 
 ---
 
@@ -228,7 +229,7 @@ else:
 
 | Situation | Behaviour |
 |---|---|
-| `SKILL-IA-01` not run, no observed snapshot | Return `trigger_event=NORMAL`, `data_gap_flag=True`, escalate |
+| `bayesian-sensor-belief-updater` not run, no observed snapshot | Return `trigger_event=NORMAL`, `data_gap_flag=True`, escalate |
 | `daily_demand = 0` (no recent moves) | Set `days_of_cover = ∞`, skip cover thresholds, classify by qty vs safety_stock only |
 | Pipeline endpoint unavailable | Set `pipeline_qty = 0`, `effective_cover = days_of_cover`, add warning |
 | `quality_status` is `quarantine` or `damaged` | Override: treat `available_qty = 0` for threshold purposes, add `quality_hold_flag=True` |
@@ -258,7 +259,7 @@ Step 2 — get_entity_by_number(number="7.11")
 → Confirmed: threshold conditions partition the state into regions where
   each action is dominant — tractable approximation to full DP greedy policy
 
-Step 3 — SKILL-IA-01 result:
+Step 3 — `bayesian-sensor-belief-updater` result:
     posterior_mean = 142.0 units
     available_qty  = 142.0   (ia01_used = true)
 
@@ -309,11 +310,11 @@ Recommended action: PLACE_ORDER with expedite option if lead time allows.
 
 ## Feeds Into
 
-- `SKILL-MD-02` — `STOCKOUT_IMMINENT` bypasses deferral controller entirely;
+- `decision-deferral-controller` — `STOCKOUT_IMMINENT` bypasses deferral controller entirely;
   deferral is never permitted when trigger is CRITICAL
-- `SKILL-DS-01` — `trigger_event` constrains the action space:
+- `expected-utility-action-ranker` — `trigger_event` constrains the action space:
   `STOCKOUT_IMMINENT` restricts candidates to `EMERGENCY_ORDER` actions only
-- `SKILL-MD-01` — `severity` contributes to composite confidence score;
+- `decision-confidence-estimator` — `severity` contributes to composite confidence score;
   `CRITICAL` overrides normal confidence thresholds
-- `SKILL-PU-01` — `days_of_cover` feeds `u_fill` calculation as a proxy
+- `multi-attribute-utility-scorer` — `days_of_cover` feeds `u_fill` calculation as a proxy
   for forward fill risk when order line qty is unavailable
