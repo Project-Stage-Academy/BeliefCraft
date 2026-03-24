@@ -29,6 +29,7 @@ START_PAGE = 23
 LAST_PAGE = 648
 BBOX_PADDING = 5
 MAX_CHUNK_CHAR_LENGTH = 1000
+PADDLE_BLOCKS_TO_SKIP = ["footer", "number", "header", "image", "footnote", "doc_title", "chart"]
 # current algorithms fails for these pages
 PAGES_NOT_TO_FIX_PADDLE = {55, 58, 128, 316, 437, 500, 568}
 
@@ -90,6 +91,8 @@ class DocumentAssembler:
         self._last_part_title: str | None = None
 
         self._acc: list[str] = []
+        # accumulates image links from paddle blocks to be attached to the next text chunk
+        self._acc_links: list[str] = []
         self._acc_start_page: int | None = None
         self._last_numbered_formula_chunks: list[dict[str, Any]] = []
         self._not_captioned_images: list[dict[str, Any]] = []
@@ -226,6 +229,8 @@ class DocumentAssembler:
                     formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
                 self._last_numbered_formula_chunks = []
             self._acc = []
+            # reset links accumulator after final flush
+            self._acc_links = []
             self._acc_start_page = None
 
         self._save()
@@ -312,6 +317,9 @@ class DocumentAssembler:
                 for formula_chunk in data["formula_chunks"]:
                     formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
 
+            # extend chunk links with links captured from paddle blocks in special region
+            chunk["image_links"].extend(data.get("image_links", []))
+
             for img_chunk in list(self._not_captioned_images):
                 if (
                     img_chunk.get("entity_id") == eid
@@ -336,6 +344,21 @@ class DocumentAssembler:
         for eid, v_obj in zip(
             (v.get("entity_id") for v in visual_items), visual_items, strict=False
         ):
+            # attach link to the closest valid paddle block above if this is a text figure
+            if v_obj.get("chunk_type") == "text" and "image_index" in v_obj:
+                v_y, target_block = v_obj.get("bbox", [0, 0, 0, 0])[1], None
+                for b in blocks:
+                    if b.get("block_label", "").lower() in PADDLE_BLOCKS_TO_SKIP:
+                        continue
+                    if b.get("block_bbox", [0, 0, 0, 0])[1] < v_y:
+                        target_block = b
+                    else:
+                        break
+                if target_block:
+                    target_block.setdefault("image_links", []).append(
+                        f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
+                    )
+
             for idx, block in enumerate(blocks):
                 bbox = block.get("block_bbox")
                 if bbox and self._is_inside(bbox, v_obj.get("bbox", [])):
@@ -401,7 +424,7 @@ class DocumentAssembler:
                 continue
             content = block.get("block_content", "").strip()
             label = block.get("block_label", "").lower()
-            if label in ["footer", "number", "header", "image", "footnote", "doc_title"]:
+            if label in PADDLE_BLOCKS_TO_SKIP:
                 continue
 
             matched_key = None
@@ -445,6 +468,8 @@ class DocumentAssembler:
                         formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
                     self._last_numbered_formula_chunks = []
                 self._acc = []
+                # reset links accumulator after flush
+                self._acc_links = []
                 self._acc_start_page = None
 
             if label == "table":
@@ -461,7 +486,10 @@ class DocumentAssembler:
                     self._last_numbered_formula_chunks.append(f_chunk)
 
             if content:
+                # capture image links from paddle block if present
+                block_links = block.get("image_links", [])
                 if matched_key:
+                    special_accs[matched_key].setdefault("image_links", []).extend(block_links)
                     special_accs[matched_key]["content"].append(content)
                 else:
                     split_on_ex = is_ex_sub and is_new_ex and self._acc
@@ -484,11 +512,15 @@ class DocumentAssembler:
                                 formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
                             self._last_numbered_formula_chunks = []
                         self._acc = []
+                        # reset links accumulator after flush
+                        self._acc_links = []
                         self._acc_start_page = None
 
                     if not self._acc:
                         self._acc_start_page = page_num
                     self._acc.append(content)
+                    # accumulate links for normal text chunks
+                    self._acc_links.extend(block_links)
 
         return special_accs
 
@@ -612,6 +644,8 @@ class DocumentAssembler:
         chunk = self._create_chunk_obj(
             c_type, meta_res["clean_content"], page, meta_res, entity_id=entity_id
         )
+        # add links accumulated from paddle blocks in normal text stream
+        chunk["image_links"].extend(self._acc_links)
 
         if chunk["chunk_type"] == "exercise" and chunk.get("entity_id"):
             eid = chunk["entity_id"]
