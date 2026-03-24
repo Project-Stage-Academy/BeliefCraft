@@ -39,6 +39,11 @@ FIGURES_BBOX_OVERRIDE = {
     266: ((242, 1040), 300, 327)
 }
 
+FIGURES_DESCRIPTION_BLOCKS = {
+    594: (594, 2),
+    595: (594, 2),
+}
+
 SKIP_COMBINATIONS = [  # Known difficult combinations of (fig_page_idx, dm_page_idx)
     (9, 48),
     (194, 348),
@@ -69,7 +74,26 @@ def pdf_page_to_img(doc: Any, page_number: int, dpi: int = DPI_RENDER) -> np.nda
     return cast(np.ndarray, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
 
-def get_advanced_caption(page: Any, rect_coords: tuple[float, float, float, float]) -> str:
+def get_page_exercise(page: Any) -> str | None:
+    blocks = page.get_text("blocks")
+    for b in blocks[::-1]:
+        block_rect = fitz.Rect(b[:4])
+        text = b[4].strip()
+
+        clean_text = text.replace("\n", " ")
+
+        match = EXERCISE_PATTERN.search(clean_text)
+
+        if match:
+            candidate_header = block_rect
+            full_content = page.get_text("text", clip=candidate_header).strip().replace("\n", " ")
+            return str(full_content[match.start() :])
+    return None
+
+
+def get_advanced_caption(
+    page: Any, prev_page: Any, rect_coords: tuple[float, float, float, float]
+) -> str:
     """
     Detect caption or block content associated with an image.
 
@@ -102,40 +126,31 @@ def get_advanced_caption(page: Any, rect_coords: tuple[float, float, float, floa
             if match and (block_rect.intersects(caption_area) or block_rect.intersects(side_area)):
                 return str(clean_text[match.start() :])
 
-        # 2. Block detection (example / exercise)
-        for b in blocks[::-1]:
-            block_rect = fitz.Rect(b[:4])
-            text = b[4].strip()
-
-            if block_rect.y0 < img_rect.y1:
-                clean_text = text.replace("\n", " ")
-
-                match = EXERCISE_PATTERN.search(clean_text) or EXAMPLE_PATTERN.search(clean_text)
-
-                if match:
-                    candidate_header = block_rect
-                    content_rect = fitz.Rect(
-                        candidate_header.x0,
-                        candidate_header.y0,
-                        page.rect.width,
-                        img_rect.y1 + BLOCK_CONTENT_PADDING,
-                    )
-                    full_content = (
-                        page.get_text("text", clip=content_rect).strip().replace("\n", " ")
-                    )
-                    return str(full_content[match.start() :])
-
-    for b in blocks[:0:-1]:
+    # 2. Block detection (example / exercise)
+    for b in blocks[::-1]:
         block_rect = fitz.Rect(b[:4])
-        if block_rect.y0 < img_rect.y0:
-            content_rect = fitz.Rect(
-                block_rect.x0,
-                block_rect.y0,
-                page.rect.width,
-                img_rect.y1 + BLOCK_CONTENT_PADDING,
-            )
-            full_content = page.get_text("text", clip=content_rect).strip()
-            return str(full_content)
+        text = b[4].strip()
+
+        if block_rect.y0 < img_rect.y1:
+            clean_text = text.replace("\n", " ")
+
+            match = EXERCISE_PATTERN.search(clean_text) or EXAMPLE_PATTERN.search(clean_text)
+
+            if match:
+                candidate_header = block_rect
+                content_rect = fitz.Rect(
+                    candidate_header.x0,
+                    candidate_header.y0,
+                    page.rect.width,
+                    img_rect.y1 + BLOCK_CONTENT_PADDING,
+                )
+                full_content = page.get_text("text", clip=content_rect).strip().replace("\n", " ")
+                return str(full_content[match.start() :])
+
+    prev_page_exercise = get_page_exercise(prev_page)
+
+    if prev_page_exercise:
+        return prev_page_exercise
 
     return "Image without specific caption or block header"
 
@@ -317,7 +332,15 @@ def process_pdf(
                         (max_loc[1] + matched_h) * fitz_scale,
                     )
 
-                    description = get_advanced_caption(page_obj, fitz_rect)
+                    prev_page = dm_doc.load_page(page_ptr - 1)
+                    if page_ptr in FIGURES_DESCRIPTION_BLOCKS:
+                        page_num, block_idx = FIGURES_DESCRIPTION_BLOCKS[page_ptr]
+                        page = dm_doc.load_page(page_num)
+                        blocks = page.get_text("blocks")
+                        rect = fitz.Rect(blocks[block_idx][:4])
+                        description = page.get_text("text", clip=rect).strip().replace("\n", " ")
+                    else:
+                        description = get_advanced_caption(page_obj, prev_page, fitz_rect)
 
                     entry = _create_entry(
                         description,
@@ -337,7 +360,6 @@ def process_pdf(
                     _mask_matched_region(page_gray, max_loc, matched_w, matched_h)
 
                     matched = True
-                    # Do not reset page_ptr; continue from current position for next template
                     break
 
                 page_ptr += 1
