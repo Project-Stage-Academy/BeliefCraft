@@ -186,7 +186,7 @@ class DocumentAssembler:
         prefix = f"{chunk_type}_{entity_id}" if entity_id else chunk_type
         return f"{prefix}_{content_hash}"
 
-    def _update_part_from_doc_title(self, page_data: dict[str, Any]) -> None:
+    def _update_part_from_doc_title(self, page_data: dict[str, Any], page_num: int) -> None:
         blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
         for block in blocks:
             label = block.get("block_label", "").lower()
@@ -197,6 +197,27 @@ class DocumentAssembler:
             part_title = raw_title.strip("#").strip()
             if not part_title or part_title == self._last_part_title:
                 continue
+
+            if self._acc:
+                prev_meta = self.meta_extractor.get_meta().copy()
+                prev_is_ex = (
+                    prev_meta.get("subsection_title") or ""
+                ).strip().lower() == "exercises"
+                e_id = self._extract_id(self._acc[0]) if prev_is_ex else None
+                chunk = self._flush(
+                    self._acc,
+                    self._acc_start_page or page_num,
+                    meta_override=prev_meta,
+                    c_type="exercise" if prev_is_ex else "text",
+                    entity_id=e_id,
+                )
+                if chunk and chunk["chunk_type"] in ["text", "exercise"]:
+                    for formula_chunk in self._last_numbered_formula_chunks:
+                        formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
+                    self._last_numbered_formula_chunks = []
+                self._acc = []
+                self._acc_links = []
+                self._acc_start_page = None
 
             self._part_index += 1
             part_value = PART_SEQUENCE[min(self._part_index, len(PART_SEQUENCE) - 1)]
@@ -212,7 +233,7 @@ class DocumentAssembler:
             if START_PAGE <= page_idx + 1 <= LAST_PAGE:
                 if (page_idx + 1) not in PAGES_NOT_TO_FIX_PADDLE:
                     self._fix_paddle_problems(page_data)
-                self._update_part_from_doc_title(page_data)
+                self._update_part_from_doc_title(page_data, page_idx + 1)
                 self._process_page(page_idx, page_data)
                 last_processed_page = page_idx + 1
 
@@ -446,7 +467,7 @@ class DocumentAssembler:
                 continue
 
             # Capture hierarchy state before processing the current block.
-            prev_meta = self.meta_extractor.get_meta()
+            prev_meta = self.meta_extractor.get_meta().copy()
             temp_meta = self.meta_extractor.process_content_and_get_meta(content)
 
             is_ex_sub = (temp_meta.get("subsection_title") or "").strip().lower() == "exercises"
