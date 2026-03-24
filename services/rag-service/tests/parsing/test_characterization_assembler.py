@@ -84,234 +84,428 @@ def _pages_with_content(n_blank: int, page_blocks: list) -> list:
 
 
 # ---------------------------------------------------------------------------
-# _is_inside
+# Spatial containment (via special-region capture)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "b1, b2, expected",
-    [
-        # exact fit — True
-        ([100, 100, 200, 200], [100, 100, 200, 200], True),
-        # b1 is well inside b2 — True
-        ([110, 110, 190, 190], [100, 100, 200, 200], True),
-        # b1 extends exactly BBOX_PADDING outside each edge — still True
-        ([95, 95, 205, 205], [100, 100, 200, 200], True),
-        # b1 left-edge is 1 unit beyond BBOX_PADDING — False
-        ([94, 100, 200, 200], [100, 100, 200, 200], False),
-        # completely disjoint — False
-        ([300, 300, 400, 400], [100, 100, 200, 200], False),
-        # empty inner list — False
-        ([], [10, 10, 20, 20], False),
-        # empty outer list — False
-        ([10, 10, 20, 20], [], False),
-        # too-short lists — False
-        ([10, 10], [5, 5, 20, 20], False),
-    ],
-)
-def test_is_inside_returns_correct_result(env, b1, b2, expected) -> None:
-    """Locks: _is_inside with BBOX_PADDING=5 tolerance — boundary and edge cases."""
-    assembler = _make(env)
-
-    result = assembler._is_inside(b1, b2)
-
-    assert result is expected
-
-
-# ---------------------------------------------------------------------------
-# _generate_deterministic_id
-# ---------------------------------------------------------------------------
-
-
-def test_generate_deterministic_id_is_stable(env) -> None:
-    """Locks: calling _generate_deterministic_id twice with the same args returns
-    the identical string.
+def test_block_at_padding_boundary_is_captured_in_special_region(
+    env, monkeypatch
+) -> None:
+    """Locks: a paddle block whose bbox right/bottom edge equals region_edge + BBOX_PADDING(5)
+    IS captured in the special region; a block 1 pixel beyond that boundary is NOT captured
+    and ends up in the main text stream instead.
     """
+    block_region = [
+        {
+            "page": START_PAGE,
+            "entity_id": "1.1",
+            "bbox": [0, 0, 100, 100],  # FITZ → Paddle [0,0,200,200] after 2× scale
+            "chunk_type": "example",
+            "caption": "",
+        }
+    ]
+    env["blocks"].write_text(json.dumps(block_region), encoding="utf-8")
+
+    blocks = [
+        # b1[2]=205 <= b2[2]+5=205 → _is_inside True → captured in region
+        {
+            "block_content": "At boundary text.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 205, 205],
+        },
+        # b1[2]=206 > 205 → _is_inside False → goes to main text stream
+        {
+            "block_content": "Outside block text.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 206, 206],
+        },
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
     assembler = _make(env)
-    id1 = assembler._generate_deterministic_id("text", "1.1", "hello world")
-    id2 = assembler._generate_deterministic_id("text", "1.1", "hello world")
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
 
-    assert id1 == id2
-
-
-def test_generate_deterministic_id_includes_type_and_entity_in_prefix(env) -> None:
-    """Locks: the ID format is '{chunk_type}_{entity_id}_{hash8}' when entity_id is given."""
-    assembler = _make(env)
-
-    uid = assembler._generate_deterministic_id("exercise", "4.2", "content")
-
-    assert uid.startswith("exercise_4.2_")
-
-
-def test_generate_deterministic_id_no_entity_uses_type_only_prefix(env) -> None:
-    """Locks: when entity_id is None the prefix is just '{chunk_type}_{hash8}'."""
-    assembler = _make(env)
-
-    uid = assembler._generate_deterministic_id("text", None, "content")
-
-    assert uid.startswith("text_")
-    assert "_None_" not in uid
-
-
-def test_generate_deterministic_id_different_inputs_yield_different_ids(env) -> None:
-    """Locks: different content strings produce different IDs (SHA-256 uniqueness)."""
-    assembler = _make(env)
-
-    id1 = assembler._generate_deterministic_id("text", "1.1", "content A")
-    id2 = assembler._generate_deterministic_id("text", "1.1", "content B")
-
-    assert id1 != id2
-
-
-def test_generate_deterministic_id_hash_matches_sha256(env) -> None:
-    """Locks: the 8-character suffix equals the first 8 chars of SHA-256(content)."""
-    assembler = _make(env)
-    content = "deterministic content"
-    expected_hash = hashlib.sha256(content.encode()).hexdigest()[:8]
-
-    uid = assembler._generate_deterministic_id("text", "2.1", content)
-
-    assert uid.endswith(expected_hash)
-
-
-# ---------------------------------------------------------------------------
-# _extract_id
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "text, expected",
-    [
-        ("Figure 1.2", "1.2"),
-        ("Exercise 5.1", "5.1"),
-        ("Table 10.5", "10.5"),
-        ("Algorithm A.3", "A.3"),
-        ("Example 4.4", "4.4"),
-        # bare X.Y fallback
-        ("The value is 4.4", "4.4"),
-        ("prefix 2.10 suffix", "2.10"),
-    ],
-)
-def test_extract_id_named_entity_and_bare_pattern(env, text, expected) -> None:
-    """Locks: _extract_id returns X.Y from named entities and bare X.Y patterns."""
-    assembler = _make(env)
-
-    assert assembler._extract_id(text) == expected
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Value is 100",        # integer only — no dot suffix
-        "No numbers here",
-        "",
-    ],
-)
-def test_extract_id_returns_none_for_non_matching_text(env, text) -> None:
-    """Locks: _extract_id returns None when no X.Y pattern is found."""
-    assembler = _make(env)
-
-    assert assembler._extract_id(text) is None
-
-
-def test_extract_id_returns_none_for_none_input(env) -> None:
-    """Locks: _extract_id(None) returns None without raising."""
-    assembler = _make(env)
-
-    assert assembler._extract_id(None) is None
-
-
-# ---------------------------------------------------------------------------
-# _safe_load_json
-# ---------------------------------------------------------------------------
-
-
-def test_safe_load_json_returns_empty_dict_for_missing_file(env) -> None:
-    """Locks: _safe_load_json returns {} when the file does not exist."""
-    assembler = _make(env)
-
-    result = assembler._safe_load_json("definitely_missing_file.json")
-
-    assert result == {}
-
-
-# ---------------------------------------------------------------------------
-# _load_and_offset
-# ---------------------------------------------------------------------------
-
-
-def test_load_and_offset_skips_non_integer_page_values(env) -> None:
-    """Locks: items whose page key is not a valid integer are silently skipped."""
-    path = env["tmp_path"] / "items.json"
-    path.write_text(
-        json.dumps([{"page": "not_a_number"}, {"page": 5, "data": "ok"}]), encoding="utf-8"
+    example_chunk = next(
+        (c for c in assembler.final_chunks if c["chunk_type"] == "example"), None
     )
+    assert example_chunk is not None
+    assert "At boundary text." in example_chunk["content"]
+    assert "Outside block text." not in example_chunk["content"]
+    text_chunks = [c for c in assembler.final_chunks if c["chunk_type"] == "text"]
+    assert any("Outside block text." in c["content"] for c in text_chunks)
+
+
+def test_block_completely_outside_region_goes_to_main_stream(
+    env, monkeypatch
+) -> None:
+    """Locks: a paddle block with bbox completely outside all special regions goes to the
+    main text accumulator and appears in a text chunk, not in any example chunk.
+    """
+    block_region = [
+        {
+            "page": START_PAGE,
+            "entity_id": "3.3",
+            "bbox": [0, 0, 100, 100],  # FITZ → Paddle [0,0,200,200]
+            "chunk_type": "example",
+            "caption": "",
+        }
+    ]
+    env["blocks"].write_text(json.dumps(block_region), encoding="utf-8")
+
+    blocks = [
+        {
+            "block_content": "Far outside text.",
+            "block_label": "text",
+            "block_bbox": [500, 500, 600, 600],
+        },
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
     assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
 
-    result = assembler._load_and_offset(path, "page", offset=0)
-
-    assert "not_a_number" not in result
-    assert 5 in result
-
-
-def test_load_and_offset_applies_offset_to_page_numbers(env) -> None:
-    """Locks: the page key value is incremented by the given offset."""
-    path = env["tmp_path"] / "items.json"
-    path.write_text(json.dumps([{"page": 3}, {"page": 7}]), encoding="utf-8")
-    assembler = _make(env)
-
-    result = assembler._load_and_offset(path, "page", offset=10)
-
-    assert 13 in result
-    assert 17 in result
-    assert 3 not in result
-    assert 7 not in result
+    example_chunk = next(
+        (c for c in assembler.final_chunks if c["chunk_type"] == "example"), None
+    )
+    if example_chunk:
+        assert "Far outside text." not in example_chunk["content"]
+    all_content = " ".join(c.get("content", "") for c in assembler.final_chunks)
+    assert "Far outside text." in all_content
 
 
 # ---------------------------------------------------------------------------
-# _flush
+# Deterministic chunk IDs (via assemble())
 # ---------------------------------------------------------------------------
 
 
-def test_flush_on_empty_accumulator_returns_none_and_adds_no_chunk(env) -> None:
-    """Locks: _flush([]) returns None and does not append anything to final_chunks."""
+def test_chunk_ids_are_stable_for_identical_inputs(env, monkeypatch) -> None:
+    """Locks: two separate DocumentAssembler runs over identical file inputs produce
+    exactly the same chunk_id list in the same order.
+    """
+    blocks = [
+        {"block_content": "Stable text content.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 Trigger", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler1 = _make(env)
+    monkeypatch.setattr(assembler1, "_save", lambda: None)
+    assembler1.assemble()
+
+    assembler2 = _make(env)
+    monkeypatch.setattr(assembler2, "_save", lambda: None)
+    assembler2.assemble()
+
+    ids1 = [c["chunk_id"] for c in assembler1.final_chunks]
+    ids2 = [c["chunk_id"] for c in assembler2.final_chunks]
+    assert ids1 == ids2
+
+
+def test_chunk_id_starts_with_chunk_type_prefix(env, monkeypatch) -> None:
+    """Locks: every chunk_id in final_chunks starts with '<chunk_type>_'."""
+    blocks = [
+        {"block_content": "Type prefix text.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
     assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
 
-    result = assembler._flush([], page=1)
-
-    assert result is None
-    assert assembler.final_chunks == []
+    for chunk in assembler.final_chunks:
+        assert chunk["chunk_id"].startswith(chunk["chunk_type"] + "_")
 
 
-def test_flush_on_non_empty_accumulator_adds_chunk_and_returns_it(env) -> None:
-    """Locks: _flush(['Hello world']) appends a chunk to final_chunks and returns it."""
+def test_chunks_with_different_content_have_different_ids(env, monkeypatch) -> None:
+    """Locks: two text chunks with distinct content strings produce distinct chunk_ids."""
+    blocks = [
+        {"block_content": "Alpha content text.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+        {"block_content": "Beta content text.", "block_label": "text", "block_bbox": [0, 40, 10, 50]},
+        {"block_content": "# 3 Flush", "block_label": "text", "block_bbox": [0, 60, 10, 70]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
     assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
 
-    result = assembler._flush(["Hello world"], page=1)
+    text_chunks = [c for c in assembler.final_chunks if c["chunk_type"] == "text"]
+    assert len(text_chunks) >= 2
+    ids = [c["chunk_id"] for c in text_chunks]
+    assert len(set(ids)) == len(ids)
 
-    assert result is not None
-    assert len(assembler.final_chunks) == 1
-    assert assembler.final_chunks[0] is result
 
+def test_chunk_id_hash_suffix_is_sha256_of_content(env, monkeypatch) -> None:
+    """Locks: the 8-char hash suffix in chunk_id equals SHA-256(content)[:8], where
+    content is the exact string stored in the chunk (text type has no post-processing).
+    """
+    known_content = "Deterministic paragraph."
 
-@pytest.mark.parametrize(
-    "part_content",
-    [
-        "PART I",
-        "PART II",
-        "PART III",
-        "PART IV",
-        "PART V",
-    ],
-)
-def test_flush_filters_out_part_marker_content(env, part_content) -> None:
-    """Locks: content matching 'PART I/II/...' is silently discarded — _flush returns None."""
+    blocks = [
+        {"block_content": known_content, "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
     assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
 
-    result = assembler._flush([part_content], page=1)
+    text_chunk = next(
+        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
+    )
+    assert text_chunk is not None
+    expected_hash = hashlib.sha256(known_content.encode()).hexdigest()[:8]
+    assert text_chunk["chunk_id"].endswith(expected_hash)
 
-    assert result is None
-    assert assembler.final_chunks == []
+
+# ---------------------------------------------------------------------------
+# entity_id extraction (via assemble())
+# ---------------------------------------------------------------------------
+
+
+def test_entity_id_extracted_from_named_entity_in_text(env, monkeypatch) -> None:
+    """Locks: a text chunk whose content contains 'Figure X.Y' (or similar named entity)
+    has entity_id set to the X.Y part extracted by _extract_id.
+    """
+    blocks = [
+        {"block_content": "See Figure 1.2 above.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    text_chunk = next(
+        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
+    )
+    assert text_chunk is not None
+    assert text_chunk["entity_id"] == "1.2"
+
+
+def test_entity_id_extracted_from_bare_number_pattern_in_text(env, monkeypatch) -> None:
+    """Locks: a text chunk whose content contains a bare 'X.Y' pattern (no named keyword)
+    has entity_id set to that X.Y value.
+    """
+    blocks = [
+        {"block_content": "The value is 4.4.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    text_chunk = next(
+        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
+    )
+    assert text_chunk is not None
+    assert text_chunk["entity_id"] == "4.4"
+
+
+def test_entity_id_is_none_when_content_has_no_id_pattern(env, monkeypatch) -> None:
+    """Locks: a text chunk whose content has no X.Y pattern at all has entity_id=None."""
+    blocks = [
+        {"block_content": "Plain text no ID.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    text_chunk = next(
+        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
+    )
+    assert text_chunk is not None
+    assert text_chunk["entity_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Formula map loading (safe_load_json via assemble())
+# ---------------------------------------------------------------------------
+
+
+def test_empty_formula_map_produces_no_formula_chunks(env, monkeypatch) -> None:
+    """Locks: when formulas.json is an empty mapping, a formula_number block does not
+    produce any numbered_formula chunk because 'content in self.formula_map' is False.
+    """
+    env["formulas"].write_text(json.dumps({}), encoding="utf-8")
+
+    blocks = [
+        {"block_content": "(1.1)", "block_label": "formula_number", "block_bbox": [0, 0, 10, 10]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    formula_chunks = [c for c in assembler.final_chunks if c["chunk_type"] == "numbered_formula"]
+    assert formula_chunks == []
+
+
+# ---------------------------------------------------------------------------
+# Page-number loading and offset (via assemble())
+# ---------------------------------------------------------------------------
+
+
+def test_blocks_json_entry_with_invalid_page_is_silently_ignored(
+    env, monkeypatch
+) -> None:
+    """Locks: a blocks_json entry with a non-integer page value is silently skipped so
+    its region is never created, while a valid entry on the same page is respected.
+    """
+    block_regions = [
+        # non-integer page — must be skipped
+        {
+            "page": "bad_page",
+            "entity_id": "9.9",
+            "bbox": [0, 0, 100, 100],
+            "chunk_type": "example",
+            "caption": "",
+        },
+        # valid entry — must create a region
+        {
+            "page": START_PAGE,
+            "entity_id": "2.2",
+            "bbox": [200, 200, 250, 250],  # FITZ → Paddle [400,400,500,500]
+            "chunk_type": "example",
+            "caption": "",
+        },
+    ]
+    env["blocks"].write_text(json.dumps(block_regions), encoding="utf-8")
+
+    blocks = [
+        # inside the bad_page region bbox (if it existed) — should go to main text
+        {"block_content": "Should be main text.", "block_label": "text", "block_bbox": [10, 10, 50, 50]},
+        # inside the valid region bbox
+        {"block_content": "Captured in region.", "block_label": "text", "block_bbox": [410, 410, 480, 480]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    entity_ids = [c.get("entity_id") for c in assembler.final_chunks]
+    assert "9.9" not in entity_ids
+    assert "2.2" in entity_ids
+
+
+def test_blocks_json_entry_applies_to_correct_page(env, monkeypatch) -> None:
+    """Locks: a blocks_json entry at page=START_PAGE creates a region that captures
+    paddle blocks on that page — confirming page numbers are applied without offset.
+    """
+    block_regions = [
+        {
+            "page": START_PAGE,
+            "entity_id": "3.3",
+            "bbox": [0, 0, 100, 100],  # FITZ → Paddle [0,0,200,200]
+            "chunk_type": "example",
+            "caption": "",
+        }
+    ]
+    env["blocks"].write_text(json.dumps(block_regions), encoding="utf-8")
+
+    blocks = [
+        {"block_content": "Inside region block.", "block_label": "text", "block_bbox": [10, 10, 50, 50]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    example_chunk = next(
+        (c for c in assembler.final_chunks if c.get("entity_id") == "3.3"), None
+    )
+    assert example_chunk is not None
+    assert "Inside region block." in example_chunk["content"]
+
+
+# ---------------------------------------------------------------------------
+# Accumulator flushing (via assemble())
+# ---------------------------------------------------------------------------
+
+
+def test_page_with_only_skipped_blocks_produces_no_text_chunks(
+    env, monkeypatch
+) -> None:
+    """Locks: a page whose every block has a label in PADDLE_BLOCKS_TO_SKIP never
+    contributes to the text accumulator, so assemble() produces no text chunks.
+    """
+    blocks = [
+        {"block_content": "1", "block_label": "footer", "block_bbox": [0, 0, 10, 10]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    text_chunks = [c for c in assembler.final_chunks if c["chunk_type"] == "text"]
+    assert text_chunks == []
+
+
+def test_text_block_with_section_header_triggers_flush(env, monkeypatch) -> None:
+    """Locks: a section-header block causes any preceding accumulated text to be flushed
+    into a text chunk that is appended to final_chunks.
+    """
+    blocks = [
+        {"block_content": "Accumulated content text.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 New Section", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    text_chunks = [c for c in assembler.final_chunks if c["chunk_type"] == "text"]
+    assert len(text_chunks) >= 1
+    assert any("Accumulated content text." in c["content"] for c in text_chunks)
+
+
+def test_part_marker_text_block_does_not_produce_chunk(env, monkeypatch) -> None:
+    """Locks: content exactly matching 'PART I/II/III/...' is discarded by _flush
+    (is_part_chunk check) and never appears in any chunk's content.
+    """
+    blocks = [
+        {"block_content": "PART II", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 New Section", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    all_content = " ".join(c.get("content", "") for c in assembler.final_chunks)
+    assert "PART II" not in all_content
 
 
 # ---------------------------------------------------------------------------

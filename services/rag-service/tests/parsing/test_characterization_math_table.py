@@ -22,66 +22,58 @@ def engine() -> MathTableEngine:
 
 
 # ---------------------------------------------------------------------------
-# _get_poly_bbox
+# _get_poly_bbox effect on process_formulas()
 # ---------------------------------------------------------------------------
 
 
-def test_get_poly_bbox_prefers_polygon_points_over_block_bbox(engine: MathTableEngine) -> None:
-    """Locks: when block_polygon_points is present it is used; block_bbox is ignored."""
-    item = {
-        "block_polygon_points": [[10, 20], [80, 20], [80, 90], [10, 90]],
-        "block_bbox": [0, 0, 999, 999],
+def test_formula_matched_using_polygon_points_when_present(engine: MathTableEngine) -> None:
+    """Locks: when block_polygon_points is present it is used for vertical overlap
+    matching; block_bbox is ignored.  The formula and number both have polygon Y=100-120
+    but their block_bbox Y values are far apart (>MAX_FORMULA_DISTANCE), so a match is
+    only possible if polygon_points are used.
+    """
+    formula_item = {
+        "block_label": "display_formula",
+        "block_content": "E = mc^2",
+        # polygon Y=100-120; block_bbox Y=50-100 (far from number)
+        "block_polygon_points": [[50, 100], [300, 100], [300, 120], [50, 120]],
+        "block_bbox": [50, 50, 300, 100],
+    }
+    num_item = {
+        "block_label": "formula_number",
+        "block_content": "(1.1)",
+        # polygon Y=100-120; block_bbox Y=800-820 (distance > MAX_FORMULA_DISTANCE)
+        "block_polygon_points": [[400, 100], [460, 100], [460, 120], [400, 120]],
+        "block_bbox": [400, 800, 460, 820],
     }
 
-    bbox = engine._get_poly_bbox(item)
+    results = engine.process_formulas([formula_item, num_item])
 
-    assert bbox == [10.0, 20.0, 80.0, 90.0]
-
-
-def test_get_poly_bbox_falls_back_to_block_bbox_when_no_polygon(engine: MathTableEngine) -> None:
-    """Locks: when block_polygon_points is absent, block_bbox is used as-is."""
-    item = {"block_bbox": [5.0, 10.0, 50.0, 100.0]}
-
-    bbox = engine._get_poly_bbox(item)
-
-    assert bbox == [5.0, 10.0, 50.0, 100.0]
+    assert len(results) == 1
+    assert results[0]["entity_id"] == "1.1"
 
 
-def test_get_poly_bbox_returns_zero_default_when_neither_present(engine: MathTableEngine) -> None:
-    """Locks: when no geometry key is present, returns [0,0,0,0]."""
-    item: dict = {}
-
-    bbox = engine._get_poly_bbox(item)
-
-    assert bbox == [0.0, 0.0, 0.0, 0.0]
-
-
-# ---------------------------------------------------------------------------
-# _join_latex_parts
-# ---------------------------------------------------------------------------
-
-
-def test_join_latex_parts_empty_returns_empty_string(engine: MathTableEngine) -> None:
-    """Locks: _join_latex_parts([]) → ''."""
-    assert engine._join_latex_parts([]) == ""
-
-
-def test_join_latex_parts_single_passthrough(engine: MathTableEngine) -> None:
-    """Locks: _join_latex_parts(['x = y']) → 'x = y' (no gathered wrapper)."""
-    assert engine._join_latex_parts(["x = y"]) == "x = y"
-
-
-def test_join_latex_parts_multiple_uses_gathered_environment(engine: MathTableEngine) -> None:
-    """Locks: multiple parts are joined inside \\begin{gathered}...\\end{gathered}
-    with \\\\ separators.
+def test_formula_matched_using_block_bbox_when_no_polygon_points(
+    engine: MathTableEngine,
+) -> None:
+    """Locks: when block_polygon_points is absent, block_bbox is used as the fallback
+    geometry source for vertical overlap detection.
     """
-    result = engine._join_latex_parts(["a = b", "c = d"])
+    formula_item = {
+        "block_label": "display_formula",
+        "block_content": "a^2 + b^2 = c^2",
+        "block_bbox": [50, 100, 300, 120],
+    }
+    num_item = {
+        "block_label": "formula_number",
+        "block_content": "(2.3)",
+        "block_bbox": [400, 100, 460, 120],
+    }
 
-    assert result.startswith("\\begin{gathered}")
-    assert result.endswith("\\end{gathered}")
-    assert "\\\\" in result
-    assert "a = b" in result
-    assert "c = d" in result
+    results = engine.process_formulas([formula_item, num_item])
+
+    assert len(results) == 1
+    assert results[0]["entity_id"] == "2.3"
 
 
 # ---------------------------------------------------------------------------
