@@ -14,6 +14,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy.dialects.postgresql import insert
+
 from database.enums import MoveType, QualityStatus
 from database.models import InventoryBalance, InventoryMove, Location
 from sqlalchemy.orm import Session
@@ -91,23 +93,20 @@ class InventoryLedger:
         If a balance record does not exist (e.g., new product in this warehouse),
         it initializes a new record with the starting quantity.
         """
-        balance = (
-            self.session.query(InventoryBalance)
-            .filter_by(product_id=product_id, location_id=location.id)
-            .first()
+        stmt = insert(InventoryBalance).values(
+            product_id=product_id,
+            location_id=location.id,
+            on_hand=qty,
+            reserved=0,
+            quality_status=QualityStatus.OK,
         )
 
-        if balance:
-            balance.on_hand += qty
-        else:
-            balance = InventoryBalance(
-                product_id=product_id,
-                location_id=location.id,
-                on_hand=qty,
-                reserved=0,
-                quality_status=QualityStatus.OK,
-            )
-            self.session.add(balance)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=['product_id', 'location_id'],
+            set_=dict(on_hand=InventoryBalance.on_hand + qty)
+        )
+
+        self.session.execute(stmt)
 
     def _log_movement(self, command: ReceiptCommand, move_type: MoveType, reason: str) -> None:
         """
