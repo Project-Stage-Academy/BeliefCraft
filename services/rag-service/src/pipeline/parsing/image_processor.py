@@ -75,6 +75,7 @@ def pdf_page_to_img(doc: Any, page_number: int, dpi: int = DPI_RENDER) -> np.nda
 
 
 def get_page_exercise(page: Any) -> str | None:
+    """Extract the latest exercise header/content snippet visible on a page."""
     blocks = page.get_text("blocks")
     for b in blocks[::-1]:
         block_rect = fitz.Rect(b[:4])
@@ -91,6 +92,64 @@ def get_page_exercise(page: Any) -> str | None:
     return None
 
 
+def _iter_caption_areas(img_rect: fitz.Rect) -> list[tuple[fitz.Rect, fitz.Rect]]:
+    """Build candidate caption and side-note areas around an image rectangle."""
+    areas: list[tuple[fitz.Rect, fitz.Rect]] = []
+    for y_offset_minus, x_offset, y_offset in [
+        (CAPTION_OFFSET_Y_MINUS, CAPTION_OFFSET_X_PLUS, CAPTION_HEIGHT),
+        (CAPTION_OFFSET_Y_MINUS_EXPANDED, CAPTION_OFFSET_PLUS_X_EXPANDED, CAPTION_HEIGHT_EXPANDED),
+    ]:
+        caption_area = fitz.Rect(
+            img_rect.x0 - CAPTION_OFFSET_X_MINUS,
+            img_rect.y1 - y_offset_minus,
+            img_rect.x1 + x_offset,
+            img_rect.y1 + y_offset,
+        )
+        side_area = fitz.Rect(img_rect.x1, img_rect.y0, img_rect.x1 + SIDE_NOTE_WIDTH, img_rect.y1)
+        areas.append((caption_area, side_area))
+    return areas
+
+
+def _find_strict_figure_caption(
+    blocks: list[tuple[Any, ...]], caption_area: fitz.Rect, side_area: fitz.Rect
+) -> str | None:
+    """Find a figure-style caption in blocks intersecting caption or side-note regions."""
+    for b in blocks[::-1]:
+        block_rect = fitz.Rect(b[:4])
+        text = b[4].strip()
+
+        clean_text = text.replace("\n", " ")
+        match = FIGURE_PATTERN.search(clean_text)
+
+        if match and (block_rect.intersects(caption_area) or block_rect.intersects(side_area)):
+            return str(clean_text[match.start() :])
+    return None
+
+
+def _find_block_content(
+    page: Any, blocks: list[tuple[Any, ...]], img_rect: fitz.Rect
+) -> str | None:
+    """Return exercise/example block text associated with an image, when present."""
+    for b in blocks[::-1]:
+        block_rect = fitz.Rect(b[:4])
+        text = b[4].strip()
+
+        if block_rect.y0 < img_rect.y1:
+            clean_text = text.replace("\n", " ")
+            match = EXERCISE_PATTERN.search(clean_text) or EXAMPLE_PATTERN.search(clean_text)
+
+            if match:
+                content_rect = fitz.Rect(
+                    block_rect.x0,
+                    block_rect.y0,
+                    page.rect.width,
+                    img_rect.y1 + BLOCK_CONTENT_PADDING,
+                )
+                full_content = page.get_text("text", clip=content_rect).strip().replace("\n", " ")
+                return str(full_content[match.start() :])
+    return None
+
+
 def get_advanced_caption(
     page: Any, prev_page: Any, rect_coords: tuple[float, float, float, float]
 ) -> str:
@@ -102,53 +161,16 @@ def get_advanced_caption(
     img_rect = fitz.Rect(*rect_coords)
     blocks = page.get_text("blocks")
 
-    for y_offset_minus, x_offset, y_offset in [
-        (CAPTION_OFFSET_Y_MINUS, CAPTION_OFFSET_X_PLUS, CAPTION_HEIGHT),
-        (CAPTION_OFFSET_Y_MINUS_EXPANDED, CAPTION_OFFSET_PLUS_X_EXPANDED, CAPTION_HEIGHT_EXPANDED),
-    ]:
-        caption_area = fitz.Rect(
-            img_rect.x0 - CAPTION_OFFSET_X_MINUS,
-            img_rect.y1 - y_offset_minus,
-            img_rect.x1 + x_offset,
-            img_rect.y1 + y_offset,
-        )
+    for caption_area, side_area in _iter_caption_areas(img_rect):
+        caption = _find_strict_figure_caption(blocks, caption_area, side_area)
+        if caption:
+            return caption
 
-        side_area = fitz.Rect(img_rect.x1, img_rect.y0, img_rect.x1 + SIDE_NOTE_WIDTH, img_rect.y1)
-
-        # 1. Strict Caption detection
-        for b in blocks[::-1]:
-            block_rect = fitz.Rect(b[:4])
-            text = b[4].strip()
-
-            clean_text = text.replace("\n", " ")
-            match = FIGURE_PATTERN.search(clean_text)
-
-            if match and (block_rect.intersects(caption_area) or block_rect.intersects(side_area)):
-                return str(clean_text[match.start() :])
-
-    # 2. Block detection (example / exercise)
-    for b in blocks[::-1]:
-        block_rect = fitz.Rect(b[:4])
-        text = b[4].strip()
-
-        if block_rect.y0 < img_rect.y1:
-            clean_text = text.replace("\n", " ")
-
-            match = EXERCISE_PATTERN.search(clean_text) or EXAMPLE_PATTERN.search(clean_text)
-
-            if match:
-                candidate_header = block_rect
-                content_rect = fitz.Rect(
-                    candidate_header.x0,
-                    candidate_header.y0,
-                    page.rect.width,
-                    img_rect.y1 + BLOCK_CONTENT_PADDING,
-                )
-                full_content = page.get_text("text", clip=content_rect).strip().replace("\n", " ")
-                return str(full_content[match.start() :])
+    block_content = _find_block_content(page, blocks, img_rect)
+    if block_content:
+        return block_content
 
     prev_page_exercise = get_page_exercise(prev_page)
-
     if prev_page_exercise:
         return prev_page_exercise
 
@@ -263,6 +285,115 @@ def _create_entry(
     }
 
 
+def _load_template_gray(figs_doc: Any, idx: int) -> tuple[np.ndarray, int, int]:
+    """Load a figure page and convert it to grayscale template plus its dimensions."""
+    template_img = pdf_page_to_img(figs_doc, idx)
+    template_gray = cv2.cvtColor(template_img, cv2.COLOR_BGR2GRAY)
+    t_h, t_w = template_gray.shape[:2]
+    return template_gray, t_h, t_w
+
+
+def _get_cached_page_gray(
+    dm_doc: Any, page_ptr: int, page_gray_cache: dict[int, np.ndarray]
+) -> np.ndarray:
+    """Get a grayscale DM page from cache, rendering it on first access."""
+    if page_ptr not in page_gray_cache:
+        page_img = pdf_page_to_img(dm_doc, page_ptr)
+        page_gray_cache[page_ptr] = cv2.cvtColor(page_img, cv2.COLOR_BGR2GRAY)
+
+        keys_to_remove = [k for k in page_gray_cache if k < page_ptr]
+        for k in keys_to_remove:
+            del page_gray_cache[k]
+
+    return page_gray_cache[page_ptr]
+
+
+def _to_fitz_rect(
+    max_loc: tuple[int, int], matched_w: int, matched_h: int
+) -> tuple[float, float, float, float]:
+    """Convert OpenCV pixel bounding box into fitz coordinate space."""
+    fitz_scale = get_scale_factor(DPI_RENDER)
+    return (
+        max_loc[0] * fitz_scale,
+        max_loc[1] * fitz_scale,
+        (max_loc[0] + matched_w) * fitz_scale,
+        (max_loc[1] + matched_h) * fitz_scale,
+    )
+
+
+def _resolve_description_for_match(
+    dm_doc: Any,
+    page_ptr: int,
+    page_obj: Any,
+    fitz_rect: tuple[float, float, float, float],
+) -> str:
+    """Resolve description text for a matched image using override blocks or caption search."""
+    prev_page = dm_doc.load_page(page_ptr - 1)
+    if page_ptr in FIGURES_DESCRIPTION_BLOCKS:
+        page_num, block_idx = FIGURES_DESCRIPTION_BLOCKS[page_ptr]
+        page = dm_doc.load_page(page_num)
+        blocks = page.get_text("blocks")
+        rect = fitz.Rect(blocks[block_idx][:4])
+        return str(page.get_text("text", clip=rect).strip().replace("\n", " "))
+
+    return get_advanced_caption(page_obj, prev_page, fitz_rect)
+
+
+def _scan_pages_for_template(
+    dm_doc: Any,
+    idx: int,
+    template_gray: np.ndarray,
+    t_h: int,
+    t_w: int,
+    page_ptr: int,
+    page_gray_cache: dict[int, np.ndarray],
+) -> tuple[dict[str, Any] | None, int]:
+    """Scan DM pages from page_ptr to find a match and build one metadata entry."""
+    while page_ptr < len(dm_doc):
+        logger.debug("Scanning page %s", page_ptr + 1)
+
+        if (idx, page_ptr) in SKIP_COMBINATIONS:
+            logger.info(
+                "Skipping known difficult combination: dm_page=%s fig_page=%s",
+                page_ptr + 1,
+                idx + 1,
+            )
+            page_ptr += 1
+            continue
+
+        page_gray = _get_cached_page_gray(dm_doc, page_ptr, page_gray_cache)
+        page_obj = dm_doc.load_page(page_ptr)
+
+        match_res = _match_template_on_page(page_gray, template_gray)
+        if not match_res:
+            page_ptr += 1
+            continue
+
+        max_val, max_loc, scale = match_res
+        matched_w = int(t_w * scale)
+        matched_h = int(t_h * scale)
+        fitz_rect = _to_fitz_rect(max_loc, matched_w, matched_h)
+
+        description = _resolve_description_for_match(dm_doc, page_ptr, page_obj, fitz_rect)
+        entry = _create_entry(
+            description,
+            page_ptr,
+            idx,
+            max_val,
+            max_loc,
+            matched_w,
+            matched_h,
+        )
+
+        if idx in FIGURES_BBOX_OVERRIDE:
+            max_loc, matched_w, matched_h = FIGURES_BBOX_OVERRIDE[idx]
+
+        _mask_matched_region(page_gray, max_loc, matched_w, matched_h)
+        return entry, page_ptr
+
+    return None, page_ptr
+
+
 def process_pdf(
     dm_pdf_path: str | Path,
     figures_pdf_path: str | Path,
@@ -277,6 +408,7 @@ def process_pdf(
     with fitz.open(dm_pdf_path) as dm_doc, fitz.open(figures_pdf_path) as figs_doc:
         already_found: set[int] = set()
         page_gray_cache: dict[int, np.ndarray] = {}
+        page_ptr = 0
         logger.info(f"Processing {len(dm_doc)} pages against {len(figs_doc)} prompt_templates...")
 
         for idx, _fig in tqdm(enumerate(figs_doc), desc="Searching prompt_templates"):
@@ -284,85 +416,20 @@ def process_pdf(
             if idx in already_found:
                 continue
 
-            template_img = pdf_page_to_img(figs_doc, idx)
-            template_gray = cv2.cvtColor(template_img, cv2.COLOR_BGR2GRAY)
-            t_h, t_w = template_gray.shape[:2]
+            template_gray, t_h, t_w = _load_template_gray(figs_doc, idx)
+            entry, page_ptr = _scan_pages_for_template(
+                dm_doc,
+                idx,
+                template_gray,
+                t_h,
+                t_w,
+                page_ptr,
+                page_gray_cache,
+            )
 
-            # Start scanning dm_doc from the last matched page (page_ptr).
-            # Do not restart from the beginning for each template.
-            if "page_ptr" not in locals():
-                page_ptr = 0
-
-            matched = False
-            while page_ptr < len(dm_doc):
-                logger.debug("Scanning page %s", page_ptr + 1)
-
-                if (idx, page_ptr) in SKIP_COMBINATIONS:
-                    logger.info(
-                        "Skipping known difficult combination: dm_page=%s fig_page=%s",
-                        page_ptr + 1,
-                        idx + 1,
-                    )
-                    page_ptr += 1
-                    continue
-
-                if page_ptr not in page_gray_cache:
-                    page_img = pdf_page_to_img(dm_doc, page_ptr)
-                    page_gray_cache[page_ptr] = cv2.cvtColor(page_img, cv2.COLOR_BGR2GRAY)
-
-                    keys_to_remove = [k for k in page_gray_cache if k < page_ptr]
-                    for k in keys_to_remove:
-                        del page_gray_cache[k]
-
-                page_obj = dm_doc.load_page(page_ptr)
-                page_gray = page_gray_cache[page_ptr]
-
-                match_res = _match_template_on_page(page_gray, template_gray)
-
-                if match_res:
-                    max_val, max_loc, scale = match_res
-
-                    matched_w = int(t_w * scale)
-                    matched_h = int(t_h * scale)
-                    fitz_scale = get_scale_factor(DPI_RENDER)
-                    fitz_rect = (
-                        max_loc[0] * fitz_scale,
-                        max_loc[1] * fitz_scale,
-                        (max_loc[0] + matched_w) * fitz_scale,
-                        (max_loc[1] + matched_h) * fitz_scale,
-                    )
-
-                    prev_page = dm_doc.load_page(page_ptr - 1)
-                    if page_ptr in FIGURES_DESCRIPTION_BLOCKS:
-                        page_num, block_idx = FIGURES_DESCRIPTION_BLOCKS[page_ptr]
-                        page = dm_doc.load_page(page_num)
-                        blocks = page.get_text("blocks")
-                        rect = fitz.Rect(blocks[block_idx][:4])
-                        description = page.get_text("text", clip=rect).strip().replace("\n", " ")
-                    else:
-                        description = get_advanced_caption(page_obj, prev_page, fitz_rect)
-
-                    entry = _create_entry(
-                        description,
-                        page_ptr,
-                        idx,
-                        max_val,
-                        max_loc,
-                        matched_w,
-                        matched_h,
-                    )
-                    all_entries.append(entry)
-                    already_found.add(idx)
-
-                    if idx in FIGURES_BBOX_OVERRIDE:
-                        max_loc, matched_w, matched_h = FIGURES_BBOX_OVERRIDE[idx]
-
-                    _mask_matched_region(page_gray, max_loc, matched_w, matched_h)
-
-                    matched = True
-                    break
-
-                page_ptr += 1
+            if entry is not None:
+                all_entries.append(entry)
+                already_found.add(idx)
 
     _save_to_json(all_entries, output_json)
 

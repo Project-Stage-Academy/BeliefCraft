@@ -57,7 +57,7 @@ def test_get_advanced_caption_no_blocks():
     mock_page.get_text.return_value = []
 
     rect = (0, 0, 100, 100)
-    result = ip.get_advanced_caption(mock_page, rect)
+    result = ip.get_advanced_caption(mock_page, mock_page, rect)
 
     assert result == "Image without specific caption or block header"
 
