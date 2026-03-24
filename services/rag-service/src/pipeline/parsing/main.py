@@ -216,11 +216,15 @@ class DocumentAssembler:
         if self._acc:
             curr_meta = self.meta_extractor.get_meta()
             is_ex_now = (curr_meta.get("subsection_title") or "").strip().lower() == "exercises"
-            self._flush(
+            chunk = self._flush(
                 self._acc,
                 self._acc_start_page or last_processed_page,
                 c_type="exercise" if is_ex_now else "text",
             )
+            if chunk and chunk["chunk_type"] in ["text", "exercise"]:
+                for formula_chunk in self._last_numbered_formula_chunks:
+                    formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
+                self._last_numbered_formula_chunks = []
             self._acc = []
             self._acc_start_page = None
 
@@ -301,6 +305,10 @@ class DocumentAssembler:
             chunk = self._create_chunk_obj(
                 data["chunk_type"], full_text, page_num, meta, entity_id=eid
             )
+
+            if "formula_chunks" in data:
+                for formula_chunk in data["formula_chunks"]:
+                    formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
 
             for img_chunk in list(self._not_captioned_images):
                 if (
@@ -444,9 +452,11 @@ class DocumentAssembler:
 
             if label == "formula_number" and content in self.formula_map:
                 formula_id = content[1:-1]  # Remove parentheses
-                self._last_numbered_formula_chunks.append(
-                    self._add_formula_chunk(formula_id, page_num)
-                )
+                f_chunk = self._add_formula_chunk(formula_id, page_num)
+                if matched_key:
+                    special_accs[matched_key].setdefault("formula_chunks", []).append(f_chunk)
+                else:
+                    self._last_numbered_formula_chunks.append(f_chunk)
 
             if content:
                 if matched_key:
