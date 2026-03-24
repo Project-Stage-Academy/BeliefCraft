@@ -14,10 +14,9 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy.dialects.postgresql import insert
-
 from database.enums import MoveType, QualityStatus
 from database.models import InventoryBalance, InventoryMove, Location
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 
@@ -102,8 +101,8 @@ class InventoryLedger:
         )
 
         stmt = stmt.on_conflict_do_update(
-            index_elements=['product_id', 'location_id'],
-            set_=dict(on_hand=InventoryBalance.on_hand + qty)
+            index_elements=["product_id", "location_id"],
+            set_={"on_hand": InventoryBalance.on_hand + qty},
         )
 
         self.session.execute(stmt)
