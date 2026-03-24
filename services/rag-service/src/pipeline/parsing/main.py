@@ -261,7 +261,7 @@ class DocumentAssembler:
                                 continue
                             rindex = content.rfind(result)
                             # move note text to note block and remove from original block
-                            blocks[idx2]["content"] = content[:rindex].strip()
+                            blocks[idx2]["block_content"] = content[:rindex].strip()
                             blocks[idx]["block_content"] = content[rindex:]
                             break
 
