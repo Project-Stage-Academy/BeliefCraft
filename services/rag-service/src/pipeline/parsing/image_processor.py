@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 # Local geometric constants
 SIMILARITY_THRESHOLD = 0.6
 CAPTION_OFFSET_X_MINUS = 10
-CAPTION_OFFSET_Y_MINUS = 0
+CAPTION_OFFSET_Y_MINUS = 50
 CAPTION_OFFSET_X_PLUS = 150
 CAPTION_HEIGHT = 30
 SIDE_NOTE_WIDTH = 200
@@ -166,9 +166,9 @@ def get_advanced_caption(
         if caption:
             return caption
 
-    block_content = _find_block_content(page, blocks, img_rect)
-    if block_content:
-        return block_content
+        block_content = _find_block_content(page, blocks, img_rect)
+        if block_content:
+            return block_content
 
     prev_page_exercise = get_page_exercise(prev_page)
     if prev_page_exercise:
