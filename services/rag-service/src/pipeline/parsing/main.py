@@ -284,7 +284,9 @@ class DocumentAssembler:
                     None,
                 )
                 if other_block:
-                    other_block["block_content"] += "\n" + block.get("block_content", "").strip()
+                    other_block["block_content"] += (
+                        "\n(" + block.get("block_content", "").strip() + ")"
+                    )
                 else:
                     new_blocks.append(block)
             else:
