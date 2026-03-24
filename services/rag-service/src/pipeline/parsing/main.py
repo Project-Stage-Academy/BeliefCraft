@@ -29,6 +29,8 @@ START_PAGE = 23
 LAST_PAGE = 648
 BBOX_PADDING = 5
 MAX_CHUNK_CHAR_LENGTH = 1000
+# current algorithms fails for these pages
+PAGES_NOT_TO_FIX_PADDLE = {55, 58, 128, 316, 437, 500, 568}
 
 ID_PREFIX_LIMIT = 100
 PART_SEQUENCE = ["I", "II", "III", "IV", "V", "Appendices"]
@@ -205,6 +207,8 @@ class DocumentAssembler:
         last_processed_page = START_PAGE
         for page_idx, page_data in enumerate(self.paddle_pages):
             if START_PAGE <= page_idx + 1 <= LAST_PAGE:
+                if (page_idx + 1) not in PAGES_NOT_TO_FIX_PADDLE:
+                    self._fix_paddle_problems(page_data)
                 self._update_part_from_doc_title(page_data)
                 self._process_page(page_idx, page_data)
                 last_processed_page = page_idx + 1
@@ -221,6 +225,36 @@ class DocumentAssembler:
             self._acc_start_page = None
 
         self._save()
+
+    def _fix_paddle_problems(self, page_data: dict[str, Any]) -> None:
+        """Sometimes paddleocr moves text of note to random text block. This is partial fix."""
+        blocks = page_data.get("prunedResult", {}).get("parsing_res_list", [])
+        correct_notes = set()
+        for block in blocks:
+            content = block.get("block_content", "").strip()
+            if match := re.match(r"^\$+\s\^\{(\d+)}\s\$+", content):
+                number = match.group(1)
+                correct_notes.add(number)
+
+        for idx, block in enumerate(blocks):
+            if block["block_content"].strip() == "":
+                for idx2 in range(idx, -1, -1):
+                    content = blocks[idx2].get("block_content", "").strip()
+                    if re.search(r"\$+\s\^\{(\d+)}\s\$+", content):
+                        results = re.findall(r"\$+\s\^\{\d+}\s\$+", content)
+                        if results:
+                            result = results[-1]
+                            search = re.search(r"\$+\s\^\{(\d+)}\s\$+", result)
+                            if search is None:
+                                continue
+                            number = search.group(1)
+                            if number in correct_notes:
+                                continue
+                            rindex = content.rfind(result)
+                            # move note text to note block and remove from original block
+                            blocks[idx2]["content"] = content[:rindex].strip()
+                            blocks[idx]["block_content"] = content[rindex:]
+                            break
 
     def _process_page(self, page_idx: int, page_data: dict[str, Any]) -> None:
         page_num = int(page_data.get("page_num") or (page_idx + 1))
