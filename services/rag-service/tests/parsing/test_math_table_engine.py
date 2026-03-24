@@ -1,5 +1,5 @@
 import pytest
-from pipeline.parsing.math_table_engine import MathTableEngine
+from pipeline.parsing.math_table_engine import MathTableEngine, clean_html_attributes
 
 
 @pytest.fixture
@@ -22,9 +22,9 @@ def test_get_poly_bbox_from_standard_bbox(engine):
 
 
 def test_clean_html_attributes(engine):
-    # Тест очищення HTML тегів від зайвих атрибутів
+    # Тест очищення HTML тегів від зайвих атрибутів (module-level function)
     html = '<table style="color: red;" border="1"><tr id="1"><td colspan="2">Data</td></tr></table>'
-    cleaned = engine._clean_html_attributes(html)
+    cleaned = clean_html_attributes(html)
 
     # Має залишити colspan, але видалити style, border та id
     assert 'colspan="2"' in cleaned
@@ -34,9 +34,9 @@ def test_clean_html_attributes(engine):
 
 
 def test_clean_html_links(engine):
-    # Тест збереження href у посиланнях
+    # Тест збереження href у посиланнях (module-level function)
     html = '<a href="http://test.com" class="btn">Link</a>'
-    cleaned = engine._clean_html_attributes(html)
+    cleaned = clean_html_attributes(html)
     assert 'href="http://test.com"' in cleaned
     assert "class=" not in cleaned
 
