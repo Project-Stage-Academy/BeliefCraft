@@ -519,7 +519,7 @@ def test_part_marker_text_block_does_not_produce_chunk(env, monkeypatch) -> None
 
 
 def test_chunk_type_from_figures_json_is_lowercased(env, monkeypatch) -> None:
-    """Locks: chunk_type from figures_json is lowercased (e.g. 'Captioned_Image' → 'captioned_image').
+    """Locks: chunk_type from figures_json is lowercased (e.g.'Captioned_Image'→'captioned_image').
     _process_page returns early if blocks is empty, so we include a dummy footer block
     to ensure _handle_images is reached.
     """

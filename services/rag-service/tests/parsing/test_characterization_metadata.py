@@ -36,7 +36,7 @@ def test_section_header_sets_section_fields(extractor: MetadataExtractor) -> Non
 
 
 def test_subsection_header_sets_subsection_fields(extractor: MetadataExtractor) -> None:
-    """Locks: a double-hash header (## N.M TITLE) sets subsection fields and resets subsubsection."""
+    """Locks: a double-hash header (## N.M TITLE) sets subsection fields and resets subsubsection"""
     meta = extractor.process_content_and_get_meta("## 2.3 Probability")
 
     assert meta["subsection_number"] == "2.3"
