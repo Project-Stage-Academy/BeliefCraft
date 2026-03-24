@@ -9,15 +9,13 @@ import hashlib
 import json
 
 import pytest
+from pipeline.parsing.main import BBOX_PADDING  # noqa: F401 — imported to lock the value at 5
 from pipeline.parsing.main import (
-    BBOX_PADDING,  # noqa: F401 — imported to lock the value at 5
-    LAST_PAGE,
     MAX_CHUNK_CHAR_LENGTH,
     PADDLE_BLOCKS_TO_SKIP,
     START_PAGE,
     DocumentAssembler,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -70,10 +68,7 @@ def _make(env: dict, **overrides) -> DocumentAssembler:
 
 def _pages_with_content(n_blank: int, page_blocks: list) -> list:
     """Return n_blank empty pages followed by one page carrying page_blocks."""
-    pages = [
-        {"page_num": i + 1, "prunedResult": {"parsing_res_list": []}}
-        for i in range(n_blank)
-    ]
+    pages = [{"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(n_blank)]
     pages.append(
         {
             "page_num": n_blank + 1,
@@ -88,9 +83,7 @@ def _pages_with_content(n_blank: int, page_blocks: list) -> list:
 # ---------------------------------------------------------------------------
 
 
-def test_block_at_padding_boundary_is_captured_in_special_region(
-    env, monkeypatch
-) -> None:
+def test_block_at_padding_boundary_is_captured_in_special_region(env, monkeypatch) -> None:
     """Locks: a paddle block whose bbox right/bottom edge equals region_edge + BBOX_PADDING(5)
     IS captured in the special region; a block 1 pixel beyond that boundary is NOT captured
     and ends up in the main text stream instead.
@@ -127,9 +120,7 @@ def test_block_at_padding_boundary_is_captured_in_special_region(
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    example_chunk = next(
-        (c for c in assembler.final_chunks if c["chunk_type"] == "example"), None
-    )
+    example_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "example"), None)
     assert example_chunk is not None
     assert "At boundary text." in example_chunk["content"]
     assert "Outside block text." not in example_chunk["content"]
@@ -137,9 +128,7 @@ def test_block_at_padding_boundary_is_captured_in_special_region(
     assert any("Outside block text." in c["content"] for c in text_chunks)
 
 
-def test_block_completely_outside_region_goes_to_main_stream(
-    env, monkeypatch
-) -> None:
+def test_block_completely_outside_region_goes_to_main_stream(env, monkeypatch) -> None:
     """Locks: a paddle block with bbox completely outside all special regions goes to the
     main text accumulator and appears in a text chunk, not in any example chunk.
     """
@@ -168,9 +157,7 @@ def test_block_completely_outside_region_goes_to_main_stream(
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    example_chunk = next(
-        (c for c in assembler.final_chunks if c["chunk_type"] == "example"), None
-    )
+    example_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "example"), None)
     if example_chunk:
         assert "Far outside text." not in example_chunk["content"]
     all_content = " ".join(c.get("content", "") for c in assembler.final_chunks)
@@ -187,7 +174,11 @@ def test_chunk_ids_are_stable_for_identical_inputs(env, monkeypatch) -> None:
     exactly the same chunk_id list in the same order.
     """
     blocks = [
-        {"block_content": "Stable text content.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "Stable text content.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 10, 10],
+        },
         {"block_content": "# 2 Trigger", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
@@ -226,9 +217,17 @@ def test_chunk_id_starts_with_chunk_type_prefix(env, monkeypatch) -> None:
 def test_chunks_with_different_content_have_different_ids(env, monkeypatch) -> None:
     """Locks: two text chunks with distinct content strings produce distinct chunk_ids."""
     blocks = [
-        {"block_content": "Alpha content text.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "Alpha content text.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 10, 10],
+        },
         {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
-        {"block_content": "Beta content text.", "block_label": "text", "block_bbox": [0, 40, 10, 50]},
+        {
+            "block_content": "Beta content text.",
+            "block_label": "text",
+            "block_bbox": [0, 40, 10, 50],
+        },
         {"block_content": "# 3 Flush", "block_label": "text", "block_bbox": [0, 60, 10, 70]},
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
@@ -261,9 +260,7 @@ def test_chunk_id_hash_suffix_is_sha256_of_content(env, monkeypatch) -> None:
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    text_chunk = next(
-        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
-    )
+    text_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "text"), None)
     assert text_chunk is not None
     expected_hash = hashlib.sha256(known_content.encode()).hexdigest()[:8]
     assert text_chunk["chunk_id"].endswith(expected_hash)
@@ -279,7 +276,11 @@ def test_entity_id_extracted_from_named_entity_in_text(env, monkeypatch) -> None
     has entity_id set to the X.Y part extracted by _extract_id.
     """
     blocks = [
-        {"block_content": "See Figure 1.2 above.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "See Figure 1.2 above.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 10, 10],
+        },
         {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
@@ -289,9 +290,7 @@ def test_entity_id_extracted_from_named_entity_in_text(env, monkeypatch) -> None
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    text_chunk = next(
-        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
-    )
+    text_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "text"), None)
     assert text_chunk is not None
     assert text_chunk["entity_id"] == "1.2"
 
@@ -311,9 +310,7 @@ def test_entity_id_extracted_from_bare_number_pattern_in_text(env, monkeypatch) 
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    text_chunk = next(
-        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
-    )
+    text_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "text"), None)
     assert text_chunk is not None
     assert text_chunk["entity_id"] == "4.4"
 
@@ -331,9 +328,7 @@ def test_entity_id_is_none_when_content_has_no_id_pattern(env, monkeypatch) -> N
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    text_chunk = next(
-        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
-    )
+    text_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "text"), None)
     assert text_chunk is not None
     assert text_chunk["entity_id"] is None
 
@@ -368,9 +363,7 @@ def test_empty_formula_map_produces_no_formula_chunks(env, monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_blocks_json_entry_with_invalid_page_is_silently_ignored(
-    env, monkeypatch
-) -> None:
+def test_blocks_json_entry_with_invalid_page_is_silently_ignored(env, monkeypatch) -> None:
     """Locks: a blocks_json entry with a non-integer page value is silently skipped so
     its region is never created, while a valid entry on the same page is respected.
     """
@@ -396,9 +389,17 @@ def test_blocks_json_entry_with_invalid_page_is_silently_ignored(
 
     blocks = [
         # inside the bad_page region bbox (if it existed) — should go to main text
-        {"block_content": "Should be main text.", "block_label": "text", "block_bbox": [10, 10, 50, 50]},
+        {
+            "block_content": "Should be main text.",
+            "block_label": "text",
+            "block_bbox": [10, 10, 50, 50],
+        },
         # inside the valid region bbox
-        {"block_content": "Captured in region.", "block_label": "text", "block_bbox": [410, 410, 480, 480]},
+        {
+            "block_content": "Captured in region.",
+            "block_label": "text",
+            "block_bbox": [410, 410, 480, 480],
+        },
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
     (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
@@ -428,7 +429,11 @@ def test_blocks_json_entry_applies_to_correct_page(env, monkeypatch) -> None:
     env["blocks"].write_text(json.dumps(block_regions), encoding="utf-8")
 
     blocks = [
-        {"block_content": "Inside region block.", "block_label": "text", "block_bbox": [10, 10, 50, 50]},
+        {
+            "block_content": "Inside region block.",
+            "block_label": "text",
+            "block_bbox": [10, 10, 50, 50],
+        },
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
     (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
@@ -437,9 +442,7 @@ def test_blocks_json_entry_applies_to_correct_page(env, monkeypatch) -> None:
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    example_chunk = next(
-        (c for c in assembler.final_chunks if c.get("entity_id") == "3.3"), None
-    )
+    example_chunk = next((c for c in assembler.final_chunks if c.get("entity_id") == "3.3"), None)
     assert example_chunk is not None
     assert "Inside region block." in example_chunk["content"]
 
@@ -449,9 +452,7 @@ def test_blocks_json_entry_applies_to_correct_page(env, monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_page_with_only_skipped_blocks_produces_no_text_chunks(
-    env, monkeypatch
-) -> None:
+def test_page_with_only_skipped_blocks_produces_no_text_chunks(env, monkeypatch) -> None:
     """Locks: a page whose every block has a label in PADDLE_BLOCKS_TO_SKIP never
     contributes to the text accumulator, so assemble() produces no text chunks.
     """
@@ -474,7 +475,11 @@ def test_text_block_with_section_header_triggers_flush(env, monkeypatch) -> None
     into a text chunk that is appended to final_chunks.
     """
     blocks = [
-        {"block_content": "Accumulated content text.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "Accumulated content text.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 10, 10],
+        },
         {"block_content": "# 2 New Section", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
@@ -531,9 +536,7 @@ def test_chunk_type_from_figures_json_is_lowercased(env, monkeypatch) -> None:
 
     # A footer block is in PADDLE_BLOCKS_TO_SKIP, so it produces no text chunk,
     # but it prevents the early-return triggered by an empty block list.
-    dummy_blocks = [
-        {"block_content": "1", "block_label": "footer", "block_bbox": [0, 0, 10, 10]}
-    ]
+    dummy_blocks = [{"block_content": "1", "block_label": "footer", "block_bbox": [0, 0, 10, 10]}]
     pages = _pages_with_content(START_PAGE - 1, dummy_blocks)
     (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
 
@@ -556,7 +559,11 @@ def test_section_header_block_flushes_accumulated_text(env, monkeypatch) -> None
     the accumulated text that preceded it.
     """
     blocks = [
-        {"block_content": "First paragraph text.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "First paragraph text.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 10, 10],
+        },
         {"block_content": "# 2 New Section", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
@@ -646,9 +653,7 @@ def test_block_inside_special_region_goes_to_region_accumulator(env, monkeypatch
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    example_chunk = next(
-        (c for c in assembler.final_chunks if c["chunk_type"] == "example"), None
-    )
+    example_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "example"), None)
     assert example_chunk is not None
     assert "Inside text." in example_chunk["content"]
     assert "Outside text." not in example_chunk["content"]
@@ -740,9 +745,7 @@ def test_defined_in_chunk_set_on_formula_after_next_flush(env, monkeypatch) -> N
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    text_chunk = next(
-        (c for c in assembler.final_chunks if c["chunk_type"] == "text"), None
-    )
+    text_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "text"), None)
     formula_chunk = next(
         (c for c in assembler.final_chunks if c["chunk_type"] == "numbered_formula"), None
     )
@@ -756,9 +759,7 @@ def test_defined_in_chunk_set_on_formula_after_next_flush(env, monkeypatch) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_exercise_chunk_self_reference_removed_from_referenced_exercises(
-    env, monkeypatch
-) -> None:
+def test_exercise_chunk_self_reference_removed_from_referenced_exercises(env, monkeypatch) -> None:
     """Locks: an exercise chunk does not include its own entity_id in referenced_exercises."""
     blocks = [
         {
@@ -801,7 +802,11 @@ def test_assemble_skips_pages_before_start_page(env, monkeypatch) -> None:
     """Locks: assemble() does not process pages with 1-based index < START_PAGE."""
     # Only 1 page total → page_idx=0, page_idx+1=1 < START_PAGE(23) → not processed
     blocks = [
-        {"block_content": "Should not appear.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "Should not appear.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 10, 10],
+        },
         {"block_content": "# 1 Trigger", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
     ]
     pages = [{"page_num": 1, "prunedResult": {"parsing_res_list": blocks}}]
@@ -819,7 +824,11 @@ def test_assemble_skips_pages_before_start_page(env, monkeypatch) -> None:
 def test_assemble_processes_exactly_start_page(env, monkeypatch) -> None:
     """Locks: assemble() processes page_idx+1 == START_PAGE (the boundary is inclusive)."""
     blocks = [
-        {"block_content": "Processed content.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "Processed content.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 10, 10],
+        },
         {"block_content": "# 2 Trigger", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
@@ -842,7 +851,9 @@ def test_block_map_bbox_scaled_by_2x_on_init(env) -> None:
     """Locks: blocks_json bboxes (FITZ space) are scaled by kx=2.0, ky=2.0 at init time.
     (PADDLE_WIDTH/FITZ_WIDTH = 1152/576 = 2.0, PADDLE_HEIGHT/FITZ_HEIGHT = 1296/648 = 2.0)
     """
-    blocks_data = [{"page": 1, "entity_id": "1.1", "bbox": [10, 20, 30, 40], "chunk_type": "example"}]
+    blocks_data = [
+        {"page": 1, "entity_id": "1.1", "bbox": [10, 20, 30, 40], "chunk_type": "example"}
+    ]
     env["blocks"].write_text(json.dumps(blocks_data), encoding="utf-8")
 
     assembler = _make(env)
@@ -857,7 +868,12 @@ def test_image_map_bbox_scaled_by_image_scale_on_init(env) -> None:
     ky_i = (1296/648) * 0.36 = 0.72 at init time.
     """
     figures_data = [
-        {"page": 1, "entity_id": "1.1", "bbox": [100, 100, 200, 200], "chunk_type": "captioned_image"}
+        {
+            "page": 1,
+            "entity_id": "1.1",
+            "bbox": [100, 100, 200, 200],
+            "chunk_type": "captioned_image",
+        }
     ]
     env["figures"].write_text(json.dumps(figures_data), encoding="utf-8")
 
@@ -865,7 +881,7 @@ def test_image_map_bbox_scaled_by_image_scale_on_init(env) -> None:
 
     scaled = assembler.image_map[1][0]["bbox"]
     # kx_i = ky_i = 0.72 — hardcoded to lock the current physics-based scale
-    assert abs(scaled[0] - 72.0) < 0.01   # 100 * 0.72
+    assert abs(scaled[0] - 72.0) < 0.01  # 100 * 0.72
     assert abs(scaled[2] - 144.0) < 0.01  # 200 * 0.72
 
 
@@ -889,7 +905,11 @@ def test_caption_prefix_lines_are_skipped_in_text_stream(env, monkeypatch, capti
     """
     blocks = [
         {"block_content": caption_prefix, "block_label": "text", "block_bbox": [0, 0, 10, 10]},
-        {"block_content": "Normal text after.", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+        {
+            "block_content": "Normal text after.",
+            "block_label": "text",
+            "block_bbox": [0, 20, 10, 30],
+        },
         {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 40, 10, 50]},
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)

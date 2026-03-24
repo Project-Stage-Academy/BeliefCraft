@@ -9,10 +9,7 @@ from pipeline.parsing.main import (
 
 def _pages_with_content(n_blank: int, page_blocks: list) -> list:
     """Return n_blank empty pages followed by one page carrying page_blocks."""
-    pages = [
-        {"page_num": i + 1, "prunedResult": {"parsing_res_list": []}}
-        for i in range(n_blank)
-    ]
+    pages = [{"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(n_blank)]
     pages.append(
         {
             "page_num": n_blank + 1,
@@ -140,7 +137,11 @@ def test_blocks_json_bbox_is_scaled_on_assembly(mock_data_env, monkeypatch):
 
     # Block at [25,45,55,70] is inside [20,40,60,80] with BBOX_PADDING=5
     blocks = [
-        {"block_content": "Inside scaled block.", "block_label": "text", "block_bbox": [25, 45, 55, 70]},
+        {
+            "block_content": "Inside scaled block.",
+            "block_label": "text",
+            "block_bbox": [25, 45, 55, 70],
+        },
     ]
     pages = _pages_with_content(START_PAGE - 1, blocks)
     (mock_data_env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
@@ -155,9 +156,7 @@ def test_blocks_json_bbox_is_scaled_on_assembly(mock_data_env, monkeypatch):
     monkeypatch.setattr(assembler, "_save", lambda: None)
     assembler.assemble()
 
-    example_chunk = next(
-        (c for c in assembler.final_chunks if c.get("entity_id") == "5.5"), None
-    )
+    example_chunk = next((c for c in assembler.final_chunks if c.get("entity_id") == "5.5"), None)
     assert example_chunk is not None
     assert "Inside scaled block." in example_chunk["content"]
 
@@ -201,10 +200,7 @@ def test_document_assembler_full_flow(mock_data_env, monkeypatch):
     assemble() only processes pages where START_PAGE(23) <= page_idx+1 <= LAST_PAGE(648).
     We therefore supply 23 pages so the last one (page_idx=22) is the first processed page.
     """
-    dummy_pages = [
-        {"page_num": i + 1, "prunedResult": {"parsing_res_list": []}}
-        for i in range(22)
-    ]
+    dummy_pages = [{"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(22)]
     # Page at index 22 (page_idx+1 == 23 == START_PAGE) carries real content
     dummy_pages.append(
         {
@@ -316,8 +312,7 @@ def test_paddle_ocr_content_used_not_markdown_field(mock_data_env, monkeypatch):
     flushed chunk's content must equal the OCR text, not the markdown version.
     """
     blank_pages = [
-        {"page_num": i + 1, "prunedResult": {"parsing_res_list": []}}
-        for i in range(START_PAGE - 1)
+        {"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(START_PAGE - 1)
     ]
     content_page = {
         "page_num": START_PAGE,
