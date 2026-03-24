@@ -84,6 +84,8 @@ class EnvironmentClientProtocol(Protocol):
         move_type: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]: ...
 
@@ -302,6 +304,8 @@ class EnvironmentAPIClient(BaseAPIClient):
         move_type: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]:
         """Get inventory movement history."""
@@ -316,6 +320,10 @@ class EnvironmentAPIClient(BaseAPIClient):
             params["from_ts"] = from_ts
         if to_ts:
             params["to_ts"] = to_ts
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
 
         return await self.get("/api/v1/smart-query/inventory/moves", params=params, timeout=timeout)
 
