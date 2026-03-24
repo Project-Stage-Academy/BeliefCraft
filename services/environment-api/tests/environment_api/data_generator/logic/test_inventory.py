@@ -70,6 +70,8 @@ class TestInventoryLedger:
         assert isinstance(move, InventoryMove)
         assert move.move_type == MoveType.INBOUND
         assert move.qty == qty
+        assert move.from_location_id is None
+        assert move.to_location_id == mock_location.id
 
     def test_record_receipt_existing_product(self, ledger, mock_session, mock_location):
         """
@@ -125,3 +127,5 @@ class TestInventoryLedger:
         assert move.move_type == MoveType.OUTBOUND
         assert move.qty == 30.0  # Logged as positive delta in movement table usually
         assert move.reason_code == "CUSTOMER_ORDER"
+        assert move.from_location_id == mock_location.id
+        assert move.to_location_id is None
