@@ -6,7 +6,7 @@ from database.base import Base
 from database.constraints import check_non_negative, check_positive
 from database.enums import LocationType, MoveType, QualityStatus
 from sqlalchemy import (
-    DateTime,
+    DateTime, UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import (
@@ -85,6 +85,7 @@ class InventoryBalance(Base):
     __table_args__ = (
         check_non_negative("on_hand", name="check_on_hand_positive"),
         check_non_negative("reserved", name="check_reserved_positive"),
+        UniqueConstraint('product_id', 'location_id', name='uq_inventory_balance_product_location')
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
