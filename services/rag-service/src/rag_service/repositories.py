@@ -7,6 +7,7 @@ import random
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 import weaviate
 from weaviate.collections.classes.filters import Filter
@@ -566,10 +567,11 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         Other fields are left ``null``.
         """
         chunk_type = "code_definitions"
+        generated_document_id = str(uuid4())
 
         if not document_ids:
             return Document(
-                id=None,
+                id=generated_document_id,
                 content="",
                 cosine_similarity=None,
                 metadata={"chunk_type": chunk_type},
@@ -584,7 +586,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         )
         source_fragment = WeaviateCodeDefinitionProcessor.restore_code_fragment(definitions)
         return Document(
-            id=None,
+            id=generated_document_id,
             content=source_fragment,
             cosine_similarity=None,
             metadata={"chunk_type": chunk_type},

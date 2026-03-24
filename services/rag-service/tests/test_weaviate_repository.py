@@ -1,4 +1,5 @@
 import inspect
+from uuid import UUID
 
 import pytest
 import requests
@@ -486,7 +487,8 @@ async def test_weaviate_get_related_code_definitions(repo):
     result = await repo.get_related_code_definitions([ROOT_UUID])
 
     assert isinstance(result, Document)
-    assert result.id is None
+    assert result.id is not None
+    assert str(UUID(result.id)) == result.id
     assert result.metadata == {"chunk_type": "code_definitions"}
     assert result.cosine_similarity is None
 
@@ -516,7 +518,8 @@ async def test_rag_tools_get_related_code_definitions_integration(repo):
     result = await rag_tools.get_related_code_definitions([ROOT_UUID])
 
     assert isinstance(result, Document)
-    assert result.id is None
+    assert result.id is not None
+    assert str(UUID(result.id)) == result.id
     assert result.metadata == {"chunk_type": "code_definitions"}
     assert result.cosine_similarity is None
 
@@ -543,7 +546,8 @@ async def test_rag_tools_get_related_code_definitions_integration_empty_ids(repo
     result = await rag_tools.get_related_code_definitions([])
 
     assert isinstance(result, Document)
-    assert result.id is None
+    assert result.id is not None
+    assert str(UUID(result.id)) == result.id
     assert result.metadata == {"chunk_type": "code_definitions"}
     assert result.cosine_similarity is None
     assert result.content == ""
@@ -560,7 +564,8 @@ async def test_rag_tools_get_related_code_definitions_integration_two_ids(repo):
     result = await rag_tools.get_related_code_definitions([ROOT_UUID, OTHER_UUID])
 
     assert isinstance(result, Document)
-    assert result.id is None
+    assert result.id is not None
+    assert str(UUID(result.id)) == result.id
     assert result.metadata == {"chunk_type": "code_definitions"}
     assert result.cosine_similarity is None
 
