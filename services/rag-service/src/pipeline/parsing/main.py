@@ -24,7 +24,6 @@ logger = get_logger(__name__)
 
 logger.info("service_started", message="RAG Service is up and running")
 
-PAGE_OFFSET = 18
 START_PAGE = 23
 LAST_PAGE = 648
 BBOX_PADDING = 5
@@ -33,13 +32,15 @@ PADDLE_BLOCKS_TO_SKIP = ["footer", "number", "header", "image", "footnote", "doc
 # current algorithms fails for these pages
 PAGES_NOT_TO_FIX_PADDLE = {55, 58, 128, 316, 437, 500, 568}
 
-ID_PREFIX_LIMIT = 100
 PART_SEQUENCE = ["I", "II", "III", "IV", "V", "Appendices"]
 IMAGE_SCALE = 0.36  # 72 points per inch / 200 dpi
 FITZ_WIDTH = 576
 FITZ_HEIGHT = 648
 PADDLE_WIDTH = 1152
 PADDLE_HEIGHT = 1296
+
+NOTE_NUMBER_PATTERN = r"\$+\s\^\{(\d+)}\s\$+"
+NOTE_NUMBER_PATTERN_WITHOUT_CAPTURING_GROUP = r"\$+\s\^\{\d+}\s\$+"
 
 
 def load_bucket_url_from_env() -> str | None:
@@ -70,9 +71,9 @@ class DocumentAssembler:
         )
 
         self.paddle_pages = self._load_all_paddle_jsons(self.paddle_dir)
-        self.image_map = self._load_and_offset(self.figures_json, "page", offset=0)
-        self.block_map = self._load_and_offset(self.blocks_json, "page", offset=0)
-        self.table_map = self._load_and_offset(self.tables_json, "page_number", offset=0)
+        self.image_map = self._load_and_offset(self.figures_json, "page")
+        self.block_map = self._load_and_offset(self.blocks_json, "page")
+        self.table_map = self._load_and_offset(self.tables_json, "page_number")
         self.formula_map = self._safe_load_json(self.formulas_json)
 
         # Blocks are in FITZ space, scale up to Paddle
@@ -263,7 +264,7 @@ class DocumentAssembler:
 
         for block in blocks:
             content = block.get("block_content", "").strip()
-            if match := re.match(r"^\$+\s\^\{(\d+)}\s\$+", content):
+            if match := re.match(rf"^{NOTE_NUMBER_PATTERN}", content):
                 number = match.group(1)
                 correct_notes.add(number)
 
@@ -271,11 +272,11 @@ class DocumentAssembler:
             if block["block_content"].strip() == "":
                 for idx2 in range(idx, -1, -1):
                     content = blocks[idx2].get("block_content", "").strip()
-                    if re.search(r"\$+\s\^\{(\d+)}\s\$+", content):
-                        results = re.findall(r"\$+\s\^\{\d+}\s\$+", content)
+                    if re.search(NOTE_NUMBER_PATTERN, content):
+                        results = re.findall(NOTE_NUMBER_PATTERN_WITHOUT_CAPTURING_GROUP, content)
                         if results:
                             result = results[-1]
-                            search = re.search(r"\$+\s\^\{(\d+)}\s\$+", result)
+                            search = re.search(NOTE_NUMBER_PATTERN, result)
                             if search is None:
                                 continue
                             number = search.group(1)
@@ -299,7 +300,7 @@ class DocumentAssembler:
         # attach notes to correct blocks
         new_blocks = []
         for block in blocks:
-            match = re.match(r"^\$+\s\^\{(\d+)}\s\$+", block.get("block_content", "").strip())
+            match = re.match(rf"^{NOTE_NUMBER_PATTERN}", block.get("block_content", "").strip())
             if match:
                 pattern = r"\$+\s\^\{" + re.escape(match.group(1)) + r"}\s\$+"
                 other_block = next(
@@ -311,9 +312,7 @@ class DocumentAssembler:
                     None,
                 )
                 if other_block:
-                    other_block["block_content"] += (
-                        "\n(" + block.get("block_content", "").strip() + ")"
-                    )
+                    other_block["block_content"] += f"\n({block.get('block_content', '').strip()})"
                 else:
                     new_blocks.append(block)
             else:
