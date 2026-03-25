@@ -952,3 +952,82 @@ def test_chunk_splits_when_length_exceeds_max_chunk_char_length(env, monkeypatch
     text_chunks = [c for c in assembler.final_chunks if c["chunk_type"] == "text"]
     # The overflow should cause at least two text chunks
     assert len(text_chunks) >= 2
+
+
+# ---------------------------------------------------------------------------
+# Metadata snapshotting and Part transitions
+# ---------------------------------------------------------------------------
+
+
+def test_exercise_at_end_of_part_is_flushed_with_correct_metadata(env, monkeypatch) -> None:
+    """Locks: when a 'PART' title is encountered, any accumulated text (like an exercise)
+    is flushed BEFORE the metadata extractor updates to the new part.
+    """
+    blocks_init = [
+        {"block_content": "PART I", "block_label": "doc_title", "block_bbox": [0, 0, 10, 10]},
+    ]
+    blocks_p1 = [
+        {"block_content": "## 1.1 Exercises", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "Exercise 1.1. End of Part I.",
+            "block_label": "text",
+            "block_bbox": [0, 20, 10, 30],
+        },
+    ]
+    blocks_p2 = [
+        {"block_content": "PART II", "block_label": "doc_title", "block_bbox": [0, 0, 10, 10]},
+        {"block_content": "# 2 New Chapter", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
+    ]
+
+    # Prepend blank pages to reach START_PAGE
+    pages = [
+        {"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(START_PAGE - 1)
+    ]
+    pages.extend(
+        [
+            {"page_num": START_PAGE, "prunedResult": {"parsing_res_list": blocks_init + blocks_p1}},
+            {"page_num": START_PAGE + 1, "prunedResult": {"parsing_res_list": blocks_p2}},
+        ]
+    )
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    # Mock set_part to track call order if needed, but here we check final chunks
+    assembler.assemble()
+
+    ex_chunk = next((c for c in assembler.final_chunks if "End of Part I" in c["content"]), None)
+    assert ex_chunk is not None
+    assert ex_chunk["chunk_type"] == "exercise"
+    # It should still have Part I metadata because it was flushed before PART II update
+    assert ex_chunk["part"] == "I"
+
+
+def test_metadata_snapshot_prevents_pollution_from_next_section_header(env, monkeypatch) -> None:
+    """Locks: the use of .copy() for prev_meta ensures that a chunk flushed by a new
+    section header receives the hierarchy state of the preceding content, not the new section.
+    """
+    blocks = [
+        {"block_content": "# 1 Old Section", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
+        {
+            "block_content": "Content of section 1.",
+            "block_label": "text",
+            "block_bbox": [0, 20, 10, 30],
+        },
+        {"block_content": "# 2 New Section", "block_label": "text", "block_bbox": [0, 40, 10, 50]},
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
+    assembler = _make(env)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
+
+    chunk = next(
+        (c for c in assembler.final_chunks if "Content of section 1" in c["content"]), None
+    )
+    assert chunk is not None
+    # If snapshotting works, section_number is 1.
+    # If it was polluted by the next block, it would be 2.
+    assert str(chunk["section_number"]) == "1"
+    assert chunk["section_title"].strip().lower() == "old section"
