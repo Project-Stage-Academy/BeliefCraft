@@ -1,12 +1,13 @@
 ---
 name: stochastic-dominance-filter
-description: "Filters a set of candidate actions down to the Pareto frontier by removing actions that are dominated — worse than some alternative on every utility attribute simultaneously. Returns only non-dominated actions to reduce the decision set before final ranking. Use between SKILL-PU-01 (scoring) and SKILL-DS-01 (ranking) when there are 4+ candidates. Questions like 'Which options can we rule out entirely?', 'Are there any strictly inferior choices here?', 'Trim the candidate list before we decide.'"
+description: "Filters a set of candidate actions down to the Pareto frontier by removing actions that are dominated — worse than some alternative on every utility attribute simultaneously. Returns only non-dominated actions to reduce the decision set before final ranking. Use between `multi-attribute-utility-scorer` (scoring) and `expected-utility-action-ranker` (ranking) when there are 4+ candidates. Questions like 'Which options can we rule out entirely?', 'Are there any strictly inferior choices here?', 'Trim the candidate list before we decide.'"
 version: "1.0"
 tags: [dominance, pareto, pruning, filtering, multi-attribute, decision]
-dependencies: [SKILL-PU-01]
+dependencies:
+  - multi-attribute-utility-scorer
 ---
 
-# SKILL-DS-02 · Stochastic Dominance Filter
+# Stochastic Dominance Filter
 
 ## When to Use This Skill
 
@@ -14,7 +15,7 @@ Activate this skill when the user asks about:
 - Eliminating clearly inferior options before final ranking
 - Which actions can be ruled out without loss of optimality
 - Reducing a large candidate set (≥ 4 actions) to a tractable frontier
-- As an intermediate filter between `SKILL-PU-01` (scoring) and `SKILL-DS-01` (ranking)
+- As an intermediate filter between `multi-attribute-utility-scorer` (scoring) and `expected-utility-action-ranker` (ranking)
 - Questions like *"We have six replenishment options — which can we drop immediately?"*
   or *"Are any of these supplier choices strictly worse than the others?"*
 
@@ -90,13 +91,13 @@ get_entity_by_number(number="20.16")
 
 ---
 
-### Step 3: Retrieve utility breakdowns from SKILL-PU-01
+### Step 3: Retrieve utility breakdowns from `multi-attribute-utility-scorer`
 
 Requires for each candidate action:
 - `utility_breakdown`: `{u_fill, u_penalty, u_lt, u_sla}` — all four
   attribute-level utility scores (not just the weighted scalar)
 - `action_id`: identifier for the action
-- `feasibility_status` from `SKILL-PU-03` (if available)
+- `feasibility_status` from `constraint-satisfaction-validator` (if available)
 
 **Pre-filter:** remove any action with `feasibility_status = INFEASIBLE`
 before running dominance checks. Infeasible actions are already eliminated;
@@ -198,7 +199,7 @@ near_dominated = [
 | No candidate dominates any other (all on frontier) | Return full set, `dominated_actions=[]`, warn that DS-01 must break the tie |
 | `utility_breakdown` missing for some actions | Skip those actions from dominance check, add `data_gap_flag=True` |
 | All candidates have identical breakdowns | Return all as frontier (no dominance), flag `all_tied=True` |
-| `SKILL-PU-03` not run (no feasibility info) | Run dominance on all candidates, add warning that infeasible actions may be present |
+| `constraint-satisfaction-validator` not run (no feasibility info) | Run dominance on all candidates, add warning that infeasible actions may be present |
 
 ---
 
@@ -222,7 +223,7 @@ Step 2 — get_entity_by_number(number="20.16")
 → Retrieved: eq. 20.16 — α dominated by Γ iff max δ < 0
 → Warehouse translation: A dominates B iff u_A[k] ≥ u_B[k] ∀k AND ∃k: u_A[k] > u_B[k]
 
-Step 3 — Upstream utility_breakdown from SKILL-PU-01:
+Step 3 — Upstream utility_breakdown from `multi-attribute-utility-scorer`:
 
     Action A: {u_fill=0.92, u_penalty=0.55, u_lt=1.00, u_sla=1.00}  feasibility=FEASIBLE
     Action B: {u_fill=0.70, u_penalty=0.40, u_lt=0.60, u_sla=0.75}  feasibility=FEASIBLE
@@ -281,7 +282,7 @@ Step 6 — Result:
 
 Action B is eliminated — strictly dominated by A on all four dimensions.
 Action D was already infeasible.
-Remaining frontier: A, C, E — pass these to SKILL-DS-01 for final ranking.
+Remaining frontier: A, C, E — pass these to `expected-utility-action-ranker` for final ranking.
 Note: C is near-dominated by A (advisory). If the penalty attribute weight
 is increased, C would be eliminated entirely.
 ```
@@ -290,9 +291,9 @@ is increased, C would be eliminated entirely.
 
 ## Feeds Into
 
-- `SKILL-DS-01` — receives `pareto_frontier` as its candidate set instead of
+- `expected-utility-action-ranker` — receives `pareto_frontier` as its candidate set instead of
   the full unfiltered list; `dominated_actions` are excluded from ranking
-- `SKILL-MD-01` — `frontier_size` feeds into decision confidence:
+- `decision-confidence-estimator` — `frontier_size` feeds into decision confidence:
   a frontier of 1 → HIGH confidence; frontier of 4+ → lower margin signal
-- `SKILL-PU-02` — if `frontier_size > 2` and scores are close, VOI
+- `value-of-information` — if `frontier_size > 2` and scores are close, VOI
   recalculation may be warranted before committing to the top action

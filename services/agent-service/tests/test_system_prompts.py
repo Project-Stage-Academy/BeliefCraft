@@ -188,6 +188,61 @@ class TestFormatReactPromptWithThoughtSteps:
         assert "<observation>" not in result
         assert '<action tool="search">' in result
 
+    def test_single_iteration_renders_all_actions_from_same_assistant_turn(self) -> None:
+        thought = ThoughtStep(
+            thought="Collect warehouse diagnostics",
+            reasoning="Need both inventory and policy data",
+            next_action="tool_use",
+        )
+        inventory_call = ToolCall(
+            tool_name="get_inventory_data",
+            arguments={"warehouse_id": "WH-001"},
+            result={"items": [1, 2, 3]},
+        )
+        kb_call = ToolCall(
+            tool_name="search_knowledge_base",
+            arguments={"query": "inventory discrepancy"},
+            result={"documents": [{"id": "chunk-1"}]},
+        )
+        state = {
+            "iteration": 2,
+            "max_iterations": 10,
+            "user_query": "Analyze discrepancy risk",
+            "thoughts": [thought],
+            "tool_calls": [inventory_call, kb_call],
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": "<thinking>Collect warehouse diagnostics</thinking>",
+                    "tool_calls": [
+                        {
+                            "id": "tc_1",
+                            "type": "function",
+                            "function": {
+                                "name": "get_inventory_data",
+                                "arguments": '{"warehouse_id": "WH-001"}',
+                            },
+                        },
+                        {
+                            "id": "tc_2",
+                            "type": "function",
+                            "function": {
+                                "name": "search_knowledge_base",
+                                "arguments": '{"query": "inventory discrepancy"}',
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        result = format_react_prompt(state)
+
+        assert result.count("<action tool=") == 2
+        assert '<action tool="get_inventory_data">' in result
+        assert '<action tool="search_knowledge_base">' in result
+        assert "chunk-1" in result
+
 
 class TestFormatReactPromptWithDicts:
     """Tests for format_react_prompt with raw dict tool calls."""
@@ -235,6 +290,50 @@ class TestFormatReactPromptWithDicts:
         }
         result = format_react_prompt(state)
         assert "<observation>" not in result
+
+    def test_dict_thought_uses_only_embedded_thought_text(self) -> None:
+        state = {
+            "iteration": 2,
+            "max_iterations": 5,
+            "user_query": "Analyze discrepancy risk",
+            "thoughts": [
+                {
+                    "thought": "<thinking>Check recent moves</thinking>\nNeed device health next.",
+                    "next_action": "tool_use",
+                    "timestamp": "2026-03-17T11:32:33.498991Z",
+                }
+            ],
+            "tool_calls": [
+                {
+                    "tool_name": "list_inventory_moves",
+                    "arguments": {"from_ts": "2026-03-09T00:00:00Z"},
+                    "result": {"data": {"moves": []}},
+                }
+            ],
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": "Check recent moves",
+                    "tool_calls": [
+                        {
+                            "id": "tc_1",
+                            "type": "function",
+                            "function": {
+                                "name": "list_inventory_moves",
+                                "arguments": '{"from_ts": "2026-03-09T00:00:00Z"}',
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+
+        result = format_react_prompt(state)
+
+        assert "<thinking>Check recent moves</thinking>" in result
+        assert "Need device health next." not in result
+        assert "'next_action': 'tool_use'" not in result
+        assert "'timestamp': '2026-03-17T11:32:33.498991Z'" not in result
 
 
 class TestFormatReactPromptUnpairedThoughts:

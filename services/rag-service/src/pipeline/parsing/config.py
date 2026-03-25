@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 # --- Data Paths ---
@@ -23,6 +24,18 @@ PAGE_OFFSET = 18  # PDF page numbering offset
 DPI_RENDER = 200  # Page rendering quality for CV
 SCALE_FACTOR = 72 / DPI_RENDER
 
-# Keywords for object detection
-CAPTION_KEYWORDS = ["figure", "fig.", "table", "algorithm"]
-BLOCK_KEYWORDS = ["example", "exercise"]
+# Matches headers like "Algorithm 3.1" or "Algorithm A.2" (case-insensitive)
+# Examples: "Algorithm 1.1", "algorithm B.3"
+ALGORITHM_PATTERN = re.compile(r"^Algorithm\s+(?:\d+|[A-G])\.\d+", re.IGNORECASE)
+
+# Matches headers like "Example 2.4" or "Example C.1"
+# Examples: "Example 10.2", "example A.5"
+EXAMPLE_PATTERN = re.compile(r"^Example\s+(?:\d+|[A-G])\.\d+", re.IGNORECASE)
+
+# Matches "Figure 3.1." inside text (not anchored to start)
+# Examples: "Figure 1.2.", "See Figure A.3."
+FIGURE_PATTERN = re.compile(r"Figure\s+(?:\d+|[A-G])\.\d+\.")
+
+# Matches headers like "Exercise 4.2" or "Exercise D.1"
+# Examples: "Exercise 7.3", "exercise B.2"
+EXERCISE_PATTERN = re.compile(r"^Exercise\s+(?:\d+|[A-G])\.\d+", re.IGNORECASE)

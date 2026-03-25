@@ -24,6 +24,8 @@ def mock_settings() -> MagicMock:
     settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     settings.BEDROCK_TEMPERATURE = 0.0
     settings.BEDROCK_MAX_TOKENS = 4000
+    settings.BEDROCK_CONNECT_TIMEOUT_SECONDS = 60
+    settings.BEDROCK_READ_TIMEOUT_SECONDS = 300
     return settings
 
 
@@ -311,12 +313,16 @@ class TestLLMServiceInit:
 
             LLMService()
 
-            mock_boto3.client.assert_called_once_with(
-                service_name="bedrock-runtime",
-                region_name="us-east-1",
-                aws_access_key_id="test-key",
-                aws_secret_access_key="test-secret",  # noqa: S106
-            )
+            client_call = mock_boto3.client.call_args
+            assert client_call is not None
+            _, client_kwargs = client_call
+            assert client_kwargs["service_name"] == "bedrock-runtime"
+            assert client_kwargs["region_name"] == "us-east-1"
+            assert client_kwargs["aws_access_key_id"] == "test-key"
+            assert client_kwargs["aws_secret_access_key"] == "test-secret"  # noqa: S106
+            assert client_kwargs["config"].connect_timeout == 60
+            assert client_kwargs["config"].read_timeout == 300
+
             mock_chat_bedrock.assert_called_once_with(
                 client=mock_boto3.client.return_value,
                 model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
