@@ -120,6 +120,10 @@ class InventoryLedger:
             to_location_id = command.location.id
         elif move_type == MoveType.OUTBOUND:
             from_location_id = command.location.id
+        else:
+            raise ValueError(
+                f"Unsupported move type for InventoryLedger._log_movement: {move_type}"
+            )    
 
         move = InventoryMove(
             product_id=command.product_id,
