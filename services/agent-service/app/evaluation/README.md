@@ -41,6 +41,8 @@ Dataset містить **20 сценаріїв** різної складност
 
 ### CLI команди
 
+**Локально (в сервісі):**
+
 ```bash
 # Список всіх сценаріїв
 uv run python -m app.evaluation.cli list
@@ -54,31 +56,114 @@ uv run python -m app.evaluation.cli run
 # Запуск конкретного сценарію
 uv run python -m app.evaluation.cli run -s scenario_001_inventory_low_stock
 
-# Запуск кількох сценаріїв
+# Запуск кількох сценаріїв з кастомним output файлом
 uv run python -m app.evaluation.cli run -s scenario_001 -s scenario_002 -o report.json
 
 # Кастомний файл зі сценаріями
-uv run python -m app.evaluation.cli run -f /path/to/custom_scenarios.yaml
+uv run python -m app.evaluation.cli run -f /path/to/custom_scenarios.yaml -o report.json
+
+# Комбінований приклад
+uv run python -m app.evaluation.cli run \
+  -s scenario_001 -s scenario_002 \
+  -f ./custom_scenarios.yaml \
+  -o evaluation_report_$(date +%Y%m%d).json
 ```
 
-### Docker команди
+### Docker / Makefile команди
 
 ```bash
-# Запуск через docker compose (потрібно щоб сервіси були запущені)
+# Запуск всіх сценаріїв (зберігає в evaluation_report.json всередині контейнера)
 make evaluate
 
-# З параметрами
-make evaluate ARGS="-s scenario_001_inventory_low_stock -o evaluation_report.json"
+# Запуск з параметрами
+make evaluate ARGS="-s scenario_001_inventory_low_stock -o my_report.json"
 
-# Список сценаріїв
+# Запуск конкретних сценаріїв
+make evaluate ARGS=" -s scenario_002_inventory_specific_sku"
+
+# Список всіх сценаріїв
 make evaluate-list
 
 # Деталі сценарію
 make evaluate-show ID=scenario_001_inventory_low_stock
 
-# Або напряму через docker compose
+# Прямі docker compose команди
 docker compose exec agent-service /app/.venv/bin/python -m app.evaluation.cli list
 docker compose exec agent-service /app/.venv/bin/python -m app.evaluation.cli run
+docker compose exec agent-service /app/.venv/bin/python -m app.evaluation.cli show scenario_001
+```
+
+### Отримання звіту з контейнера
+
+**Де зберігається звіт:**
+- За замовчуванням: `/app/evaluation_report.json` всередину контейнера
+- На host машині: потрібно скопіювати з контейнера
+
+**Способи отримання звіту:**
+
+**Варіант 1: Скопіювати з контейнера (найпростіший)**
+```bash
+# Запустити evaluation
+make evaluate
+
+# Скопіювати файл на host
+docker compose cp agent-service:/app/evaluation_report.json ./evaluation_report.json
+
+# Переглянути результати
+cat evaluation_report.json | jq '{pass_rate, avg_overall_score, total_scenarios, passed, failed}'
+```
+
+**Варіант 2: Зберегти напряму в mounted директорію**
+```bash
+# app/ директорія змонтована на host, тому файл буде доступний одразу
+make evaluate ARGS="-o /app/services/agent-service/app/evaluation_report.json"
+
+# Файл з'явиться на host за адресою:
+cat services/agent-service/app/evaluation_report.json | jq .
+```
+
+**Варіант 3: Запуск локально (без Docker)**
+```bash
+# Перейти в сервіс
+cd services/agent-service
+
+# Запустити evaluation (файл зберігається тут же)
+uv run python -m app.evaluation.cli run -o evaluation_report.json
+
+# Переглянути результати
+cat evaluation_report.json | jq .
+```
+
+### CLI опції (довідка)
+
+**Команда `run` (запуск evaluation)**
+```
+uv run python -m app.evaluation.cli run [OPTIONS]
+
+Options:
+  -s, --scenarios TEXT           Specific scenario IDs to run (can be multiple)
+  -o, --output TEXT              Output file for JSON report
+                                 (default: evaluation_report.json)
+  -f, --scenarios-file PATH      Path to custom scenarios YAML file
+```
+
+**Команда `list` (список сценаріїв)**
+```
+uv run python -m app.evaluation.cli list [OPTIONS]
+
+Options:
+  -f, --scenarios-file PATH      Path to custom scenarios YAML file
+```
+
+**Команда `show` (деталі сценарію)**
+```
+uv run python -m app.evaluation.cli show SCENARIO_ID [OPTIONS]
+
+Arguments:
+  SCENARIO_ID                    ID сценарію (обов'язковий)
+
+Options:
+  -f, --scenarios-file PATH      Path to custom scenarios YAML file
 ```
 
 ### Програмне використання
