@@ -201,24 +201,7 @@ class DocumentAssembler:
 
             if self._acc:
                 prev_meta = self.meta_extractor.get_meta().copy()
-                prev_is_ex = (
-                    prev_meta.get("subsection_title") or ""
-                ).strip().lower() == "exercises"
-                e_id = self._extract_id(self._acc[0]) if prev_is_ex else None
-                chunk = self._flush(
-                    self._acc,
-                    self._acc_start_page or page_num,
-                    meta_override=prev_meta,
-                    c_type="exercise" if prev_is_ex else "text",
-                    entity_id=e_id,
-                )
-                if chunk and chunk["chunk_type"] in ["text", "exercise"]:
-                    for formula_chunk in self._last_numbered_formula_chunks:
-                        formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
-                    self._last_numbered_formula_chunks = []
-                self._acc = []
-                self._acc_links = []
-                self._acc_start_page = None
+                self._flush_accumulated_chunk(page_num, prev_meta)
 
             self._part_index += 1
             part_value = PART_SEQUENCE[min(self._part_index, len(PART_SEQUENCE) - 1)]
@@ -226,6 +209,24 @@ class DocumentAssembler:
             self._last_part_title = part_title
 
             break
+
+    def _flush_accumulated_chunk(self, page_num: int, prev_meta: dict[str, Any]) -> None:
+        prev_is_ex = (prev_meta.get("subsection_title") or "").strip().lower() == "exercises"
+        e_id = self._extract_id(self._acc[0]) if prev_is_ex else None
+        chunk = self._flush(
+            self._acc,
+            self._acc_start_page or page_num,
+            meta_override=prev_meta,
+            c_type="exercise" if prev_is_ex else "text",
+            entity_id=e_id,
+        )
+        if chunk and chunk["chunk_type"] in ["text", "exercise"]:
+            for formula_chunk in self._last_numbered_formula_chunks:
+                formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
+            self._last_numbered_formula_chunks = []
+        self._acc = []
+        self._acc_links = []
+        self._acc_start_page = None
 
     def assemble(self) -> None:
         logger.info(f"[*] Starting assembly of {len(self.paddle_pages)} pages...")
@@ -473,25 +474,7 @@ class DocumentAssembler:
             is_new_ex = bool(re.match(r"^#*\s*Exercise\s+\d+\.\d+", text, re.I))
 
             if temp_meta.get("force_new_chunk") and self._acc:
-                prev_is_ex = (
-                    prev_meta.get("subsection_title") or ""
-                ).strip().lower() == "exercises"
-                e_id = self._extract_id(self._acc[0]) if prev_is_ex else None
-                chunk = self._flush(
-                    self._acc,
-                    self._acc_start_page or page_num,
-                    meta_override=prev_meta,
-                    c_type="exercise" if prev_is_ex else "text",
-                    entity_id=e_id,
-                )
-                if chunk and chunk["chunk_type"] in ["text", "exercise"]:
-                    for formula_chunk in self._last_numbered_formula_chunks:
-                        formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
-                    self._last_numbered_formula_chunks = []
-                self._acc = []
-                # reset links accumulator after flush
-                self._acc_links = []
-                self._acc_start_page = None
+                self._flush_accumulated_chunk(page_num, prev_meta)
 
             if label == "table":
                 was_numbered_table = self._process_table(content, page_num, temp_meta)
