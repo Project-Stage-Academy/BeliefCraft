@@ -58,7 +58,7 @@ F Problems 609"""
 logger = get_logger(__name__)
 
 SEARCH_FILTER_FIELD_TO_METADATA_FIELD = {
-    "part": "part_number",
+    "part": "part",
     "section": "section_number",
     "subsection": "subsection_number",
     "subsubsection": "subsubsection_number",

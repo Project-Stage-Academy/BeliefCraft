@@ -25,7 +25,7 @@ def test_convert_search_filters():
 
     assert internal_filters.condition == "and"
     fields = {f.field: f.value for f in internal_filters.filters}
-    assert fields["part_number"] == "I"
+    assert fields["part"] == "I"
     assert fields["page"] == 15
     assert "section_number" not in fields
     assert "subsection_number" not in fields
@@ -50,7 +50,7 @@ async def test_search_knowledge_base_delegation(rag_tools, mock_repo):
     assert args[1] == 3
     # Check converted filters
     filters = args[2]
-    assert filters.filters[0].field == "part_number"
+    assert filters.filters[0].field == "part"
     assert filters.filters[0].value == "I"
     assert args[3] == [EntityType.FORMULA]
 

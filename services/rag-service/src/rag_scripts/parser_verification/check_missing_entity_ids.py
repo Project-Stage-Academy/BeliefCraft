@@ -81,6 +81,19 @@ def detect_gaps(ids: list[tuple[str, ...]]) -> list[dict[str, Any]]:
         if not ordered:
             continue
 
+        # Check if numbering starts at 1
+        first_val = int(ordered[0])
+        if first_val > 1:
+            missing = [".".join((*parent, str(value))) for value in range(1, first_val)]
+            gaps.append(
+                {
+                    "parent": ".".join(parent) if parent else "",
+                    "after": "start",
+                    "before": ".".join((*parent, ordered[0])),
+                    "missing": missing,
+                }
+            )
+
         for current, nxt in zip(ordered, ordered[1:], strict=False):
             c, n = int(current), int(nxt)
             if n > c + 1:

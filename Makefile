@@ -39,5 +39,8 @@ lint-format:
 	make format
 	make lint
 
+pre-commit:
+	uv run pre-commit run --all-files
+
 clean:
 	docker compose down -v --remove-orphans
