@@ -16,6 +16,7 @@ from datetime import datetime
 
 from database.enums import MoveType, QualityStatus
 from database.models import InventoryBalance, InventoryMove, Location
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 
@@ -87,27 +88,37 @@ class InventoryLedger:
     def _update_balance(self, location: Location, product_id: uuid.UUID, qty: float) -> None:
         """
         Updates the perpetual inventory balance for a product at a specific location.
-
-        If a balance record does not exist (e.g., new product in this warehouse),
-        it initializes a new record with the starting quantity.
         """
-        balance = (
-            self.session.query(InventoryBalance)
-            .filter_by(product_id=product_id, location_id=location.id)
-            .first()
-        )
+        if qty < 0:
+            balance = (
+                self.session.query(InventoryBalance)
+                .filter_by(product_id=product_id, location_id=location.id)
+                .with_for_update()
+                .first()
+            )
 
-        if balance:
+            if not balance or balance.on_hand < abs(qty):
+                raise ValueError(
+                    f"Insufficient stock for product {product_id} at location {location.id}."
+                )
+
             balance.on_hand += qty
+
         else:
-            balance = InventoryBalance(
+            stmt = insert(InventoryBalance).values(
                 product_id=product_id,
                 location_id=location.id,
                 on_hand=qty,
                 reserved=0,
                 quality_status=QualityStatus.OK,
             )
-            self.session.add(balance)
+
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["product_id", "location_id"],
+                set_={"on_hand": InventoryBalance.on_hand + qty},
+            )
+
+            self.session.execute(stmt)
 
     def _log_movement(self, command: ReceiptCommand, move_type: MoveType, reason: str) -> None:
         """

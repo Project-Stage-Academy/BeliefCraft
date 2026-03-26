@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -85,6 +86,7 @@ class InventoryBalance(Base):
     __table_args__ = (
         check_non_negative("on_hand", name="check_on_hand_positive"),
         check_non_negative("reserved", name="check_reserved_positive"),
+        UniqueConstraint("product_id", "location_id", name="uq_inventory_balance_product_location"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
