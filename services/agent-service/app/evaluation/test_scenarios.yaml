@@ -1,0 +1,382 @@
+# Agent Evaluation Test Scenarios
+# 20 scenarios: 15 easy (3 iter), 3 medium (5 iter), 2 hard (8 iter)
+#
+# Updated to align with "Algorithms for Decision Making" textbook chunks
+# Book sections include: Representation, Inference, Beliefs, POMDP/Belief State Planning,
+# Simple Decisions, Exact/Approximate Solution Methods, Policy Search, Model-Based/Free Methods,
+# State Uncertainty, Sequential Problems, and more.
+#
+# Note: 'section' field references book section numbers (e.g., "19" = Beliefs, "20-22" = Belief State Planning)
+
+scenarios:
+  # ====================
+  # EASY SCENARIOS (3 iterations) - Basic queries
+  # ====================
+
+  - id: "scenario_001_inventory_low_stock"
+    category: "inventory_replenishment"
+    query: "Which products currently have stock levels below their reorder point?"
+    context:
+      warehouse_id: "wh-001"
+    max_iterations: 3
+    expected_output:
+      must_include:
+        algorithm: "reorder point|ROP|inventory control|decision"
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should identify reorder point algorithm"
+      actionability: "Must list specific products needing reorder"
+    difficulty: "easy"
+
+  - id: "scenario_002_inventory_specific_sku"
+    category: "inventory_query"
+    query: "What is the current inventory level and location for product SKU-12345?"
+    context:
+      product_sku: "SKU-12345"
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should query inventory data"
+      actionability: "Must provide specific quantity and location"
+    difficulty: "easy"
+
+  - id: "scenario_003_inventory_by_category"
+    category: "inventory_query"
+    query: "Show me the total inventory value for products in the Electronics category."
+    context:
+      category: "Electronics"
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should filter by category and compute value"
+      actionability: "Must provide aggregated inventory value"
+    difficulty: "easy"
+
+  - id: "scenario_004_inventory_move_history"
+    category: "inventory_audit"
+    query: "List all inventory movements for product SKU-67890 in the last 7 days."
+    context:
+      product_sku: "SKU-67890"
+      days_back: 7
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should query inventory move history"
+      actionability: "Must list movements with timestamps"
+    difficulty: "easy"
+
+  - id: "scenario_005_inventory_fast_movers"
+    category: "inventory_analysis"
+    query: "Which 5 products have the highest inventory turnover rate?"
+    context:
+      limit: 5
+    max_iterations: 3
+    expected_output:
+      must_include:
+        algorithm: "turnover|velocity|ABC analysis|ranking|policy"
+        recommendations:
+          min_count: 3
+          max_count: 5
+    evaluation_criteria:
+      retrieval_accuracy: "Should identify turnover metrics"
+      actionability: "Must rank top 5 products"
+    difficulty: "easy"
+
+  - id: "scenario_006_supplier_by_region"
+    category: "supplier_query"
+    query: "List all suppliers located in the US region with reliability score above 0.8."
+    context:
+      region: "US"
+      reliability_min: 0.8
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should filter suppliers by region and reliability"
+      actionability: "Must list suppliers with scores"
+    difficulty: "easy"
+
+  - id: "scenario_007_supplier_reliability"
+    category: "supplier_query"
+    query: "What is the reliability score and lead time for supplier SUP-456?"
+    context:
+      supplier_id: "SUP-456"
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should retrieve supplier details"
+      actionability: "Must provide reliability and lead time"
+    difficulty: "easy"
+
+  - id: "scenario_008_supplier_compare"
+    category: "supplier_analysis"
+    query: "Compare lead times and reliability for suppliers in the EU region."
+    context:
+      region: "EU"
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should compare multiple suppliers"
+      actionability: "Must provide comparative analysis"
+    difficulty: "easy"
+
+  - id: "scenario_009_po_list_pending"
+    category: "procurement_query"
+    query: "Show me all purchase orders with status 'pending' or 'confirmed'."
+    context:
+      status_filter: ["pending", "confirmed"]
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should filter POs by status"
+      actionability: "Must list PO details"
+    difficulty: "easy"
+
+  - id: "scenario_010_po_specific"
+    category: "procurement_query"
+    query: "Get details for purchase order PO-789, including line items and supplier."
+    context:
+      po_number: "PO-789"
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should retrieve PO with line items"
+      actionability: "Must show complete PO structure"
+    difficulty: "easy"
+
+  - id: "scenario_011_po_pipeline"
+    category: "procurement_analysis"
+    query: "What products are currently in the procurement pipeline and when will they arrive?"
+    context: {}
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should query procurement pipeline"
+      actionability: "Must list products with ETAs"
+    difficulty: "easy"
+
+  - id: "scenario_012_shipment_active"
+    category: "logistics_query"
+    query: "List all active inbound shipments with their current status."
+    context:
+      direction: "inbound"
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should filter shipments by status"
+      actionability: "Must list shipments with status"
+    difficulty: "easy"
+
+  - id: "scenario_013_shipment_delays"
+    category: "logistics_analysis"
+    query: "Which shipments are experiencing delays compared to their expected arrival?"
+    context: {}
+    max_iterations: 3
+    expected_output:
+      must_include:
+        algorithm: "lead time|delay|variance|uncertainty"
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should identify delayed shipments"
+      actionability: "Must list delayed shipments with reasons"
+    difficulty: "easy"
+
+  - id: "scenario_014_product_by_category"
+    category: "product_query"
+    query: "List all products in the Furniture category with their unit costs."
+    context:
+      category: "Furniture"
+    max_iterations: 3
+    expected_output:
+      must_include:
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should filter products by category"
+      actionability: "Must list products with pricing"
+    difficulty: "easy"
+
+  - id: "scenario_015_product_demand"
+    category: "product_analysis"
+    query: "Which products have shown increasing demand over the last 30 days?"
+    context:
+      days_back: 30
+    max_iterations: 3
+    expected_output:
+      must_include:
+        algorithm: "demand forecast|trend|time series|sequential|model"
+        recommendations:
+          min_count: 1
+    evaluation_criteria:
+      retrieval_accuracy: "Should analyze demand trends"
+      actionability: "Must identify trending products"
+    difficulty: "easy"
+
+  # ====================
+  # MEDIUM SCENARIOS (5 iterations) - Multi-step reasoning
+  # ====================
+
+  - id: "scenario_016_risk_order_delay"
+    category: "risk_assessment"
+    query: "Calculate the probability that Order ORD-12345 will miss its delivery deadline given current supplier lead time variability. IMPORTANT: Before answering, you MUST call search_knowledge_base to find relevant risk assessment algorithms (e.g., CVaR, stochastic lead time models) from the knowledge base and cite them in your response."
+    context:
+      order_id: "ORD-12345"
+    max_iterations: 5
+    expected_output:
+      must_include:
+        algorithm: "CVaR|tail risk|stochastic|probability|lead time|uncertainty|quantile|risk|distribution|Gaussian|exploration|bandit|UCB|posterior|finite difference|likelihood|reward|baseline"
+        formula: true
+        code: true
+      must_cite:
+        section: ["1", "2", "11", "15"]  # Introduction, Representation, Sequential Problems, Model Uncertainty
+    evaluation_criteria:
+      retrieval_accuracy: "Should find risk assessment algorithm"
+      reasoning_quality: "Must analyze lead time distribution"
+      actionability: "Must provide probability estimate"
+    difficulty: "medium"
+
+  - id: "scenario_017_constrained_reorder"
+    category: "inventory_optimization"
+    query: "We have limited warehouse capacity of 10000 cubic meters. Which products should we prioritize for reordering to minimize stockout risk while respecting space constraints? IMPORTANT: Before answering, you MUST call search_knowledge_base to find constrained optimization algorithms (e.g., knapsack, inventory control under constraints) from the knowledge base and cite them in your response."
+    context:
+      capacity_limit: 10000
+      unit: "cubic_meters"
+    max_iterations: 5
+    expected_output:
+      must_include:
+        algorithm: "knapsack|optimization|constraint|priority|search|branch|bound|sparse|Monte Carlo|MCTS|heuristic|finite difference|likelihood|reward|baseline|policy|gradient"
+        formula: true
+        code: true
+        recommendations:
+          min_count: 3
+      must_cite:
+        section: ["1", "2", "9", "11"]  # Introduction, Representation, Online Planning, Sequential Problems
+    evaluation_criteria:
+      retrieval_accuracy: "Should find constrained optimization algorithm"
+      reasoning_quality: "Must consider space and stockout risk"
+      actionability: "Must rank products with rationale"
+    difficulty: "medium"
+
+  - id: "scenario_018_sensor_reconciliation"
+    category: "belief_state_estimation"
+    query: "Sensors report conflicting inventory levels for Product SKU-999 (Sensor A: 250 units with quality 0.9, Sensor B: 180 units with quality 0.7, Sensor C: 220 units with quality 0.85). Estimate the true inventory level. IMPORTANT: Before answering, you MUST call search_knowledge_base to find Bayesian inference or sensor fusion algorithms from the knowledge base and cite them in your response."
+    context:
+      product_sku: "SKU-999"
+      observations:
+        - sensor: "A"
+          value: 250
+          quality: 0.9
+        - sensor: "B"
+          value: 180
+          quality: 0.7
+        - sensor: "C"
+          value: 220
+          quality: 0.85
+    max_iterations: 5
+    expected_output:
+      must_include:
+        algorithm: "Bayesian|weighted average|sensor fusion|belief|inference|Kalman|particle|filter|sampling|Gibbs|variable elimination"
+        formula: true
+        code: true
+      must_cite:
+        section: ["2", "3", "19"]  # Representation, Inference, Beliefs (State Uncertainty)
+    evaluation_criteria:
+      retrieval_accuracy: "Should find sensor fusion algorithm"
+      reasoning_quality: "Must weight observations by quality"
+      actionability: "Must provide estimated value with confidence"
+    difficulty: "medium"
+
+  # ====================
+  # HARD SCENARIOS (8 iterations) - Complex multi-step reasoning
+  # ====================
+
+  - id: "scenario_019_pomdp_belief_update"
+    category: "belief_state_estimation"
+    query: "Product SKU-777 has uncertain inventory due to noisy sensors. Historical data shows mean 500 units with std 50. We receive 4 new sensor readings: [480, 520, 510, 495] with quality scores [0.8, 0.9, 0.85, 0.75]. Update the belief state using POMDP/Bayesian methods and recommend whether to trigger a physical count. IMPORTANT: Before answering, you MUST call search_knowledge_base to find POMDP, Kalman filter, or Bayesian belief update algorithms from the knowledge base and cite them in your response."
+    context:
+      product_sku: "SKU-777"
+      prior_mean: 500
+      prior_std: 50
+      observations:
+        - value: 480
+          quality: 0.8
+        - value: 520
+          quality: 0.9
+        - value: 510
+          quality: 0.85
+        - value: 495
+          quality: 0.75
+    max_iterations: 8
+    expected_output:
+      must_include:
+        algorithm: "POMDP|Bayesian|Kalman|particle|filter|belief|inference|discrete|injection|sampling|Gibbs"
+        formula: true
+        code: true
+        recommendations:
+          min_count: 1
+      must_cite:
+        section: ["2", "3", "19"]  # Representation, Inference, Beliefs (State Uncertainty / POMDP)
+    evaluation_criteria:
+      retrieval_accuracy: "Must find POMDP/belief update algorithm"
+      reasoning_quality: "Must show multi-step belief propagation"
+      code_validity: "Code must compute posterior distribution"
+      actionability: "Must recommend physical count threshold"
+    difficulty: "hard"
+
+  - id: "scenario_020_multi_constraint_optimization"
+    category: "inventory_optimization"
+    query: "Optimize inventory replenishment for 10 products considering: (1) warehouse space limit 5000 m³, (2) budget constraint $50000, (3) supplier reliability must average >0.85, (4) minimize stockout probability to <5%. Provide ranked recommendations with trade-off analysis. IMPORTANT: Before answering, you MUST call search_knowledge_base to find multi-objective optimization or Pareto-based decision algorithms from the knowledge base and cite them in your response."
+    context:
+      space_limit: 5000
+      budget: 50000
+      min_reliability: 0.85
+      max_stockout_prob: 0.05
+      product_count: 10
+    max_iterations: 8
+    expected_output:
+      must_include:
+        algorithm: "multi-objective|Pareto|constraint|optimization|knapsack|search|branch|bound|sparse|Monte Carlo|MCTS|heuristic|finite difference|likelihood|reward|baseline|policy|gradient"
+        formula: true
+        code: true
+        recommendations:
+          min_count: 5
+          max_count: 10
+      must_cite:
+        section: ["1", "2", "9", "11"]  # Introduction, Representation, Online Planning, Sequential Problems
+    evaluation_criteria:
+      retrieval_accuracy: "Must find multi-constraint optimization"
+      reasoning_quality: "Must analyze trade-offs between constraints"
+      code_validity: "Code must handle all 4 constraints"
+      actionability: "Must rank products with clear rationale"
+    difficulty: "hard"
