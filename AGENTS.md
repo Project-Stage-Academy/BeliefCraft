@@ -128,4 +128,5 @@ If there was error with documentation MCP server, try calling it again. NEVER as
 - **Architecture**: Adding redundant "just-in-case" logic that deviates from the established path.
 - **Integrity**: Skipping validation steps or ignoring linting/type-checking warnings.
 - **Correction Neglect**: Proceeding with implementation or using tools like `save_memory` after a user correction instead of activating `context-engineering`: ALWAYS activate the `context-engineering` skill immediately to encode the fix into procedural instructions.
+- **Environment Semantics**: Treating BeliefCraft's live-environment logic as a code bug when the shared dataset is merely stale: Assume live/runtime semantics by default and explicitly separate architecture bugs from operational artifacts caused by reused seeded data.
 - **Loquacity**: Providing long explanations or repeating known constraints: ALWAYS be concise and follow the "Minimal Output" mandate.

@@ -78,7 +78,17 @@ def _base_agent_state(**overrides: Any) -> AgentState:
         "thoughts": [],
         "tool_calls": [],
         "messages": [],
-        "final_answer": "Use (s,S) policy with safety stock. $S = \\mu + z\\sigma$.",
+        "final_answer": (
+            "## Inventory Management\n\n"
+            "### Analysis\n"
+            "Use (s,S) policy with safety stock. $S = \\mu + z\\sigma$.\n\n"
+            "### Algorithm\n"
+            "Algorithm 3.2 - (s,S) Policy\n\n"
+            "### Recommendations\n"
+            "- Increase reorder point by 15%\n\n"
+            "### Confidence\n"
+            "high\n"
+        ),
         "status": "completed",
         "error": None,
         "total_tokens": 500,
@@ -187,6 +197,7 @@ class TestGenerate:
 
         assert result.request_id == "req-test-001"
         assert result.query == "How should we handle stockout risk?"
+        assert result.final_answer == state["final_answer"]
         assert result.task == "Inventory Management"
         assert result.analysis == "Risk is elevated."
         assert result.algorithm == "Algorithm 3.2 - (s,S) Policy"
@@ -221,6 +232,61 @@ class TestGenerate:
         result = await generator.generate(state)
         assert len(result.recommendations) == 1
         assert result.recommendations[0].priority == "high"
+
+    @pytest.mark.asyncio
+    async def test_uses_parser_semantic_fields_without_raw_text_validation(
+        self,
+        mock_llm: MagicMock,
+        mock_formula_extractor: MagicMock,
+        mock_citation_extractor: MagicMock,
+    ) -> None:
+        mock_llm.chat_completion = AsyncMock(
+            return_value={
+                "message": {
+                    "role": "assistant",
+                    "content": json.dumps(
+                        {
+                            "task": "Inferred Task",
+                            "analysis": "Summarized analysis",
+                            "algorithm": "Particle Filter",
+                            "recommendations": [
+                                {
+                                    "action": "Invented recommendation",
+                                    "priority": "high",
+                                    "rationale": "Parser inferred it",
+                                    "expected_outcome": "Should be removed",
+                                }
+                            ],
+                            "confidence": "high",
+                        }
+                    ),
+                },
+                "tool_calls": [],
+                "finish_reason": "stop",
+                "tokens": {"prompt": 20, "completion": 20, "total": 40},
+            }
+        )
+        gen = RecommendationGenerator(
+            llm=mock_llm,
+            formula_extractor=mock_formula_extractor,
+            citation_extractor=mock_citation_extractor,
+        )
+        state = _base_agent_state(
+            final_answer=(
+                "## Inventory Discrepancy Risk Analysis\n\n"
+                "### Analysis\n"
+                "Use only direct evidence from tools. Do not provide recommendations.\n"
+            )
+        )
+
+        result = await gen.generate(state)
+
+        assert result.task == "Inferred Task"
+        assert result.analysis == "Summarized analysis"
+        assert result.algorithm == "Particle Filter"
+        assert result.confidence == "high"
+        assert len(result.recommendations) == 1
+        assert result.recommendations[0].action == "Invented recommendation"
 
     @pytest.mark.asyncio
     async def test_tools_used_deduplicated(self, generator: RecommendationGenerator) -> None:
@@ -283,6 +349,7 @@ class TestFallbackResponse:
     ) -> None:
         state = _base_agent_state(final_answer=None, status="failed", error="Timeout")
         result = await generator.generate(state)
+        assert result.final_answer is None
         assert result.status == "failed"
         assert result.task == "Analysis Failed"
         assert "Timeout" in result.analysis
@@ -401,8 +468,9 @@ class TestParseFinalAnswer:
         assert result.task == "Structured Task"
         assert result.analysis == "Structured analysis"
         assert result.algorithm == "Algorithm 2.2"
+        assert result.confidence == "high"
         assert len(result.recommendations) == 1
-        assert result.recommendations[0].priority == "high"
+        assert result.recommendations[0].action == "Apply policy"
 
     @pytest.mark.asyncio
     async def test_strips_markdown_json_fences(
@@ -439,6 +507,8 @@ class TestParseFinalAnswer:
         result = await gen.generate(state)
         assert result.task == "Stock Analysis"
         assert result.confidence == "medium"
+        assert len(result.recommendations) == 1
+        assert result.recommendations[0].action == "Hold"
 
     @pytest.mark.asyncio
     async def test_falls_back_gracefully_on_invalid_json(
@@ -460,7 +530,7 @@ class TestParseFinalAnswer:
             formula_extractor=mock_formula_extractor,
             citation_extractor=mock_citation_extractor,
         )
-        state = _base_agent_state()
+        state = _base_agent_state(final_answer="No explicit task heading.")
         result = await gen.generate(state)
         # Fallback: task is "Analysis", analysis is the raw final_answer
         assert result.task == "Analysis"
@@ -479,10 +549,10 @@ class TestParseFinalAnswer:
             formula_extractor=mock_formula_extractor,
             citation_extractor=mock_citation_extractor,
         )
-        state = _base_agent_state()
+        state = _base_agent_state(final_answer="No explicit task heading.")
         result = await gen.generate(state)
         assert result.task == "Analysis"
-        assert len(result.recommendations) >= 1
+        assert result.recommendations == []
 
     @pytest.mark.asyncio
     async def test_recommendations_are_pydantic_models(
@@ -828,6 +898,28 @@ class TestWarningDetection:
         assert any("No specific algorithm" in w for w in result.warnings)
 
     @pytest.mark.asyncio
+    async def test_warning_on_low_confidence_uses_parser_output(
+        self,
+        mock_llm: MagicMock,
+        mock_formula_extractor: MagicMock,
+        mock_citation_extractor: MagicMock,
+    ) -> None:
+        mock_llm.chat_completion = AsyncMock(
+            return_value=_structured_llm_response(confidence="low")
+        )
+        gen = RecommendationGenerator(
+            llm=mock_llm,
+            formula_extractor=mock_formula_extractor,
+            citation_extractor=mock_citation_extractor,
+        )
+        state = _base_agent_state(final_answer="## Inventory Analysis\n\nNo confidence provided.")
+
+        result = await gen.generate(state)
+
+        assert result.confidence == "low"
+        assert any("Confidence" in w or "confidence" in w for w in result.warnings)
+
+    @pytest.mark.asyncio
     async def test_warning_on_failed_tool_calls(
         self,
         mock_llm: MagicMock,
@@ -860,7 +952,7 @@ class TestWarningDetection:
             formula_extractor=mock_formula_extractor,
             citation_extractor=mock_citation_extractor,
         )
-        state = _base_agent_state()
+        state = _base_agent_state(final_answer="## Inventory Management\n\n### Confidence\nlow\n")
         result = await gen.generate(state)
         assert any("Confidence" in w or "confidence" in w for w in result.warnings)
 
