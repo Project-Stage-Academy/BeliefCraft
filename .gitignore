@@ -64,6 +64,13 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# RAG retrieval evaluation test artifacts
+services/rag-service/tests/retrieval/.eval_cache/
+services/rag-service/tests/retrieval/golden_set.json
+services/rag-service/tests/retrieval/eval_report.json
+services/rag-service/tests/retrieval/IMPLEMENTATION_SUMMARY.md
+services/rag-service/tests/retrieval/retrieval_coverage.md
+
 # Translations
 *.mo
 *.pot

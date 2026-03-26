@@ -27,6 +27,12 @@ restart:
 test:
 	uv run pytest
 
+test-retrieval:
+	uv run pytest services/rag-service/tests/retrieval -m "integration" -v --no-cov
+
+test-eval:
+	uv run pytest services/rag-service/tests/retrieval -m "eval" --maxfail=3 -v --no-cov
+
 lint:
 	uv run ruff check . --fix
 	npm --prefix services/ui run lint

@@ -129,3 +129,4 @@ If there was error with documentation MCP server, try calling it again. NEVER as
 - **Integrity**: Skipping validation steps or ignoring linting/type-checking warnings.
 - **Correction Neglect**: Proceeding with implementation or using tools like `save_memory` after a user correction instead of activating `context-engineering`: ALWAYS activate the `context-engineering` skill immediately to encode the fix into procedural instructions.
 - **Loquacity**: Providing long explanations or repeating known constraints: ALWAYS be concise and follow the "Minimal Output" mandate.
+- **Standalone Scripts**: Using relative imports (`.module`) in utility scripts meant for direct execution with `python script.py` or in library modules imported by them: Use same-directory imports (`from module import ...`) for standalone scripts and their dependencies; reserve relative imports for test files run by pytest.
