@@ -124,9 +124,22 @@ class InventoryLedger:
         """
         Persists an immutable audit record of the inventory change.
         """
+        from_location_id: uuid.UUID | None = None
+        to_location_id: uuid.UUID | None = None
+
+        if move_type == MoveType.INBOUND:
+            to_location_id = command.location.id
+        elif move_type == MoveType.OUTBOUND:
+            from_location_id = command.location.id
+        else:
+            raise ValueError(
+                f"Unsupported move type for InventoryLedger._log_movement: {move_type}"
+            )
+
         move = InventoryMove(
             product_id=command.product_id,
-            to_location_id=command.location.id,
+            from_location_id=from_location_id,
+            to_location_id=to_location_id,
             move_type=move_type,
             qty=command.qty,
             occurred_at=command.date,

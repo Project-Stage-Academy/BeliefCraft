@@ -299,9 +299,6 @@ main {
   color: var(--text-faint);
   flex: 1;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .chunk-hierarchy .crumb { color: var(--text-dim); }
 .chunk-hierarchy .sep { color: var(--border2); margin: 0 4px; }
@@ -320,6 +317,19 @@ main {
 }
 .chunk-content p { margin-bottom: .75em; }
 .chunk-content p:last-child { margin-bottom: 0; }
+
+/* Referenced metadata */
+.chunk-referenced {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.referenced-item { margin-bottom: 1px; }
+.referenced-key { font-weight: 600; color: var(--text-faint); margin-right: 4px; }
 
 .chunk-content h1, .chunk-content h2, .chunk-content h3,
 .chunk-content h4, .chunk-content h5 {
@@ -589,11 +599,19 @@ function resolveTypeKey(raw) {
 
 function buildHierarchyHtml(chunk) {
   const parts = [
-    chunk.part_title,
-    chunk.section_title,
-    chunk.subsection_title,
-    chunk.subsubsection_title,
-  ].filter(Boolean);
+    { num: chunk.part, title: chunk.part_title },
+    { num: chunk.section_number, title: chunk.section_title },
+    { num: chunk.subsection_number, title: chunk.subsection_title },
+    { num: chunk.subsubsection_number, title: chunk.subsubsection_title }
+  ]
+    .map(level => {
+      const items = [];
+      if (level.num) items.push(level.num);
+      if (level.title) items.push(level.title);
+      return items.join(' ');
+    })
+    .filter(Boolean);
+
   if (!parts.length) return '<span style="opacity:.35">—</span>';
   return parts
     .map(p => `<span class="crumb">${escHtml(p)}</span>`)
@@ -646,6 +664,25 @@ function buildChunkCard(chunk) {
   contentDiv.className = 'chunk-content';
   contentDiv.innerHTML = md.render(chunk.content || '');
   body.appendChild(contentDiv);
+
+  // Referenced metadata
+  const refEntries = Object.entries(chunk).filter(([key, val]) => {
+    if (key !== 'defined_in_chunk' && !key.startsWith('referenced_')) return false;
+    if (val === null || val === undefined) return false;
+    if (typeof val === 'string' && val.trim() === '') return false;
+    if (Array.isArray(val) && val.length === 0) return false;
+    if (typeof val === 'object' && Object.keys(val).length === 0) return false;
+    return true;
+  });
+  if (refEntries.length > 0) {
+    const refDiv = document.createElement('div');
+    refDiv.className = 'chunk-referenced';
+    refDiv.innerHTML = refEntries.map(([k, v]) => {
+      const displayVal = Array.isArray(v) ? v.join(', ') : v;
+      return `<div class="referenced-item"><span class="referenced-key">${escHtml(k)}:</span> ${escHtml(displayVal)}</div>`;
+    }).join('');
+    body.appendChild(refDiv);
+  }
 
   // Images
   const links = chunk.image_links || [];

@@ -10,7 +10,7 @@ def test_get_scale_factor():
 
 
 def test_create_entry_logic():
-    description = "[BLOCK EXAMPLE CONTENT]:\nExample 1.2 Analysis"
+    description = "Example 1.2 Analysis"
     max_loc = (10, 20)
     t_w, t_h = 100, 50
 
@@ -46,9 +46,10 @@ def test_match_template_on_page_success(mock_min_max, mock_match):
     result = ip._match_template_on_page(page_gray, template_gray)
 
     assert result is not None
-    similarity, location = result
+    similarity, location, best_scale = result
     assert similarity == 0.9
     assert location == (100, 150)
+    assert best_scale == 1.0
 
 
 def test_get_advanced_caption_no_blocks():
@@ -56,7 +57,7 @@ def test_get_advanced_caption_no_blocks():
     mock_page.get_text.return_value = []
 
     rect = (0, 0, 100, 100)
-    result = ip.get_advanced_caption(mock_page, rect)
+    result = ip.get_advanced_caption(mock_page, mock_page, rect)
 
     assert result == "Image without specific caption or block header"
 
@@ -125,12 +126,30 @@ def test_save_to_json_error(tmp_path):
 
 def test_create_entry_various_descriptions():
     """Test the logic of _create_entry for different description formats."""
-    e1 = ip._create_entry("[BLOCK EXERCISE CONTENT]: 5.1", 0, 0, 0.9, (0, 0), 10, 10)
+    e1 = ip._create_entry("Exercise 5.1", 0, 0, 0.9, (0, 0), 10, 10)
     assert e1["chunk_type"] == "exercise"
     assert e1["entity_id"] == "5.1"
 
-    e2 = ip._create_entry("Figure 7 Header", 0, 0, 0.9, (0, 0), 10, 10)
-    assert e2["entity_id"] == "7"
+    e2 = ip._create_entry("Figure 7.3. Header", 0, 0, 0.9, (0, 0), 10, 10)
+    assert e2["entity_id"] == "7.3"
 
     e3 = ip._create_entry("Random image", 0, 0, 0.9, (0, 0), 10, 10)
     assert e3["entity_id"] is None
+
+
+def test_mask_matched_region_whitens_area():
+    page_gray = np.zeros((10, 10), dtype=np.uint8)
+
+    ip._mask_matched_region(page_gray, max_loc=(2, 3), t_w=4, t_h=2)
+
+    assert np.all(page_gray[3:5, 2:6] == 255)
+    assert np.all(page_gray[:3, :] == 0)
+
+
+def test_mask_matched_region_clips_to_page_bounds():
+    page_gray = np.zeros((5, 5), dtype=np.uint8)
+
+    ip._mask_matched_region(page_gray, max_loc=(4, 4), t_w=4, t_h=4)
+
+    assert page_gray[4, 4] == 255
+    assert np.count_nonzero(page_gray == 255) == 1

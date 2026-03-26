@@ -4,13 +4,13 @@ from pipeline.parsing.metadata_extractor import MetadataExtractor
 def test_metadata_extractor_headers():
     extractor = MetadataExtractor()
 
-    content = "CHAPTER 1 INTRODUCTION"
+    content = "# 1 INTRODUCTION"
     meta = extractor.process_content_and_get_meta(content)
     assert meta["section_number"] == "1"
     assert "INTRODUCTION" in meta["section_title"]
     assert meta["force_new_chunk"] is True
 
-    content = "1.1 Fundamental Concepts"
+    content = "## 1.1 Fundamental Concepts"
     meta = extractor.process_content_and_get_meta(content)
     assert meta["subsection_number"] == "1.1"
     assert "Fundamental Concepts" in meta["subsection_title"]

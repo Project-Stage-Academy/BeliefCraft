@@ -56,7 +56,13 @@ class TestInventoryLedger:
         move = mock_session.add.call_args[0][0]
         assert isinstance(move, InventoryMove)
         assert move.move_type == MoveType.INBOUND
+<<<<<<< fix/agent_debug
         assert move.qty == 100.0
+=======
+        assert move.qty == qty
+        assert move.from_location_id is None
+        assert move.to_location_id == mock_location.id
+>>>>>>> main
 
     def test_record_receipt_existing_product(self, ledger, mock_session, mock_location):
         product_id = uuid.uuid4()
@@ -99,6 +105,7 @@ class TestInventoryLedger:
         assert move.move_type == MoveType.OUTBOUND
         assert move.qty == 30.0
         assert move.reason_code == "CUSTOMER_ORDER"
+<<<<<<< fix/agent_debug
 
     def test_record_issuance_insufficient_stock(self, ledger, mock_session, mock_location):
         """Verifies that attempting to issue more stock than available raises an error."""
@@ -118,3 +125,7 @@ class TestInventoryLedger:
 
         with pytest.raises(ValueError, match="Insufficient stock"):
             ledger.record_issuance(command)
+=======
+        assert move.from_location_id == mock_location.id
+        assert move.to_location_id is None
+>>>>>>> main

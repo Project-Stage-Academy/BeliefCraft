@@ -19,6 +19,30 @@ FIELDS_TO_CLEAN = {"content", "caption"}
 logger = get_logger(__name__)
 
 
+def clean_html_attributes(html_text: str) -> str:
+    """
+    Removes all HTML attributes except:
+    href for <a> and colspan, rowspan for table-related tags.
+    """
+    if not html_text or not html_text.strip():
+        return html_text
+
+    soup = BeautifulSoup(html_text, "html.parser")
+
+    for tag in soup.find_all(True):
+
+        if tag.name in TABLE_TAGS:
+            tag.attrs = {k: v for k, v in tag.attrs.items() if k.lower() in TABLE_ATTRS_TO_KEEP}
+
+        elif tag.name == "a":
+            tag.attrs = {k: v for k, v in tag.attrs.items() if k.lower() in LINK_ATTRS_TO_KEEP}
+
+        else:
+            tag.attrs = {}
+
+    return str(soup)
+
+
 class MathTableEngine:
     """
     Engine for associating mathematical formulas and tables with their
@@ -200,32 +224,9 @@ class MathTableEngine:
                 )
         return results
 
-    def _clean_html_attributes(self, html_text: str) -> str:
-        """
-        Removes all HTML attributes except:
-        href for <a> and colspan, rowspan for table-related tags.
-        """
-        if not html_text or not html_text.strip():
-            return html_text
-
-        soup = BeautifulSoup(html_text, "html.parser")
-
-        for tag in soup.find_all(True):
-
-            if tag.name in TABLE_TAGS:
-                tag.attrs = {k: v for k, v in tag.attrs.items() if k.lower() in TABLE_ATTRS_TO_KEEP}
-
-            elif tag.name == "a":
-                tag.attrs = {k: v for k, v in tag.attrs.items() if k.lower() in LINK_ATTRS_TO_KEEP}
-
-            else:
-                tag.attrs = {}
-
-        return str(soup)
-
     def _clean_chunk_fields(self, chunk: dict[str, Any]) -> dict[str, Any]:
         "Cleans all HTML fields inside a single chunk."
         for field in FIELDS_TO_CLEAN:
             if field in chunk and isinstance(chunk[field], str):
-                chunk[field] = self._clean_html_attributes(chunk[field])
+                chunk[field] = clean_html_attributes(chunk[field])
         return chunk
