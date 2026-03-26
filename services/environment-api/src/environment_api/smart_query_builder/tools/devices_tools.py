@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from common.schemas.common import ToolResult
+from common.schemas.common import ToolResult, build_tool_meta
 from common.schemas.devices import (
     DeviceAnomalyRow,
     DeviceAnomalyType,
@@ -192,14 +192,14 @@ def list_sensor_devices(
                 if not data
                 else f"Retrieved {len(data)} sensor devices."
             ),
-            meta={
-                "count": len(data),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(data),
+                filters={
                     "warehouse_id": str(request.warehouse_id) if request.warehouse_id else None,
                     "device_type": request.device_type.value if request.device_type else None,
                     "status": request.status.value if request.status else None,
                 },
-            },
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to list sensor devices.") from exc
@@ -223,7 +223,7 @@ def get_sensor_device(
         return ToolResult(
             data=_sensor_device_from_row(row),
             message="Retrieved sensor device details.",
-            meta={"device_id": device_id},
+            meta=build_tool_meta(count=1, device_id=device_id),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get sensor device.") from exc
@@ -259,14 +259,14 @@ def get_device_health_summary(
                 if not data
                 else f"Retrieved health summary for {len(data)} devices."
             ),
-            meta={
-                "count": len(data),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(data),
+                filters={
                     "warehouse_id": str(request.warehouse_id) if request.warehouse_id else None,
                     "since_ts": request.since_ts.isoformat() if request.since_ts else None,
                     "as_of": request.as_of.isoformat() if request.as_of else None,
                 },
-            },
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get device health summary.") from exc
@@ -332,16 +332,16 @@ def get_device_anomalies(
                 if not data
                 else f"Detected anomalies for {len(data)} devices."
             ),
-            meta={
-                "count": len(data),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(data),
+                filters={
                     "warehouse_id": str(request.warehouse_id) if request.warehouse_id else None,
                     "window": request.window,
                 },
-                "thresholds": {
+                thresholds={
                     "low_confidence": LOW_CONFIDENCE_THRESHOLD,
                 },
-            },
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get device anomalies.") from exc

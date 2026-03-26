@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from common.schemas.common import ToolResult
+from common.schemas.common import ToolResult, build_tool_meta
 from common.schemas.observed_inventory import (
     GetObservedInventorySnapshotRequest,
     ObservedInventoryQualityStatus,
@@ -120,9 +120,9 @@ def get_observed_inventory_snapshot(
                 if not data
                 else f"Retrieved {len(data)} observed inventory rows."
             ),
-            meta={
-                "count": len(data),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(data),
+                filters={
                     "quality_status_in": (
                         [status.value for status in request.quality_status_in]
                         if request.quality_status_in
@@ -130,7 +130,7 @@ def get_observed_inventory_snapshot(
                     ),
                     "dev_mode": request.dev_mode,
                 },
-            },
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get observed inventory snapshot.") from exc

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from common.schemas.common import ToolResult
+from common.schemas.common import ToolResult, build_tool_meta
 from common.schemas.shipments import (
     DelayedShipmentRow,
     GetShipmentsDelaySummaryRequest,
@@ -84,16 +84,17 @@ def get_shipments_delay_summary(
         return ToolResult(
             data=summary,
             message=message,
-            meta={
-                "filters": {
+            meta=build_tool_meta(
+                count=summary.total_shipments,
+                filters={
                     "date_from": request.date_from.isoformat(),
                     "date_to": request.date_to.isoformat(),
                     "warehouse_id": warehouse_id,
                     "route_id": route_id,
                     "status": status,
                 },
-                "delayed_list_count": len(delayed_shipments),
-            },
+                delayed_list_count=len(delayed_shipments),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to fetch shipment delay summary.") from exc

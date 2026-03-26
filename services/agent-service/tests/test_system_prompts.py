@@ -134,6 +134,32 @@ class TestFormatReactPromptWithThoughtSteps:
         assert "<observation>" in result
         assert "42" in result
 
+    def test_trace_meta_is_not_injected_into_prompt_history(self) -> None:
+        thought = ThoughtStep(
+            thought="I need to check inventory",
+            reasoning="User asked about stock",
+            next_action="call_search_tool",
+        )
+        tool_call = ToolCall(
+            tool_name="search_inventory",
+            arguments={"warehouse_id": "WH-001"},
+            result={"stock": 42},
+            trace_meta={"count": 1, "filters": {"warehouse_id": "WH-001"}},
+        )
+        state = {
+            "iteration": 2,
+            "max_iterations": 10,
+            "user_query": "What is the stock level?",
+            "thoughts": [thought],
+            "tool_calls": [tool_call],
+        }
+
+        result = format_react_prompt(state)
+
+        assert "'stock': 42" in result
+        assert "'filters'" not in result
+        assert "'count': 1" not in result
+
     def test_multiple_iterations(self) -> None:
         thoughts = [
             ThoughtStep(

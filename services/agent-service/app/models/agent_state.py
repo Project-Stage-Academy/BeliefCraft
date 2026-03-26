@@ -12,6 +12,7 @@ class ToolCall(BaseModel):
     category: str | None = None
     arguments: dict[str, Any]
     result: dict[str, Any] | None = None
+    trace_meta: dict[str, Any] | None = None
     error: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

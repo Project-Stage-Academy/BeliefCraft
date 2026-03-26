@@ -52,9 +52,11 @@ def test_list_inventory_moves_returns_tool_result_with_meta(
     assert len(result.data.moves) == 1
     assert result.data.moves[0].reason_code == "cycle_count_gain"
     assert result.message == "Retrieved 1 inventory moves."
-    assert result.meta["count"] == 1
-    assert result.meta["filters"]["warehouse_id"] == "wh-1"
-    assert result.meta["pagination"] == {"limit": 10, "offset": 5}
+    assert result.meta.count == 1
+    assert result.meta.filters["warehouse_id"] == "wh-1"
+    assert result.meta.pagination is not None
+    assert result.meta.pagination.limit == 10
+    assert result.meta.pagination.offset == 5
 
 
 def test_list_inventory_moves_wraps_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -99,7 +101,7 @@ def test_get_inventory_move_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.data.move.qty == 7.0
     assert result.message == "Retrieved inventory move details."
-    assert result.meta["move_id"] == move_id
+    assert result.meta.move_id == move_id
 
 
 def test_get_inventory_move_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -159,7 +161,7 @@ def test_get_inventory_move_audit_trace_with_observations(
 
     assert result.data.move.qty == 4.0
     assert len(result.data.observations) == 1
-    assert result.meta["observation_count"] == 1
+    assert result.meta.observation_count == 1
 
 
 def test_get_inventory_adjustments_summary_builds_response(
@@ -189,5 +191,5 @@ def test_get_inventory_adjustments_summary_builds_response(
     assert result.data.count == 3
     assert result.data.total_qty == 9.0
     assert len(result.data.by_reason) == 2
-    assert result.meta["filters"]["warehouse_id"] == "wh-1"
+    assert result.meta.filters["warehouse_id"] == "wh-1"
     assert result.message == "Aggregated 3 inventory adjustments."

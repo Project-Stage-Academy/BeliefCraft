@@ -277,8 +277,10 @@ class ReActAgent:
                 )
             else:
                 tool_data = result.get("data", {})
-                if not isinstance(tool_data, dict):
-                    tool_data = {"result": tool_data}
+                tool_meta = result.get("meta", {})
+                tool_data, tool_meta = self._normalize_tool_success_payload(
+                    tool_category, tool_data, tool_meta
+                )
                 logger.info(
                     "tool_execution_success",
                     request_id=request_id,
@@ -291,6 +293,7 @@ class ReActAgent:
                         category=tool_category,
                         arguments=func_args,
                         result=tool_data,
+                        trace_meta=tool_meta,
                     )
                 )
                 new_messages.append(
@@ -303,6 +306,30 @@ class ReActAgent:
                 )
 
         return new_messages, new_tool_calls
+
+    @staticmethod
+    def _normalize_tool_success_payload(
+        tool_category: str | None,
+        tool_data: Any,
+        tool_meta: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Normalize tool payloads before storing them in agent state."""
+        if (
+            tool_category == "environment"
+            and isinstance(tool_data, dict)
+            and "data" in tool_data
+            and isinstance(tool_data.get("meta"), dict)
+        ):
+            tool_meta = tool_data["meta"]
+            tool_data = tool_data["data"]
+
+        if not isinstance(tool_meta, dict):
+            tool_meta = {}
+
+        if not isinstance(tool_data, dict):
+            tool_data = {"result": tool_data}
+
+        return tool_data, tool_meta
 
     def _build_act_result(
         self,

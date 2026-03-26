@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from common.schemas.common import ToolResult
+from common.schemas.common import Pagination, ToolResult, build_tool_meta
 from common.schemas.observations import (
     CompareObservationsToBalancesRequest,
     ObservationBalanceComparisonRow,
@@ -56,9 +56,9 @@ def compare_observations_to_balances(
             return ToolResult(
                 data=[],
                 message="No results for observations vs balances.",
-                meta={
-                    "count": 0,
-                    "filters": {
+                meta=build_tool_meta(
+                    count=0,
+                    filters={
                         "warehouse_id": warehouse_id,
                         "location_id": location_id,
                         "sku": sku,
@@ -66,8 +66,8 @@ def compare_observations_to_balances(
                         "observed_from": observed_from.isoformat(),
                         "observed_to": observed_to.isoformat(),
                     },
-                    "pagination": {"limit": limit, "offset": offset},
-                },
+                    pagination=Pagination(limit=limit, offset=offset),
+                ),
             )
 
         data = [
@@ -92,9 +92,9 @@ def compare_observations_to_balances(
         return ToolResult(
             data=data,
             message=f"Retrieved {len(data)} observation comparison rows.",
-            meta={
-                "count": len(data),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(data),
+                filters={
                     "warehouse_id": warehouse_id,
                     "location_id": location_id,
                     "sku": sku,
@@ -102,8 +102,8 @@ def compare_observations_to_balances(
                     "observed_from": observed_from.isoformat(),
                     "observed_to": observed_to.isoformat(),
                 },
-                "pagination": {"limit": limit, "offset": offset},
-            },
+                pagination=Pagination(limit=limit, offset=offset),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to compare observations to balances.") from exc
