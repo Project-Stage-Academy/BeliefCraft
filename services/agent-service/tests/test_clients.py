@@ -369,7 +369,7 @@ class TestEnvironmentAPIClient:
 
                 mock_get.assert_called_once_with(
                     "/api/v1/smart-query/inventory/observed-snapshot",
-                    params={"quality_status_in": ["good", "inspected"]},
+                    params={"quality_status_in": "good,inspected"},
                     timeout=None,
                 )
 

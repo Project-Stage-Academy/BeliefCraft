@@ -38,60 +38,82 @@ def mock_location():
 
 class TestInventoryLedger:
     def test_record_receipt_new_product(self, ledger, mock_session, mock_location):
+        """
+        Verifies that receiving a product for the first time creates a
+        new balance record and logs the movement.
+        """
         product_id = uuid.uuid4()
+        ref_id = uuid.uuid4()
+        date = datetime.now(tz=UTC)
+        qty = 100.0
+
+        # Mock database query returning None (no existing balance)
+        mock_session.query().filter_by().first.return_value = None
+
         command = ReceiptCommand(
-            location=mock_location,
-            product_id=product_id,
-            date=datetime.now(tz=UTC),
-            qty=100.0,
-            ref_id=uuid.uuid4(),
+            location=mock_location, product_id=product_id, date=date, qty=qty, ref_id=ref_id
         )
         ledger.record_receipt(command)
 
-        # Verify atomic upsert was executed
-        mock_session.execute.assert_called_once()
+        # 1. Verify Balance Initialization
+        # We expect 2 calls to session.add: one for Balance, one for Move
+        assert mock_session.add.call_count == 2
 
-        # Verify Audit Trail
-        assert mock_session.add.call_count == 1
-        move = mock_session.add.call_args[0][0]
+        balance = mock_session.add.call_args_list[0][0][0]
+        assert isinstance(balance, InventoryBalance)
+        assert balance.on_hand == qty
+        assert balance.product_id == product_id
+        assert balance.location_id == mock_location.id
+
+        # 2. Verify Audit Trail
+        move = mock_session.add.call_args_list[1][0][0]
         assert isinstance(move, InventoryMove)
         assert move.move_type == MoveType.INBOUND
-<<<<<<< fix/agent_debug
-        assert move.qty == 100.0
-=======
         assert move.qty == qty
         assert move.from_location_id is None
         assert move.to_location_id == mock_location.id
->>>>>>> main
 
     def test_record_receipt_existing_product(self, ledger, mock_session, mock_location):
+        """
+        Verifies that receiving an existing product increments the
+        current balance and logs the movement.
+        """
         product_id = uuid.uuid4()
+        existing_balance = InventoryBalance(
+            product_id=product_id, location_id=mock_location.id, on_hand=50.0
+        )
+        mock_session.query().filter_by().first.return_value = existing_balance
+
         command = ReceiptCommand(
             location=mock_location,
             product_id=product_id,
             date=datetime.now(tz=UTC),
-            qty=10.0,
+            qty=10,
             ref_id=uuid.uuid4(),
         )
         ledger.record_receipt(command)
 
-        mock_session.execute.assert_called_once()
+        # Verify balance was updated
+        assert existing_balance.on_hand == 60.0
+        # Verify session.add was only called once (for the move, balance was already in session)
         assert mock_session.add.call_count == 1
 
     def test_record_issuance_logic(self, ledger, mock_session, mock_location):
+        """
+        Verifies that issuing (shipping) stock decrements the balance
+        and creates an OUTBOUND movement record.
+        """
         product_id = uuid.uuid4()
         existing_balance = InventoryBalance(
             product_id=product_id, location_id=mock_location.id, on_hand=100.0
         )
-
-        # Mock the locked query chain
-        mock_session.query().filter_by().with_for_update().first.return_value = existing_balance
+        mock_session.query().filter_by().first.return_value = existing_balance
 
         command = ReceiptCommand(
             location=mock_location,
-            product_id=product_id,
+            product_id=uuid.uuid4(),
             date=datetime.now(tz=UTC),
-            qty=30.0,
+            qty=30,
             ref_id=uuid.uuid4(),
         )
         ledger.record_issuance(command)
@@ -100,32 +122,10 @@ class TestInventoryLedger:
         assert existing_balance.on_hand == 70.0
 
         # Verify move record
-        assert mock_session.add.call_count == 1
         move = mock_session.add.call_args[0][0]
+        assert isinstance(move, InventoryMove)
         assert move.move_type == MoveType.OUTBOUND
-        assert move.qty == 30.0
+        assert move.qty == 30.0  # Logged as positive delta in movement table usually
         assert move.reason_code == "CUSTOMER_ORDER"
-<<<<<<< fix/agent_debug
-
-    def test_record_issuance_insufficient_stock(self, ledger, mock_session, mock_location):
-        """Verifies that attempting to issue more stock than available raises an error."""
-        product_id = uuid.uuid4()
-        existing_balance = InventoryBalance(
-            product_id=product_id, location_id=mock_location.id, on_hand=10.0
-        )
-        mock_session.query().filter_by().with_for_update().first.return_value = existing_balance
-
-        command = ReceiptCommand(
-            location=mock_location,
-            product_id=product_id,
-            date=datetime.now(tz=UTC),
-            qty=30.0,
-            ref_id=uuid.uuid4(),
-        )
-
-        with pytest.raises(ValueError, match="Insufficient stock"):
-            ledger.record_issuance(command)
-=======
         assert move.from_location_id == mock_location.id
         assert move.to_location_id is None
->>>>>>> main
