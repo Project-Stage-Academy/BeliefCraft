@@ -54,8 +54,8 @@ def test_get_observed_inventory_snapshot_dev_mode_returns_ground_truth_fields(
     assert row.quality_status.value == "ok"
     assert row.on_hand == 11.0
     assert result.message == "Retrieved 1 observed inventory rows."
-    assert result.meta["filters"]["quality_status_in"] == ["ok"]
-    assert result.meta["filters"]["dev_mode"] is True
+    assert result.meta.filters["quality_status_in"] == ["ok"]
+    assert result.meta.filters["dev_mode"] is True
 
 
 def test_get_observed_inventory_snapshot_non_dev_mode_returns_public_shape(
@@ -93,7 +93,7 @@ def test_get_observed_inventory_snapshot_non_dev_mode_returns_public_shape(
     assert row.quality_status.value == "damaged"
     assert row.observed_qty is None
     assert row.confidence is None
-    assert result.meta["filters"]["dev_mode"] is False
+    assert result.meta.filters["dev_mode"] is False
 
 
 def test_get_observed_inventory_snapshot_wraps_validation_error() -> None:

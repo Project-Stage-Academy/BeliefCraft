@@ -47,10 +47,10 @@ def test_list_sensor_devices_returns_tool_result_with_meta(
     assert len(result.data) == 1
     assert result.data[0].id == device_id
     assert result.message == "Retrieved 1 sensor devices."
-    assert result.meta["count"] == 1
-    assert result.meta["filters"]["warehouse_id"] == str(warehouse_id)
-    assert result.meta["filters"]["device_type"] == "camera"
-    assert result.meta["filters"]["status"] == "active"
+    assert result.meta.count == 1
+    assert result.meta.filters["warehouse_id"] == str(warehouse_id)
+    assert result.meta.filters["device_type"] == "camera"
+    assert result.meta.filters["status"] == "active"
 
 
 def test_get_device_anomalies_detects_multiple_anomaly_types(
