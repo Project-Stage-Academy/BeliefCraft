@@ -35,11 +35,9 @@ class FormOptionsResponse(BaseModel):
 
 
 class CacheClient(Protocol):
-    def get(self, key: str) -> str | None:
-        ...
+    def get(self, key: str) -> str | None: ...
 
-    def setex(self, key: str, ttl_seconds: int, value: str) -> bool:
-        ...
+    def setex(self, key: str, ttl_seconds: int, value: str) -> bool: ...
 
 
 def get_cache_client() -> CacheClient | None:
