@@ -84,8 +84,6 @@ class EnvironmentClientProtocol(Protocol):
         move_type: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
-        limit: int | None = None,
-        offset: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]: ...
 
@@ -266,7 +264,7 @@ class EnvironmentAPIClient(BaseAPIClient):
         if purchase_order_id:
             params["purchase_order_id"] = purchase_order_id
         if purchase_order_ids:
-            params["purchase_order_ids"] = purchase_order_ids
+            params["purchase_order_ids"] = ",".join(purchase_order_ids)
 
         return await self.get(
             "/api/v1/smart-query/procurement/po-lines", params=params, timeout=timeout
@@ -304,8 +302,6 @@ class EnvironmentAPIClient(BaseAPIClient):
         move_type: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
-        limit: int | None = None,
-        offset: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]:
         """Get inventory movement history."""
@@ -320,10 +316,6 @@ class EnvironmentAPIClient(BaseAPIClient):
             params["from_ts"] = from_ts
         if to_ts:
             params["to_ts"] = to_ts
-        if limit is not None:
-            params["limit"] = limit
-        if offset is not None:
-            params["offset"] = offset
 
         return await self.get("/api/v1/smart-query/inventory/moves", params=params, timeout=timeout)
 
@@ -512,7 +504,7 @@ class EnvironmentAPIClient(BaseAPIClient):
         """Get observed inventory snapshot with quality filtering."""
         params: dict[str, Any] = {}
         if quality_status_in:
-            params["quality_status_in"] = quality_status_in
+            params["quality_status_in"] = ",".join(quality_status_in)
 
         return await self.get(
             "/api/v1/smart-query/inventory/observed-snapshot",

@@ -46,11 +46,13 @@ def _resolve_database_url() -> Any:
 
 get_connect_args, get_database_url, Base = _load_db_dependencies()
 
+config.set_main_option("sqlalchemy.url", _resolve_database_url())
+
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    url = _resolve_database_url()
+    url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -70,7 +72,6 @@ def run_migrations_online() -> None:
         section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        url=_resolve_database_url(),
         connect_args=get_connect_args(),
     )
 
