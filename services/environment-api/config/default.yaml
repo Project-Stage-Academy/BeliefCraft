@@ -9,6 +9,10 @@ server:
 logging:
   level: "INFO"
 
+cache:
+  redis_url: "redis://localhost:6379"
+  ttl_seconds: 1800
+
 simulation:
   default_days: 365
   random_seed: 42
