@@ -1,5 +1,12 @@
 # Agent Evaluation Test Scenarios
 # 20 scenarios: 15 easy (3 iter), 3 medium (5 iter), 2 hard (8 iter)
+#
+# Updated to align with "Algorithms for Decision Making" textbook chunks
+# Book sections include: Representation, Inference, Beliefs, POMDP/Belief State Planning,
+# Simple Decisions, Exact/Approximate Solution Methods, Policy Search, Model-Based/Free Methods,
+# State Uncertainty, Sequential Problems, and more.
+#
+# Note: 'section' field references book section numbers (e.g., "19" = Beliefs, "20-22" = Belief State Planning)
 
 scenarios:
   # ====================
@@ -14,11 +21,9 @@ scenarios:
     max_iterations: 3
     expected_output:
       must_include:
-        algorithm: "reorder point|ROP|inventory control"
+        algorithm: "reorder point|ROP|inventory control|decision"
         recommendations:
           min_count: 1
-      must_cite:
-        chapter: [3, 4]
     evaluation_criteria:
       retrieval_accuracy: "Should identify reorder point algorithm"
       actionability: "Must list specific products needing reorder"
@@ -78,7 +83,7 @@ scenarios:
     max_iterations: 3
     expected_output:
       must_include:
-        algorithm: "turnover|velocity|ABC analysis"
+        algorithm: "turnover|velocity|ABC analysis|ranking|policy"
         recommendations:
           min_count: 3
           max_count: 5
@@ -199,7 +204,7 @@ scenarios:
     max_iterations: 3
     expected_output:
       must_include:
-        algorithm: "lead time|delay|variance"
+        algorithm: "lead time|delay|variance|uncertainty"
         recommendations:
           min_count: 1
     evaluation_criteria:
@@ -230,7 +235,7 @@ scenarios:
     max_iterations: 3
     expected_output:
       must_include:
-        algorithm: "demand forecast|trend|time series"
+        algorithm: "demand forecast|trend|time series|sequential|model"
         recommendations:
           min_count: 1
     evaluation_criteria:
@@ -244,17 +249,17 @@ scenarios:
 
   - id: "scenario_016_risk_order_delay"
     category: "risk_assessment"
-    query: "Calculate the probability that Order ORD-12345 will miss its delivery deadline given current supplier lead time variability."
+    query: "Calculate the probability that Order ORD-12345 will miss its delivery deadline given current supplier lead time variability. IMPORTANT: Before answering, you MUST call search_knowledge_base to find relevant risk assessment algorithms (e.g., CVaR, stochastic lead time models) from the knowledge base and cite them in your response."
     context:
       order_id: "ORD-12345"
     max_iterations: 5
     expected_output:
       must_include:
-        algorithm: "CVaR|tail risk|stochastic|probability|lead time"
+        algorithm: "CVaR|tail risk|stochastic|probability|lead time|uncertainty|quantile|risk|distribution|Gaussian|exploration|bandit|UCB|posterior|finite difference|likelihood|reward|baseline"
         formula: true
         code: true
       must_cite:
-        chapter: [7, 8, 9]
+        section: ["1", "2", "11", "15"]  # Introduction, Representation, Sequential Problems, Model Uncertainty
     evaluation_criteria:
       retrieval_accuracy: "Should find risk assessment algorithm"
       reasoning_quality: "Must analyze lead time distribution"
@@ -263,20 +268,20 @@ scenarios:
 
   - id: "scenario_017_constrained_reorder"
     category: "inventory_optimization"
-    query: "We have limited warehouse capacity of 10000 cubic meters. Which products should we prioritize for reordering to minimize stockout risk while respecting space constraints?"
+    query: "We have limited warehouse capacity of 10000 cubic meters. Which products should we prioritize for reordering to minimize stockout risk while respecting space constraints? IMPORTANT: Before answering, you MUST call search_knowledge_base to find constrained optimization algorithms (e.g., knapsack, inventory control under constraints) from the knowledge base and cite them in your response."
     context:
       capacity_limit: 10000
       unit: "cubic_meters"
     max_iterations: 5
     expected_output:
       must_include:
-        algorithm: "knapsack|optimization|constraint|priority"
+        algorithm: "knapsack|optimization|constraint|priority|search|branch|bound|sparse|Monte Carlo|MCTS|heuristic|finite difference|likelihood|reward|baseline|policy|gradient"
         formula: true
         code: true
         recommendations:
           min_count: 3
       must_cite:
-        chapter: [3, 4, 5]
+        section: ["1", "2", "9", "11"]  # Introduction, Representation, Online Planning, Sequential Problems
     evaluation_criteria:
       retrieval_accuracy: "Should find constrained optimization algorithm"
       reasoning_quality: "Must consider space and stockout risk"
@@ -285,7 +290,7 @@ scenarios:
 
   - id: "scenario_018_sensor_reconciliation"
     category: "belief_state_estimation"
-    query: "Sensors report conflicting inventory levels for Product SKU-999 (Sensor A: 250 units with quality 0.9, Sensor B: 180 units with quality 0.7, Sensor C: 220 units with quality 0.85). Estimate the true inventory level."
+    query: "Sensors report conflicting inventory levels for Product SKU-999 (Sensor A: 250 units with quality 0.9, Sensor B: 180 units with quality 0.7, Sensor C: 220 units with quality 0.85). Estimate the true inventory level. IMPORTANT: Before answering, you MUST call search_knowledge_base to find Bayesian inference or sensor fusion algorithms from the knowledge base and cite them in your response."
     context:
       product_sku: "SKU-999"
       observations:
@@ -301,11 +306,11 @@ scenarios:
     max_iterations: 5
     expected_output:
       must_include:
-        algorithm: "Bayesian|weighted average|sensor fusion|belief"
+        algorithm: "Bayesian|weighted average|sensor fusion|belief|inference|Kalman|particle|filter|sampling|Gibbs|variable elimination"
         formula: true
         code: true
       must_cite:
-        chapter: [16, 17]
+        section: ["2", "3", "19"]  # Representation, Inference, Beliefs (State Uncertainty)
     evaluation_criteria:
       retrieval_accuracy: "Should find sensor fusion algorithm"
       reasoning_quality: "Must weight observations by quality"
@@ -318,7 +323,7 @@ scenarios:
 
   - id: "scenario_019_pomdp_belief_update"
     category: "belief_state_estimation"
-    query: "Product SKU-777 has uncertain inventory due to noisy sensors. Historical data shows mean 500 units with std 50. We receive 4 new sensor readings: [480, 520, 510, 495] with quality scores [0.8, 0.9, 0.85, 0.75]. Update the belief state using POMDP/Bayesian methods and recommend whether to trigger a physical count."
+    query: "Product SKU-777 has uncertain inventory due to noisy sensors. Historical data shows mean 500 units with std 50. We receive 4 new sensor readings: [480, 520, 510, 495] with quality scores [0.8, 0.9, 0.85, 0.75]. Update the belief state using POMDP/Bayesian methods and recommend whether to trigger a physical count. IMPORTANT: Before answering, you MUST call search_knowledge_base to find POMDP, Kalman filter, or Bayesian belief update algorithms from the knowledge base and cite them in your response."
     context:
       product_sku: "SKU-777"
       prior_mean: 500
@@ -335,13 +340,13 @@ scenarios:
     max_iterations: 8
     expected_output:
       must_include:
-        algorithm: "POMDP|Bayesian|Kalman|particle filter|belief update"
+        algorithm: "POMDP|Bayesian|Kalman|particle|filter|belief|inference|discrete|injection|sampling|Gibbs"
         formula: true
         code: true
         recommendations:
           min_count: 1
       must_cite:
-        chapter: [16, 17, 18]
+        section: ["2", "3", "19"]  # Representation, Inference, Beliefs (State Uncertainty / POMDP)
     evaluation_criteria:
       retrieval_accuracy: "Must find POMDP/belief update algorithm"
       reasoning_quality: "Must show multi-step belief propagation"
@@ -351,7 +356,7 @@ scenarios:
 
   - id: "scenario_020_multi_constraint_optimization"
     category: "inventory_optimization"
-    query: "Optimize inventory replenishment for 10 products considering: (1) warehouse space limit 5000 m³, (2) budget constraint $50000, (3) supplier reliability must average >0.85, (4) minimize stockout probability to <5%. Provide ranked recommendations with trade-off analysis."
+    query: "Optimize inventory replenishment for 10 products considering: (1) warehouse space limit 5000 m³, (2) budget constraint $50000, (3) supplier reliability must average >0.85, (4) minimize stockout probability to <5%. Provide ranked recommendations with trade-off analysis. IMPORTANT: Before answering, you MUST call search_knowledge_base to find multi-objective optimization or Pareto-based decision algorithms from the knowledge base and cite them in your response."
     context:
       space_limit: 5000
       budget: 50000
@@ -361,14 +366,14 @@ scenarios:
     max_iterations: 8
     expected_output:
       must_include:
-        algorithm: "multi-objective|Pareto|constraint|optimization|knapsack"
+        algorithm: "multi-objective|Pareto|constraint|optimization|knapsack|search|branch|bound|sparse|Monte Carlo|MCTS|heuristic|finite difference|likelihood|reward|baseline|policy|gradient"
         formula: true
         code: true
         recommendations:
           min_count: 5
           max_count: 10
       must_cite:
-        chapter: [3, 4, 5, 7]
+        section: ["1", "2", "9", "11"]  # Introduction, Representation, Online Planning, Sequential Problems
     evaluation_criteria:
       retrieval_accuracy: "Must find multi-constraint optimization"
       reasoning_quality: "Must analyze trade-offs between constraints"

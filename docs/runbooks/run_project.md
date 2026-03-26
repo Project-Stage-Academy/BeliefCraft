@@ -147,8 +147,8 @@ If your chunk JSON is at the repo root, run:
 
 ```bash
 PYTHONPATH=services/rag-service/src \
-uv run services/rag-service/src/scripts/embed_chunks.py \
-"./ULTIMATE_FINAL_BOOK(with correct formulas and translated).json" \
+uv run services/rag-service/src/rag_scripts/embed_chunks.py \
+"./ULTIMATE_BOOK_DATA_25_03_translated.json" \
 --recreate
 ```
 

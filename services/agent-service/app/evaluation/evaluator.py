@@ -14,7 +14,7 @@ from app.evaluation.models import (
     EvaluationResult,
     EvaluationScenario,
 )
-from app.models.responses import AgentRecommendationResponse
+from app.models.responses import AgentRecommendationResponse, Citation
 from app.prompts.system_prompts import get_warehouse_advisor_prompt
 from app.services.react_agent import ReActAgent
 from app.services.recommendation_generator import RecommendationGenerator
@@ -22,6 +22,18 @@ from app.tools import get_skill_store
 from common.logging import get_logger
 
 logger = get_logger(__name__)
+
+_rag_tools_registered: bool = False
+
+# Maps the top-level title segment (lowercase) to book section number.
+# Derived from entity_number prefixes present in RAG knowledge base chunks.
+_TITLE_SECTION_MAP: dict[str, str] = {
+    "introduction": "1",
+    "probabilistic reasoning": "2",
+    "sequential problems": "11",
+    "model uncertainty": "15",
+    "state uncertainty": "19",
+}
 
 
 class AgentEvaluator:
@@ -82,6 +94,8 @@ class AgentEvaluator:
         Returns:
             EvaluationReport with aggregated results.
         """
+        await self._ensure_rag_tools_registered()
+
         if scenario_ids:
             scenarios_to_run = [s for s in self.scenarios if s.id in scenario_ids]
             if not scenarios_to_run:
@@ -121,6 +135,35 @@ class AgentEvaluator:
         )
 
         return report
+
+    async def _ensure_rag_tools_registered(self) -> None:
+        """Register RAG tools from MCP server if not already done.
+
+        Mirrors the startup logic from main.py lifespan() so that the
+        evaluator works correctly when invoked from the CLI without a
+        running FastAPI application.
+        """
+        global _rag_tools_registered
+        if _rag_tools_registered:
+            return
+
+        from app.clients.rag_mcp_client import RAGMCPClient
+        from app.config import get_settings
+        from app.tools import register_mcp_rag_tools
+
+        settings = get_settings()
+        mcp_client = RAGMCPClient(base_url=settings.RAG_API_URL)
+        try:
+            await mcp_client.connect()
+            await register_mcp_rag_tools(mcp_client)
+            _rag_tools_registered = True
+            logger.info("evaluator_rag_tools_registered", rag_url=settings.RAG_API_URL)
+        except Exception as e:
+            logger.warning(
+                "evaluator_rag_tools_registration_failed",
+                error=str(e),
+                message="Evaluation will continue without RAG tools; citation metrics may fail",
+            )
 
     async def _evaluate_scenario(
         self,
@@ -300,14 +343,16 @@ class AgentEvaluator:
 
         score = 1.0
 
-        if "chapter" in must_cite:
-            expected_chapters = must_cite["chapter"]
-            if isinstance(expected_chapters, list):
-                citation_pages = [c.page for c in response.citations if c.page is not None]
-                has_expected_chapter = any(page in expected_chapters for page in citation_pages)
-                if not has_expected_chapter:
+        if "section" in must_cite:
+            expected_sections = must_cite["section"]
+            if isinstance(expected_sections, list):
+                found_sections = {
+                    self._extract_section_from_citation(c) for c in response.citations
+                } - {None}
+                has_expected_section = bool(found_sections & set(expected_sections))
+                if not has_expected_section:
                     score -= 0.5
-                    failure_reasons.append(f"Expected citations from chapters {expected_chapters}")
+                    failure_reasons.append(f"Expected citations from sections {expected_sections}")
 
         return max(0.0, score)
 
@@ -406,6 +451,24 @@ class AgentEvaluator:
                 break
 
         return max(0.0, score)
+
+    @staticmethod
+    def _extract_section_from_citation(citation: Citation) -> str | None:
+        """Extract book section number from a citation.
+
+        Strategy:
+        1. Parse the integer prefix from entity_number (e.g. "11.4" → "11").
+        2. Fall back to the top-level title segment mapped via _TITLE_SECTION_MAP.
+        """
+
+        if citation.entity_number:
+            prefix = citation.entity_number.split(".")[0]
+            if prefix.isdigit():
+                return prefix
+        if citation.title:
+            first_segment = citation.title.lower().split(" / ")[0].strip()
+            return _TITLE_SECTION_MAP.get(first_segment) or None
+        return None
 
     def _create_failed_result(
         self,

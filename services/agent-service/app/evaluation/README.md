@@ -79,7 +79,7 @@ make evaluate
 make evaluate ARGS="-s scenario_001_inventory_low_stock -o my_report.json"
 
 # Запуск конкретних сценаріїв
-make evaluate ARGS=" -s scenario_002_inventory_specific_sku"
+make evaluate ARGS=" -s scenario_016_risk_order_delay"
 
 # Список всіх сценаріїв
 make evaluate-list

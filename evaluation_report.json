@@ -1,161 +1,1324 @@
 {
-  "report_id": "d6c0f151-a8d5-48f5-b5cd-d4a34bb23faa",
-  "timestamp": "2026-03-25 19:35:05.784952+00:00",
+  "report_id": "4ffd13f8-b58e-4e63-a87b-35254bfca1a4",
+  "timestamp": "2026-03-26 20:04:57.113049+00:00",
   "total_scenarios": 1,
   "passed": 0,
   "failed": 1,
   "pass_rate": 0.0,
-  "avg_retrieval_accuracy": 1.0,
-  "avg_citation_quality": 0.0,
+  "avg_retrieval_accuracy": 0.5,
+  "avg_citation_quality": 1.0,
   "avg_code_validity": 1.0,
   "avg_reasoning_quality": 1.0,
   "avg_actionability": 1.0,
-  "avg_overall_score": 0.8,
-  "avg_execution_time": 41.613463,
-  "avg_iterations": 2.0,
+  "avg_overall_score": 0.8500000000000001,
+  "avg_execution_time": 88.14349,
+  "avg_iterations": 4.0,
   "results_by_category": {
-    "inventory_replenishment": {
+    "risk_assessment": {
       "total": 1,
       "passed": 0,
       "pass_rate": 0.0,
-      "avg_score": 0.8
+      "avg_score": 0.8500000000000001
     }
   },
   "results_by_difficulty": {
-    "easy": {
+    "medium": {
       "total": 1,
       "passed": 0,
       "pass_rate": 0.0,
-      "avg_score": 0.8
+      "avg_score": 0.8500000000000001
     }
   },
   "failed_scenarios": [
-    "scenario_001_inventory_low_stock"
+    "scenario_016_risk_order_delay"
   ],
   "results": [
     {
-      "scenario_id": "scenario_001_inventory_low_stock",
-      "scenario_category": "inventory_replenishment",
-      "query": "Which products currently have stock levels below their reorder point?",
-      "difficulty": "easy",
+      "scenario_id": "scenario_016_risk_order_delay",
+      "scenario_category": "risk_assessment",
+      "query": "Calculate the probability that Order ORD-12345 will miss its delivery deadline given current supplier lead time variability. IMPORTANT: Before answering, you MUST call search_knowledge_base to find relevant risk assessment algorithms (e.g., CVaR, stochastic lead time models) from the knowledge base and cite them in your response.",
+      "difficulty": "medium",
       "agent_status": "completed",
-      "iterations": 2,
-      "execution_time_seconds": 41.613463,
-      "retrieval_accuracy": 1.0,
-      "citation_quality": 0.0,
+      "iterations": 4,
+      "execution_time_seconds": 88.14349,
+      "retrieval_accuracy": 0.5,
+      "citation_quality": 1.0,
       "code_validity": 1.0,
       "reasoning_quality": 1.0,
       "actionability": 1.0,
-      "overall_score": 0.8,
+      "overall_score": 0.8500000000000001,
       "passed": false,
       "failure_reasons": [
-        "No citations provided"
+        "Expected algorithm pattern: CVaR|tail risk|stochastic|probability|lead time|uncertainty, got: Algorithm 15.6 - Quantile Exploration"
       ],
-      "algorithm_found": "Newsvendor model for reorder point calculation; (s,Q) policy; POMDP-based inventory policy",
-      "citations_count": 0,
-      "code_snippets_count": 2,
-      "recommendations_count": 4,
+      "algorithm_found": "Algorithm 15.6 - Quantile Exploration",
+      "citations_count": 41,
+      "code_snippets_count": 7,
+      "recommendations_count": 5,
       "tools_used": [
-        "get_observed_inventory_snapshot"
+        "search_knowledge_base",
+        "list_purchase_orders",
+        "get_purchase_order"
       ],
       "full_response": {
-        "request_id": "38f99dec-4293-48f3-8949-988baee8df03",
-        "query": "Which products currently have stock levels below their reorder point?",
-        "task": "Inventory Replenishment - Identify Products Below Reorder Point",
-        "analysis": "Retrieved current inventory snapshot for 50 unique products across 3 locations. Analysis cannot be completed because reorder point data is not available through current system tools. Current inventory shows products with lowest stock levels ranging from ~65.9 to ~105.3 units. Inventory observations include confidence scores (0.59-0.95) indicating sensor noise. To determine products below reorder point, need either configured reorder points from product master data or historical demand data, supplier lead times, and desired service level to calculate dynamic reorder points using formulas: r = \u03bcL + z\u03c3L or r = d \u00d7 L + SS.",
-        "algorithm": "Newsvendor model for reorder point calculation; (s,Q) policy; POMDP-based inventory policy",
+        "request_id": "44cf1d3b-31ef-496c-a293-4638ddac7bc9",
+        "query": "Calculate the probability that Order ORD-12345 will miss its delivery deadline given current supplier lead time variability. IMPORTANT: Before answering, you MUST call search_knowledge_base to find relevant risk assessment algorithms (e.g., CVaR, stochastic lead time models) from the knowledge base and cite them in your response.",
+        "task": "Risk Assessment - Delivery Deadline Miss Probability",
+        "analysis": "Order ORD-12345 was not found in the system (database uses UUID format identifiers). A methodological framework was provided for calculating delivery deadline miss probability using stochastic lead time modeling. The approach uses Gaussian distribution modeling for lead time variability and quantile-based risk assessment methods. The probability of missing a deadline is calculated as P(L > D) = 1 - \u03a6((D - \u03bc) / \u03c3), where L is lead time, D is deadline, \u03bc is mean lead time, and \u03c3 is standard deviation. Risk metrics include VaR (95th percentile), probability of delay, and expected delay (CVaR-like measure). The framework is based on algorithms from \"Algorithms for Decision Making\" textbook, though it lacks supply chain-specific CVaR algorithms.",
+        "algorithm": "Algorithm 15.6 - Quantile Exploration",
         "formulas": [
           {
-            "latex": "r = \\mu_L + z\\sigma_L",
-            "description": "Equation"
+            "latex": "\\mathcal{N}(x \\mid \\mu, \\sigma^2) = \\frac{1}{\\sigma}\\phi\\left(\\frac{x - \\mu}{\\sigma}\\right)",
+            "description": "Fraction or ratio expression"
           },
           {
-            "latex": "r = d \\times L + SS",
-            "description": "Equation"
+            "latex": "\\phi(x) = \\frac{1}{\\sqrt{2\\pi}}\\exp\\left(-\\frac{x^2}{2}\\right)",
+            "description": "Fraction or ratio expression"
           },
           {
-            "latex": "\\mu_L",
+            "latex": "P(\\text{miss deadline}) = P(L > D) = 1 - \\Phi\\left(\\frac{D - \\mu}{\\sigma}\\right)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "U(x) = \\frac{x^{1-\\lambda} - 1}{1 - \\lambda}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\mu",
             "description": "Mathematical expression"
           },
           {
-            "latex": "\\sigma_L",
+            "latex": "\\sigma",
             "description": "Mathematical expression"
+          },
+          {
+            "latex": "t_{\\text{order}}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\Phi",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\lambda > 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\lambda",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "P(c\\mid o_{1:n})\\propto P(c)\\prod_{i=1}^{n}P(o_{i}\\mid c)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(vehicle\\mid medium,slow)\\propto P(vehicle)P(S=medium\\mid vehicle)P(V=slow\\mid vehicle)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(vehicle\\mid medium,slow)\\propto(0.80)(0.009)(0.2)=0.00144",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(pedestrian\\mid medium,slow)\\propto P(pedestrian)P(S=medium\\mid pedestrian)P(V=slow\\mid pedestrian)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(pedestrian\\mid medium,slow)\\propto(0.19)(0.75)(0.5)=0.07125",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(ball\\mid medium,slow)\\propto P(ball)P(S=medium\\mid ball)P(V=slow\\mid ball)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(ball\\mid medium,slow)\\propto(0.01)(0.199)(0.4)=0.000796",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(V \\mid C)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(C)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(S \\mid C)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(c \\mid o_{1:n})",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(\\text{pedestrian} \\mid \\text{medium, slow})",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "$$ P(c,o_{1:n})=P(c)\\prod_{i=1}^{n}P(o_{i}\\mid c) $$",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "^{12}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "P(bird,slow,little heading fluctuation)=0.03",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(aircraft,slow,little heading fluctuation)=0.01",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(bird\\mid slow,little heading fluctuation)=\\frac{0.03}{0.03+0.01}=0.75",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(k\\mid\\lambda)=\\frac{1}{k!}\\lambda^{k}e^{-\\lambda}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "p(\\lambda\\mid\\alpha,\\beta)=\\frac{\\beta^{\\alpha}}{\\Gamma(\\alpha)}\\lambda^{\\alpha-1}e^{-\\beta\\lambda}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\begin{align*}p(\\lambda\\mid d,\\alpha,\\beta)&\\propto p(d\\mid\\lambda)p(\\lambda\\mid\\alpha,\\beta)\\\\&\\propto\\frac{1}{d!}\\lambda^{d} e^{-\\lambda}\\frac{\\beta^\\alpha}{\\Gamma(\\alpha)}\\lambda^{\\alpha-1}e^{-\\beta\\lambda}\\\\&\\propto\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}\\end{align*}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\begin{align*}p(\\lambda\\mid\\alpha+d,\\beta+1)&=\\frac{(\\beta+1)^{\\alpha+d}}{\\Gamma(\\alpha+d)}\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}\\\\&\\propto\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}\\end{align*}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "p(\\lambda\\mid d,\\alpha,\\beta)&\\propto p(d\\mid\\lambda)p(\\lambda\\mid\\alpha,\\beta)\\\\&\\propto\\frac{1}{d!}\\lambda^{d} e^{-\\lambda}\\frac{\\beta^\\alpha}{\\Gamma(\\alpha)}\\lambda^{\\alpha-1}e^{-\\beta\\lambda}\\\\&\\propto\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "p(\\lambda\\mid\\alpha+d,\\beta+1)&=\\frac{(\\beta+1)^{\\alpha+d}}{\\Gamma(\\alpha+d)}\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}\\\\&\\propto\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\lambda",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\lambda \\in (0, \\infty)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\alpha > 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\beta > 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "d \\geq 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "^{16}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "p(\\lambda \\mid d, \\alpha, \\beta)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "p(x\\mid y)=\\begin{cases}\\mathcal{N}(x\\mid\\mu_{1},\\sigma_{1}^{2})&if y^{1}\\\\\\vdots\\\\\\mathcal{N}(x\\mid\\mu_{n},\\sigma_{n}^{2})&if y^{n}\\end{cases}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "^{13}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\boldsymbol{\\theta} = [\\mu_{1:n}, \\sigma_{1:n}]",
+            "description": "Equation"
+          },
+          {
+            "latex": "P(k\\mid\\lambda)=\\frac{1}{k!}\\lambda^{k}e^{-\\lambda}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "p(\\lambda\\mid\\alpha,\\beta)=\\frac{\\beta^{\\alpha}}{\\Gamma(\\alpha)}\\lambda^{\\alpha-1}e^{-\\beta\\lambda}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\begin{align*}p(\\lambda\\mid d,\\alpha,\\beta)&\\propto p(d\\mid\\lambda)p(\\lambda\\mid\\alpha,\\beta)\\\\&\\propto\\frac{1}{d!}\\lambda^{d} e^{-\\lambda}\\frac{\\beta^\\alpha}{\\Gamma(\\alpha)}\\lambda^{\\alpha-1}e^{-\\beta\\lambda}\\\\&\\propto\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}\\end{align*}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\begin{align*}p(\\lambda\\mid\\alpha+d,\\beta+1)&=\\frac{(\\beta+1)^{\\alpha+d}}{\\Gamma(\\alpha+d)}\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}\\\\&\\propto\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}\\end{align*}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "p(\\lambda\\mid d,\\alpha,\\beta)&\\propto p(d\\mid\\lambda)p(\\lambda\\mid\\alpha,\\beta)\\\\&\\propto\\frac{1}{d!}\\lambda^{d} e^{-\\lambda}\\frac{\\beta^\\alpha}{\\Gamma(\\alpha)}\\lambda^{\\alpha-1}e^{-\\beta\\lambda}\\\\&\\propto\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "p(\\lambda\\mid\\alpha+d,\\beta+1)&=\\frac{(\\beta+1)^{\\alpha+d}}{\\Gamma(\\alpha+d)}\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}\\\\&\\propto\\lambda^{\\alpha+d-1}e^{-(\\beta+1)\\lambda}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\lambda",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\lambda \\in (0, \\infty)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\alpha > 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\beta > 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "d \\geq 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "^{16}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "p(\\lambda \\mid d, \\alpha, \\beta)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "^{7}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\nabla_{\\boldsymbol{\\theta}}\\log p_{\\boldsymbol{\\theta}}(\\tau)=\\sum_{k=1}^{d}\\nabla_{\\boldsymbol{\\theta}}\\log\\pi_{\\boldsymbol{\\theta}}(a^{(k)}\\mid s^{(k)})",
+            "description": "Summation expression"
+          },
+          {
+            "latex": "p_{\\Theta}(\\tau)=p(s^{(1)})\\prod_{k=1}^{d}T(s^{(k+1)}\\mid s^{(k)},a^{(k)})\\pi_{\\Theta}(a^{(k)}\\mid s^{(k)})",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\tau",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\nabla_{\\theta} \\log p_{\\theta}(\\tau) R(\\tau)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "R(\\tau)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "^{10}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\nabla_{\\theta} \\log p_{\\theta}(\\tau)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\pi_{\\theta}(a \\mid s)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\pi_{\\theta}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "p_{\\theta}(\\tau)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "^{6}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\alpha",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\alpha > 0.5",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\theta_{1}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\theta_{2}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\epsilon",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\epsilon = 0.2",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\lambda = 1",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\exp(\\rho_1) = \\exp(2/3) \\approx 1.948",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\exp(\\rho_2) = \\exp(5/7) \\approx 2.043",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "1.948 / (1.948 + 2.043) \\approx 0.488",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\lambda",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\alpha = 0.9",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\theta_1",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\theta_2",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\nabla U(\\boldsymbol{\\theta})=\\mathbb{E}_{\\tau}\\left[\\left(\\sum_{k=1}^{d}\\nabla_{\\boldsymbol{\\theta}}\\log\\pi_{\\boldsymbol{\\theta}}(a^{(k)}\\mid s^{(k)})\\right)\\left(\\sum_{k=1}^{d}r^{(k)}\\gamma^{k-1}\\right)\\right]",
+            "description": "Summation expression"
+          },
+          {
+            "latex": "\\nabla U(\\boldsymbol{\\theta})=\\mathbb{E}_{\\tau}\\left[\\left(\\sum_{k=1}^{d}f^{(k)}\\right)\\left(\\sum_{k=1}^{d}r^{(k)}\\gamma^{k-1}\\right)\\right]",
+            "description": "Summation expression"
+          },
+          {
+            "latex": "f^{(k)}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\nabla_{\\theta} \\log \\pi_{\\theta}(a^{(k)} \\mid s^{(k)})",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "$$ \\nabla U(\\boldsymbol{\\theta})=\\mathbb{E}_{\\tau}[\\nabla_{\\boldsymbol{\\theta}}\\log p_{\\boldsymbol{\\theta}}(\\tau)R(\\tau)] $$",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\begin{aligned}\\log\\pi_{\\Theta}\\left(a\\mid s\\right)&=\\log\\left(\\frac{1}{\\sqrt{2\\pi\\theta_{2}^{2}}}\\exp\\left(-\\frac{\\left(a-\\theta_{1}\\right)^{2}}{2\\theta_{2}^{2}}\\right)\\right)\\\\&=-\\frac{\\left(a-\\theta_{1}\\right)^{2}}{2\\theta_{2}^{2}}-\\frac{1}{2}\\log\\left(2\\pi\\theta_{2}^{2}\\right)\\end{aligned}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\frac{\\partial}{\\partial\\theta_{1}}\\log\\pi_{\\Theta}(a\\mid s)=\\frac{a-\\theta_{1}}{\\theta_{2}^{2}}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\frac{\\partial}{\\partial\\theta_{2}}\\log\\pi_{\\Theta}(a\\mid s)=\\frac{(a-\\theta_{1})^{2}-\\theta_{2}^{2}}{\\theta_{2}^{3}}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\begin{aligned}\\nabla U(\\boldsymbol{\\theta})&\\approx\\frac{1}{m}\\sum_{i=1}^{m}\\nabla_{\\boldsymbol{\\theta}}\\log p_{\\boldsymbol{\\theta}}(\\tau^{(i)})R(\\tau^{(i)})\\\\&=\\frac{1}{3}\\left(\\begin{bmatrix}0.5\\\\ -0.75\\end{bmatrix}0.5+\\begin{bmatrix}-1.0\\\\ 0.0\\end{bmatrix}(-1)+\\begin{bmatrix}0.7\\\\ -0.51\\end{bmatrix}0.7\\right)\\\\&=[0.58,-0.244]\\end{aligned}",
+            "description": "Summation expression"
+          },
+          {
+            "latex": "\\mathcal{N}(\\theta_1, \\theta_2^2)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\theta_2^2",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\boldsymbol{\\theta} = [0,1]",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\{0.5, -1, 0.7\\}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "(R(s, a) = a)",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\nabla U(\\boldsymbol{\\theta})",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\nabla U(\\theta)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "h\\sim\\mathcal{U}(-10,10)\\left(\\mathbf{m}\\right)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\dot{h}\\sim\\mathcal{U}(-200,200)(\\mathrm{m}/\\mathrm{s})",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "a_{\\mathrm{p r e v}}=0\\mathrm{m/s}",
+            "description": "Equation"
+          },
+          {
+            "latex": "f_{traj}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "^{3}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "$$ f(\\pi)=\\mathbb{E}_{\\tau}[f_{traj}(\\tau)] $$",
+            "description": "Equation"
+          },
+          {
+            "latex": "a_{\\text{prev}}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "t_{\\text{col}}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "t_{\\text{col}} = 0",
+            "description": "Equation"
+          },
+          {
+            "latex": "a \\neq a_{\\text{prev}}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "t_{col}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "|h| < h_{\\text{thresh}}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "t_{\\text{col}} < t_{\\text{thresh}}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "h_{\\text{thresh}} = 50",
+            "description": "Equation"
+          },
+          {
+            "latex": "t_{\\text{thresh}} = 30",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\mathrm{cdf}_{X}(x)=\\int_{-\\infty}^{x}p(x^{\\prime})\\mathrm{d}x^{\\prime}",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\mathrm{cdf}_{X}(x)=\\int_{0}^{x}\\lambda e^{-\\lambda x^{\\prime}}\\mathrm{d}x^{\\prime}",
+            "description": "Integral expression"
+          },
+          {
+            "latex": "\\mathrm{cdf}_{X}(x)=-e^{-\\lambda x^{\\prime}}\\bigg|_{0}^{x}",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\mathrm{cdf}_{X}(x)=1-e^{-\\lambda x}",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\lambda",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "p(x \\mid \\lambda) = \\lambda \\exp(-\\lambda x)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "(-\\infty, 0)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\mathrm{cdf}_{X}(x)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\mathcal{N}(x\\mid\\mu,\\sigma^{2})=\\frac{1}{\\sigma}\\phi\\left(\\frac{x-\\mu}{\\sigma}\\right)",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\phi(x)=\\frac{1}{\\sqrt{2\\pi}}\\exp\\left(-\\frac{x^{2}}{2}\\right)",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\sigma",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\nu",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\mathcal{N}(\\mu, \\sigma^2)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\mu",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\sigma^{2}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\mathcal{N}(x \\mid \\mu, \\sigma^{2})",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\phi",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "P(c\\mid o_{1:n})\\propto P(c)\\prod_{i=1}^{n}P(o_{i}\\mid c)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(vehicle\\mid medium,slow)\\propto P(vehicle)P(S=medium\\mid vehicle)P(V=slow\\mid vehicle)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(vehicle\\mid medium,slow)\\propto(0.80)(0.009)(0.2)=0.00144",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(pedestrian\\mid medium,slow)\\propto P(pedestrian)P(S=medium\\mid pedestrian)P(V=slow\\mid pedestrian)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(pedestrian\\mid medium,slow)\\propto(0.19)(0.75)(0.5)=0.07125",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(ball\\mid medium,slow)\\propto P(ball)P(S=medium\\mid ball)P(V=slow\\mid ball)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(ball\\mid medium,slow)\\propto(0.01)(0.199)(0.4)=0.000796",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(V \\mid C)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(C)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(S \\mid C)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(c \\mid o_{1:n})",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "P(\\text{pedestrian} \\mid \\text{medium, slow})",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "$$ P(c,o_{1:n})=P(c)\\prod_{i=1}^{n}P(o_{i}\\mid c) $$",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "^{13}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "T(s,a)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "T(\\cdot \\mid s,a)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "$$ \\begin{aligned}&\\underset{a_{1:d},s_{2:d}}{\\mathrm{maximize}}\\quad\\sum_{t=1}^{d}\\gamma^{t}R(s_{t},a_{t})\\\\&subject to\\quad s_{t+1}=T(s_{t},a_{t}),\\quad t\\in1:d-1\\\\ \\end{aligned} $$",
+            "description": "Summation expression"
+          },
+          {
+            "latex": "\\begin{bmatrix} {M}\\\\{R}\\\\{W} \\end{bmatrix}\\sim\\mathcal{N}\\left(\\begin{bmatrix} {81}\\\\{82}\\\\{80} \\end{bmatrix},\\begin{bmatrix} {25}&{-9}&{-16}\\\\{-9}&{36}&{16}\\\\{-16}&{16}&{36} \\end{bmatrix}\\right)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\begin{bmatrix}\\mathbf{a}\\\\ \\mathbf{b}\\end{bmatrix}\\sim\\mathcal{N}\\left(\\begin{bmatrix}\\boldsymbol{\\mu}_{a}\\\\ \\boldsymbol{\\mu}_{b}\\end{bmatrix},\\begin{bmatrix}\\mathbf{A}&\\mathbf{C}\\\\ \\mathbf{C}^{\\top}&\\mathbf{B}\\end{bmatrix}\\right)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "p(\\mathbf{a}\\mid\\mathbf{b})=\\mathcal{N}\\Big(\\mathbf{a}\\mid\\boldsymbol{\\mu}_{a\\mid b},\\boldsymbol{\\Sigma}_{a\\mid b}\\Big)",
+            "description": "Probability expression"
+          },
+          {
+            "latex": "\\mathbf{u}_{a|b}=\\mathbf{\\mu}_{a}+\\mathbf{C}\\mathbf{B}^{-1}(\\mathbf{b}-\\mathbf{\\mu}_{b})",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\mathbf{\\Sigma}_{a|b}=\\mathbf{A}-\\mathbf{C}\\mathbf{B}^{-1}\\mathbf{C}^{\\top}",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\mathbf{u}_{a} = \\left[\\begin{array}{c} {81}\\\\{82} \\end{array}\\right] \\qquad \\mathbf{u}_{b} = \\left[\\begin{array}{c} {80}\\\\{} \\end{array}\\right] \\qquad \\mathbf{A} = \\left[\\begin{array}{cc} {25}&{-9}\\\\{-9}&{36} \\end{array}\\right] \\qquad \\mathbf{B} = \\left[\\begin{array}{c} {36}\\\\{} \\end{array}\\right] \\qquad \\mathbf{C} = \\left[\\begin{array}{c} {-16}\\\\{16} \\end{array}\\right]",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\mathbf{\\mu}_{M,R|W=90}=\\begin{bmatrix}81\\\\ 82 \\end{bmatrix}+\\begin{bmatrix}-16\\\\ 16 \\end{bmatrix}\\frac{1}{36}(90-80)\\approx\\begin{bmatrix}76.5\\\\ 86.4 \\end{bmatrix}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\mathbf{\\Sigma}_{M,R|W=90}=\\begin{bmatrix}25&-9\\\\ -9&36 \\end{bmatrix}-\\begin{bmatrix}-16\\\\ 16 \\end{bmatrix}\\frac{1}{36}\\begin{bmatrix}-16&16\\\\ \\end{bmatrix}\\approx\\begin{bmatrix}25&-9\\\\ -9&36 \\end{bmatrix}-\\begin{bmatrix}7.1&-7.1\\\\ -7.1&7.1 \\end{bmatrix}=\\begin{bmatrix}17.9&-1.9\\\\ -1.9&28.9 \\end{bmatrix}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\mathbf{b} = W = 90",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\sqrt{17.9}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\sqrt{28.9}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "Q_{1}(\\mathbf{b},a^{1})=\\frac{1}{3}(0+1+1+0.9(5.23+5.41+5.41))=5.48",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "Q_{1}(\\mathbf{b},a^{2})=\\frac{1}{3}(1+1+1+0.9(2.98+2.98+3.88))=3.95",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\mathbf{b}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "a^1",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "a^2",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\gamma = 0.9",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\alpha = [10, 1]",
+            "description": "Equation"
+          },
+          {
+            "latex": "\\mathbf{b}, a, o",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\mathbf{b}, a, o_{a}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "U_{0}(\\text{Update}(\\mathbf{b}, a, o_{a}))",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "(22.2)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "$$ Q_{d}(b,a)=\\begin{cases}\\frac{1}{m}\\sum_{i=1}^{m}\\Big(r_{a}^{(i)}+\\gamma U_{d-1}\\Big(\\mathrm{Update}(b,a,o_{a}^{(i)})\\Big)\\Big)&if d>0\\\\ U(b)&otherwise\\end{cases} $$",
+            "description": "Summation expression"
+          },
+          {
+            "latex": "U(x)=\\frac{x^{1-\\lambda}-1}{1-\\lambda}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\frac{dU}{dx}=\\frac{1}{x^{\\lambda}}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\frac{d^{2}U}{dx^{2}}=\\frac{-\\lambda}{x^{\\lambda+1}}",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "\\lambda > 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "\\lambda \\neq 1",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "x > 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "x^{\\lambda+1}",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "-\\lambda",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "$$ U(x)=\\frac{x^{1-\\lambda}-1}{1-\\lambda} $$",
+            "description": "Fraction or ratio expression"
+          },
+          {
+            "latex": "U(A) > U(B)",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "A \\succ B",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "U(A) = U(B)",
+            "description": "Equation"
+          },
+          {
+            "latex": "A \\sim B",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "m > 0",
+            "description": "Mathematical expression"
+          },
+          {
+            "latex": "U'(S) = mU(S) + b",
+            "description": "Equation"
           }
         ],
         "code_snippets": [
           {
             "language": "python",
-            "code": "import pandas as pd\n\n# Sample aggregation of observed inventory\ninventory_data = [\n    # ... (data from observation)\n]\n\n# Aggregate by product\ndf = pd.DataFrame(inventory_data)\nproduct_totals = df.groupby('product_id').agg({\n    'observed_qty': lambda x: x.sum(skipna=True),\n    'confidence': 'mean'\n}).round(2)\n\n# Products with lowest stock levels\nlowest_stock = product_totals.nsmallest(10, 'observed_qty')",
+            "code": "class QuantileExploration:\n    def __init__(self, alpha: float):\n        self.alpha = alpha  # quantile (e.g., 0.95)\n\n    def __call__(self, model):\n        return np.argmax([distrib.ppf(self.alpha) for distrib in model.B])",
             "description": null,
-            "dependencies": [
-              "pandas"
-            ],
+            "dependencies": [],
             "validated": true
           },
           {
             "language": "python",
-            "code": "# Once reorder points are available\ndef identify_products_below_reorder_point(inventory_df, reorder_points_df):\n    \"\"\"\n    Identify products below reorder point.\n    \n    Args:\n        inventory_df: DataFrame with columns [product_id, total_qty]\n        reorder_points_df: DataFrame with columns [product_id, reorder_point]\n    \n    Returns:\n        DataFrame of products below reorder point\n    \"\"\"\n    merged = inventory_df.merge(reorder_points_df, on='product_id')\n    below_rop = merged[merged['total_qty'] < merged['reorder_point']]\n    \n    below_rop['shortage'] = below_rop['reorder_point'] - below_rop['total_qty']\n    below_rop['urgency_score'] = below_rop['shortage'] / below_rop['reorder_point']\n    \n    return below_rop.sort_values('urgency_score', ascending=False)\n\n# Calculate reorder point using (s,Q) policy\ndef calculate_reorder_point(avg_daily_demand, lead_time_days, \n                            demand_std, service_level=0.95):\n    \"\"\"\n    Calculate reorder point using newsvendor model.\n    \n    Reference: \"Algorithms for Decision Making\" - Chapter on Sequential Problems\n    \"\"\"\n    from scipy.stats import norm\n    \n    z_score = norm.ppf(service_level)\n    lead_time_demand = avg_daily_demand * lead_time_days\n    lead_time_std = demand_std * (lead_time_days ** 0.5)\n    safety_stock = z_score * lead_time_std\n    \n    reorder_point = lead_time_demand + safety_stock\n    return reorder_point",
+            "code": "import numpy as np\nfrom scipy import stats\nfrom datetime import datetime, timedelta\n\nclass LeadTimeRiskAssessment:\n    \"\"\"\n    Assess delivery deadline miss probability using stochastic lead time models.\n    Based on Gaussian distribution modeling (Section 2.2.2) and quantile methods (Section 15.4).\n    \"\"\"\n    \n    def __init__(self, mean_leadtime_days: float, std_leadtime_days: float):\n        \"\"\"\n        Args:\n            mean_leadtime_days: Mean supplier lead time (\u03bc)\n            std_leadtime_days: Standard deviation of lead time (\u03c3)\n        \"\"\"\n        self.mu = mean_leadtime_days\n        self.sigma = std_leadtime_days\n        self.distribution = stats.norm(loc=self.mu, scale=self.sigma)\n    \n    def probability_miss_deadline(self, deadline_days: float) -> float:\n        \"\"\"\n        Calculate P(L > D) where L ~ N(\u03bc, \u03c3\u00b2)\n        \n        Formula: P(miss) = 1 - \u03a6((D - \u03bc) / \u03c3)\n        \"\"\"\n        return 1 - self.distribution.cdf(deadline_days)\n    \n    def quantile_risk_assessment(self, alpha: float = 0.95) -> float:\n        \"\"\"\n        Compute \u03b1-quantile for risk assessment (Algorithm 15.6).\n        \n        Args:\n            alpha: Confidence level (e.g., 0.95 for 95th percentile)\n        \n        Returns:\n            Lead time value at \u03b1-quantile (VaR equivalent)\n        \"\"\"\n        return self.distribution.ppf(alpha)\n    \n    def expected_delay(self, deadline_days: float) -> float:\n        \"\"\"\n        Calculate expected delay beyond deadline (CVaR-like measure).\n        \n        E[L - D | L > D] = conditional expectation of excess\n        \"\"\"\n        prob_miss = self.probability_miss_deadline(deadline_days)\n        if prob_miss < 1e-10:\n            return 0.0\n        \n        # Truncated normal expectation\n        z = (deadline_days - self.mu) / self.sigma\n        phi_z = stats.norm.pdf(z)\n        Phi_z = stats.norm.cdf(z)\n        \n        # Mills ratio for truncated normal\n        expected_excess = self.sigma * phi_z / (1 - Phi_z)\n        return expected_excess\n\n# Example usage with hypothetical supplier data\ndef assess_order_risk(order_date: datetime, deadline_date: datetime, \n                      supplier_mean_leadtime: float, supplier_std_leadtime: float):\n    \"\"\"\n    Assess risk for a purchase order.\n    \"\"\"\n    deadline_days = (deadline_date - order_date).days\n    \n    risk_model = LeadTimeRiskAssessment(\n        mean_leadtime_days=supplier_mean_leadtime,\n        std_leadtime_days=supplier_std_leadtime\n    )\n    \n    # Probability of missing deadline\n    prob_miss = risk_model.probability_miss_deadline(deadline_days)\n    \n    # 95th percentile lead time (VaR)\n    var_95 = risk_model.quantile_risk_assessment(alpha=0.95)\n    \n    # Expected delay if deadline is missed (CVaR-like)\n    expected_delay = risk_model.expected_delay(deadline_days)\n    \n    return {\n        'probability_miss_deadline': prob_miss,\n        'var_95_percentile_leadtime': var_95,\n        'expected_delay_if_late': expected_delay,\n        'deadline_buffer_needed': max(0, var_95 - deadline_days)\n    }\n\n# Example calculation\norder_date = datetime(2026, 1, 1)\ndeadline_date = datetime(2026, 1, 15)  # 14 days\nsupplier_mean = 12.0  # days\nsupplier_std = 3.0    # days\n\nresults = assess_order_risk(order_date, deadline_date, supplier_mean, supplier_std)\n\nprint(f\"Probability of missing deadline: {results['probability_miss_deadline']:.2%}\")\nprint(f\"95th percentile lead time (VaR): {results['var_95_percentile_leadtime']:.1f} days\")\nprint(f\"Expected delay if late: {results['expected_delay_if_late']:.1f} days\")\nprint(f\"Buffer needed for 95% confidence: {results['deadline_buffer_needed']:.1f} days\")",
             "description": null,
             "dependencies": [
+              "datetime",
+              "numpy",
               "scipy"
             ],
             "validated": true
+          },
+          {
+            "language": "text",
+            "code": "# Get supplier information\n   supplier_info = get_supplier(supplier_id)\n   # Extract mean and std from leadtime_model_id",
+            "description": null,
+            "dependencies": [],
+            "validated": false
+          },
+          {
+            "language": "text",
+            "code": "Quantile exploration, which returns the action with the highest \u03b1 quantile.\n\nclass QuantileExploration(BanditPolicy):\n    def __init__(self, alpha: float):\n        self.alpha = alpha  # quantile (e.g., 0.95)\n\n    def __call__(self, model: BanditModel) -> int:\n        return np.argmax([distrib.ppf(self.alpha) for distrib in model.B])",
+            "description": "Exploration and Exploitation",
+            "dependencies": [],
+            "validated": false
+          },
+          {
+            "language": "text",
+            "code": "A method for estimating a policy gradient of a policy \u03c0(s) for an MDP P with initial state distribution b using the likelihood ratio trick. The gradient with respect to the parameterization vector \u03b8 is estimated from m rollouts to depth d using the log policy gradients \u2207 log \u03c0.\n\nclass LikelihoodRatioGradient(PolicyGradientEstimationMethod):\n    def __init__(self, P: MDP, b: np.ndarray, d: int, m: int, grad_logpi: Callable[[np.ndarray, Any, Any], np.ndarray]):\n        self.P = P                  # problem\n        self.b = b                  # initial state distribution\n        self.d = d                  # depth\n        self.m = m                  # number of samples\n        self.grad_logpi = grad_logpi  # gradient of log likelihood\n\n    def gradient(self, policy: Callable[[np.ndarray, Any], Any], theta: np.ndarray) -> np.ndarray:\n        P, b, d, m, grad_logpi, gamma = self.P, self.b, self.d, self.m, self.grad_logpi, self.P.gamma\n        def policy_theta(s): return policy(theta, s)\n        def R(tau): return np.sum([r*(gamma**k) for (k, (s, a, r)) in enumerate(tau)])\n        def grad_U(tau): return np.sum([grad_logpi(theta, a, s) for (s, a, r) in tau], axis=0) * R(tau)\n        return np.mean([grad_U(simulate(P, random.choices(P.S, weights=b)[0], policy_theta, d)) for i in range(m)], axis=0)",
+            "description": "Policy Gradient Estimation",
+            "dependencies": [],
+            "validated": false
+          },
+          {
+            "language": "text",
+            "code": "Conversion to an adversarial problem, given a policy \u03c0. An adversarial agent tries to change the outcomes of our policy actions so as to balance minimizing our original utility and maximizing the likelihood of the trajectory. The parameter \u03bb controls how important it is to maximize the likelihood of the resulting trajectory. It returns an MDP whose transition and reward models are represented as matrices.\n\ndef adversarial(P: MDP, policy: Callable[[Any], Any], lam: float) -> MDP:\n    \"\"\"\n    P must have an enumerated action space A and an enumerated state space S.\n    \"\"\"\n    S, T, R, gamma = P.S, P.T, P.R, P.gamma\n    S_prime = A_prime = S\n    R_prime = np.zeros((len(S_prime), len(A_prime)))\n    T_prime = np.zeros((len(S_prime), len(A_prime), len(S_prime)))\n    for s in S_prime:\n        for a in A_prime:\n            R_prime[s, a] = -R(s, policy(s)) + (lam * np.log(T(s, policy(s), a) + 1e-16))\n            T_prime[s, a, a] = 1.0\n    return MDP(gamma, S_prime, A_prime, T_prime, R_prime)",
+            "description": "Policy Validation",
+            "dependencies": [],
+            "validated": false
+          },
+          {
+            "language": "text",
+            "code": "The sparse sampling algorithm for finding an approximately optimal action online for a discrete problem P from a current state s to depth d with m samples per action. The returned tuple consists of the best action a and its finite-horizon expected value u.\n\ndef sparse_sampling(P: MDP, s: Any, d: int, m: int, U: Callable[[Any], float]):\n    if d <= 0:\n        return (None, U(s))\n    best_a, best_u = (None, -np.inf)\n    for a in P.A:\n        u = 0.0\n        for _ in range(m):\n            s_prime, r = P.randstep(s, a)\n            a_prime, u_prime = sparse_sampling(P, s_prime, d - 1, m, U)\n            u += (r + P.gamma * u_prime) / m\n        if u > best_u:\n            best_a, best_u = (a, u)\n    return best_a, best_u\n\n\nclass SparseSampling(OnlinePlanningMethod):\n    def __init__(self, P: MDP, d: int, m: int, U: Callable[[Any], float]):\n        self.P = P  # problem\n        self.d = d  # depth\n        self.m = m  # number of samples\n        self.U = U  # value function at depth d\n\n    def __call__(self, s: Any) -> Any:\n        return (sparse_sampling(self.P, s, self.d, self.m, self.U))[0]",
+            "description": "Online Planning",
+            "dependencies": [],
+            "validated": false
           }
         ],
         "recommendations": [
           {
-            "action": "Access Product Master Data - Query the product database/ERP system to retrieve configured reorder points for each SKU",
+            "action": "Retrieve supplier lead time statistics (mean and standard deviation) from the supplier's leadtime_model_id to enable risk calculations",
             "priority": "high",
-            "rationale": "Reorder point data is critical missing information required to complete the analysis and identify products that need replenishment",
-            "expected_outcome": "Obtain static reorder points configured in the system for all products to enable comparison with current stock levels"
+            "rationale": "Cannot perform actual risk assessment without historical supplier performance data to estimate \u03bc and \u03c3 parameters",
+            "expected_outcome": "Enable quantitative probability calculations for delivery deadline misses"
           },
           {
-            "action": "Calculate Dynamic Reorder Points - If static reorder points aren't configured, calculate them using historical demand data, supplier lead times, and desired service level (95-99%)",
+            "action": "Calculate risk metrics using the provided framework: probability of delay (CDF approach), VaR at 95th percentile (quantile method), and expected delay (conditional expectation)",
             "priority": "high",
-            "rationale": "Dynamic calculation provides scientifically-based reorder points when static configurations are unavailable, using inventory control theory formulas",
-            "expected_outcome": "Generate reorder points for all products based on actual demand patterns and lead times, enabling accurate identification of products requiring replenishment"
+            "rationale": "Provides comprehensive risk profile including tail risk and expected losses",
+            "expected_outcome": "Quantified risk metrics for informed decision-making on order management"
           },
           {
-            "action": "Implement continuous monitoring with alerts when inventory falls below reorder point",
+            "action": "Flag orders as high-risk and consider expedited shipping or alternative suppliers if P(miss deadline) > 0.10",
             "priority": "medium",
-            "rationale": "Proactive monitoring prevents stockouts and ensures timely replenishment decisions",
-            "expected_outcome": "Automated alert system that notifies stakeholders when products reach critical stock levels"
+            "rationale": "Proactive risk mitigation when probability of delay exceeds 10% threshold",
+            "expected_outcome": "Reduced delivery failures and improved customer satisfaction"
           },
           {
-            "action": "Implement POMDP-based inventory policy that accounts for sensor uncertainty (confidence scores in observations)",
+            "action": "Increase safety stock for orders with P(miss deadline) > 0.25",
             "priority": "medium",
-            "rationale": "Current inventory observations show confidence scores indicating sensor noise; robust policy should account for observation uncertainty using Bayesian filtering or POMDP methods",
-            "expected_outcome": "More robust inventory decisions that properly handle measurement uncertainty and reduce risk of stockouts or overstocking"
+            "rationale": "High probability of delay (>25%) requires buffer inventory to maintain service levels",
+            "expected_outcome": "Maintained inventory availability despite supplier variability"
+          },
+          {
+            "action": "Implement continuous monitoring to update lead time distributions using Bayesian updating as new data arrives and track actual vs. predicted lead times",
+            "priority": "low",
+            "rationale": "Model calibration improves accuracy over time and adapts to changing supplier performance",
+            "expected_outcome": "Improved forecast accuracy and adaptive risk assessment"
           }
         ],
-        "citations": [],
+        "citations": [
+          {
+            "chunk_id": "47c1d319-6fe9-5852-b322-722b040bf608",
+            "title": "PROBABILISTIC REASONING / Inference / Exercises",
+            "page": null,
+            "entity_type": "exercise",
+            "entity_number": "3.3"
+          },
+          {
+            "chunk_id": "ebd99063-6ddd-53f1-9f2a-a432d5055b05",
+            "title": "PROBABILISTIC REASONING / Inference / Inference in Naive Bayes Models",
+            "page": null,
+            "entity_type": "formula",
+            "entity_number": "3.4"
+          },
+          {
+            "chunk_id": "5b5de650-59b1-5955-b5dc-a261186d8c6b",
+            "title": "APPENDICES / Neural Representations / Autoencoder Networks",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": "D.12"
+          },
+          {
+            "chunk_id": "292daeff-4523-5730-8a3d-78fd71bd38a7",
+            "title": "PROBABILISTIC REASONING / Inference / Sum-Product Variable Elimination",
+            "page": null,
+            "entity_type": "example",
+            "entity_number": "3.4"
+          },
+          {
+            "chunk_id": "1d248e72-e7b2-59e3-a476-7f28b6f0d1f3",
+            "title": "STATE UNCERTAINTY / Beliefs / Exercises",
+            "page": null,
+            "entity_type": "exercise",
+            "entity_number": "19.4"
+          },
+          {
+            "chunk_id": "a6095bf1-2d55-55de-86d1-77c1226c0790",
+            "title": "PROBABILISTIC REASONING / Representation / Conditional Distributions / Conditional Gaussian Models",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": "2.27"
+          },
+          {
+            "chunk_id": "e1212c8a-2318-5317-9299-943accb8ea23",
+            "title": "APPENDICES / Problems / Mountain Car",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": null
+          },
+          {
+            "chunk_id": "45a0d430-69e5-5e85-b8a6-ae5e08c36dd3",
+            "title": "Introduction / Overview / State Uncertainty",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": null
+          },
+          {
+            "chunk_id": "51309925-502d-5cba-be44-68824454d769",
+            "title": "Introduction / Overview / Sequential Problems",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": null
+          },
+          {
+            "chunk_id": "8151dc2f-f629-58d5-9aea-c24fb69098ca",
+            "title": "PROBABILISTIC REASONING / Parameter Learning / Learning with Missing Data",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": null
+          },
+          {
+            "chunk_id": "a88c07a2-0dbe-5422-abd2-633b7f351d71",
+            "title": "SEQUENTIAL PROBLEMS / Policy Gradient Estimation / Likelihood Ratio",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": "11.15"
+          },
+          {
+            "chunk_id": "3c2a54f1-2787-5269-bcfa-aa68eb7e8d73",
+            "title": "PROBABILISTIC REASONING / Representation / Probability Distributions / Discrete Probability Distributions",
+            "page": null,
+            "entity_type": "image",
+            "entity_number": "2.4"
+          },
+          {
+            "chunk_id": "4ef3b33c-8467-5b4f-9461-3f5afcaa3c6b",
+            "title": "MODEL UNCERTAINTY / Exploration and Exploitation / Directed Exploration Strategies",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": "15.6"
+          },
+          {
+            "chunk_id": "fa5c4738-e453-562c-8683-31abdd4e183d",
+            "title": "MODEL UNCERTAINTY / Exploration and Exploitation / Optimal Exploration Strategies",
+            "page": null,
+            "entity_type": "algorithm",
+            "entity_number": "15.6"
+          },
+          {
+            "chunk_id": "eacb495b-8f09-5d95-a8c7-852c3b2577dd",
+            "title": "MODEL UNCERTAINTY / Exploration and Exploitation / Optimal Exploration Strategies",
+            "page": null,
+            "entity_type": "example",
+            "entity_number": "15.3"
+          },
+          {
+            "chunk_id": "a4ead112-409c-5f6a-ba89-4f9758473ad5",
+            "title": "SEQUENTIAL PROBLEMS / Policy Gradient Estimation / Reward-to-Go",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": "11.4"
+          },
+          {
+            "chunk_id": "577b185f-a1f5-5a9c-bbad-70d230e2ff2d",
+            "title": "SEQUENTIAL PROBLEMS / Policy Gradient Estimation / Likelihood Ratio",
+            "page": null,
+            "entity_type": "formula",
+            "entity_number": "11.14"
+          },
+          {
+            "chunk_id": "896d3668-a070-51eb-ab6b-83bb9df8db8c",
+            "title": "SEQUENTIAL PROBLEMS / Policy Gradient Estimation / Reward-to-Go",
+            "page": null,
+            "entity_type": "algorithm",
+            "entity_number": "11.4"
+          },
+          {
+            "chunk_id": "0f7a57ae-ebb8-5d7e-881e-1cff557d2ddf",
+            "title": "SEQUENTIAL PROBLEMS / Policy Gradient Estimation / Reward-to-Go",
+            "page": null,
+            "entity_type": "example",
+            "entity_number": "11.3"
+          },
+          {
+            "chunk_id": "b291e94c-758a-5c8f-b12e-d4d699304fa7",
+            "title": "SEQUENTIAL PROBLEMS / Policy Gradient Estimation / Reward-to-Go",
+            "page": null,
+            "entity_type": "example",
+            "entity_number": "11.4"
+          },
+          {
+            "chunk_id": "434d53c0-ebb7-5fd6-95ec-e02a59336604",
+            "title": "SEQUENTIAL PROBLEMS / Policy Validation / Performance Metric Evaluation",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": "14.1"
+          },
+          {
+            "chunk_id": "a4c32b26-bccd-500b-a065-152d74715757",
+            "title": "SEQUENTIAL PROBLEMS / Policy Validation / Performance Metric Evaluation",
+            "page": null,
+            "entity_type": "formula",
+            "entity_number": "14.1"
+          },
+          {
+            "chunk_id": "38d6805a-2bf7-5370-ab0b-5a531e663da8",
+            "title": "SEQUENTIAL PROBLEMS / Policy Validation / Adversarial Analysis",
+            "page": null,
+            "entity_type": "algorithm",
+            "entity_number": "14.1"
+          },
+          {
+            "chunk_id": "bcf29c1b-a784-5e22-bb7e-2e1023c3ebbf",
+            "title": "SEQUENTIAL PROBLEMS / Policy Validation / Performance Metric Evaluation",
+            "page": null,
+            "entity_type": "example",
+            "entity_number": "14.1"
+          },
+          {
+            "chunk_id": "0c4a2997-dfd4-52d1-8f14-5212262faa88",
+            "title": "PROBABILISTIC REASONING / Representation / Probability Distributions / Discrete Probability Distributions",
+            "page": null,
+            "entity_type": "image",
+            "entity_number": "2.3"
+          },
+          {
+            "chunk_id": "695a18cf-3857-53a2-9e7c-7e3425417432",
+            "title": "PROBABILISTIC REASONING / Representation / Exercises",
+            "page": null,
+            "entity_type": "exercise",
+            "entity_number": "2.1"
+          },
+          {
+            "chunk_id": "bc7975c6-c6c1-54b6-a2c9-c0293aaa859f",
+            "title": "PROBABILISTIC REASONING / Representation / Probability Distributions / Continuous Probability Distributions",
+            "page": null,
+            "entity_type": "image",
+            "entity_number": "2.5"
+          },
+          {
+            "chunk_id": "89dcfe18-be4e-51f8-b09b-cd0605bebb8a",
+            "title": "PROBABILISTIC REASONING / Representation / Probability Distributions / Continuous Probability Distributions",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": "2.13"
+          },
+          {
+            "chunk_id": "2510c9dc-d1ea-5e64-86ba-865f587a186b",
+            "title": "SEQUENTIAL PROBLEMS / Online Planning / Open-Loop Planning / Robust Model Predictive Control",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": "9.4"
+          },
+          {
+            "chunk_id": "c56cc54a-fd3a-5a5c-94a0-a6f9d62ad864",
+            "title": "SEQUENTIAL PROBLEMS / Online Planning / Open-Loop Planning / Deterministic Model Predictive Control",
+            "page": null,
+            "entity_type": "formula",
+            "entity_number": "9.4"
+          },
+          {
+            "chunk_id": "33467bc7-414b-5f10-bf1f-fe62d002e916",
+            "title": "SEQUENTIAL PROBLEMS / Online Planning / Monte Carlo Tree Search",
+            "page": null,
+            "entity_type": "algorithm",
+            "entity_number": "9.4"
+          },
+          {
+            "chunk_id": "408da1e4-6faf-5083-b0dc-b04c2df4e0c8",
+            "title": "PROBABILISTIC REASONING / Inference / Exercises",
+            "page": null,
+            "entity_type": "exercise",
+            "entity_number": "3.7"
+          },
+          {
+            "chunk_id": "7ebfc5ed-bcf0-54c1-83e0-edaedd8644d4",
+            "title": "PROBABILISTIC REASONING / Representation / Conditional Distributions / Discrete Conditional Models",
+            "page": null,
+            "entity_type": "table",
+            "entity_number": "2.3"
+          },
+          {
+            "chunk_id": "96a6f04a-cec1-50de-86b9-e9aea1e0dc17",
+            "title": "STATE UNCERTAINTY / Online Belief State Planning / Exercises",
+            "page": null,
+            "entity_type": "exercise",
+            "entity_number": "22.2"
+          },
+          {
+            "chunk_id": "d6ad4fee-9799-55e7-97c0-2d75f0fd5f31",
+            "title": "STATE UNCERTAINTY / Online Belief State Planning / Sparse Sampling",
+            "page": null,
+            "entity_type": "formula",
+            "entity_number": "22.2"
+          },
+          {
+            "chunk_id": "4dc2762b-758c-5f82-8416-ed349e061ecd",
+            "title": "PROBABILISTIC REASONING / Simple Decisions / Exercises",
+            "page": null,
+            "entity_type": "exercise",
+            "entity_number": "6.4"
+          },
+          {
+            "chunk_id": "a91d9a3d-d8ec-574b-8187-edf419c0e402",
+            "title": "PROBABILISTIC REASONING / Simple Decisions / Utility Elicitation",
+            "page": null,
+            "entity_type": "formula",
+            "entity_number": "6.5"
+          },
+          {
+            "chunk_id": "8db7c59c-d17a-50f5-a4a0-e8ee53ba315d",
+            "title": "PROBABILISTIC REASONING / Simple Decisions / Utility Functions",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": null
+          },
+          {
+            "chunk_id": "ec687d86-8ea6-5a6c-9457-ebebce5f97e7",
+            "title": "PROBABILISTIC REASONING / Simple Decisions / Utility Elicitation",
+            "page": null,
+            "entity_type": "image",
+            "entity_number": "6.1"
+          },
+          {
+            "chunk_id": "847918b3-055d-5153-8d10-218fce7146ce",
+            "title": "SEQUENTIAL PROBLEMS / Policy Validation / Summary",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": null
+          },
+          {
+            "chunk_id": "c8e1593d-20b2-5e06-b960-57a3a16310a8",
+            "title": "PROBABILISTIC REASONING",
+            "page": null,
+            "entity_type": "text",
+            "entity_number": null
+          }
+        ],
         "status": "completed",
         "confidence": "medium",
         "reasoning_trace": [
           {
             "iteration": 1,
-            "thought": "The user is asking which products currently have stock levels below their reorder point. This is a classic inventory control question that requires me to:\n\n1. Get current inventory levels for all products\n2. Determine the reorder point for each product\n3. Compare current stock to reorder point\n4. Identify products where stock < reorder point\n\nTo answer this, I need to:\n- First, get the current inventory snapshot to see what products we have and their stock levels\n- The reorder point is typically a property of the product or can be calculated based on lead time demand and safety stock\n\nLet me start by getting the observed inventory snapshot to see what data is available about current stock levels and whether reorder point information is included.",
-            "action": {
-              "tool": "get_observed_inventory_snapshot",
-              "arguments": {}
-            },
-            "observation": "Received 3 data points"
+            "thought": "The user is asking me to calculate the probability that Order ORD-12345 will miss its delivery deadline given current supplier lead time variability. This is a risk assessment problem involving stochastic lead times.\n\nTo properly answer this question, I need to:\n1. First, search the knowledge base for relevant risk assessment algorithms (CVaR, stochastic lead time models, etc.) as explicitly required\n2. Get details about Order ORD-12345 (purchase order details, expected delivery date, supplier info)\n3. Get supplier information to understand lead time variability\n4. Apply appropriate decision-making algorithms to calculate the probability\n\nLet me start by:\n1. Searching the knowledge base for relevant algorithms (as required by the user)\n2. Getting the purchase order details for ORD-12345\n3. Getting supplier information\n\nSince these are independent calls (knowledge base search doesn't depend on order details), I can make them in parallel.",
+            "actions": [
+              {
+                "tool": "search_knowledge_base",
+                "arguments": {
+                  "query": "CVaR conditional value at risk stochastic lead time supplier risk assessment probability",
+                  "k": 5,
+                  "traverse_types": [
+                    "formula",
+                    "algorithm",
+                    "example"
+                  ]
+                },
+                "observation": "Received 1 data points"
+              },
+              {
+                "tool": "search_knowledge_base",
+                "arguments": {
+                  "query": "delivery deadline probability miss late arrival stochastic process uncertainty",
+                  "k": 5,
+                  "traverse_types": [
+                    "formula",
+                    "algorithm"
+                  ]
+                },
+                "observation": "Received 1 data points"
+              },
+              {
+                "tool": "list_purchase_orders",
+                "arguments": {
+                  "status_in": [
+                    "draft",
+                    "submitted",
+                    "partial",
+                    "received",
+                    "closed"
+                  ]
+                },
+                "observation": "Received 3 data points"
+              }
+            ]
           },
           {
             "iteration": 2,
-            "thought": "Looking at the history, I can see that I've retrieved the observed inventory snapshot, which gives me current stock levels for products across different locations. The data shows:\n\n- Product IDs\n- Location IDs\n- Observed quantities (with some uncertainty/noise)\n- Confidence levels\n- Quality status\n\nHowever, I notice a critical issue: **the data does not include reorder point information**. The reorder point is a product-specific parameter that defines when to reorder, and it's not present in the inventory snapshot.\n\nTo answer the user's question about which products have stock levels below their reorder point, I need to:\n\n1. Aggregate the observed quantities by product (sum across all locations to get total inventory per product)\n2. Find the reorder point for each product\n\nThe problem is that I don't see a direct tool to get product information including reorder points. Let me think about what data might be available:\n\n- The inventory snapshot doesn't have reorder points\n- I need to check if there's product master data available\n- Alternatively, reorder points might be calculated based on demand patterns and lead times\n\nLooking at the available tools, I don't see a direct \"get_product\" or \"list_products\" function that would give me reorder point information. However, in inventory management systems, reorder points are typically stored as product attributes.\n\nSince I don't have access to product master data or reorder points through the available tools, I should:\n1. First aggregate the inventory by product to get total stock levels\n2. Acknowledge that I cannot determine which products are below reorder point without access to that configuration data\n\nLet me provide a response that:\n- Shows the current stock levels aggregated by product\n- Explains that reorder point data is needed but not available through the current tools\n- Suggests what would be needed to complete the analysis\n\nActually, wait - let me reconsider. Perhaps the system expects me to calculate reorder points based on other data like demand rates and lead times. But I would need:\n- Demand/consumption data\n- Lead time data from suppliers\n- Safety stock policies\n\nWithout these, I cannot determine reorder points. Let me provide a comprehensive answer explaining this limitation."
+            "thought": "Looking at the history, I can see that:\n\n1. I've searched the knowledge base for risk assessment algorithms (CVaR, stochastic lead time models), but the results didn't return highly relevant content about CVaR or stochastic lead time models specifically. The results were mostly about Bayesian inference, naive Bayes models, and general probabilistic reasoning.\n\n2. I've listed purchase orders, but I notice that none of them have an ID matching \"ORD-12345\". The purchase orders returned all have UUID format IDs (like '7fe18b38-986d-4939-a1a8-5feedbb97154'), not the format \"ORD-12345\".\n\nThis is a critical issue - the order \"ORD-12345\" doesn't appear to exist in the system. However, before concluding this, let me:\n1. Search the knowledge base more specifically for stochastic processes, lead time variability, and delivery risk\n2. Try to understand if \"ORD-12345\" might be a different identifier format\n\nLet me search for more relevant algorithms related to stochastic lead times and delivery risk assessment, and also check if there's a way to query by a different order identifier.",
+            "actions": [
+              {
+                "tool": "search_knowledge_base",
+                "arguments": {
+                  "query": "stochastic lead time variability supply chain risk tail risk quantile",
+                  "k": 5,
+                  "traverse_types": [
+                    "formula",
+                    "algorithm",
+                    "example"
+                  ]
+                },
+                "observation": "Received 1 data points"
+              },
+              {
+                "tool": "search_knowledge_base",
+                "arguments": {
+                  "query": "normal distribution Gaussian probability exceed threshold cumulative distribution function",
+                  "k": 5,
+                  "traverse_types": [
+                    "formula",
+                    "algorithm"
+                  ]
+                },
+                "observation": "Received 1 data points"
+              },
+              {
+                "tool": "get_purchase_order",
+                "arguments": {
+                  "purchase_order_id": "ORD-12345"
+                },
+                "observation": "Error: ExternalServiceError: environment-api returned HTTP 422"
+              }
+            ]
+          },
+          {
+            "iteration": 3,
+            "thought": "Looking at the history, I can see several important findings:\n\n1. **Order ORD-12345 does not exist**: I attempted to get purchase order \"ORD-12345\" and received an HTTP 422 error, which typically indicates invalid input. When I listed all purchase orders, none had an ID matching \"ORD-12345\" - they all have UUID format IDs.\n\n2. **Knowledge base search results**: I've searched for risk assessment algorithms (CVaR, stochastic lead time models) but the results didn't return specific CVaR or stochastic lead time content. Instead, I got:\n   - Bayesian inference examples\n   - Quantile exploration algorithms (which are related to risk assessment)\n   - Policy gradient methods\n   - Gaussian distribution formulas\n\n3. **Relevant algorithms found**:\n   - Quantile exploration (Algorithm 15.6) - which deals with \u03b1-quantiles for probability distributions\n   - Gaussian/Normal distribution formulas (2.13, 2.14) - useful for modeling lead time variability\n   - Cumulative distribution function concepts\n\nSince the order \"ORD-12345\" doesn't exist in the system, I cannot calculate the actual probability for this specific order. However, I should:\n1. Acknowledge that the order doesn't exist\n2. Provide a methodological framework for how to calculate such a probability using the algorithms I found\n3. Search for more specific content about CVaR or risk measures as the user explicitly requested\n\nLet me search more specifically for CVaR and risk measures.",
+            "actions": [
+              {
+                "tool": "search_knowledge_base",
+                "arguments": {
+                  "query": "CVaR conditional value at risk tail risk percentile worst case",
+                  "k": 5,
+                  "traverse_types": [
+                    "formula",
+                    "algorithm",
+                    "example"
+                  ]
+                },
+                "observation": "Received 1 data points"
+              },
+              {
+                "tool": "search_knowledge_base",
+                "arguments": {
+                  "query": "risk measure utility risk averse risk sensitive optimization",
+                  "k": 5,
+                  "traverse_types": [
+                    "formula",
+                    "algorithm"
+                  ]
+                },
+                "observation": "Received 1 data points"
+              }
+            ]
+          },
+          {
+            "iteration": 4,
+            "thought": "Looking at the history, I can see that:\n\n1. **Order ORD-12345 does not exist**: I attempted to retrieve this order and got an HTTP 422 error. When I listed all purchase orders, none had an ID matching \"ORD-12345\" - they all use UUID format.\n\n2. **Knowledge base searches completed**: I've searched for:\n   - CVaR and stochastic lead time models\n   - Delivery deadline probability and stochastic processes\n   - Normal distribution and cumulative distribution functions\n   - CVaR, tail risk, and percentiles\n   - Risk measures and utility functions\n\n3. **Relevant algorithms found**:\n   - **Quantile exploration (Algorithm 15.6)**: Deals with \u03b1-quantiles for probability distributions, which is related to tail risk assessment\n   - **Gaussian distribution formulas (2.13, 2.14)**: For modeling lead time variability\n   - **Cumulative distribution function concepts**: For calculating probabilities of exceeding thresholds\n   - **Risk aversion and utility functions (6.5)**: Related to risk-sensitive decision making\n\n4. **Key finding**: The textbook doesn't appear to have specific CVaR (Conditional Value at Risk) algorithms, but it does have:\n   - Quantile-based methods (which are related to VaR/CVaR)\n   - Risk-averse utility functions\n   - Probabilistic reasoning with Gaussian distributions\n\nSince the order doesn't exist, I cannot calculate the actual probability. However, I can provide:\n1. A methodological framework for how to calculate this probability\n2. Citations to the relevant algorithms from the knowledge base\n3. Mathematical formulas and Python code for implementation\n4. Acknowledge the limitation that the specific order doesn't exist\n\nI have enough information now to provide a comprehensive answer that addresses the user's requirements while being honest about the data limitation."
           }
         ],
-        "iterations": 2,
-        "total_tokens": 28993,
-        "execution_time_seconds": 41.61085,
+        "iterations": 4,
+        "total_tokens": 131055,
+        "execution_time_seconds": 88.137671,
         "tools_used": [
-          "get_observed_inventory_snapshot"
+          "search_knowledge_base",
+          "list_purchase_orders",
+          "get_purchase_order"
         ],
-        "warnings": [],
-        "timestamp": "2026-03-25 19:35:05.783168+00:00"
+        "warnings": [
+          "Some tools failed during execution: get_purchase_order. Results may be incomplete."
+        ],
+        "timestamp": "2026-03-26 20:04:57.110184+00:00"
       },
-      "timestamp": "2026-03-25 19:35:05.783775+00:00"
+      "timestamp": "2026-03-26 20:04:57.111510+00:00"
     }
   ]
 }
