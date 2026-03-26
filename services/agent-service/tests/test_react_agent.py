@@ -309,6 +309,50 @@ class TestActNode:
 
     @pytest.mark.asyncio()
     @patch("app.services.react_agent.tool_registry")
+    async def test_act_extracts_trace_meta_from_environment_tool_envelope(
+        self,
+        mock_registry: MagicMock,
+        agent: ReActAgent,
+        initial_state: AgentState,
+    ) -> None:
+        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
+            return_value={
+                "status": "success",
+                "data": {
+                    "data": [{"product_id": "P-001"}],
+                    "message": "Retrieved 1 observed inventory rows.",
+                    "meta": {"count": 1, "trace_count": 1},
+                },
+            }
+        )
+        mock_registry.get_tool.return_value.get_metadata.return_value.category = "environment"
+        initial_state["messages"] = [
+            {
+                "role": "assistant",
+                "content": "Checking...",
+                "tool_calls": [
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_observed_inventory_snapshot",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
+            }
+        ]
+
+        result = await agent._act_node(initial_state)
+
+        assert result["tool_calls"][0].result == {"result": [{"product_id": "P-001"}]}
+        assert result["tool_calls"][0].trace_meta == {"count": 1, "trace_count": 1}
+        assert json.loads(result["messages"][-1]["content"]) == {
+            "result": [{"product_id": "P-001"}]
+        }
+
+    @pytest.mark.asyncio()
+    @patch("app.services.react_agent.tool_registry")
     async def test_act_stores_tool_category_from_registry(
         self,
         mock_registry: MagicMock,

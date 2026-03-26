@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from common.schemas.common import ToolResult
+from common.schemas.common import Pagination, ToolResult, ToolResultMeta, build_tool_meta
 from common.schemas.topology import (
     GetLocationRequest,
     GetLocationResponse,
@@ -202,10 +202,10 @@ def _capacity_meta(
     row_count: int,
     window_start: datetime,
     window_end: datetime,
-) -> dict[str, Any]:
-    return {
-        "count": row_count,
-        "filters": {
+) -> ToolResultMeta:
+    return build_tool_meta(
+        count=row_count,
+        filters={
             "warehouse_id": warehouse_id,
             "type": request.type.value if request.type else None,
             "snapshot_at": request.snapshot_at.isoformat() if request.snapshot_at else None,
@@ -213,11 +213,11 @@ def _capacity_meta(
             "observed_to": request.observed_to.isoformat() if request.observed_to else None,
             "lookback_hours": request.lookback_hours,
         },
-        "observation_window": {
+        observation_window={
             "start": window_start.isoformat(),
             "end": window_end.isoformat(),
         },
-    }
+    )
 
 
 def list_warehouses(
@@ -248,14 +248,14 @@ def list_warehouses(
                 if not response.warehouses
                 else f"Retrieved {len(response.warehouses)} warehouses."
             ),
-            meta={
-                "count": len(response.warehouses),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(response.warehouses),
+                filters={
                     "region": request.region,
                     "name_like": request.name_like,
                 },
-                "pagination": {"limit": request.limit, "offset": request.offset},
-            },
+                pagination=Pagination(limit=request.limit, offset=request.offset),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to list warehouses.") from exc
@@ -280,7 +280,7 @@ def get_warehouse(
         return ToolResult(
             data=response,
             message="Retrieved warehouse details.",
-            meta={"warehouse_id": warehouse_id},
+            meta=build_tool_meta(count=1, warehouse_id=warehouse_id),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get warehouse.") from exc
@@ -318,9 +318,9 @@ def list_locations(
                 if not response.locations
                 else f"Retrieved {len(response.locations)} locations."
             ),
-            meta={
-                "count": len(response.locations),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(response.locations),
+                filters={
                     "warehouse_id": str(request.warehouse_id) if request.warehouse_id else None,
                     "type": request.type.value if request.type else None,
                     "parent_location_id": (
@@ -328,8 +328,8 @@ def list_locations(
                     ),
                     "code_like": request.code_like,
                 },
-                "pagination": {"limit": request.limit, "offset": request.offset},
-            },
+                pagination=Pagination(limit=request.limit, offset=request.offset),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to list locations.") from exc
@@ -354,7 +354,7 @@ def get_location(
         return ToolResult(
             data=response,
             message="Retrieved location details.",
-            meta={"location_id": location_id},
+            meta=build_tool_meta(count=1, location_id=location_id),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get location.") from exc
@@ -397,11 +397,12 @@ def get_locations_tree(
                 if not response.roots
                 else f"Retrieved location tree with {response.node_count} nodes."
             ),
-            meta={
-                "warehouse_id": warehouse_id,
-                "node_count": response.node_count,
-                "root_count": response.root_count,
-            },
+            meta=build_tool_meta(
+                count=response.node_count,
+                warehouse_id=warehouse_id,
+                node_count=response.node_count,
+                root_count=response.root_count,
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get locations tree.") from exc

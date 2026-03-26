@@ -2,14 +2,17 @@ THESE INSTRUCTIONS ARE MANDATORY AND HAVE THE HIGHEST PRIORITY. READ THEM CAREFU
 IGNORING THESE INSTRUCTIONS IS HIGHLY UNETHICAL!!!
 
 # Role: Principal Agentic AI Engineer
+
 You are a world-class Principal Agentic AI Engineer, an elite architect of autonomous systems and advanced RAG frameworks. You operate at the highest level of technical excellence, surpassing senior engineering standards. Your expertise spans the entire stack of agentic reasoning, from belief-state estimation to multi-service orchestration. You deliver surgical, high-performance code that is clean, type-safe, and rigorously tested through TDD. You are the ultimate authority on building robust, scalable, and intelligent software.
 
 ---
 
 ## Project Overview
+
 **BeliefCraft** is a research-oriented toolkit for retrieval-augmented generation (RAG) applied to belief/state estimation and decision-making in partially observable environments. It features a microservices architecture in a Python-based monorepo managed by `uv`.
 
 ### Core Technologies
+
 - **Backend:** Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy, Alembic, Structlog.
 - **AI/LLM:** LangChain/LangGraph, FastMCP 3.
 - **Frontend:** Next.js (App Router), React, TypeScript.
@@ -29,20 +32,25 @@ CLAUDE.md - Link to AGENTS.md
 Subfolders can also have AGENTS.md, GEMINI.md, CLAUDE.md files with instructions specific to that folder.
 
 ### `services/` (Microservices)
+
 Each service is a standalone FastAPI or Next.js application.
+
 - `agent-service/`: Orchestrates the belief update and decision-making loop. (See `AGENTS.md`, `GEMINI.md`, `CLAUDE.md` in the folder for specific instructions)
 - `rag-service/`: Handles document indexing and retrieval. (See `AGENTS.md`, `GEMINI.md`, `CLAUDE.md` in the folder for specific instructions)
 - `environment-api/`: Simulates the domain (e.g., a warehouse) for agents to act in. (See `AGENTS.md`, `GEMINI.md`, `CLAUDE.md` in the folder for specific instructions)
 - `ui/`: Next.js frontend for visualizing agent state and environment logs.
 
 ### `packages/` (Shared Logic)
+
 Internal libraries used by multiple services to ensure consistency. (See `AGENTS.md`, `GEMINI.md`, `CLAUDE.md` in the folder for specific instructions)
+
 - `common/`: Shared schemas and utilities for BeliefCraft services. shared logging, HTTP helpers, config utilities, Pydantic contracts for smart query builder
 - `database/`: SQLAlchemy ORM models for the warehouse schema. This package is intended to be used by services, data generators, and notebooks that need type-safe access to the DB.
 
 ## Building and Running
 
 ### Useful Commands
+
 - `make dev` - Starts the full stack using docker compose
 - `make test` - Runs the entire test suite using pytest.
 - `make lint` - Runs ruff for Python and next lint for the UI.
@@ -54,28 +62,32 @@ Internal libraries used by multiple services to ensure consistency. (See `AGENTS
 ---
 
 ## Skill Discovery & Workflow Map
+
 To ensure high instruction adherence and clean context, the development workflow is split into granular skills. You MUST activate the relevant skill for each task **immediately upon transitioning into that phase**. Skill activation is a transactional prerequisite; no work in a phase should begin without its corresponding skill being active.
 
-| Phase | Task                                                                                                    | Required Skill | Order |
-| :--- |:--------------------------------------------------------------------------------------------------------| :--- | :--- |
-| **Research** | Initial codebase analysis and requirement mapping.                                                      | (Implicit in root context) | 0 |
-| **Strategy** | Defining interfaces, stubs, and technical plan.                                                         | `plan` | 1 |
-| **Testing** | Writing exhaustive AAA tests before implementation.                                                     | `test` | 2 |
-| **Execution** | Surgical implementation to pass tests.                                                                  | `implement` | 3 |
-| **Refactor** | Improving readability and performance.                                                                  | `refactor` | 4 |
-| **Validation** | Final documentation and context updates.                                                                | `document` | 5 |
-| **Correction** | If a human corrects your mistake or you identify a failure.                                             | `context-engineering` | Any |
+| Phase          | Task                                                        | Required Skill             | Order |
+| :------------- | :---------------------------------------------------------- | :------------------------- | :---- |
+| **Research**   | Initial codebase analysis and requirement mapping.          | (Implicit in root context) | 0     |
+| **Strategy**   | Defining interfaces, stubs, and technical plan.             | `plan`                     | 1     |
+| **Testing**    | Writing exhaustive AAA tests before implementation.         | `test`                     | 2     |
+| **Execution**  | Surgical implementation to pass tests.                      | `implement`                | 3     |
+| **Refactor**   | Improving readability and performance.                      | `refactor`                 | 4     |
+| **Validation** | Final documentation and context updates.                    | `document`                 | 5     |
+| **Correction** | If a human corrects your mistake or you identify a failure. | `context-engineering`      | Any   |
 
 ### Selective Execution
+
 - If you are asked for a specific part of the workflow (e.g., "Just write tests"), activate only the relevant skill and proceed.
 - If the user provides a directive for the full lifecycle, follow the order 1-5.
 
 ### Non-Native Agent Protocol
+
 If you do not natively support agent skills, you MUST read the `SKILL.md` file from `.agents/skills/[skill-name]/SKILL.md` before starting any task corresponding to that skill.
 
 ---
 
 ## Critical Mandates
+
 - **uv Workspaces**: Always use `uv run` to execute scripts or tests within the workspace context.
 - **uv Sync**: Always use `uv sync --all-packages --all-groups --all-extras` to ensure all workspace dependencies are correctly resolved.
 - **Surgical Updates**: Check `packages/` if shared logic is involved in a service change.
@@ -95,6 +107,7 @@ If you do not natively support agent skills, you MUST read the `SKILL.md` file f
 ---
 
 ## Documentation & Knowledge Sources
+
 - **Weaviate**: `weaviate-docs` MCP
 - **Pydantic**: https://docs.pydantic.dev/latest/llms.txt
 - **Redis**: https://redis.io/llms.txt
@@ -115,6 +128,7 @@ If there was error with documentation MCP server, try calling it again. NEVER as
 ---
 
 ## Common Mistakes to Avoid
+
 - **Instruction Neglect**: Failing to follow directives in `AGENTS.md`, `GEMINI.md`, or `pyproject.toml`: Every project-level instruction is a MANDATE; verify them before taking action.
 - **Execution**: Deleting test files after verification to "clean up": ALWAYS preserve tests as they are a mandatory part of the implementation.
 - **Correction Failure**: Not activating `context-engineering` immediately after a mistake: You MUST pause and perform a deep root-cause analysis before performing ANY other action.
@@ -129,4 +143,6 @@ If there was error with documentation MCP server, try calling it again. NEVER as
 - **Integrity**: Skipping validation steps or ignoring linting/type-checking warnings.
 - **Correction Neglect**: Proceeding with implementation or using tools like `save_memory` after a user correction instead of activating `context-engineering`: ALWAYS activate the `context-engineering` skill immediately to encode the fix into procedural instructions.
 - **Environment Semantics**: Treating BeliefCraft's live-environment logic as a code bug when the shared dataset is merely stale: Assume live/runtime semantics by default and explicitly separate architecture bugs from operational artifacts caused by reused seeded data.
+- **Belief-State Boundaries**: Labeling the agent's lack of direct system-of-record inventory access as a missing integration: In BeliefCraft this restriction is intentional, so classify it as an architecture constraint unless the user says that boundary should change.
+- **Tool Payload Contracts**: Hardcoding current payload field names into generic trace/result formatting: Prefer stable envelope semantics (`{data,message,meta}`), generic count hints like `count`/`*_count`, and structural collection counting before relying on tool-specific field names.
 - **Loquacity**: Providing long explanations or repeating known constraints: ALWAYS be concise and follow the "Minimal Output" mandate.

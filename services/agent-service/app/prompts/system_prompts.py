@@ -173,6 +173,8 @@ def _extract_message_tool_calls(message: dict[str, Any] | None) -> list[dict[str
 
 def _build_action_from_recorded_tool_call(
     recorded_tool_call: dict[str, Any] | object,
+    *,
+    include_trace_meta: bool = False,
 ) -> dict[str, Any]:
     """Build a prompt/reasoning action from a recorded ToolCall."""
     action: dict[str, Any] = {
@@ -187,6 +189,11 @@ def _build_action_from_recorded_tool_call(
 
     result = _get_tool_call_attr(recorded_tool_call, "result")
     if result is not None:
+        if include_trace_meta:
+            trace_meta = _get_tool_call_attr(recorded_tool_call, "trace_meta")
+            if isinstance(trace_meta, dict) and trace_meta:
+                action["observation"] = {"data": result, "meta": trace_meta}
+                return action
         action["observation"] = result
 
     return action
@@ -195,6 +202,8 @@ def _build_action_from_recorded_tool_call(
 def _build_action_from_message_and_recorded_result(
     raw_tool_call: dict[str, Any],
     recorded_tool_call: dict[str, Any] | object | None,
+    *,
+    include_trace_meta: bool = False,
 ) -> dict[str, Any]:
     """Build a prompt/reasoning action for one assistant-declared tool call."""
     function_payload = raw_tool_call.get("function")
@@ -213,7 +222,10 @@ def _build_action_from_message_and_recorded_result(
     if recorded_tool_call is None:
         return action
 
-    recorded_action = _build_action_from_recorded_tool_call(recorded_tool_call)
+    recorded_action = _build_action_from_recorded_tool_call(
+        recorded_tool_call,
+        include_trace_meta=include_trace_meta,
+    )
     action["tool"] = recorded_action.get("tool") or action["tool"]
     action["arguments"] = recorded_action.get("arguments") or action["arguments"]
 
@@ -225,6 +237,8 @@ def _build_action_from_message_and_recorded_result(
 
 def _build_iteration_history_from_messages(
     state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
 ) -> list[dict[str, Any]]:
     """Build iteration history using assistant-turn boundaries from raw messages."""
     thoughts = state["thoughts"]
@@ -249,7 +263,11 @@ def _build_iteration_history_from_messages(
             if recorded_index < len(recorded_tool_calls):
                 recorded_tool_call = recorded_tool_calls[recorded_index]
             actions.append(
-                _build_action_from_message_and_recorded_result(raw_tool_call, recorded_tool_call)
+                _build_action_from_message_and_recorded_result(
+                    raw_tool_call,
+                    recorded_tool_call,
+                    include_trace_meta=include_trace_meta,
+                )
             )
 
         history.append(
@@ -266,6 +284,8 @@ def _build_iteration_history_from_messages(
 
 def _build_iteration_history_from_flat_lists(
     state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
 ) -> list[dict[str, Any]]:
     """Fallback history builder for tests or older states without raw messages."""
     thoughts = state["thoughts"]
@@ -275,7 +295,12 @@ def _build_iteration_history_from_flat_lists(
     for index, thought in enumerate(thoughts):
         actions: list[dict[str, Any]] = []
         if index < len(tool_calls):
-            actions.append(_build_action_from_recorded_tool_call(tool_calls[index]))
+            actions.append(
+                _build_action_from_recorded_tool_call(
+                    tool_calls[index],
+                    include_trace_meta=include_trace_meta,
+                )
+            )
 
         history.append(
             {
@@ -288,15 +313,25 @@ def _build_iteration_history_from_flat_lists(
     return history
 
 
-def build_iteration_history(state: Mapping[str, Any]) -> list[dict[str, Any]]:
+def build_iteration_history(
+    state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
+) -> list[dict[str, Any]]:
     """Return iteration history with exact assistant-turn to tool-call grouping."""
     has_assistant_turns = any(
         isinstance(message, dict) and message.get("role") == "assistant"
         for message in state.get("messages", [])
     )
     if has_assistant_turns:
-        return _build_iteration_history_from_messages(state)
-    return _build_iteration_history_from_flat_lists(state)
+        return _build_iteration_history_from_messages(
+            state,
+            include_trace_meta=include_trace_meta,
+        )
+    return _build_iteration_history_from_flat_lists(
+        state,
+        include_trace_meta=include_trace_meta,
+    )
 
 
 def _format_action_xml(action: dict[str, Any]) -> list[str]:

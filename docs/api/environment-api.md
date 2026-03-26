@@ -21,9 +21,18 @@ All smart-query endpoints return:
 {
   "data": "...",
   "message": "...",
-  "meta": {}
+  "meta": {
+    "count": 0,
+    "trace_count": 0
+  }
 }
 ```
+
+`meta` follows the shared `ToolResultMeta` contract:
+- `count`: generic count of primary returned items
+- `trace_count`: optional public-trace count; defaults to `count`
+- `pagination`: optional `{ "limit": int, "offset": int }` for list endpoints
+- additional tool-specific fields such as `filters`, `warehouse_id`, or `observation_count`
 
 Validation and errors:
 - Invalid query params/domain validation: `422`

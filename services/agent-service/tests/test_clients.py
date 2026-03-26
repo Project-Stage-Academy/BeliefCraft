@@ -188,6 +188,25 @@ class TestEnvironmentAPIClient:
                 )
 
     @pytest.mark.asyncio
+    async def test_list_po_lines_preserves_repeated_purchase_order_ids(
+        self, mock_settings: Mock
+    ) -> None:
+        """Test listing PO lines sends repeated query params for multiple PO ids."""
+        with patch("app.clients.environment_client.get_settings", return_value=mock_settings):
+            client = EnvironmentAPIClient()
+
+            with patch.object(client, "get", return_value={"po_lines": []}) as mock_get:
+                await client.list_po_lines(
+                    purchase_order_ids=["PO-1", "PO-2"],
+                )
+
+                mock_get.assert_called_once_with(
+                    "/api/v1/smart-query/procurement/po-lines",
+                    params={"purchase_order_ids": ["PO-1", "PO-2"]},
+                    timeout=None,
+                )
+
+    @pytest.mark.asyncio
     async def test_get_procurement_pipeline_summary(self, mock_settings: Mock) -> None:
         """Test getting procurement pipeline summary."""
         with patch("app.clients.environment_client.get_settings", return_value=mock_settings):

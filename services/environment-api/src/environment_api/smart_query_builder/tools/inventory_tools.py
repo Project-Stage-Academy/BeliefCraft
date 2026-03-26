@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from common.schemas.common import ToolResult
+from common.schemas.common import Pagination, ToolResult, build_tool_meta
 from common.schemas.inventory import CurrentInventoryRow, GetCurrentInventoryRequest
 
 from ..db.session import get_session
@@ -56,17 +56,17 @@ def get_current_inventory(
             return ToolResult(
                 data=[],
                 message="No results for current inventory.",
-                meta={
-                    "count": 0,
-                    "filters": {
+                meta=build_tool_meta(
+                    count=0,
+                    filters={
                         "warehouse_id": warehouse_id,
                         "location_id": location_id,
                         "sku": sku,
                         "product_id": product_id,
                         "include_reserved": include_reserved,
                     },
-                    "pagination": {"limit": limit, "offset": offset},
-                },
+                    pagination=Pagination(limit=limit, offset=offset),
+                ),
             )
 
         data = [
@@ -90,17 +90,17 @@ def get_current_inventory(
         return ToolResult(
             data=data,
             message=f"Retrieved {len(data)} current inventory rows.",
-            meta={
-                "count": len(data),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(data),
+                filters={
                     "warehouse_id": warehouse_id,
                     "location_id": location_id,
                     "sku": sku,
                     "product_id": product_id,
                     "include_reserved": include_reserved,
                 },
-                "pagination": {"limit": limit, "offset": offset},
-            },
+                pagination=Pagination(limit=limit, offset=offset),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to fetch current inventory.") from exc
