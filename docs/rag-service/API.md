@@ -69,12 +69,14 @@ The book "Algorithms for Decision Making" uses a strict numbering system. This t
 #### `get_related_code_definitions`
 **Retrieve Python source code related to a set of documents (algorithms or examples).**
 
-Follows `referenced_classes`, `referenced_methods`, and `referenced_functions` links from the given document IDs, collects all reachable code-definition entities (`CodeClass`, `CodeMethod`, `CodeFunction`), and returns them as a single ordered Python source fragment.
+Follows `referenced_classes`, `referenced_methods`, and `referenced_functions` links from the given document IDs, collects all reachable code-definition entities (`CodeClass`, `CodeMethod`, `CodeFunction`), and wraps them into one `Document`.
 
 **Arguments:**
 - `document_ids` (array of strings, required): List of document IDs (UUIDs) from which to follow code-definition references.
 
-**Returns:** Python source string with all related code definitions in call order.
+**Returns:** A single `Document` where:
+- `content` contains the reconstructed ordered Python source fragment.
+- `id`, `metadata`, and `cosine_similarity` may be `null`.
 
 ---
 
@@ -123,12 +125,12 @@ async def interact_with_rag():
             )
             print(f"Formula: {formula}")
 
-            # 5. Retrieve and reconstruct Python source code for a document
-            source = await client.call_tool(
+            # 5. Retrieve related Python code definitions wrapped as one Document
+            code_defs_document = await client.call_tool(
                 "get_related_code_definitions",
                 {"document_ids": ["<algorithm-chunk-uuid>"]}
             )
-            print(f"Source code:\n{source}")
+            print(code_defs_document["content"])
 
 
 if __name__ == "__main__":

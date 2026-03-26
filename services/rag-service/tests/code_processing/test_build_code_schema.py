@@ -30,7 +30,7 @@ def test_function_record_has_required_fields():
     assert "name" in record
     assert "algorithm_number" in record
     assert "code" in record
-    assert "initialized_classes" in record
+    assert "referenced_classes" in record
     assert "referenced_functions" in record
     assert "referenced_methods" in record
 
@@ -54,7 +54,7 @@ def test_method_record_has_required_fields():
     assert "algorithm_number" in record
     assert "code" in record
     assert "class" in record
-    assert "initialized_classes" in record
+    assert "referenced_classes" in record
     assert "referenced_functions" in record
     assert "referenced_methods" in record
 
@@ -89,14 +89,14 @@ def test_function_used_functions_reference():
     assert "fn:helper" in caller["referenced_functions"]
 
 
-def test_function_initialized_classes_reference():
+def test_function_referenced_classes_reference():
     fragments = [
         "class Box: pass",
         "def factory():\n    b = Box()",
     ]
     schema = build_code_schema(fragments)
     factory = next(f for f in schema["functions"] if f["name"] == "factory")
-    assert "cls:Box" in factory["initialized_classes"]
+    assert "cls:Box" in factory["referenced_classes"]
 
 
 def test_multiple_functions():
@@ -118,9 +118,9 @@ def test_simple_class_id():
 
 
 def test_class_with_bases_in_code():
-    code = "class Child(Parent): pass"
-    schema = build_code_schema([code])
-    assert "Child(Parent)" in schema["classes"][0]["code"]
+    schema = build_code_schema(["class Parent: pass", "class Child(Parent): pass"])
+    child = next(c for c in schema["classes"] if c["name"] == "Child")
+    assert "Child(Parent)" in child["code"]
 
 
 def test_class_with_init_code_contains_init():
@@ -175,14 +175,14 @@ def test_method_used_methods_cross_reference():
     assert "mth:A.first" in second["referenced_methods"]
 
 
-def test_method_initialized_classes_reference():
+def test_method_referenced_classes_reference():
     fragments = [
         "class Widget: pass",
         "class Builder:\n    def build(self):\n        w = Widget()",
     ]
     schema = build_code_schema(fragments)
     build_method = next(m for m in schema["methods"] if m["name"] == "build")
-    assert "cls:Widget" in build_method["initialized_classes"]
+    assert "cls:Widget" in build_method["referenced_classes"]
 
 
 def test_method_known_class_ref_not_external():
@@ -235,3 +235,31 @@ def test_no_duplicate_refs():
     schema = build_code_schema(fragments)
     caller = next(f for f in schema["functions"] if f["name"] == "caller")
     assert caller["referenced_functions"].count("fn:helper") == 1
+
+
+def test_function_referenced_classes_from_param_and_return_type_hints():
+    fragments = [
+        "class BayesianNetwork: pass",
+        "class Assignment: pass",
+        "class Factor: pass",
+        (
+            "def infer(bn: BayesianNetwork, query: list[str], evidence: Assignment) -> Factor:\n"
+            "    return Factor()"
+        ),
+    ]
+    schema = build_code_schema(fragments)
+    infer_fn = next(f for f in schema["functions"] if f["name"] == "infer")
+    # Type hints should create class refs even before runtime calls are considered.
+    assert "cls:BayesianNetwork" in infer_fn["referenced_classes"]
+    assert "cls:Assignment" in infer_fn["referenced_classes"]
+    assert "cls:Factor" in infer_fn["referenced_classes"]
+
+
+def test_class_with_known_parent_adds_parent_reference():
+    fragments = [
+        "class Parent: pass",
+        "class Child(Parent): pass",
+    ]
+    schema = build_code_schema(fragments)
+    child = next(c for c in schema["classes"] if c["name"] == "Child")
+    assert "cls:Parent" in child["referenced_classes"]

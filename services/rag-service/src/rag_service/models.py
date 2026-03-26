@@ -38,10 +38,10 @@ class SearchFilters(BaseModel):
 class Document(BaseModel):
     """Document returned from vector store search."""
 
-    id: str
+    id: str | None = None
     content: str
     cosine_similarity: float | None = None
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] | None = None
 
 
 class MetadataFilterOperator(StrEnum):
