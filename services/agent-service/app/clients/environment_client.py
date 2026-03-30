@@ -15,7 +15,7 @@ Example:
 from typing import Any, Protocol
 
 from app.clients.base_client import BaseAPIClient
-from app.config import get_settings
+from app.config_load import settings
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -189,8 +189,9 @@ class EnvironmentAPIClient(BaseAPIClient):
 
     def __init__(self) -> None:
         """Initialize Environment API client with config from settings."""
-        settings = get_settings()
-        super().__init__(base_url=settings.ENVIRONMENT_API_URL, service_name="environment-api")
+        super().__init__(
+            base_url=settings.external_services.environment_api_url, service_name="environment-api"
+        )
 
     # ========== PROCUREMENT MODULE ==========
 

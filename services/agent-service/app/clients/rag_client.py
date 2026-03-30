@@ -30,10 +30,9 @@ Migration:
     New approach (MCP):
         ```python
         from app.clients.rag_mcp_client import create_rag_mcp_client
-        from app.config import get_settings
+        from app.config_load import settings
 
-        settings = get_settings()
-        async with create_rag_mcp_client(settings.RAG_API_URL) as client:
+        async with create_rag_mcp_client(settings.external_services.rag_api_url) as client:
             tools = await client.list_tools()
             result = await client.call_tool("search_knowledge_base", {"query": "POMDP", "k": 5})
         ```
@@ -62,7 +61,7 @@ Example:
 from typing import Any, Protocol
 
 from app.clients.base_client import BaseAPIClient
-from app.config import get_settings
+from app.config_load import settings
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -108,8 +107,7 @@ class RAGAPIClient(BaseAPIClient):
 
     def __init__(self) -> None:
         """Initialize RAG API client with config from settings."""
-        settings = get_settings()
-        super().__init__(base_url=settings.RAG_API_URL, service_name="rag-api")
+        super().__init__(base_url=settings.external_services.rag_api_url, service_name="rag-api")
 
     async def search_knowledge_base(
         self,
