@@ -159,6 +159,7 @@ dependencies = [
     { name = "beliefcraft-database" },
     { name = "beliefcraft-environment-api" },
     { name = "beliefcraft-rag-service" },
+    { name = "boto3-stubs" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
 ]
@@ -192,6 +193,7 @@ requires-dist = [
     { name = "beliefcraft-database", editable = "packages/database" },
     { name = "beliefcraft-environment-api", editable = "services/environment-api" },
     { name = "beliefcraft-rag-service", editable = "services/rag-service" },
+    { name = "boto3-stubs", specifier = "~=1.42.59" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.0" },
 ]
