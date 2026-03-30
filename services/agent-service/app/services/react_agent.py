@@ -1,6 +1,5 @@
 """ReAct agent implementation using LangGraph state machine."""
 
-import json
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
@@ -11,8 +10,7 @@ from app.prompts.system_prompts import (
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
     format_react_prompt,
 )
-from app.services.llm_service import LLMService
-from app.tools.registry import tool_registry
+from app.services.base_agent import BaseAgent
 from common.logging import get_logger
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -20,7 +18,7 @@ from langgraph.graph.state import CompiledStateGraph
 logger = get_logger(__name__)
 
 
-class ReActAgent:
+class ReActAgent(BaseAgent):
     """ReAct loop implementation using LangGraph for AWS Bedrock/Claude."""
 
     def __init__(self, system_prompt: str | None = None) -> None:
@@ -31,9 +29,11 @@ class ReActAgent:
             system_prompt: Custom system prompt. If None, uses default
                           WAREHOUSE_ADVISOR_SYSTEM_PROMPT.
         """
-        self.llm: LLMService = LLMService(model_id=settings.react_agent.model_id)
-        self.system_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        self.graph = self._build_graph()
+        resolved_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        super().__init__(
+            model_id=settings.react_agent.model_id,
+            system_prompt=resolved_prompt,
+        )
 
     def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:
         """Build the ReAct state machine with think/act/finalize nodes."""
@@ -119,23 +119,6 @@ class ReActAgent:
             {"role": "user", "content": format_react_prompt(state)},
         ]
 
-    async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
-        """Make the LLM API call with messages and tool definitions.
-
-        Args:
-            messages: List of messages to send to the LLM.
-
-        Returns:
-            LLM response dictionary containing message, tool_calls, tokens, etc.
-        """
-        tools = self._get_tool_definitions()
-        result = await self.llm.chat_completion(
-            messages=messages,
-            tools=tools if tools else None,
-            tool_choice="auto",
-        )
-        return result
-
     def _parse_and_update(self, state: AgentState, response: dict[str, Any]) -> dict[str, Any]:
         """Parse LLM response and build state updates.
 
@@ -194,183 +177,6 @@ class ReActAgent:
 
         return updates
 
-    async def _act_node(self, state: AgentState) -> dict[str, Any]:
-        """Action step: execute tool calls from the last assistant message.
-
-        Orchestrates tool execution by extracting pending calls, executing them,
-        and building the updated state.
-        """
-        logger.info(
-            "react_act",
-            request_id=state["request_id"],
-            iteration=state["iteration"],
-        )
-
-        pending_calls = self._extract_pending_tool_calls(state)
-        results = await self._execute_all_tools(pending_calls, state["request_id"])
-        return self._build_act_result(state, results)
-
-    def _extract_pending_tool_calls(self, state: AgentState) -> list[dict[str, Any]]:
-        """Extract tool calls from the last assistant message.
-
-        Returns:
-            List of tool call dictionaries with id, function name, and arguments.
-        """
-        last_message = state["messages"][-1] if state["messages"] else {}
-        return cast(list[dict[str, Any]], last_message.get("tool_calls", []))
-
-    async def _execute_all_tools(
-        self, pending_calls: list[dict[str, Any]], request_id: str
-    ) -> tuple[list[dict[str, Any]], list[ToolCall]]:
-        """Execute all pending tool calls and collect results.
-
-        Args:
-            pending_calls: List of tool call dictionaries from the assistant message.
-            request_id: Request ID for logging.
-
-        Returns:
-            Tuple of (new_messages, new_tool_calls) containing tool response messages
-            and ToolCall objects.
-        """
-        new_messages: list[dict[str, Any]] = []
-        new_tool_calls: list[ToolCall] = []
-
-        for tool_call in pending_calls:
-            func_name = tool_call["function"]["name"]
-            tool_call_id = tool_call["id"]
-            func_args = self._parse_tool_arguments(tool_call["function"]["arguments"])
-            tool_category = self._get_tool_category(func_name)
-
-            logger.info(
-                "executing_tool",
-                request_id=request_id,
-                tool=func_name,
-                tool_call_id=tool_call_id,
-            )
-
-            result = await self._execute_tool(func_name, func_args)
-
-            if result.get("status") == "error":
-                error_msg = result.get("error", "Unknown tool error")
-                logger.error(
-                    "tool_execution_error",
-                    request_id=request_id,
-                    tool=func_name,
-                    tool_call_id=tool_call_id,
-                    error=error_msg,
-                )
-                new_tool_calls.append(
-                    ToolCall(
-                        tool_name=func_name,
-                        category=tool_category,
-                        arguments=func_args,
-                        error=error_msg,
-                    )
-                )
-                # Report error back to LLM so it can reason about it
-                new_messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call_id,
-                        "name": func_name,
-                        "content": json.dumps({"error": error_msg}),
-                    }
-                )
-            else:
-                tool_data = result.get("data", {})
-                tool_meta = result.get("meta", {})
-                tool_data, tool_meta = self._normalize_tool_success_payload(
-                    tool_category, tool_data, tool_meta
-                )
-                logger.info(
-                    "tool_execution_success",
-                    request_id=request_id,
-                    tool=func_name,
-                    tool_call_id=tool_call_id,
-                )
-                new_tool_calls.append(
-                    ToolCall(
-                        tool_name=func_name,
-                        category=tool_category,
-                        arguments=func_args,
-                        result=tool_data,
-                        trace_meta=tool_meta,
-                    )
-                )
-                new_messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call_id,
-                        "name": func_name,
-                        "content": json.dumps(tool_data),
-                    }
-                )
-
-        return new_messages, new_tool_calls
-
-    @staticmethod
-    def _normalize_tool_success_payload(
-        tool_category: str | None,
-        tool_data: Any,
-        tool_meta: Any,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Normalize tool payloads before storing them in agent state."""
-        if (
-            tool_category == "environment"
-            and isinstance(tool_data, dict)
-            and "data" in tool_data
-            and isinstance(tool_data.get("meta"), dict)
-        ):
-            tool_meta = tool_data["meta"]
-            tool_data = tool_data["data"]
-
-        if not isinstance(tool_meta, dict):
-            tool_meta = {}
-
-        if not isinstance(tool_data, dict):
-            tool_data = {"result": tool_data}
-
-        return tool_data, tool_meta
-
-    def _build_act_result(
-        self,
-        state: AgentState,
-        results: tuple[list[dict[str, Any]], list[ToolCall]],
-    ) -> dict[str, Any]:
-        """Build the state update from tool execution results.
-
-        Args:
-            state: Current agent state.
-            results: Tuple of (new_messages, new_tool_calls) from tool execution.
-
-        Returns:
-            State update dictionary with merged messages, tool calls, and incremented iteration.
-        """
-        new_messages, new_tool_calls = results
-        return {
-            "messages": state["messages"] + new_messages,
-            "tool_calls": state["tool_calls"] + new_tool_calls,
-            "iteration": state["iteration"] + 1,
-        }
-
-    @staticmethod
-    def _get_tool_category(tool_name: str) -> str | None:
-        """Resolve category from the registered tool metadata when available."""
-        try:
-            return tool_registry.get_tool(tool_name).get_metadata().category
-        except Exception:  # noqa: BLE001
-            return None
-
-    @staticmethod
-    def _parse_tool_arguments(raw_args: str | dict[str, Any]) -> dict[str, Any]:
-        """Parse tool arguments from string or dict with fallback."""
-        if isinstance(raw_args, dict):
-            return raw_args
-        try:
-            return json.loads(raw_args)  # type: ignore[no-any-return]
-        except (json.JSONDecodeError, TypeError):
-            return {"query": raw_args}
-
     def _should_continue(
         self, state: AgentState
     ) -> Literal["continue", "finalize", "max_iterations"]:
@@ -385,6 +191,68 @@ class ReActAgent:
             return "finalize"
 
         return "continue"
+
+    async def _act_node(self, state: AgentState) -> dict[str, Any]:
+        """Action step: execute tool calls from the last assistant message.
+
+        Orchestrates tool execution by extracting pending calls, executing them,
+        and building the updated state.
+        """
+        logger.info(
+            "react_act",
+            request_id=state["request_id"],
+            iteration=state["iteration"],
+        )
+
+        pending_calls = self._extract_pending_tool_calls(state)
+        new_messages, tool_results = await self._execute_all_tools(
+            pending_calls, state["request_id"]
+        )
+        return self._build_act_result(state, new_messages, tool_results)
+
+    def _extract_pending_tool_calls(self, state: AgentState) -> list[dict[str, Any]]:
+        """Extract tool calls from the last assistant message.
+
+        Returns:
+            List of tool call dictionaries with id, function name, and arguments.
+        """
+        last_message = state["messages"][-1] if state["messages"] else {}
+        return cast(list[dict[str, Any]], last_message.get("tool_calls", []))
+
+    def _build_act_result(
+        self,
+        state: AgentState,
+        new_messages: list[dict[str, Any]],
+        tool_results: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Build the state update from tool execution results.
+
+        Args:
+            state: Current agent state.
+            new_messages: Tool response messages.
+            tool_results: Structured tool result objects.
+
+        Returns:
+            State update dictionary with merged messages, tool calls, and incremented iteration.
+        """
+        # Convert generic tool_results to ReAct-specific ToolCall objects
+        react_tool_calls = [
+            ToolCall(
+                tool_name=result["tool_name"],
+                category=result.get("category"),
+                arguments=result["arguments"],
+                error=result.get("error"),
+                result=result.get("result"),
+                trace_meta=result.get("trace_meta"),
+            )
+            for result in tool_results
+        ]
+
+        return {
+            "messages": state["messages"] + new_messages,
+            "tool_calls": state["tool_calls"] + react_tool_calls,
+            "iteration": state["iteration"] + 1,
+        }
 
     def _finalize_node(self, state: AgentState) -> dict[str, Any]:
         """Prepare the final response and set completion metadata."""
@@ -409,46 +277,6 @@ class ReActAgent:
             updates["status"] = "completed"
 
         return updates
-
-    async def _execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Execute a tool call using the registry.
-
-        Always returns a uniform dict with a ``status`` key so callers can
-        branch on success/error without inspecting arbitrary key presence.
-
-        Args:
-            tool_name: Name of the tool to invoke.
-            arguments: Parsed arguments to pass to the tool.
-
-        Returns:
-            ``{"status": "success", "data": ...}`` on success, or
-            ``{"status": "error", "error": ..., "message": ...}`` on failure.
-            Never raises — all exceptions are captured and returned as error dicts.
-        """
-        try:
-            result = await tool_registry.execute_tool(tool_name, arguments)
-
-            if result.success:
-                return {"status": "success", "data": cast(dict[str, Any], result.data)}
-
-            error_msg = result.error or "Tool reported failure without a message"
-            logger.warning("tool_execution_failed", tool=tool_name, error=error_msg)
-            return {
-                "status": "error",
-                "error": error_msg,
-                "message": f"Tool execution failed: {error_msg}",
-            }
-        except Exception as e:
-            logger.error("tool_execution_unexpected_error", tool=tool_name, error=str(e))
-            return {
-                "status": "error",
-                "error": str(e),
-                "message": f"Unexpected tool error: {str(e)}",
-            }
-
-    def _get_tool_definitions(self) -> list[dict[str, Any]]:
-        """Get OpenAI function calling schemas for all tools."""
-        return tool_registry.get_openai_functions()
 
     async def run(
         self,
