@@ -17,28 +17,30 @@ from langchain_core.messages import (
 @pytest.fixture()
 def mock_settings() -> MagicMock:
     settings = MagicMock()
-    settings.AWS_DEFAULT_REGION = "us-east-1"
-    settings.AWS_PROFILE = None
-    settings.AWS_ACCESS_KEY_ID = "test-key"
-    settings.AWS_SECRET_ACCESS_KEY = "test-secret"  # noqa: S105
-    settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
-    settings.BEDROCK_TEMPERATURE = 0.0
-    settings.BEDROCK_MAX_TOKENS = 4000
-    settings.BEDROCK_CONNECT_TIMEOUT_SECONDS = 60
-    settings.BEDROCK_READ_TIMEOUT_SECONDS = 300
+    # Update to match the new nested Pydantic schema structure
+    settings.bedrock.region = "us-east-1"
+    settings.bedrock.aws_profile = None
+    settings.bedrock.aws_access_key_id = "test-key"
+    settings.bedrock.aws_secret_access_key = "test-secret"  # noqa: S105
+    settings.bedrock.temperature = 0.0
+    settings.bedrock.max_tokens = 4000
+    settings.bedrock.connect_timeout_seconds = 60
+    settings.bedrock.read_timeout_seconds = 300
+    settings.react_agent.model_id = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     return settings
 
 
 @pytest.fixture()
 def llm_service(mock_settings: MagicMock) -> Generator[LLMService, None, None]:
+    # Mock settings directly
     with (
-        patch("app.services.llm_service.get_settings", return_value=mock_settings),
+        patch("app.services.llm_service.settings", mock_settings),
         patch("app.services.llm_service.boto3") as mock_boto3,
         patch("app.services.llm_service.ChatBedrock") as mock_chat_bedrock,
     ):
         mock_boto3.client.return_value = MagicMock()
         mock_llm = MagicMock()
-        mock_llm.model_id = mock_settings.BEDROCK_MODEL_ID
+        mock_llm.model_id = mock_settings.react_agent.model_id
         mock_chat_bedrock.return_value = mock_llm
         service = LLMService()
         yield service
@@ -303,8 +305,9 @@ class TestExtractThought:
 
 class TestLLMServiceInit:
     def test_uses_settings_values(self, mock_settings: MagicMock) -> None:
+        # Patch settings directly
         with (
-            patch("app.services.llm_service.get_settings", return_value=mock_settings),
+            patch("app.services.llm_service.settings", mock_settings),
             patch("app.services.llm_service.boto3") as mock_boto3,
             patch("app.services.llm_service.ChatBedrock") as mock_chat_bedrock,
         ):

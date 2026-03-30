@@ -159,10 +159,8 @@ dependencies = [
     { name = "beliefcraft-database" },
     { name = "beliefcraft-environment-api" },
     { name = "beliefcraft-rag-service" },
-    { name = "boto3-stubs" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "respx" },
 ]
 
 [package.dev-dependencies]
@@ -194,10 +192,8 @@ requires-dist = [
     { name = "beliefcraft-database", editable = "packages/database" },
     { name = "beliefcraft-environment-api", editable = "services/environment-api" },
     { name = "beliefcraft-rag-service", editable = "services/rag-service" },
-    { name = "boto3-stubs", specifier = "~=1.42.59" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.0" },
-    { name = "respx", specifier = ">=0.22.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -230,6 +226,7 @@ dependencies = [
     { name = "anthropic" },
     { name = "beliefcraft-common" },
     { name = "boto3" },
+    { name = "boto3-stubs" },
     { name = "fastapi" },
     { name = "fastmcp" },
     { name = "httpx" },
@@ -241,6 +238,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "redis" },
+    { name = "respx" },
     { name = "structlog" },
     { name = "tenacity" },
     { name = "uvicorn", extra = ["standard"] },
@@ -258,6 +256,7 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.18.0" },
     { name = "beliefcraft-common", editable = "packages/common" },
     { name = "boto3", specifier = ">=1.34" },
+    { name = "boto3-stubs", specifier = "~=1.42.59" },
     { name = "fastapi", specifier = ">=0.110" },
     { name = "fastmcp", specifier = ">=3" },
     { name = "httpx", specifier = ">=0.27" },
@@ -269,6 +268,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "redis", specifier = ">=5.0" },
+    { name = "respx", specifier = ">=0.22.0" },
     { name = "structlog", specifier = ">=24.0" },
     { name = "tenacity", specifier = ">=8.2" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27" },
