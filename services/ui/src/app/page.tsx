@@ -63,8 +63,8 @@ const DEFAULT_CONTEXT: QueryContext = {
   constraints: '',
 };
 
-const buildQuery = (context: QueryContext) =>
-  `${PROBLEM_DEFINITION} Origin: ${context.origin}, Destination: ${context.destination}. ` +
+const buildQuery = (context: QueryContext, problemDef: string = PROBLEM_DEFINITION) =>
+  `${problemDef} Origin: ${context.origin}, Destination: ${context.destination}. ` +
   `Product: ${context.product}. Transport Mode: ${context.transportMode}. ` +
   `Objective: ${context.objective}. Budget: ${context.budget}. Constraints: ${context.constraints}.`;
 
@@ -92,7 +92,8 @@ const formatTimestamp = (value?: string) => {
 };
 
 export default function Home() {
-  const [problemDefinitionDisplay, setProblemDefinitionDisplay] = useState('');
+  const [problemDefinitionDisplay, setProblemDefinitionDisplay] = useState(PROBLEM_DEFINITION);
+  const [submittedProblemDef, setSubmittedProblemDef] = useState(PROBLEM_DEFINITION);
   const [origin, setOrigin] = useState(DEFAULT_CONTEXT.origin);
   const [destination, setDestination] = useState(DEFAULT_CONTEXT.destination);
   const [transportMode, setTransportMode] = useState(DEFAULT_CONTEXT.transportMode);
@@ -157,7 +158,7 @@ export default function Home() {
     };
   }, []);
 
-  const submittedQuery = useMemo(() => buildQuery(submitted), [submitted]);
+  const submittedQuery = useMemo(() => buildQuery(submitted, submittedProblemDef), [submitted, submittedProblemDef]);
 
   const memoTitle = response?.task || response?.query?.slice(0, 60) || '—';
   const memoId = response?.request_id
@@ -166,7 +167,8 @@ export default function Home() {
   const memoTimestamp = response?.timestamp ? formatTimestamp(response.timestamp) : '—';
 
   const clearForm = () => {
-    setProblemDefinitionDisplay('');
+    setProblemDefinitionDisplay(PROBLEM_DEFINITION);
+    setSubmittedProblemDef(PROBLEM_DEFINITION);
     setOrigin('');
     setDestination('');
     setTransportMode('');
@@ -202,7 +204,7 @@ export default function Home() {
       constraints: constraints.trim(),
     };
 
-    const query = buildQuery(nextContext);
+    const query = buildQuery(nextContext, problemDefinitionDisplay);
     if (query.length < 10 || query.length > 1000) {
       setError('Final query must be between 10 and 1000 characters.');
       return;
@@ -212,7 +214,7 @@ export default function Home() {
     setIsLoading(true);
     setResponse(null);
     setSubmitted(nextContext);
-    setProblemDefinitionDisplay(PROBLEM_DEFINITION);
+    setSubmittedProblemDef(problemDefinitionDisplay);
 
     const body = {
       query,
@@ -488,7 +490,7 @@ export default function Home() {
                 rows={3}
                 value={problemDefinitionDisplay}
                 placeholder={EMPTY_OPTION_LABEL}
-                readOnly
+                onChange={(e) => setProblemDefinitionDisplay(e.target.value)}
               />
             </div>
 

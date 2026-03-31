@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const ENV_API_URL = process.env.VITE_ENV_API_URL ?? 'http://localhost:8000';
+const ENV_API_URL = process.env.ENV_API_URL ?? 'http://localhost:8000';
 
 export async function GET() {
   const resp = await fetch(`${ENV_API_URL}/api/v1/form-options`, {

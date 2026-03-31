@@ -264,7 +264,7 @@ class EnvironmentAPIClient(BaseAPIClient):
         if purchase_order_id:
             params["purchase_order_id"] = purchase_order_id
         if purchase_order_ids:
-            params["purchase_order_ids"] = ",".join(purchase_order_ids)
+            params["purchase_order_ids"] = purchase_order_ids
 
         return await self.get(
             "/api/v1/smart-query/procurement/po-lines", params=params, timeout=timeout
