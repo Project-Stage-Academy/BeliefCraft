@@ -143,6 +143,7 @@ def client(db_session: Session) -> TestClient:
             "environment_api.smart_query_builder.tools.observed_inventory_tools.get_session",
             mock_get_session,
         ),
+        patch("environment_api.api.form_options.get_session", mock_get_session),
     ]
 
     with contextlib.ExitStack() as stack:

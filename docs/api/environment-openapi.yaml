@@ -1103,8 +1103,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/form-options:
+    get:
+      tags:
+      - form-options
+      summary: Get Form Options
+      description: Return cached form options for dropdown fields.
+      operationId: get_form_options_api_v1_form_options_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormOptionsResponse'
 components:
   schemas:
+    FormOptionsResponse:
+      properties:
+        origins:
+          items:
+            type: string
+          type: array
+          title: Origins
+        destinations:
+          items:
+            type: string
+          type: array
+          title: Destinations
+        products:
+          items:
+            $ref: '#/components/schemas/ProductOption'
+          type: array
+          title: Products
+        transport_modes:
+          items:
+            type: string
+          type: array
+          title: Transport Modes
+      additionalProperties: false
+      type: object
+      required:
+      - origins
+      - destinations
+      - products
+      - transport_modes
+      title: FormOptionsResponse
     HTTPValidationError:
       properties:
         detail:
@@ -1130,6 +1174,22 @@ components:
       - supplier
       - warehouse_supplier
       title: ProcurementGroupBy
+    ProductOption:
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: Name
+        category:
+          type: string
+          minLength: 1
+          title: Category
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - category
+      title: ProductOption
     TopologyLocationType:
       type: string
       enum:
