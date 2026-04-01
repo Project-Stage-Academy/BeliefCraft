@@ -375,13 +375,13 @@ class DocumentAssembler:
         blocks: list[dict[str, Any]],
     ) -> set[int]:
         used: set[int] = set()
-        used_block_ids: set[int] = set()
         visual_items = self.image_map.get(page_num, [])
         captioned_images = []
 
         for eid, v_obj in zip(
             (v.get("entity_id") for v in visual_items), visual_items, strict=False
         ):
+            used_block_ids: set[int] = set()
             # attach link to the closest valid paddle block above if this is a text figure
             if v_obj.get("chunk_type") == "text" and "image_index" in v_obj:
                 v_y, target_block = v_obj.get("bbox", [0, 0, 0, 0])[1], None
