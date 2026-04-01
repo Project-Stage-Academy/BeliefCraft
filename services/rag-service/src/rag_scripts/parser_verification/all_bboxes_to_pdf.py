@@ -189,7 +189,10 @@ def load_chunks(path: Path) -> list[dict[str, Any]]:
 def get_chunk_id_by_block_id(chunks: list[dict[str, Any]], block_id: str) -> str | None:
     """Return the chunk_id that contains the given pdf block_id"""
     for chunk in chunks:
-        if block_id in chunk["pdf_block_ids"]:
+        pdf_block_ids = chunk.get("pdf_block_ids")
+        if not isinstance(pdf_block_ids, list):
+            continue
+        if block_id in pdf_block_ids:
             return str(chunk["chunk_id"])
     return None
 
