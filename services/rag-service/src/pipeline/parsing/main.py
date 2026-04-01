@@ -49,6 +49,11 @@ def load_bucket_url_from_env() -> str | None:
     return os.getenv("FIGURES_BUCKET_URL")
 
 
+def format_block_number(page_num: int, block_num: int) -> str:
+    """Formats block number as '{page_num}:{block_num}'."""
+    return f"{page_num}:{block_num}"
+
+
 class DocumentAssembler:
     def __init__(
         self,
@@ -95,6 +100,7 @@ class DocumentAssembler:
         # accumulates image links from paddle blocks to be attached to the next text chunk
         self._acc_links: list[str] = []
         self._acc_start_page: int | None = None
+        self._acc_block_ids: list[str] = []
         self._last_numbered_formula_chunks: list[dict[str, Any]] = []
         self._not_captioned_images: list[dict[str, Any]] = []
 
@@ -219,12 +225,14 @@ class DocumentAssembler:
             meta_override=prev_meta,
             c_type="exercise" if prev_is_ex else "text",
             entity_id=e_id,
+            block_ids=self._acc_block_ids,
         )
         if chunk and chunk["chunk_type"] in ["text", "exercise"]:
             for formula_chunk in self._last_numbered_formula_chunks:
                 formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
             self._last_numbered_formula_chunks = []
         self._acc = []
+        self._acc_block_ids = []
         self._acc_links = []
         self._acc_start_page = None
 
@@ -246,12 +254,14 @@ class DocumentAssembler:
                 self._acc,
                 self._acc_start_page or last_processed_page,
                 c_type="exercise" if is_ex_now else "text",
+                block_ids=self._acc_block_ids,
             )
             if chunk and chunk["chunk_type"] in ["text", "exercise"]:
                 for formula_chunk in self._last_numbered_formula_chunks:
                     formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
                 self._last_numbered_formula_chunks = []
             self._acc = []
+            self._acc_block_ids = []
             # reset links accumulator after final flush
             self._acc_links = []
             self._acc_start_page = None
@@ -332,7 +342,7 @@ class DocumentAssembler:
             full_text = "\n".join(data["content"])
             meta = self.meta_extractor.process_content_and_get_meta(full_text, update_meta=False)
             chunk = self._create_chunk_obj(
-                data["chunk_type"], full_text, page_num, meta, entity_id=eid
+                data["chunk_type"], full_text, page_num, meta, data["block_ids"], entity_id=eid
             )
 
             if "formula_chunks" in data:
@@ -360,6 +370,7 @@ class DocumentAssembler:
         blocks: list[dict[str, Any]],
     ) -> set[int]:
         used: set[int] = set()
+        used_block_ids: set[int] = set()
         visual_items = self.image_map.get(page_num, [])
         captioned_images = []
 
@@ -381,16 +392,31 @@ class DocumentAssembler:
                         f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
                     )
 
+            clean_content = v_obj.get("caption", v_obj.get("content", "")).strip()
+
+            entity_number = self._extract_id(clean_content, full=True)
+            block_id = None
             for idx, block in enumerate(blocks):
                 bbox = block.get("block_bbox")
                 if bbox and self._is_inside(bbox, v_obj.get("bbox", [])):
                     used.add(idx)
+                    used_block_ids.add(block["block_id"])
 
-            clean_content = v_obj.get("caption", v_obj.get("content", "")).strip()
+                if entity_number in block.get("block_content", ""):
+                    block_id = format_block_number(page_num, block["block_id"])
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
+            formated_used = [format_block_number(page_num, idx) for idx in used_block_ids]
+            chunk_block_ids = formated_used.copy()
+            if block_id is not None:
+                chunk_block_ids.append(block_id)
             chunk = self._create_chunk_obj(
-                v_obj["chunk_type"].lower(), clean_content, page_num, meta_res, entity_id=eid
+                v_obj["chunk_type"].lower(),
+                clean_content,
+                page_num,
+                meta_res,
+                chunk_block_ids,
+                entity_id=eid,
             )
 
             if "image_index" in v_obj:
@@ -461,9 +487,16 @@ class DocumentAssembler:
                         break
 
             text = BeautifulSoup(content, "html.parser").get_text().strip().lower()
-            if re.search(r"^(example|algorithm|figure|table)\s+([a-z\d]+\.\d+)\.", text):
+            if match := re.search(r"^(example|algorithm|figure|table)\s+([a-z\d]+\.\d+)\.", text):
                 # this is caption, it will be added to corresponding
                 # numbered entity chunk, ignore here
+                match_str = match.group(0)
+                split = match_str.split(" ")
+                key = (split[1][:-1].upper(), split[0])  # (number, type)
+                if special_block := special_accs.get(key):
+                    special_block.setdefault("block_ids", []).append(
+                        format_block_number(page_num, block["block_id"])
+                    )
                 continue
 
             # Capture hierarchy state before processing the current block.
@@ -477,15 +510,26 @@ class DocumentAssembler:
                 self._flush_accumulated_chunk(page_num, prev_meta)
 
             if label == "table":
-                was_numbered_table = self._process_table(content, page_num, temp_meta)
+                was_numbered_table = self._process_table(
+                    content, page_num, temp_meta, format_block_number(page_num, block["block_id"])
+                )
                 if was_numbered_table:
                     continue
 
             if label == "formula_number" and content in self.formula_map:
                 formula_id = content[1:-1]  # Remove parentheses
-                f_chunk = self._add_formula_chunk(formula_id, page_num)
+                f_chunk = self._add_formula_chunk(
+                    formula_id,
+                    page_num,
+                    format_block_number(
+                        page_num, block["block_id"] - 1
+                    ),  # formulas are usually right above the block that references them
+                )
                 if matched_key:
                     special_accs[matched_key].setdefault("formula_chunks", []).append(f_chunk)
+                    special_accs[matched_key].setdefault("block_ids", []).append(
+                        format_block_number(page_num, block["block_id"])
+                    )
                 else:
                     self._last_numbered_formula_chunks.append(f_chunk)
 
@@ -495,6 +539,9 @@ class DocumentAssembler:
                 if matched_key:
                     special_accs[matched_key].setdefault("image_links", []).extend(block_links)
                     special_accs[matched_key]["content"].append(content)
+                    special_accs[matched_key].setdefault("block_ids", []).append(
+                        format_block_number(page_num, block["block_id"])
+                    )
                 else:
                     split_on_ex = is_ex_sub and is_new_ex and self._acc
                     split_on_len = (
@@ -510,12 +557,14 @@ class DocumentAssembler:
                             self._acc_start_page or page_num,
                             c_type="exercise" if is_ex_sub else "text",
                             entity_id=e_id,
+                            block_ids=self._acc_block_ids,
                         )
                         if chunk and chunk["chunk_type"] in ["text", "exercise"]:
                             for formula_chunk in self._last_numbered_formula_chunks:
                                 formula_chunk["defined_in_chunk"] = chunk["chunk_id"]
                             self._last_numbered_formula_chunks = []
                         self._acc = []
+                        self._acc_block_ids = []
                         # reset links accumulator after flush
                         self._acc_links = []
                         self._acc_start_page = None
@@ -523,12 +572,15 @@ class DocumentAssembler:
                     if not self._acc:
                         self._acc_start_page = page_num
                     self._acc.append(content)
+                    self._acc_block_ids.append(format_block_number(page_num, block["block_id"]))
                     # accumulate links for normal text chunks
                     self._acc_links.extend(block_links)
 
         return special_accs
 
-    def _process_table(self, content: str, page_num: int, temp_meta: dict[str, Any]) -> bool:
+    def _process_table(
+        self, content: str, page_num: int, temp_meta: dict[str, Any], block_id: str
+    ) -> bool:
         for possible_table in self.table_map.get(page_num, []):
             if clean_html_attributes(content) == possible_table["table_content"].strip():
                 caption = re.sub("<[^<]+?>", "", possible_table.get("caption_content", ""))
@@ -538,6 +590,7 @@ class DocumentAssembler:
                     clean_html_attributes(content),
                     page_num,
                     temp_meta,
+                    [block_id],
                     entity_id=e_id,
                 )
                 chunk.update(
@@ -551,11 +604,11 @@ class DocumentAssembler:
                 return True
         return False
 
-    def _add_formula_chunk(self, f_id: str, page_num: int) -> dict[str, Any]:
+    def _add_formula_chunk(self, f_id: str, page_num: int, block_id: str) -> dict[str, Any]:
         meta_now = self.meta_extractor.get_meta()
         formula_content = self.formula_map.get(f"({f_id})", f"Formula {f_id}")
         f_chunk = self._create_chunk_obj(
-            "numbered_formula", formula_content, page_num, meta_now, entity_id=f_id
+            "numbered_formula", formula_content, page_num, meta_now, [block_id], entity_id=f_id
         )
         self.final_chunks.append(f_chunk)
         return f_chunk
@@ -566,6 +619,7 @@ class DocumentAssembler:
         content: str,
         page: int,
         meta: dict[str, Any],
+        block_ids: list[str],
         entity_id: str | None = None,
     ) -> dict[str, Any]:
         final_type = "exercise" if meta.get("is_exercise") or c_type == "exercise" else c_type
@@ -592,6 +646,7 @@ class DocumentAssembler:
             "content": content,
             "page": page,
             "image_links": [],
+            "pdf_block_ids": block_ids,
         }
 
         if hasattr(self.meta_extractor, "get_references"):
@@ -625,6 +680,7 @@ class DocumentAssembler:
         meta_override: dict[str, Any] | None = None,
         c_type: str = "text",
         entity_id: str | None = None,
+        block_ids: list[str] | None = None,
     ) -> dict[str, Any] | None:
         raw_text = "\n".join(acc)
         meta_res = self.meta_extractor.process_content_and_get_meta(raw_text, update_meta=False)
@@ -645,8 +701,9 @@ class DocumentAssembler:
         is_part_chunk = re.match(r"^PART\s[IV]+$", meta_res["clean_content"].strip())
         if not meta_res["clean_content"] or is_part_chunk:
             return None
+        safe_block_ids = block_ids or []
         chunk = self._create_chunk_obj(
-            c_type, meta_res["clean_content"], page, meta_res, entity_id=entity_id
+            c_type, meta_res["clean_content"], page, meta_res, safe_block_ids, entity_id=entity_id
         )
         # add links accumulated from paddle blocks in normal text stream
         chunk["image_links"].extend(self._acc_links)
@@ -666,7 +723,7 @@ class DocumentAssembler:
         self.final_chunks.append(chunk)
         return chunk
 
-    def _extract_id(self, text: str | None) -> str | None:
+    def _extract_id(self, text: str | None, full: bool = False) -> str | None:
         if not text:
             return None
         # Спочатку шукаємо за суворим шаблоном
@@ -676,7 +733,10 @@ class DocumentAssembler:
         if not m:
             # Якщо не знайшли, шукаємо просто число формату X.X (наприклад, "4.4")
             m = re.search(r"\b([a-zA-Z\d]+\.\d+)\b", str(text))
-        return m.group(1) if m else None
+
+        if m:
+            return m.group(0) if full else m.group(1)
+        return None
 
     def _save(self) -> None:
         output = Path("ULTIMATE_BOOK_DATA.json")
