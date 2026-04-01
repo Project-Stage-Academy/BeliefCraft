@@ -22,8 +22,8 @@ logger = configure_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.clients.rag_mcp_client import RAGMCPClient
-    from app.tools import (
-        ToolRegistryFactory,
+    from app.tools import ToolRegistryFactory
+    from app.tools.registration import (
         register_mcp_rag_tools,
         register_skill_tools,
     )
