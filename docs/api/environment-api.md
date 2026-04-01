@@ -14,6 +14,7 @@ This service is **not** implemented as an MCP server in the current repository.
 - Local: `http://localhost:8000`
 - Health: `GET /health`
 - API group: `/api/v1/smart-query`
+- Form options: `GET /api/v1/form-options`
 
 ## Endpoint Contract
 All smart-query endpoints return:
@@ -48,6 +49,18 @@ Example:
   "env": "local"
 }
 ```
+
+### GET `/api/v1/form-options`
+Returns dropdown options for UI forms.
+
+Response fields:
+- `origins`: unique `name` values from warehouses and suppliers
+- `destinations`: unique `name` values from warehouses
+- `products`: objects with `name` and `category`
+- `transport_modes`: unique route `mode` values
+
+Caching:
+- Server-side cache with TTL (`config/default.yaml` → `cache.ttl_seconds`)
 
 ### GET `/api/v1/smart-query/inventory/moves`
 Returns inventory movement records.

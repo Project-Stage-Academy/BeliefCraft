@@ -125,6 +125,10 @@ services:
       - "3000:3000"
     env_file:
       - ./services/ui/.env
+    environment:
+      - ENV_API_URL=http://environment-api:8000
+      - RAG_API_URL=http://rag-service:8001
+      - AGENT_API_URL=http://agent-service:8003
     command: ["sh", "-c", "npm run dev -- --hostname 0.0.0.0 --port 3000"]
     volumes:
       - ./services/ui:/app/services/ui
