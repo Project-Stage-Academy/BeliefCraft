@@ -402,7 +402,7 @@ class DocumentAssembler:
                     used.add(idx)
                     used_block_ids.add(block["block_id"])
 
-                if entity_number in block.get("block_content", ""):
+                if entity_number and entity_number in block.get("block_content", ""):
                     block_id = format_block_number(page_num, block["block_id"])
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
