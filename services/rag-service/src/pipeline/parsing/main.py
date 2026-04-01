@@ -653,7 +653,7 @@ class DocumentAssembler:
             "content": content,
             "page": page,
             "image_links": [],
-            "pdf_block_ids": block_ids,
+            "pdf_block_ids": block_ids if block_ids is not None else [],
         }
 
         if hasattr(self.meta_extractor, "get_references"):
