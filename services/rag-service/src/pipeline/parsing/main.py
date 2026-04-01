@@ -342,7 +342,12 @@ class DocumentAssembler:
             full_text = "\n".join(data["content"])
             meta = self.meta_extractor.process_content_and_get_meta(full_text, update_meta=False)
             chunk = self._create_chunk_obj(
-                data["chunk_type"], full_text, page_num, meta, data.get("block_ids", []), entity_id=eid
+                data["chunk_type"],
+                full_text,
+                page_num,
+                meta,
+                data.get("block_ids", []),
+                entity_id=eid,
             )
 
             if "formula_chunks" in data:
