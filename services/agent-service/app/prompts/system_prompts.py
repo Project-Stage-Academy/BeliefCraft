@@ -101,8 +101,6 @@ and decision points.
 
 REACT_LOOP_PROMPT = """You are in a ReAct (Reasoning + Acting) loop.
 
-Current iteration: {iteration}/{max_iterations}
-
 User query:
 <query>
 {user_query}
@@ -122,6 +120,8 @@ INSTRUCTIONS for this step:
 4. If you have sufficient information, provide the FINAL ANSWER.
 
 If you are ready to answer, start your response with "FINAL ANSWER:".
+
+Current iteration: {iteration}/{max_iterations}
 """
 
 
@@ -356,8 +356,10 @@ def format_react_prompt(state: Mapping[str, Any]) -> str:
     """
     history: list[str] = []
     for iteration in build_iteration_history(state):
-        iter_log = [f'  <iteration index="{iteration["iteration"]}">']
-        iter_log.append(f'    <thinking>{iteration["thought"]}</thinking>')
+        iter_log = [
+            f'  <iteration index="{iteration["iteration"]}">',
+            f'    <thinking>{iteration["thought"]}</thinking>',
+        ]
 
         for action in iteration["actions"]:
             iter_log.extend(_format_action_xml(action))

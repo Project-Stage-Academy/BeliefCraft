@@ -512,3 +512,138 @@ class TestGetWarehouseAdvisorPrompt:
         else:
             # Catalog should still be present
             assert catalog_pos != -1
+
+
+class TestReactPromptCachingPrefixStability:
+    """Tests to protect append-only prompt growth assumptions for KV caching."""
+
+    @staticmethod
+    def _extract_history(prompt: str) -> str:
+        start_tag = "<history>\n"
+        end_tag = "\n</history>"
+        start = prompt.index(start_tag) + len(start_tag)
+        end = prompt.index(end_tag, start)
+        return prompt[start:end]
+
+    def test_history_prefix_is_stable_when_appending_iteration(self) -> None:
+        base_state = {
+            "iteration": 2,
+            "max_iterations": 6,
+            "user_query": "Analyze discrepancy risk",
+            "thoughts": [
+                ThoughtStep(
+                    thought="Gather inventory deltas",
+                    reasoning="Need recent movement context",
+                    next_action="tool_use",
+                )
+            ],
+            "tool_calls": [
+                ToolCall(
+                    tool_name="list_inventory_moves",
+                    arguments={"window": "24h"},
+                    result={"count": 4},
+                )
+            ],
+        }
+
+        appended_state = {
+            "iteration": 3,
+            "max_iterations": 6,
+            "user_query": "Analyze discrepancy risk",
+            "thoughts": [
+                ThoughtStep(
+                    thought="Gather inventory deltas",
+                    reasoning="Need recent movement context",
+                    next_action="tool_use",
+                ),
+                ThoughtStep(
+                    thought="Check device anomalies",
+                    reasoning="Need to explain movement spikes",
+                    next_action="tool_use",
+                ),
+            ],
+            "tool_calls": [
+                ToolCall(
+                    tool_name="list_inventory_moves",
+                    arguments={"window": "24h"},
+                    result={"count": 4},
+                ),
+                ToolCall(
+                    tool_name="list_device_alerts",
+                    arguments={"severity": "high"},
+                    result={"alerts": 1},
+                ),
+            ],
+        }
+
+        base_prompt = format_react_prompt(base_state)
+        appended_prompt = format_react_prompt(appended_state)
+        base_history = self._extract_history(base_prompt)
+        appended_history = self._extract_history(appended_prompt)
+
+        assert appended_history.startswith(base_history)
+        assert '<iteration index="2">' in appended_history
+        assert "Check device anomalies" in appended_history
+        assert '<action tool="list_device_alerts">' in appended_history
+
+    def test_overall_prompt_prefix_is_stable_when_appending_iteration(self) -> None:
+        base_state = {
+            "iteration": 2,
+            "max_iterations": 6,
+            "user_query": "Assess stockout exposure",
+            "thoughts": [
+                ThoughtStep(
+                    thought="Query current stock",
+                    reasoning="Need baseline inventory",
+                    next_action="tool_use",
+                )
+            ],
+            "tool_calls": [
+                ToolCall(
+                    tool_name="get_inventory_data",
+                    arguments={"sku": "ABC-123"},
+                    result={"on_hand": 12},
+                )
+            ],
+        }
+
+        appended_state = {
+            "iteration": 3,
+            "max_iterations": 6,
+            "user_query": "Assess stockout exposure",
+            "thoughts": [
+                ThoughtStep(
+                    thought="Query current stock",
+                    reasoning="Need baseline inventory",
+                    next_action="tool_use",
+                ),
+                ThoughtStep(
+                    thought="Estimate lead-time risk",
+                    reasoning="Need fulfillment uncertainty",
+                    next_action="tool_use",
+                ),
+            ],
+            "tool_calls": [
+                ToolCall(
+                    tool_name="get_inventory_data",
+                    arguments={"sku": "ABC-123"},
+                    result={"on_hand": 12},
+                ),
+                ToolCall(
+                    tool_name="get_supplier_lead_time",
+                    arguments={"supplier": "S-9"},
+                    result={"days": 5},
+                ),
+            ],
+        }
+
+        base_prompt = format_react_prompt(base_state)
+        appended_prompt = format_react_prompt(appended_state)
+        base_history = self._extract_history(base_prompt)
+
+        prefix_through_base_history = base_prompt.split(base_history, 1)[0] + base_history
+
+        assert appended_prompt.startswith(prefix_through_base_history)
+        assert "You are in a ReAct (Reasoning + Acting) loop." in appended_prompt
+        assert "<query>" in appended_prompt
+        assert "Current iteration: 3/6" in appended_prompt
