@@ -1,8 +1,12 @@
 from typing import Any
 
 from app.config_load import settings
+from app.models.env_sub_agent_plans import WarehousePlan
 from app.models.env_sub_agent_state import ReWOOState
-from app.prompts.env_sub_agent_system_prompts import ENV_SUB_AGENT_SYSTEM_PROMPT
+from app.prompts.env_sub_agent_system_prompts import (
+    ENV_SUB_AGENT_SYSTEM_PROMPT,
+    ENV_SUB_AGENT_PLANNER_PROMPT,
+)
 from app.services.base_agent import BaseAgent
 from app.tools.factory import ToolRegistryFactory
 from app.tools.registry import ToolRegistry
@@ -17,12 +21,7 @@ class EnvSubAgent(BaseAgent):
     """ReWOO implementation using LangGraph for AWS Bedrock/Claude."""
 
     def __init__(self, tool_registry: ToolRegistry | None = None) -> None:
-        """Initialize ReWOO agent with environment-only tools.
-
-        Args:
-            tool_registry: Pre-configured registry with environment tools.
-                          If None, creates environment-only registry.
-        """
+        """Initialize ReWOO agent with environment-only tools."""
         resolved_registry = tool_registry or ToolRegistryFactory.create_env_sub_agent_registry()
         super().__init__(
             model_id=settings.env_sub_agent.model_id,
@@ -45,9 +44,59 @@ class EnvSubAgent(BaseAgent):
 
         return workflow.compile()
 
-    def _plan_node(self, state: ReWOOState) -> ReWOOState:
-        """Planner node: Generate execution plan from agent query."""
-        return state
+    async def _plan_node(self, state: ReWOOState) -> dict[str, Any]:
+        """Planner node: Generate structured execution plan from agent query."""
+        request_id = state.get("request_id", "unknown")
+        logger.info("env_sub_agent_plan_start", request_id=request_id)
+
+        # 1. Format tool descriptions and parameters for the prompt
+        tool_descriptions = "\n".join(
+            f"- {tool.metadata.name}: {tool.metadata.description}\n"
+            f"  Parameters: {tool.metadata.parameters}"
+            for tool in self.tool_registry.list_tools()
+        )
+
+        user_prompt = ENV_SUB_AGENT_PLANNER_PROMPT.format(
+            tool_descriptions=tool_descriptions,
+            agent_query=state.get("agent_query", ""),
+        )
+
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            # 2. Call LLM using structured output with the Pydantic schema
+            plan_data = await self.llm.structured_completion(
+                messages=messages,
+                schema=WarehousePlan,
+            )
+
+            # Ensure we have a valid WarehousePlan object
+            if isinstance(plan_data, dict):
+                plan_data = WarehousePlan(**plan_data)
+
+            logger.info(
+                "env_sub_agent_plan_success",
+                request_id=request_id,
+                planned_tools_count=len(plan_data.tool_calls)
+            )
+
+            return {
+                "plan": plan_data,
+                "status": "executing",
+            }
+
+        except Exception as e:
+            logger.error(
+                "env_sub_agent_plan_error",
+                request_id=request_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+            return {"status": "failed", "error": str(e)}
 
     def _execute_node(self, state: ReWOOState) -> ReWOOState:
         """Executor node: Execute plan steps and update state."""
@@ -58,14 +107,5 @@ class EnvSubAgent(BaseAgent):
         return state
 
     async def run(self, *args: Any, **kwargs: Any) -> Any:
-        """Execute the ReWOO agent.
-
-        Args:
-            *args: Positional arguments (agent-specific).
-            **kwargs: Keyword arguments (agent-specific).
-
-        Returns:
-            Final agent state or result.
-        """
-        # Placeholder implementation - to be implemented based on specific requirements
+        # ... [implementation] ...
         raise NotImplementedError("EnvSubAgent.run() must be implemented by subclass or extended")
