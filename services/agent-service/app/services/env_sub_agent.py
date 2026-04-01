@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 from app.config_load import settings
 from app.models.env_sub_agent_plans import WarehousePlan
@@ -150,6 +150,38 @@ class EnvSubAgent(BaseAgent):
         """Solver node: Solve a problem based on agent observations."""
         return state
 
-    async def run(self, *args: Any, **kwargs: Any) -> Any:
-        # ... [implementation] ...
-        raise NotImplementedError("EnvSubAgent.run() must be implemented by subclass or extended")
+    async def run(
+        self,
+        agent_query: str,
+        **kwargs: Any,
+    ) -> ReWOOState:
+        from app.core.exceptions import AgentExecutionError
+        from app.models.env_sub_agent_state import create_initial_state
+
+        logger.info(
+            "env_sub_agent_run_start",
+            query=agent_query[:200],
+        )
+
+        initial_state = create_initial_state(agent_query=agent_query)
+
+        try:
+            final_state = cast(ReWOOState, await self.graph.ainvoke(initial_state))
+        except Exception as e:
+            logger.error(
+                "env_sub_agent_run_error",
+                request_id=initial_state["request_id"],
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+            raise AgentExecutionError(f"EnvSubAgent execution failed: {e}") from e
+
+        logger.info(
+            "env_sub_agent_run_complete",
+            request_id=final_state["request_id"],
+            status=final_state["status"],
+            tokens=final_state["total_tokens"],
+        )
+
+        return final_state
