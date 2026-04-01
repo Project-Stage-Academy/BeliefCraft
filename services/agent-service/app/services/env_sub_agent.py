@@ -1,11 +1,12 @@
+import asyncio
 from typing import Any
 
 from app.config_load import settings
 from app.models.env_sub_agent_plans import WarehousePlan
 from app.models.env_sub_agent_state import ReWOOState
 from app.prompts.env_sub_agent_system_prompts import (
-    ENV_SUB_AGENT_SYSTEM_PROMPT,
     ENV_SUB_AGENT_PLANNER_PROMPT,
+    ENV_SUB_AGENT_SYSTEM_PROMPT,
 )
 from app.services.base_agent import BaseAgent
 from app.tools.factory import ToolRegistryFactory
@@ -80,7 +81,7 @@ class EnvSubAgent(BaseAgent):
             logger.info(
                 "env_sub_agent_plan_success",
                 request_id=request_id,
-                planned_tools_count=len(plan_data.tool_calls)
+                planned_tools_count=len(plan_data.tool_calls),
             )
 
             return {
@@ -98,9 +99,52 @@ class EnvSubAgent(BaseAgent):
             )
             return {"status": "failed", "error": str(e)}
 
-    def _execute_node(self, state: ReWOOState) -> ReWOOState:
-        """Executor node: Execute plan steps and update state."""
-        return state
+    async def _execute_node(self, state: ReWOOState) -> dict[str, Any]:
+        """Executor node: Execute all planned steps in parallel and collect observations."""
+        request_id = state.get("request_id", "unknown")
+        logger.info("env_sub_agent_execute_start", request_id=request_id)
+
+        plan: WarehousePlan | None = state.get("plan")
+        if not plan or not plan.tool_calls:
+            logger.warning("env_sub_agent_empty_plan", request_id=request_id)
+            return {"status": "failed", "error": "No tools planned for execution"}
+
+        tasks = [self._execute_tool(call.tool_name, call.arguments) for call in plan.tool_calls]
+
+        # Execute all independent tools in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        observations: dict[str, Any] = {}
+        for index, (call, result) in enumerate(zip(plan.tool_calls, results, strict=True)):
+            safe_result: dict[str, Any] | BaseException
+            # Handle potential unhandled exceptions from asyncio.gather
+            if isinstance(result, Exception):
+                safe_result = {
+                    "status": "error",
+                    "error": str(result),
+                    "message": f"Unhandled execution exception: {type(result).__name__}",
+                }
+            else:
+                safe_result = result
+
+            # Append index to key to prevent overwriting if the same tool is called multiple times
+            observation_key = f"{call.tool_name}_{index}"
+            observations[observation_key] = {
+                "tool": call.tool_name,
+                "arguments": call.arguments,
+                "response": safe_result,
+            }
+
+        logger.info(
+            "env_sub_agent_execute_success",
+            request_id=request_id,
+            executed_tools_count=len(plan.tool_calls),
+        )
+
+        return {
+            "observations": observations,
+            "status": "solving",
+        }
 
     def _solve_node(self, state: ReWOOState) -> ReWOOState:
         """Solver node: Solve a problem based on agent observations."""
