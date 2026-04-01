@@ -1026,3 +1026,32 @@ class GetObservedInventorySnapshotTool(APIClientTool):
             return await client.get_observed_inventory_snapshot(
                 quality_status_in=kwargs.get("quality_status_in"),
             )
+
+ENVIRONMENT_TOOL_CLASSES = [
+    # PROCUREMENT
+    ListSuppliersTool,
+    GetSupplierTool,
+    ListPurchaseOrdersTool,
+    GetPurchaseOrderTool,
+    ListPOLinesTool,
+    GetProcurementPipelineSummaryTool,
+    # INVENTORY AUDIT
+    ListInventoryMovesTool,
+    GetInventoryMoveTool,
+    GetInventoryMoveAuditTraceTool,
+    GetInventoryAdjustmentsSummaryTool,
+    # TOPOLOGY
+    ListWarehousesTool,
+    GetWarehouseTool,
+    ListLocationsTool,
+    GetLocationTool,
+    GetLocationsTreeTool,
+    GetCapacityUtilizationSnapshotTool,
+    # DEVICE MONITORING
+    ListSensorDevicesTool,
+    GetSensorDeviceTool,
+    GetDeviceHealthSummaryTool,
+    GetDeviceAnomaliesTool,
+    # OBSERVED INVENTORY
+    GetObservedInventorySnapshotTool,
+]

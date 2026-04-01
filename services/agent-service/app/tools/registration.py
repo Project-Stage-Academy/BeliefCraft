@@ -8,29 +8,7 @@ Separated from __init__.py to prevent side effects and memory bloat on import.
 from typing import TYPE_CHECKING
 
 from app.tools.cached_tool import CachedTool
-from app.tools.environment_tools import (
-    GetCapacityUtilizationSnapshotTool,
-    GetDeviceAnomaliesTool,
-    GetDeviceHealthSummaryTool,
-    GetInventoryAdjustmentsSummaryTool,
-    GetInventoryMoveAuditTraceTool,
-    GetInventoryMoveTool,
-    GetLocationsTreeTool,
-    GetLocationTool,
-    GetObservedInventorySnapshotTool,
-    GetProcurementPipelineSummaryTool,
-    GetPurchaseOrderTool,
-    GetSensorDeviceTool,
-    GetSupplierTool,
-    GetWarehouseTool,
-    ListInventoryMovesTool,
-    ListLocationsTool,
-    ListPOLinesTool,
-    ListPurchaseOrdersTool,
-    ListSensorDevicesTool,
-    ListSuppliersTool,
-    ListWarehousesTool,
-)
+from app.tools.environment_tools import ENVIRONMENT_TOOL_CLASSES
 from app.tools.mcp_loader import MCPToolLoader
 from app.tools.mcp_tool import MCPClientProtocol
 from app.tools.registry import ToolRegistry
@@ -52,36 +30,8 @@ def get_skill_store() -> "SkillStore | None":
 def register_environment_tools(registry: ToolRegistry) -> None:
     logger.info("registering_environment_tools_started")
 
-    # PROCUREMENT MODULE (6 tools)
-    registry.register(CachedTool(ListSuppliersTool()))
-    registry.register(CachedTool(GetSupplierTool()))
-    registry.register(CachedTool(ListPurchaseOrdersTool()))
-    registry.register(CachedTool(GetPurchaseOrderTool()))
-    registry.register(CachedTool(ListPOLinesTool()))
-    registry.register(CachedTool(GetProcurementPipelineSummaryTool()))
-
-    # INVENTORY AUDIT MODULE (4 tools)
-    registry.register(CachedTool(ListInventoryMovesTool()))
-    registry.register(CachedTool(GetInventoryMoveTool()))
-    registry.register(CachedTool(GetInventoryMoveAuditTraceTool()))
-    registry.register(CachedTool(GetInventoryAdjustmentsSummaryTool()))
-
-    # TOPOLOGY MODULE (6 tools)
-    registry.register(CachedTool(ListWarehousesTool()))
-    registry.register(CachedTool(GetWarehouseTool()))
-    registry.register(CachedTool(ListLocationsTool()))
-    registry.register(CachedTool(GetLocationTool()))
-    registry.register(CachedTool(GetLocationsTreeTool()))
-    registry.register(CachedTool(GetCapacityUtilizationSnapshotTool()))
-
-    # DEVICE MONITORING MODULE (4 tools) - Real-time, skip_cache=True
-    registry.register(CachedTool(ListSensorDevicesTool()))
-    registry.register(CachedTool(GetSensorDeviceTool()))
-    registry.register(CachedTool(GetDeviceHealthSummaryTool()))
-    registry.register(CachedTool(GetDeviceAnomaliesTool()))
-
-    # OBSERVED INVENTORY MODULE (1 tool) - Real-time, skip_cache=True
-    registry.register(CachedTool(GetObservedInventorySnapshotTool()))
+    for tool_class in ENVIRONMENT_TOOL_CLASSES:
+        registry.register(CachedTool(tool_class()))
 
     env_count = sum(
         1 for t in registry.tools.values() if t.get_metadata().category == "environment"
