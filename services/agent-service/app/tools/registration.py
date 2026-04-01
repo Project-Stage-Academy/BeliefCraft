@@ -83,9 +83,7 @@ def register_skill_tools(skills_dir: str, registry: ToolRegistry) -> None:
     registry.register(CachedTool(LoadSkillTool(store)))
     registry.register(CachedTool(ReadSkillFilesTool(store)))
 
-    skill_count = sum(
-        1 for t in registry.tools.values() if t.get_metadata().category == "skill"
-    )
+    skill_count = sum(1 for t in registry.tools.values() if t.get_metadata().category == "skill")
 
     logger.info(
         "skill_tools_registered",

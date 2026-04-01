@@ -20,6 +20,7 @@ Organized by module:
 Total: 21 tools
 """
 
+from collections.abc import Callable
 from typing import Any, cast
 
 from app.clients.environment_client import (
@@ -31,7 +32,7 @@ from app.core.constants import (
     CACHE_TTL_HISTORY,
     CACHE_TTL_SHIPMENTS,
 )
-from app.tools.base import APIClientTool, ToolMetadata
+from app.tools.base import APIClientTool, BaseTool, ToolMetadata
 
 # ========================================
 # PROCUREMENT MODULE (6 tools)
@@ -1027,7 +1028,8 @@ class GetObservedInventorySnapshotTool(APIClientTool):
                 quality_status_in=kwargs.get("quality_status_in"),
             )
 
-ENVIRONMENT_TOOL_CLASSES = [
+
+ENVIRONMENT_TOOL_CLASSES: list[Callable[[], BaseTool]] = [
     # PROCUREMENT
     ListSuppliersTool,
     GetSupplierTool,

@@ -3,7 +3,7 @@ from app.models.responses import AgentRecommendationResponse
 from app.prompts.system_prompts import get_warehouse_advisor_prompt
 from app.services.react_agent import ReActAgent
 from app.services.recommendation_generator import RecommendationGenerator
-from app.tools import ToolRegistryFactory, get_skill_store
+from app.tools.registration import get_skill_store
 from common.logging import get_logger
 from fastapi import APIRouter, HTTPException, Request
 
@@ -26,10 +26,10 @@ async def analyze_query(
     logger.info("agent_analyze_request", query=request_obj.query)
 
     try:
-        # Get pre-built registry from app state or create default
+        # Enforce strict dependency injection (fail fast if missing)
         react_registry = getattr(request.app.state, "react_agent_registry", None)
         if not react_registry:
-            react_registry = ToolRegistryFactory.create_react_agent_registry()
+            raise ValueError("ReAct tool registry not initialized in app state.")
 
         # Generate system prompt with skill catalog if available
         skill_store = get_skill_store()
