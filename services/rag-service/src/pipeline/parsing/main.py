@@ -411,7 +411,7 @@ class DocumentAssembler:
                     block_id = format_block_number(page_num, block["block_id"])
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
-            formated_used = [format_block_number(page_num, idx) for idx in used_block_ids]
+            formated_used = [format_block_number(page_num, idx) for idx in sorted(used_block_ids)]
             chunk_block_ids = formated_used.copy()
             if block_id is not None:
                 chunk_block_ids.append(block_id)
