@@ -156,7 +156,6 @@ def draw_rect(
     page.draw_rect(rect, color=color, width=1.2)
 
     if label:
-        # позиція трохи вище прямокутника
         text_position = fitz.Point(rect.x0, rect.y0 - 1)
 
         page.insert_text(
@@ -188,6 +187,7 @@ def load_chunks(path: Path) -> list[dict[str, Any]]:
 
 
 def get_chunk_id_by_block_id(chunks: list[dict[str, Any]], block_id: str) -> str | None:
+    """Return the chunk_id that contains the given pdf block_id"""
     for chunk in chunks:
         if block_id in chunk["pdf_block_ids"]:
             return str(chunk["chunk_id"])
@@ -202,6 +202,7 @@ def main() -> None:
     parser.add_argument("blocks_json", type=Path)
     parser.add_argument("images_json", type=Path)
     parser.add_argument("paddle_dir", type=Path)
+    parser.add_argument("--input_json", type=Path)
 
     parser.add_argument("-o", "--output", type=Path, default=Path("out.pdf"))
     parser.add_argument("--dpi", type=float, default=200.0)
