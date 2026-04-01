@@ -22,7 +22,11 @@ logger = configure_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.clients.rag_mcp_client import RAGMCPClient
-    from app.tools import register_mcp_rag_tools, register_skill_tools
+    from app.tools import (
+        ToolRegistryFactory,
+        register_mcp_rag_tools,
+        register_skill_tools,
+    )
 
     # Startup
     logger.info("agent_service_starting", version=settings.app.version)
@@ -53,8 +57,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.redis_pool = redis.ConnectionPool.from_url(settings.redis.url, decode_responses=True)
     app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
 
+    # Build EnvSubAgent registry (environment tools only)
+    logger.info("building_env_sub_agent_registry")
+    env_sub_registry = ToolRegistryFactory.create_env_sub_agent_registry()
+    app.state.env_sub_agent_registry = env_sub_registry
+    logger.info(
+        "env_sub_agent_registry_built",
+        tools_count=len(env_sub_registry.tools),
+    )
+
     # Create persistent MCP client
     mcp_client = RAGMCPClient(base_url=settings.external_services.rag_api_url)
+    mcp_rag_tools = []
     try:
         await mcp_client.connect()
         app.state.rag_mcp_client = mcp_client
@@ -64,31 +78,58 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             rag_mcp_url=f"{settings.external_services.rag_api_url}/mcp",
         )
 
-        await register_mcp_rag_tools(mcp_client)
-        logger.info("mcp_rag_tools_loaded_successfully")
+        # Create temporary registry for MCP tool discovery
+        temp_registry = ToolRegistryFactory.create_react_agent_registry()
+        await register_mcp_rag_tools(mcp_client, registry=temp_registry)
+
+        # Extract loaded MCP tools for reuse
+        mcp_rag_tools = [
+            t for t in temp_registry.tools.values() if t.get_metadata().category == "rag"
+        ]
+
+        logger.info("mcp_rag_tools_loaded_successfully", count=len(mcp_rag_tools))
 
     except Exception as e:
         logger.warning(
             "failed_to_load_mcp_tools_continuing_without_rag",
             error=str(e),
             error_type=type(e).__name__,
-            message="Service will continue with environment tools only",
+            message="Service will continue with skill tools only",
         )
         await mcp_client.close()
 
-    # Register skill tools
+    # Register skill tools and get store
+    skill_tools = []
     logger.info("loading_skill_tools", skills_dir=settings.app.skills_dir)
     try:
-        register_skill_tools(settings.app.skills_dir)
-        logger.info("skill_tools_loaded_successfully")
+        temp_registry = ToolRegistryFactory.create_react_agent_registry()
+        register_skill_tools(settings.app.skills_dir, registry=temp_registry)
+        skill_tools = [
+            t for t in temp_registry.tools.values() if t.get_metadata().category == "skill"
+        ]
+        logger.info("skill_tools_loaded_successfully", count=len(skill_tools))
     except Exception as e:
         logger.warning(
             "failed_to_load_skill_tools_continuing_without_skills",
             error=str(e),
             error_type=type(e).__name__,
             skills_dir=settings.app.skills_dir,
-            message="Service will continue with environment and RAG tools only",
+            message="Service will continue with RAG tools only",
         )
+
+    # Build ReActAgent registry (RAG + skill tools, no environment)
+    logger.info("building_react_agent_registry")
+    react_registry = ToolRegistryFactory.create_react_agent_registry(
+        mcp_rag_tools=mcp_rag_tools,
+        skill_tools=skill_tools,
+    )
+    app.state.react_agent_registry = react_registry
+    logger.info(
+        "react_agent_registry_built",
+        tools_count=len(react_registry.tools),
+        rag_tools=len(mcp_rag_tools),
+        skill_tools=len(skill_tools),
+    )
 
     try:
         yield

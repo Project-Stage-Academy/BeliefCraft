@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from app.models.agent_state import AgentState, create_initial_state
 from app.services.react_agent import ReActAgent
+from app.tools.factory import ToolRegistryFactory
 
 
 def _make_llm_response(
@@ -34,7 +35,7 @@ def _make_llm_response(
 @pytest.fixture()
 def mock_llm_service() -> Generator[MagicMock, None, None]:
     """Create a mock LLMService that avoids real AWS connections."""
-    with patch("app.services.react_agent.LLMService") as mock_cls:
+    with patch("app.services.base_agent.LLMService") as mock_cls:
         instance = MagicMock()
         instance.chat_completion = AsyncMock()
         mock_cls.return_value = instance
@@ -44,7 +45,8 @@ def mock_llm_service() -> Generator[MagicMock, None, None]:
 @pytest.fixture()
 def agent(mock_llm_service: MagicMock) -> ReActAgent:
     """Create a ReActAgent with mocked LLM."""
-    return ReActAgent()
+    tool_registry = ToolRegistryFactory.create_react_agent_registry()
+    return ReActAgent(tool_registry=tool_registry)
 
 
 @pytest.fixture()
@@ -308,10 +310,8 @@ class TestActNode:
         assert result["iteration"] == 1
 
     @pytest.mark.asyncio()
-    @patch("app.services.react_agent.tool_registry")
     async def test_act_extracts_trace_meta_from_environment_tool_envelope(
         self,
-        mock_registry: MagicMock,
         agent: ReActAgent,
         initial_state: AgentState,
     ) -> None:
@@ -325,7 +325,7 @@ class TestActNode:
                 },
             }
         )
-        mock_registry.get_tool.return_value.get_metadata.return_value.category = "environment"
+        agent._get_tool_category = MagicMock(return_value="environment")
         initial_state["messages"] = [
             {
                 "role": "assistant",
@@ -352,17 +352,15 @@ class TestActNode:
         }
 
     @pytest.mark.asyncio()
-    @patch("app.services.react_agent.tool_registry")
     async def test_act_stores_tool_category_from_registry(
         self,
-        mock_registry: MagicMock,
         agent: ReActAgent,
         initial_state: AgentState,
     ) -> None:
         agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
             return_value={"status": "success", "data": {"documents": []}}
         )
-        mock_registry.get_tool.return_value.get_metadata.return_value.category = "rag"
+        agent._get_tool_category = MagicMock(return_value="rag")
         initial_state["messages"] = [
             {
                 "role": "assistant",
@@ -665,58 +663,56 @@ class TestToolRegistryIntegration:
     @pytest.mark.asyncio()
     async def test_execute_tool_with_registry_success(self, agent: ReActAgent) -> None:
         """Test successful tool execution via registry."""
-        with patch("app.services.react_agent.tool_registry") as mock_registry:
-            mock_result = MagicMock()
-            mock_result.success = True
-            mock_result.data = {"result": "success", "value": 42}
-            mock_registry.execute_tool = AsyncMock(return_value=mock_result)
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.data = {"result": "success", "value": 42}
+        agent.tool_registry.execute_tool = AsyncMock(return_value=mock_result)
 
-            result = await agent._execute_tool("test_tool", {"param": "value"})
+        result = await agent._execute_tool("test_tool", {"param": "value"})
 
-            assert result == {"status": "success", "data": {"result": "success", "value": 42}}
-            mock_registry.execute_tool.assert_called_once_with("test_tool", {"param": "value"})
+        assert result == {"status": "success", "data": {"result": "success", "value": 42}}
+        agent.tool_registry.execute_tool.assert_called_once_with("test_tool", {"param": "value"})
 
     @pytest.mark.asyncio()
     async def test_execute_tool_with_registry_failure(self, agent: ReActAgent) -> None:
         """Test tool execution failure via registry."""
-        with patch("app.services.react_agent.tool_registry") as mock_registry:
-            mock_result = MagicMock()
-            mock_result.success = False
-            mock_result.error = "Tool not found"
-            mock_registry.execute_tool = AsyncMock(return_value=mock_result)
+        mock_result = MagicMock()
+        mock_result.success = False
+        mock_result.error = "Tool not found"
+        agent.tool_registry.execute_tool = AsyncMock(return_value=mock_result)
 
-            result = await agent._execute_tool("missing_tool", {})
+        result = await agent._execute_tool("missing_tool", {})
 
-            assert "error" in result
-            assert result["error"] == "Tool not found"
-            assert "Tool execution failed" in result["message"]
+        assert "error" in result
+        assert result["error"] == "Tool not found"
+        assert "Tool execution failed" in result["message"]
 
     @pytest.mark.asyncio()
     async def test_execute_tool_with_exception(self, agent: ReActAgent) -> None:
         """Test tool execution with unexpected exception."""
-        with patch("app.services.react_agent.tool_registry") as mock_registry:
-            mock_registry.execute_tool = AsyncMock(side_effect=Exception("Connection error"))
+        agent.tool_registry.execute_tool = AsyncMock(side_effect=Exception("Connection error"))
 
-            result = await agent._execute_tool("failing_tool", {})
+        result = await agent._execute_tool("failing_tool", {})
 
-            assert "error" in result
-            assert result["error"] == "Connection error"
-            assert "Unexpected tool error" in result["message"]
+        assert "error" in result
+        assert result["error"] == "Connection error"
+        assert "Unexpected tool error" in result["message"]
 
     def test_get_tool_definitions_from_registry(self, agent: ReActAgent) -> None:
         """Test getting tool definitions from registry."""
-        with patch("app.services.react_agent.tool_registry") as mock_registry:
-            mock_registry.get_openai_functions.return_value = [
+        agent.tool_registry.get_openai_functions = MagicMock(
+            return_value=[
                 {"name": "tool1", "description": "Test tool 1"},
                 {"name": "tool2", "description": "Test tool 2"},
             ]
+        )
 
-            result = agent._get_tool_definitions()
+        result = agent._get_tool_definitions()
 
-            assert len(result) == 2
-            assert result[0]["name"] == "tool1"
-            assert result[1]["name"] == "tool2"
-            mock_registry.get_openai_functions.assert_called_once()
+        assert len(result) == 2
+        assert result[0]["name"] == "tool1"
+        assert result[1]["name"] == "tool2"
+        agent.tool_registry.get_openai_functions.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

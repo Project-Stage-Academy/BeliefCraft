@@ -4,6 +4,8 @@ from app.config_load import settings
 from app.models.env_sub_agent_state import ReWOOState
 from app.prompts.env_sub_agent_system_prompts import ENV_SUB_AGENT_SYSTEM_PROMPT
 from app.services.base_agent import BaseAgent
+from app.tools.factory import ToolRegistryFactory
+from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -14,13 +16,18 @@ logger = get_logger(__name__)
 class EnvSubAgent(BaseAgent):
     """ReWOO implementation using LangGraph for AWS Bedrock/Claude."""
 
-    def __init__(self) -> None:
+    def __init__(self, tool_registry: ToolRegistry | None = None) -> None:
+        """Initialize ReWOO agent with environment-only tools.
+
+        Args:
+            tool_registry: Pre-configured registry with environment tools.
+                          If None, creates environment-only registry.
         """
-        Initialize ReWOO agent.
-        """
+        resolved_registry = tool_registry or ToolRegistryFactory.create_env_sub_agent_registry()
         super().__init__(
             model_id=settings.env_sub_agent.model_id,
             system_prompt=ENV_SUB_AGENT_SYSTEM_PROMPT,
+            tool_registry=resolved_registry,
         )
 
     def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:

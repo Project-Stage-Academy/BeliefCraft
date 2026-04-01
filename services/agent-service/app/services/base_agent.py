@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Any, cast
 
 from app.services.llm_service import LLMService
-from app.tools.registry import tool_registry
+from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langgraph.graph.state import CompiledStateGraph
 
@@ -19,20 +19,23 @@ class BaseAgent(ABC):
     Subclasses must implement _build_graph() to define their specific architecture.
     """
 
-    def __init__(self, model_id: str, system_prompt: str) -> None:
+    def __init__(self, model_id: str, system_prompt: str, tool_registry: ToolRegistry) -> None:
         """Initialize the agent with LLM configuration and system prompt.
 
         Args:
             model_id: The model identifier to use for LLM service.
             system_prompt: The system prompt that guides the agent's behavior.
+            tool_registry: Pre-configured ToolRegistry with agent-specific tools.
         """
         self.llm: LLMService = LLMService(model_id=model_id)
         self.system_prompt = system_prompt
+        self.tool_registry = tool_registry
         self.graph = self._build_graph()
         logger.info(
             "base_agent_initialized",
             agent_class=self.__class__.__name__,
             model_id=model_id,
+            tools_count=len(tool_registry.tools),
         )
 
     @abstractmethod
@@ -183,10 +186,7 @@ class BaseAgent(ABC):
         return new_messages, tool_results
 
     async def _execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Execute a tool call using the registry.
-
-        Always returns a uniform dict with a ``status`` key so callers can
-        branch on success/error without inspecting arbitrary key presence.
+        """Execute a tool and handle success/error wrapping.
 
         Args:
             tool_name: Name of the tool to invoke.
@@ -198,7 +198,7 @@ class BaseAgent(ABC):
             Never raises — all exceptions are captured and returned as error dicts.
         """
         try:
-            result = await tool_registry.execute_tool(tool_name, arguments)
+            result = await self.tool_registry.execute_tool(tool_name, arguments)
 
             if result.success:
                 return {"status": "success", "data": cast(dict[str, Any], result.data)}
@@ -220,7 +220,7 @@ class BaseAgent(ABC):
 
     def _get_tool_definitions(self) -> list[dict[str, Any]]:
         """Get OpenAI function calling schemas for all tools."""
-        return tool_registry.get_openai_functions()
+        return self.tool_registry.get_openai_functions()
 
     # ========== Tool Utilities ==========
 
@@ -248,11 +248,10 @@ class BaseAgent(ABC):
 
         return tool_data, tool_meta
 
-    @staticmethod
-    def _get_tool_category(tool_name: str) -> str | None:
+    def _get_tool_category(self, tool_name: str) -> str | None:
         """Resolve category from the registered tool metadata when available."""
         try:
-            return tool_registry.get_tool(tool_name).get_metadata().category
+            return self.tool_registry.get_tool(tool_name).get_metadata().category
         except Exception:  # noqa: BLE001
             return None
 

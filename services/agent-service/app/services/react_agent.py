@@ -11,6 +11,8 @@ from app.prompts.system_prompts import (
     format_react_prompt,
 )
 from app.services.base_agent import BaseAgent
+from app.tools.factory import ToolRegistryFactory
+from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -21,18 +23,25 @@ logger = get_logger(__name__)
 class ReActAgent(BaseAgent):
     """ReAct loop implementation using LangGraph for AWS Bedrock/Claude."""
 
-    def __init__(self, system_prompt: str | None = None) -> None:
-        """
-        Initialize ReAct agent with optional custom system prompt.
+    def __init__(
+        self,
+        system_prompt: str | None = None,
+        tool_registry: ToolRegistry | None = None,
+    ) -> None:
+        """Initialize ReAct agent with optional custom system prompt and registry.
 
         Args:
             system_prompt: Custom system prompt. If None, uses default
                           WAREHOUSE_ADVISOR_SYSTEM_PROMPT.
+            tool_registry: Pre-configured registry with RAG+skill tools.
+                          If None, creates empty registry (for testing).
         """
         resolved_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        resolved_registry = tool_registry or ToolRegistryFactory.create_react_agent_registry()
         super().__init__(
             model_id=settings.react_agent.model_id,
             system_prompt=resolved_prompt,
+            tool_registry=resolved_registry,
         )
 
     def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:

@@ -34,7 +34,7 @@ async def list_tools(
         None,
         description="Filter by category (environment, rag, planning, utility)",
         pattern="^(environment|rag|planning|utility)$",
-    )
+    ),
 ) -> ToolListResponse:
     """
     List all available tools for the agent.
