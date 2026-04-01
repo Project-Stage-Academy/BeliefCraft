@@ -117,11 +117,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             message="Service will continue with RAG tools only",
         )
 
-    # Build ReActAgent registry (RAG + skill tools, no environment)
+    # Build ReActAgent registry (RAG + skill tools + sub-agent orchestrator)
     logger.info("building_react_agent_registry")
     react_registry = ToolRegistryFactory.create_react_agent_registry(
         mcp_rag_tools=mcp_rag_tools,
         skill_tools=skill_tools,
+        env_sub_registry=env_sub_registry,
     )
     app.state.react_agent_registry = react_registry
     logger.info(
