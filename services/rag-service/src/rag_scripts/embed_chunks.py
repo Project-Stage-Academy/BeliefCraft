@@ -101,16 +101,17 @@ def insert_chunks(
     references: list[DataReference | DataReferenceMulti] = []
     with collection.batch.dynamic() as batch:
         for chunk in chunks:
-            chunk.pop("chunk_id", "")
-            uuid = generate_deterministic_uuid(chunk)
-            if "defined_in_chunk" in chunk:
+            chunk_to_add = chunk.copy()
+            chunk_to_add.pop("chunk_id", "")
+            uuid = generate_deterministic_uuid(chunk_to_add)
+            if "defined_in_chunk" in chunk_to_add:
                 referenced_chunk = next(
-                    ch for ch in chunks if ch["chunk_id"] == chunk["defined_in_chunk"]
+                    ch for ch in chunks if ch["chunk_id"] == chunk_to_add["defined_in_chunk"]
                 )
-                chunk["defined_in_chunk"] = generate_deterministic_uuid(referenced_chunk)
-            chunk_references = extract_references_from_chunk(chunk, reference_map)
+                chunk_to_add["defined_in_chunk"] = generate_deterministic_uuid(referenced_chunk)
+            chunk_references = extract_references_from_chunk(chunk_to_add, reference_map)
             batch.add_object(
-                properties=chunk,
+                properties=chunk_to_add,
                 uuid=uuid,
             )
             references.extend(chunk_references)
