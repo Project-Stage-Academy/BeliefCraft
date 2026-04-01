@@ -73,7 +73,7 @@ def extract_paddle_boxes(pages: list[dict[str, Any]]) -> list[tuple[int, list[fl
         pages: A list of page data dictionaries.
 
     Returns:
-        A list of tuples containing (page_index, bounding_box).
+        A list of tuples containing (page_index, bounding_box, block_id).
     """
     result: list[tuple[int, list[float], int]] = []
 
