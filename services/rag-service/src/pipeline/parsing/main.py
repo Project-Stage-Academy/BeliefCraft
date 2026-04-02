@@ -381,7 +381,6 @@ class DocumentAssembler:
         for eid, v_obj in zip(
             (v.get("entity_id") for v in visual_items), visual_items, strict=False
         ):
-            used_block_ids: set[int] = set()
             # attach link to the closest valid paddle block above if this is a text figure
             if v_obj.get("chunk_type") == "text" and "image_index" in v_obj:
                 v_y, target_block = v_obj.get("bbox", [0, 0, 0, 0])[1], None
@@ -399,28 +398,17 @@ class DocumentAssembler:
 
             clean_content = v_obj.get("caption", v_obj.get("content", "")).strip()
 
-            entity_number = self._extract_id(clean_content, full=True)
-            block_id = None
             for idx, block in enumerate(blocks):
                 bbox = block.get("block_bbox")
                 if bbox and self._is_inside(bbox, v_obj.get("bbox", [])):
                     used.add(idx)
-                    used_block_ids.add(block["block_id"])
-
-                if entity_number and entity_number in block.get("block_content", ""):
-                    block_id = format_block_number(page_num, block["block_id"])
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
-            formated_used = [format_block_number(page_num, idx) for idx in sorted(used_block_ids)]
-            chunk_block_ids = formated_used.copy()
-            if block_id is not None:
-                chunk_block_ids.append(block_id)
             chunk = self._create_chunk_obj(
                 v_obj["chunk_type"].lower(),
                 clean_content,
                 page_num,
                 meta_res,
-                chunk_block_ids,
                 entity_id=eid,
             )
 
@@ -622,7 +610,7 @@ class DocumentAssembler:
         content: str,
         page: int,
         meta: dict[str, Any],
-        block_ids: list[str],
+        block_ids: list[str] | None = None,
         entity_id: str | None = None,
     ) -> dict[str, Any]:
         final_type = "exercise" if meta.get("is_exercise") or c_type == "exercise" else c_type
@@ -726,7 +714,7 @@ class DocumentAssembler:
         self.final_chunks.append(chunk)
         return chunk
 
-    def _extract_id(self, text: str | None, full: bool = False) -> str | None:
+    def _extract_id(self, text: str | None) -> str | None:
         if not text:
             return None
         # Спочатку шукаємо за суворим шаблоном
@@ -736,10 +724,7 @@ class DocumentAssembler:
         if not m:
             # Якщо не знайшли, шукаємо просто число формату X.X (наприклад, "4.4")
             m = re.search(r"\b([a-zA-Z\d]+\.\d+)\b", str(text))
-
-        if m:
-            return m.group(0) if full else m.group(1)
-        return None
+        return m.group(1) if m else None
 
     def _save(self) -> None:
         output = Path("ULTIMATE_BOOK_DATA.json")
