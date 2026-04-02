@@ -205,7 +205,7 @@ def main() -> None:
     parser.add_argument("blocks_json", type=Path)
     parser.add_argument("images_json", type=Path)
     parser.add_argument("paddle_dir", type=Path)
-    parser.add_argument("--input_json", type=Path)
+    parser.add_argument("--chunks_json", type=Path)
 
     parser.add_argument("-o", "--output", type=Path, default=Path("out.pdf"))
     parser.add_argument("--dpi", type=float, default=200.0)
