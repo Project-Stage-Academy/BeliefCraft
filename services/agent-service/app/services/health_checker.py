@@ -1,6 +1,7 @@
 """Health check service for external dependencies"""
 
 import os
+from typing import Any
 
 import boto3
 import botocore.exceptions  # type: ignore[import-untyped]
@@ -104,7 +105,7 @@ class HealthChecker:
             logger.warning("aws_credential_check_failed", error=str(e))
             return f"{ERROR_PREFIX}{e}"
 
-    def _build_sts_client(self) -> boto3.client:
+    def _build_sts_client(self) -> Any:
         """Build a boto3 STS client using the same auth strategy as LLMService."""
         region = self.settings.AWS_DEFAULT_REGION
 
@@ -112,12 +113,15 @@ class HealthChecker:
             session = boto3.Session(profile_name=self.settings.AWS_PROFILE, region_name=region)
             return session.client("sts")
 
-        kwargs: dict[str, str] = {"service_name": "sts", "region_name": region}
         if self.settings.AWS_ACCESS_KEY_ID and self.settings.AWS_SECRET_ACCESS_KEY:
-            kwargs["aws_access_key_id"] = self.settings.AWS_ACCESS_KEY_ID
-            kwargs["aws_secret_access_key"] = self.settings.AWS_SECRET_ACCESS_KEY
+            return boto3.client(
+                "sts",
+                region_name=region,
+                aws_access_key_id=self.settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=self.settings.AWS_SECRET_ACCESS_KEY,
+            )
 
-        return boto3.client(**kwargs)
+        return boto3.client("sts", region_name=region)
 
     async def check_all_dependencies(self) -> dict[str, str]:
         """

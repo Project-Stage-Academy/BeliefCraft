@@ -133,7 +133,8 @@ module = [
     "langchain_aws.*",
     "langchain_core.*",
     "langgraph.*",
-    "alembic.*"
+    "alembic.*",
+    "testcontainers.*"
 ]
 ignore_missing_imports = true
 

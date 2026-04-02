@@ -1,4 +1,4 @@
-from tests.conftest import (
+from common.shared_fixtures import (
     client,
     db_engine,
     db_session,
