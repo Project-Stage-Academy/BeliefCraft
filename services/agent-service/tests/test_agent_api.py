@@ -41,18 +41,30 @@ def _structured_response() -> AgentRecommendationResponse:
 
 @patch("app.api.v1.routes.agent.RecommendationGenerator")
 @patch("app.api.v1.routes.agent.ReActAgent")
+@patch("app.api.v1.routes.agent.get_skill_store")
 def test_analyze_endpoint_success(
+    mock_get_skill_store: MagicMock,
     mock_agent_class: MagicMock,
     mock_generator_class: MagicMock,
 ) -> None:
     """Analyze endpoint should return structured recommendation response."""
     final_state = {"request_id": "test-123", "status": "completed"}
 
+    # Mock the skill store
+    mock_store = MagicMock()
+    mock_store.get_skill_catalog.return_value = "<skill>test</skill>"
+    mock_store.get_skill_names.return_value = ["test"]
+    mock_get_skill_store.return_value = mock_store
+
     mock_agent = mock_agent_class.return_value
     mock_agent.run = AsyncMock(return_value=final_state)
 
     mock_generator = mock_generator_class.return_value
     mock_generator.generate = AsyncMock(return_value=_structured_response())
+
+    # We must explicitly inject the registry into the app state for the test
+    # to pass the strict dependency injection check
+    app.state.react_agent_registry = MagicMock()
 
     response = client.post(
         "/api/v1/agent/analyze",
@@ -78,18 +90,24 @@ def test_analyze_endpoint_success(
 
 @patch("app.api.v1.routes.agent.RecommendationGenerator")
 @patch("app.api.v1.routes.agent.ReActAgent")
+@patch("app.api.v1.routes.agent.get_skill_store")
 def test_analyze_endpoint_with_context_and_default_iterations(
+    mock_get_skill_store: MagicMock,
     mock_agent_class: MagicMock,
     mock_generator_class: MagicMock,
 ) -> None:
     """Analyze endpoint should forward context and default max_iterations."""
     final_state = {"request_id": "test-456", "status": "completed"}
 
+    mock_get_skill_store.return_value = None
+
     mock_agent = mock_agent_class.return_value
     mock_agent.run = AsyncMock(return_value=final_state)
 
     mock_generator = mock_generator_class.return_value
     mock_generator.generate = AsyncMock(return_value=_structured_response())
+
+    app.state.react_agent_registry = MagicMock()
 
     response = client.post(
         "/api/v1/agent/analyze",
@@ -141,10 +159,16 @@ def test_analyze_endpoint_validation_max_iterations_bounds() -> None:
 
 
 @patch("app.api.v1.routes.agent.ReActAgent")
-def test_analyze_endpoint_agent_error(mock_agent_class: MagicMock) -> None:
+@patch("app.api.v1.routes.agent.get_skill_store")
+def test_analyze_endpoint_agent_error(
+    mock_get_skill_store: MagicMock, mock_agent_class: MagicMock
+) -> None:
     """Analyze endpoint should return 500 on agent execution failure."""
+    mock_get_skill_store.return_value = None
     mock_agent = mock_agent_class.return_value
     mock_agent.run = AsyncMock(side_effect=Exception("Agent execution failed"))
+
+    app.state.react_agent_registry = MagicMock()
 
     response = client.post(
         "/api/v1/agent/analyze",
@@ -158,16 +182,21 @@ def test_analyze_endpoint_agent_error(mock_agent_class: MagicMock) -> None:
 
 @patch("app.api.v1.routes.agent.RecommendationGenerator")
 @patch("app.api.v1.routes.agent.ReActAgent")
+@patch("app.api.v1.routes.agent.get_skill_store")
 def test_analyze_endpoint_generator_error(
+    mock_get_skill_store: MagicMock,
     mock_agent_class: MagicMock,
     mock_generator_class: MagicMock,
 ) -> None:
     """Analyze endpoint should return 500 when recommendation generation fails."""
+    mock_get_skill_store.return_value = None
     mock_agent = mock_agent_class.return_value
     mock_agent.run = AsyncMock(return_value={"request_id": "test-999"})
 
     mock_generator = mock_generator_class.return_value
     mock_generator.generate = AsyncMock(side_effect=Exception("Formatting failed"))
+
+    app.state.react_agent_registry = MagicMock()
 
     response = client.post(
         "/api/v1/agent/analyze",
@@ -177,3 +206,19 @@ def test_analyze_endpoint_generator_error(
     assert response.status_code == 500
     data = response.json()
     assert "Formatting failed" in data["detail"]
+
+
+def test_analyze_endpoint_missing_registry() -> None:
+    """Analyze endpoint should return 500 if registry is not injected."""
+    # Ensure registry is missing
+    if hasattr(app.state, "react_agent_registry"):
+        del app.state.react_agent_registry
+
+    response = client.post(
+        "/api/v1/agent/analyze",
+        json={"query": "A valid query for testing"},
+    )
+
+    assert response.status_code == 500
+    data = response.json()
+    assert "ReAct tool registry not initialized" in data["detail"]

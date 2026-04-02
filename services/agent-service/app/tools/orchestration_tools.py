@@ -1,8 +1,8 @@
+# file: services/agent-service/app/tools/orchestration_tools.py
 """Orchestration tools for agent-to-agent communication."""
 
 from typing import Any
 
-from app.services.env_sub_agent import EnvSubAgent
 from app.tools.base import BaseTool, ToolMetadata
 from app.tools.registry import ToolRegistry
 
@@ -13,8 +13,6 @@ class CallEnvSubAgentTool(BaseTool):
     def __init__(self, env_registry: ToolRegistry) -> None:
         self.env_registry = env_registry
 
-        # Dynamically extract just the names and short descriptions of the tools
-        # to give the Main Agent a "menu" of what the sub-agent can do.
         capabilities = [f"{t.metadata.name}" for t in self.env_registry.list_tools()]
         self._capability_summary = ", ".join(capabilities)
 
@@ -27,12 +25,11 @@ class CallEnvSubAgentTool(BaseTool):
                 "Delegate warehouse environment data retrieval to a specialized sub-agent. "
                 "This sub-agent executes API calls and returns a concise, factual text summary "
                 "of the current reality. "
-                f"The sub-agent has access to the following specific data endpoints: "
-                f"[{self._capability_summary}]. "
-                "Provide a highly specific natural language query. Include exact identifiers "
-                "(UUIDs, SKUs, POs) "
-                "and explicitly state what metrics, statuses, historical trends, or anomalies "
-                "you need."
+                "The sub-agent has access to the following "
+                f"specific data endpoints: [{self._capability_summary}]. "
+                "Provide a highly specific natural language query. "
+                "Include exact identifiers (UUIDs, SKUs, POs) and explicitly state what "
+                "metrics, statuses, historical trends, or anomalies you need."
             ),
             parameters={
                 "type": "object",
@@ -40,8 +37,8 @@ class CallEnvSubAgentTool(BaseTool):
                     "agent_query": {
                         "type": "string",
                         "description": (
-                            "Clear, specific natural language instructions outlining ",
-                            "exactly what data to retrieve and summarize.",
+                            "Clear, specific natural language instructions ",
+                            "outlining exactly what data to retrieve and summarize.",
                         ),
                     }
                 },
@@ -53,6 +50,8 @@ class CallEnvSubAgentTool(BaseTool):
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         self._validate_required_params(["agent_query"], kwargs)
+
+        from app.services.env_sub_agent import EnvSubAgent
 
         sub_agent = EnvSubAgent(tool_registry=self.env_registry)
         final_state = await sub_agent.run(agent_query=kwargs["agent_query"])

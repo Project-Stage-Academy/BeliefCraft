@@ -11,7 +11,6 @@ from app.prompts.system_prompts import (
     format_react_prompt,
 )
 from app.services.base_agent import BaseAgent
-from app.tools.factory import ToolRegistryFactory
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langgraph.graph import END, StateGraph
@@ -36,12 +35,15 @@ class ReActAgent(BaseAgent):
             tool_registry: Pre-configured registry with RAG+skill tools.
                           If None, creates empty registry (for testing).
         """
+
+        if tool_registry is None:
+            raise ValueError("A configured ToolRegistry must be explicitly injected.")
+
         resolved_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        resolved_registry = tool_registry or ToolRegistryFactory.create_react_agent_registry()
         super().__init__(
             model_id=settings.react_agent.model_id,
             system_prompt=resolved_prompt,
-            tool_registry=resolved_registry,
+            tool_registry=tool_registry,
         )
 
     def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:

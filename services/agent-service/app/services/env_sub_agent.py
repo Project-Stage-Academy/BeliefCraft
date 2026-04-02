@@ -9,7 +9,6 @@ from app.prompts.env_sub_agent_system_prompts import (
     ENV_SUB_AGENT_SYSTEM_PROMPT,
 )
 from app.services.base_agent import BaseAgent
-from app.tools.factory import ToolRegistryFactory
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langgraph.graph import StateGraph
@@ -21,13 +20,19 @@ logger = get_logger(__name__)
 class EnvSubAgent(BaseAgent):
     """ReWOO implementation using LangGraph for AWS Bedrock/Claude."""
 
-    def __init__(self, tool_registry: ToolRegistry | None = None) -> None:
+    def __init__(
+        self, system_prompt: str | None = None, tool_registry: ToolRegistry | None = None
+    ) -> None:
         """Initialize ReWOO agent with environment-only tools."""
-        resolved_registry = tool_registry or ToolRegistryFactory.create_env_sub_agent_registry()
+        if tool_registry is None:
+            raise ValueError("A configured ToolRegistry must be explicitly injected.")
+
+        resolved_prompt = system_prompt or ENV_SUB_AGENT_SYSTEM_PROMPT
+
         super().__init__(
             model_id=settings.env_sub_agent.model_id,
-            system_prompt=ENV_SUB_AGENT_SYSTEM_PROMPT,
-            tool_registry=resolved_registry,
+            system_prompt=resolved_prompt,
+            tool_registry=tool_registry,
         )
 
     def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:
