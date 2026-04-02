@@ -526,11 +526,7 @@ class DocumentAssembler:
                 f_chunk = self._add_formula_chunk(
                     formula_id,
                     page_num,
-                    format_block_number(
-                        page_num,
-                        block["block_id"]
-                        - 1,  # formulas are usually right above the block that references them
-                    ),
+                    format_block_number(page_num, block["block_id"]),
                 )
                 if matched_key:
                     special_accs[matched_key].setdefault("formula_chunks", []).append(f_chunk)

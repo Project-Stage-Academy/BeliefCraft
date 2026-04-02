@@ -17,6 +17,8 @@ from pipeline.parsing.main import (
     DocumentAssembler,
 )
 
+from .test_main_assembler import _with_block_ids
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -64,16 +66,6 @@ def _make(env: dict, **overrides) -> DocumentAssembler:
     }
     kwargs.update(overrides)
     return DocumentAssembler(**kwargs)
-
-
-def _with_block_ids(blocks: list[dict]) -> list[dict]:
-    """Return a copy of blocks where each block has a stable 1-based block_id."""
-    normalized: list[dict] = []
-    for idx, block in enumerate(blocks, start=1):
-        block_copy = dict(block)
-        block_copy.setdefault("block_id", idx)
-        normalized.append(block_copy)
-    return normalized
 
 
 def _pages_with_content(n_blank: int, page_blocks: list) -> list:
