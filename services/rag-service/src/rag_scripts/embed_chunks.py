@@ -98,17 +98,28 @@ def insert_chunks(
     collection: Collection, chunks: list[dict[str, Any]], reference_map: ReferenceMap
 ) -> None:
     """Iterate through chunks and insert them into Weaviate."""
+    chunk_id_map: dict[str, dict[str, Any]] = {
+        ch["chunk_id"]: ch for ch in chunks if "chunk_id" in ch
+    }
     references: list[DataReference | DataReferenceMulti] = []
     with collection.batch.dynamic() as batch:
         for chunk in chunks:
             chunk_to_add = chunk.copy()
             chunk_to_add.pop("chunk_id", "")
-            uuid = generate_deterministic_uuid(chunk_to_add)
             if "defined_in_chunk" in chunk_to_add:
-                referenced_chunk = next(
-                    ch for ch in chunks if ch["chunk_id"] == chunk_to_add["defined_in_chunk"]
+                parent_chunk_id = chunk_to_add["defined_in_chunk"]
+                referenced_chunk = chunk_id_map.get(parent_chunk_id)
+                if referenced_chunk is None:
+                    raise ValueError(
+                        f"Chunk references unknown parent chunk_id='{parent_chunk_id}' "
+                        f"via 'defined_in_chunk'."
+                    )
+                referenced_chunk_for_uuid = referenced_chunk.copy()
+                referenced_chunk_for_uuid.pop("chunk_id", "")
+                chunk_to_add["defined_in_chunk"] = generate_deterministic_uuid(
+                    referenced_chunk_for_uuid
                 )
-                chunk_to_add["defined_in_chunk"] = generate_deterministic_uuid(referenced_chunk)
+            uuid = generate_deterministic_uuid(chunk_to_add)
             chunk_references = extract_references_from_chunk(chunk_to_add, reference_map)
             batch.add_object(
                 properties=chunk_to_add,

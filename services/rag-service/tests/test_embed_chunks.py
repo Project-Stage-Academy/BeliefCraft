@@ -242,12 +242,112 @@ def test_insert_chunks_preserves_chunk_id_for_defined_in_references():
 
     insert_chunks(mock_collection, chunks, reference_map)
 
-    # Verify that parent_id is still in the original chunks
-    # list (this ensures no KeyError for the second chunk)
     assert chunks[0]["chunk_id"] == "parent_id"
-    # Verify the second chunk's defined_in_chunk was converted to the parent's UUID
-    parent_uuid = generate_deterministic_uuid(chunks[0])
+    parent_canonical = {
+        "entity_id": "parent_entity",
+        "chunk_type": "text",
+        "content": "Parent content",
+    }
+    parent_uuid = generate_deterministic_uuid(parent_canonical)
     added_child_properties = mock_batch.add_object.call_args_list[1].kwargs["properties"]
     assert added_child_properties["defined_in_chunk"] == parent_uuid
-    # Verify 'chunk_id' was popped from the properties sent to Weaviate
     assert "chunk_id" not in added_child_properties
+
+
+def test_defined_in_chunk_uuid_consistent_for_parent_without_entity_id():
+    """Verify that when a parent chunk has no entity_id, the UUID stored in defined_in_chunk
+    matches the UUID used when inserting the parent (repr without chunk_id)."""
+    mock_collection = MagicMock()
+    mock_batch = MagicMock()
+    mock_collection.batch.dynamic.return_value.__enter__.return_value = mock_batch
+
+    parent = {"chunk_id": "p1", "content": "raw parent text", "chunk_type": "text"}
+    child = {
+        "chunk_id": "c1",
+        "content": "child text",
+        "chunk_type": "text",
+        "defined_in_chunk": "p1",
+    }
+
+    insert_chunks(mock_collection, [parent, child], {})
+
+    parent_canonical = {"content": "raw parent text", "chunk_type": "text"}
+    expected_parent_uuid = generate_deterministic_uuid(parent_canonical)
+    inserted_parent_uuid = mock_batch.add_object.call_args_list[0].kwargs["uuid"]
+    inserted_child_defined_in = mock_batch.add_object.call_args_list[1].kwargs["properties"][
+        "defined_in_chunk"
+    ]
+    assert inserted_parent_uuid == expected_parent_uuid
+    assert inserted_child_defined_in == expected_parent_uuid
+
+
+def test_multiple_children_reference_same_parent_via_defined_in_chunk():
+    """Verify that multiple child chunks referencing the same parent all receive the correct
+    resolved UUID for defined_in_chunk, confirming the precomputed map handles this correctly."""
+    mock_collection = MagicMock()
+    mock_batch = MagicMock()
+    mock_collection.batch.dynamic.return_value.__enter__.return_value = mock_batch
+
+    parent = {
+        "chunk_id": "shared_parent",
+        "entity_id": "p_entity",
+        "chunk_type": "text",
+        "content": "Shared parent",
+    }
+    children = [
+        {
+            "chunk_id": f"child_{i}",
+            "entity_id": f"child_entity_{i}",
+            "chunk_type": "text",
+            "content": f"Child {i}",
+            "defined_in_chunk": "shared_parent",
+        }
+        for i in range(3)
+    ]
+
+    insert_chunks(mock_collection, [parent, *children], {})
+
+    parent_canonical = {"entity_id": "p_entity", "chunk_type": "text", "content": "Shared parent"}
+    expected_parent_uuid = generate_deterministic_uuid(parent_canonical)
+    for call_idx in range(1, 4):
+        props = mock_batch.add_object.call_args_list[call_idx].kwargs["properties"]
+        assert props["defined_in_chunk"] == expected_parent_uuid
+
+
+def test_chunk_uuid_computed_after_defined_in_chunk_correction():
+    """Verify that for a chunk without entity_id, its UUID is based on the corrected
+    defined_in_chunk value (a UUID string) rather than the original chunk_id string."""
+    mock_collection = MagicMock()
+    mock_batch = MagicMock()
+    mock_collection.batch.dynamic.return_value.__enter__.return_value = mock_batch
+
+    parent = {"chunk_id": "pid", "content": "parent", "chunk_type": "text"}
+    child = {"chunk_id": "cid", "content": "child", "chunk_type": "text", "defined_in_chunk": "pid"}
+
+    insert_chunks(mock_collection, [parent, child], {})
+
+    parent_canonical = {"content": "parent", "chunk_type": "text"}
+    parent_uuid = generate_deterministic_uuid(parent_canonical)
+    corrected_child = {"content": "child", "chunk_type": "text", "defined_in_chunk": parent_uuid}
+    expected_child_uuid = generate_deterministic_uuid(corrected_child)
+
+    inserted_child_uuid = mock_batch.add_object.call_args_list[1].kwargs["uuid"]
+    assert inserted_child_uuid == expected_child_uuid
+
+
+def test_insert_chunks_raises_for_missing_defined_in_chunk_parent():
+    """Verify that a clear ValueError is raised when defined_in_chunk references a chunk_id
+    that does not exist in the chunk list."""
+    mock_collection = MagicMock()
+    mock_batch = MagicMock()
+    mock_collection.batch.dynamic.return_value.__enter__.return_value = mock_batch
+
+    child = {
+        "chunk_id": "c1",
+        "content": "orphan child",
+        "chunk_type": "text",
+        "defined_in_chunk": "nonexistent_id",
+    }
+
+    with pytest.raises(ValueError, match="unknown parent chunk_id='nonexistent_id'"):
+        insert_chunks(mock_collection, [child], {})
