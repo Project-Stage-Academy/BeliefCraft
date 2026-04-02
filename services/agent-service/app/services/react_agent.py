@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
+from app.config_load import settings
 from app.core.exceptions import AgentExecutionError
 from app.models.agent_state import AgentState, ThoughtStep, ToolCall, create_initial_state
 from app.prompts.system_prompts import (
@@ -30,7 +31,7 @@ class ReActAgent:
             system_prompt: Custom system prompt. If None, uses default
                           WAREHOUSE_ADVISOR_SYSTEM_PROMPT.
         """
-        self.llm: LLMService = LLMService()
+        self.llm: LLMService = LLMService(model_id=settings.react_agent.model_id)
         self.system_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
         self.graph = self._build_graph()
 

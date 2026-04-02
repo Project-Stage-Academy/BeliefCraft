@@ -148,16 +148,17 @@ class AgentEvaluator:
             return
 
         from app.clients.rag_mcp_client import RAGMCPClient
-        from app.config import get_settings
+        from app.config_load import settings
         from app.tools import register_mcp_rag_tools
 
-        settings = get_settings()
-        mcp_client = RAGMCPClient(base_url=settings.RAG_API_URL)
+        mcp_client = RAGMCPClient(base_url=settings.external_services.rag_api_url)
         try:
             await mcp_client.connect()
             await register_mcp_rag_tools(mcp_client)
             _rag_tools_registered = True
-            logger.info("evaluator_rag_tools_registered", rag_url=settings.RAG_API_URL)
+            logger.info(
+                "evaluator_rag_tools_registered", rag_url=settings.external_services.rag_api_url
+            )
         except Exception as e:
             logger.warning(
                 "evaluator_rag_tools_registration_failed",
@@ -501,15 +502,15 @@ class AgentEvaluator:
         failed = total - passed
         pass_rate = passed / total if total > 0 else 0.0
 
-        avg_retrieval = sum(r.retrieval_accuracy for r in results) / total
-        avg_citation = sum(r.citation_quality for r in results) / total
-        avg_code = sum(r.code_validity for r in results) / total
-        avg_reasoning = sum(r.reasoning_quality for r in results) / total
-        avg_actionability = sum(r.actionability for r in results) / total
-        avg_overall = sum(r.overall_score for r in results) / total
+        avg_retrieval = sum(r.retrieval_accuracy for r in results) / total if total > 0 else 0.0
+        avg_citation = sum(r.citation_quality for r in results) / total if total > 0 else 0.0
+        avg_code = sum(r.code_validity for r in results) / total if total > 0 else 0.0
+        avg_reasoning = sum(r.reasoning_quality for r in results) / total if total > 0 else 0.0
+        avg_actionability = sum(r.actionability for r in results) / total if total > 0 else 0.0
+        avg_overall = sum(r.overall_score for r in results) / total if total > 0 else 0.0
 
-        avg_execution = sum(r.execution_time_seconds for r in results) / total
-        avg_iterations = sum(r.iterations for r in results) / total
+        avg_execution = sum(r.execution_time_seconds for r in results) / total if total > 0 else 0.0
+        avg_iterations = sum(r.iterations for r in results) / total if total > 0 else 0.0
 
         by_category: dict[str, list[EvaluationResult]] = {}
         for result in results:

@@ -30,7 +30,7 @@ import json
 from typing import Any
 
 import redis.asyncio as redis
-from app.config import get_settings
+from app.config_load import settings
 from app.core.constants import REDIS_MAX_CONNECTIONS, REDIS_SOCKET_CONNECT_TIMEOUT
 from app.tools.base import BaseTool, ToolMetadata, ToolResult
 from common.logging import get_logger
@@ -69,15 +69,16 @@ class CachedTool(BaseTool):
                 If None, uses tool metadata or global default
         """
         self.tool = tool
-        self.settings = get_settings()
 
         # TTL priority: 1. Constructor arg, 2. Tool metadata, 3. Global default
         tool_metadata = self.tool.get_metadata()
-        self.ttl_seconds = ttl_seconds or tool_metadata.cache_ttl or self.settings.CACHE_TTL_SECONDS
+        self.ttl_seconds = (
+            ttl_seconds or tool_metadata.cache_ttl or settings.redis.cache_ttl_seconds
+        )
 
         # Configure Redis connection pool explicitly for better type safety
         pool = redis.ConnectionPool.from_url(
-            self.settings.REDIS_URL,
+            settings.redis.url,
             decode_responses=True,
             max_connections=REDIS_MAX_CONNECTIONS,
             socket_keepalive=True,

@@ -12,7 +12,6 @@ dependencies = [
     "beliefcraft-environment-api",
     "beliefcraft-rag-service",
     "beliefcraft-agent-service",
-    "respx>=0.22.0",
 ]
 
 [tool.uv.sources]

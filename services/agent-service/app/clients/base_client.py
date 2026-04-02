@@ -1,3 +1,4 @@
+# file: services/agent-service/app/clients/base_client.py
 """
 Base HTTP API client with retry logic and observability.
 
@@ -22,7 +23,7 @@ from types import TracebackType
 from typing import Any
 
 import httpx
-from app.config import get_settings
+from app.config_load import settings
 from app.core.exceptions import ExternalServiceError
 from common.http_client import TracedHttpClient
 from common.logging import get_logger
@@ -71,9 +72,7 @@ class BaseAPIClient:
         """
         self.base_url = base_url.rstrip("/")
         self.service_name = service_name
-
-        settings = get_settings()
-        self.default_timeout = float(settings.TOOL_TIMEOUT_SECONDS)
+        self.default_timeout = float(settings.execution.tool_timeout_seconds)
 
         # Lazy initialization - client created only in __aenter__
         self._client: TracedHttpClient | None = None
