@@ -214,3 +214,40 @@ def test_insert_chunks(weaviate_client):
     )
     assert directly_fetched == expected_directly_fetched
     assert fetched_by_reference == expected_fetched_by_reference
+
+
+def test_insert_chunks_preserves_chunk_id_for_defined_in_references():
+    """Verify that processing a chunk doesn't remove 'chunk_id' from the original list,
+    preventing KeyErrors when later chunks reference it via 'defined_in_chunk'."""
+    mock_collection = MagicMock()
+    mock_batch = MagicMock()
+    mock_collection.batch.dynamic.return_value.__enter__.return_value = mock_batch
+
+    chunks = [
+        {
+            "chunk_id": "parent_id",
+            "entity_id": "parent_entity",
+            "chunk_type": "text",
+            "content": "Parent content",
+        },
+        {
+            "chunk_id": "child_id",
+            "entity_id": "child_entity",
+            "chunk_type": "text",
+            "content": "Child content",
+            "defined_in_chunk": "parent_id",
+        },
+    ]
+    reference_map = {}
+
+    insert_chunks(mock_collection, chunks, reference_map)
+
+    # Verify that parent_id is still in the original chunks
+    # list (this ensures no KeyError for the second chunk)
+    assert chunks[0]["chunk_id"] == "parent_id"
+    # Verify the second chunk's defined_in_chunk was converted to the parent's UUID
+    parent_uuid = generate_deterministic_uuid(chunks[0])
+    added_child_properties = mock_batch.add_object.call_args_list[1].kwargs["properties"]
+    assert added_child_properties["defined_in_chunk"] == parent_uuid
+    # Verify 'chunk_id' was popped from the properties sent to Weaviate
+    assert "chunk_id" not in added_child_properties
