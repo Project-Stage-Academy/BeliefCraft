@@ -359,3 +359,26 @@ def test_insert_chunks_skips_defined_in_chunk_when_parent_is_missing():
     assert mock_batch.add_object.call_count == 1
     inserted_props = mock_batch.add_object.call_args_list[0].kwargs["properties"]
     assert "defined_in_chunk" not in inserted_props
+
+
+def test_insert_chunks_warns_on_duplicate_uuid():
+    """Verify that inserting two chunks that produce the same UUID prints a warning
+    identifying the overwritten chunk, but both calls to add_object are still made."""
+    mock_collection = MagicMock()
+    mock_batch = MagicMock()
+    mock_collection.batch.dynamic.return_value.__enter__.return_value = mock_batch
+
+    identical_chunk = {"entity_id": "e1", "chunk_type": "text", "content": "same"}
+    chunk_a = {"chunk_id": "a", **identical_chunk}
+    chunk_b = {"chunk_id": "b", **identical_chunk}
+
+    expected_uuid = generate_deterministic_uuid(identical_chunk)
+
+    with patch("builtins.print") as mock_print:
+        insert_chunks(mock_collection, [chunk_a, chunk_b], {})
+
+    mock_print.assert_called_once_with(
+        f"Warning: Duplicate UUID '{expected_uuid}' detected. "
+        f"The previously inserted chunk with this UUID will be overwritten."
+    )
+    assert mock_batch.add_object.call_count == 2

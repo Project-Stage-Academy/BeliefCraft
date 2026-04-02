@@ -102,6 +102,7 @@ def insert_chunks(
         ch["chunk_id"]: ch for ch in chunks if "chunk_id" in ch
     }
     references: list[DataReference | DataReferenceMulti] = []
+    seen_uuids: set[str] = set()
     with collection.batch.dynamic() as batch:
         for chunk in chunks:
             chunk_to_add = chunk.copy()
@@ -122,6 +123,12 @@ def insert_chunks(
                         referenced_chunk_for_uuid
                     )
             uuid = generate_deterministic_uuid(chunk_to_add)
+            if uuid in seen_uuids:
+                print(
+                    f"Warning: Duplicate UUID '{uuid}' detected. "
+                    f"The previously inserted chunk with this UUID will be overwritten."
+                )
+            seen_uuids.add(uuid)
             chunk_references = extract_references_from_chunk(chunk_to_add, reference_map)
             batch.add_object(
                 properties=chunk_to_add,
