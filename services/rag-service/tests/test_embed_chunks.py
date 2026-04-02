@@ -335,9 +335,9 @@ def test_chunk_uuid_computed_after_defined_in_chunk_correction():
     assert inserted_child_uuid == expected_child_uuid
 
 
-def test_insert_chunks_raises_for_missing_defined_in_chunk_parent():
-    """Verify that a clear ValueError is raised when defined_in_chunk references a chunk_id
-    that does not exist in the chunk list."""
+def test_insert_chunks_skips_defined_in_chunk_when_parent_is_missing():
+    """Verify that when defined_in_chunk references an unknown chunk_id, the field is dropped,
+    the chunk is still inserted, and a warning is printed."""
     mock_collection = MagicMock()
     mock_batch = MagicMock()
     mock_collection.batch.dynamic.return_value.__enter__.return_value = mock_batch
@@ -349,5 +349,13 @@ def test_insert_chunks_raises_for_missing_defined_in_chunk_parent():
         "defined_in_chunk": "nonexistent_id",
     }
 
-    with pytest.raises(ValueError, match="unknown parent chunk_id='nonexistent_id'"):
+    with patch("builtins.print") as mock_print:
         insert_chunks(mock_collection, [child], {})
+
+    mock_print.assert_called_with(
+        "Warning: Chunk references unknown parent chunk_id='nonexistent_id' "
+        "via 'defined_in_chunk'. Skipping field."
+    )
+    assert mock_batch.add_object.call_count == 1
+    inserted_props = mock_batch.add_object.call_args_list[0].kwargs["properties"]
+    assert "defined_in_chunk" not in inserted_props

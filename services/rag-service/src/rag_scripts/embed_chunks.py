@@ -110,15 +110,17 @@ def insert_chunks(
                 parent_chunk_id = chunk_to_add["defined_in_chunk"]
                 referenced_chunk = chunk_id_map.get(parent_chunk_id)
                 if referenced_chunk is None:
-                    raise ValueError(
-                        f"Chunk references unknown parent chunk_id='{parent_chunk_id}' "
-                        f"via 'defined_in_chunk'."
+                    print(
+                        f"Warning: Chunk references unknown parent chunk_id='{parent_chunk_id}' "
+                        f"via 'defined_in_chunk'. Skipping field."
                     )
-                referenced_chunk_for_uuid = referenced_chunk.copy()
-                referenced_chunk_for_uuid.pop("chunk_id", "")
-                chunk_to_add["defined_in_chunk"] = generate_deterministic_uuid(
-                    referenced_chunk_for_uuid
-                )
+                    chunk_to_add.pop("defined_in_chunk")
+                else:
+                    referenced_chunk_for_uuid = referenced_chunk.copy()
+                    referenced_chunk_for_uuid.pop("chunk_id", "")
+                    chunk_to_add["defined_in_chunk"] = generate_deterministic_uuid(
+                        referenced_chunk_for_uuid
+                    )
             uuid = generate_deterministic_uuid(chunk_to_add)
             chunk_references = extract_references_from_chunk(chunk_to_add, reference_map)
             batch.add_object(
