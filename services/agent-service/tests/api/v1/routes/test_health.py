@@ -24,6 +24,9 @@ MOCK_SETTINGS = {
         "aws_profile": None,
     },
     "react_agent": {"model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0"},
+    "execution": {},
+    "langsmith": {},
+    "env_sub_agent": {"model_id": "test-model"},
 }
 
 
