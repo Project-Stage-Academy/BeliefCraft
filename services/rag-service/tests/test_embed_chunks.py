@@ -352,7 +352,7 @@ def test_insert_chunks_skips_defined_in_chunk_when_parent_is_missing():
     with patch("builtins.print") as mock_print:
         insert_chunks(mock_collection, [child], {})
 
-    mock_print.assert_called_with(
+    mock_print.call_args_list[0].assert_called_with(
         "Warning: Chunk references unknown parent chunk_id='nonexistent_id' "
         "via 'defined_in_chunk'. Skipping field."
     )
@@ -377,7 +377,7 @@ def test_insert_chunks_warns_on_duplicate_uuid():
     with patch("builtins.print") as mock_print:
         insert_chunks(mock_collection, [chunk_a, chunk_b], {})
 
-    mock_print.assert_called_once_with(
+    mock_print.call_args_list[0].assert_called_with(
         f"Warning: Duplicate UUID '{expected_uuid}' detected. "
         f"The previously inserted chunk with this UUID will be overwritten."
     )
