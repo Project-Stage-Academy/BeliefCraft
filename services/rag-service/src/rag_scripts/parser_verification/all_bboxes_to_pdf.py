@@ -222,9 +222,9 @@ def main() -> None:
     paddle_pages = load_paddle_dir(args.paddle_dir)
     paddle_boxes = extract_paddle_boxes(paddle_pages)
 
-    if args.input_json:
-        chunks = load_chunks(args.input_json)
-        print("Loaded", len(chunks), "chunks from", args.input_json)
+    if args.chunks_json:
+        chunks = load_chunks(args.chunks_json)
+        print("Loaded", len(chunks), "chunks from", args.chunks_json)
     else:
         chunks = None
 
