@@ -2,28 +2,8 @@
 Tests for citation extraction from RAG tool results.
 """
 
-import json
-from pathlib import Path
-
 from app.models.agent_state import ToolCall
 from app.services.extractors.citation_extractor import CitationExtractor
-
-
-def _mock_rag_data_path() -> Path:
-    repo_root = Path(__file__).resolve().parents[3]
-    return (
-        repo_root
-        / "services"
-        / "rag-service"
-        / "src"
-        / "rag_service"
-        / "mock_vector_store_data.json"
-    )
-
-
-def _load_mock_chunks() -> list[dict]:
-    with _mock_rag_data_path().open(encoding="utf-8") as f:
-        return json.load(f)
 
 
 def _as_document_shape(raw_chunk: dict) -> dict:
@@ -43,10 +23,9 @@ def _expected_hierarchy_title(chunk: dict) -> str:
     return " / ".join(parts)
 
 
-def test_extract_from_tool_calls_maps_metadata_fields() -> None:
+def test_extract_from_tool_calls_maps_metadata_fields(mock_rag_chunks: list[dict]) -> None:
     extractor = CitationExtractor()
-    chunks = _load_mock_chunks()
-    formula_chunk = next(c for c in chunks if c.get("chunk_type") == "numbered_formula")
+    formula_chunk = next(c for c in mock_rag_chunks if c.get("chunk_type") == "numbered_formula")
 
     citations = extractor.extract_from_tool_calls(
         [
@@ -67,10 +46,9 @@ def test_extract_from_tool_calls_maps_metadata_fields() -> None:
     assert citation.title == _expected_hierarchy_title(formula_chunk)
 
 
-def test_extract_from_tool_calls_supports_flat_result_shape() -> None:
+def test_extract_from_tool_calls_supports_flat_result_shape(mock_rag_chunks: list[dict]) -> None:
     extractor = CitationExtractor()
-    chunks = _load_mock_chunks()
-    text_chunk = next(c for c in chunks if c.get("chunk_type") == "text")
+    text_chunk = next(c for c in mock_rag_chunks if c.get("chunk_type") == "text")
 
     citations = extractor.extract_from_tool_calls(
         [
@@ -91,10 +69,9 @@ def test_extract_from_tool_calls_supports_flat_result_shape() -> None:
     assert citation.title == _expected_hierarchy_title(text_chunk)
 
 
-def test_extract_from_tool_calls_deduplicates_chunk_ids() -> None:
+def test_extract_from_tool_calls_deduplicates_chunk_ids(mock_rag_chunks: list[dict]) -> None:
     extractor = CitationExtractor()
-    chunks = _load_mock_chunks()
-    table_chunk = next(c for c in chunks if c.get("chunk_type") == "numbered_table")
+    table_chunk = next(c for c in mock_rag_chunks if c.get("chunk_type") == "numbered_table")
     document = _as_document_shape(table_chunk)
 
     tool_calls = [
@@ -148,10 +125,9 @@ def test_extract_from_tool_calls_uses_get_entity_arguments_as_fallbacks() -> Non
     assert citation.title == "Formula 16.4"
 
 
-def test_extract_from_tool_calls_uses_tool_category_when_present() -> None:
+def test_extract_from_tool_calls_uses_tool_category_when_present(mock_rag_chunks: list[dict]) -> None:
     extractor = CitationExtractor()
-    chunks = _load_mock_chunks()
-    formula_chunk = next(c for c in chunks if c.get("chunk_type") == "numbered_formula")
+    formula_chunk = next(c for c in mock_rag_chunks if c.get("chunk_type") == "numbered_formula")
 
     citations = extractor.extract_from_tool_calls(
         [

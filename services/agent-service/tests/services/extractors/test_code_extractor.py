@@ -10,23 +10,6 @@ from app.models.agent_state import ToolCall
 from app.services.extractors.code_extractor import CodeExtractor
 
 
-def _mock_rag_data_path() -> Path:
-    repo_root = Path(__file__).resolve().parents[3]
-    return (
-        repo_root
-        / "services"
-        / "rag-service"
-        / "src"
-        / "rag_service"
-        / "mock_vector_store_data.json"
-    )
-
-
-def _load_mock_chunks() -> list[dict]:
-    with _mock_rag_data_path().open(encoding="utf-8") as file:
-        return json.load(file)
-
-
 def _as_document_shape(raw_chunk: dict) -> dict:
     return {
         "id": raw_chunk["chunk_id"],
@@ -164,9 +147,9 @@ def test_extract_from_document_uses_nested_dependency_metadata_fields() -> None:
     ]
 
 
-def test_extract_from_document_reads_algorithm_chunk_content_from_mock_data() -> None:
+def test_extract_from_document_reads_algorithm_chunk_content_from_mock_data(mock_rag_chunks: list[dict]) -> None:
     extractor = CodeExtractor()
-    chunks = _load_mock_chunks()
+    chunks = mock_rag_chunks
     algorithm_chunk = next(c for c in chunks if c.get("chunk_type") == "algorithm")
 
     snippets = extractor.extract_from_document(algorithm_chunk)
@@ -346,9 +329,9 @@ def test_extract_from_answer_and_tool_calls_deduplicates_across_sources() -> Non
     assert snippets[0].language == "python"
 
 
-def test_extract_from_document_supports_nested_document_shape_from_mock_chunk() -> None:
+def test_extract_from_document_supports_nested_document_shape_from_mock_chunk(mock_rag_chunks: list[dict]) -> None:
     extractor = CodeExtractor()
-    chunks = _load_mock_chunks()
+    chunks = mock_rag_chunks
     algorithm_chunk = next(c for c in chunks if c.get("chunk_type") == "algorithm")
     nested_document = _as_document_shape(algorithm_chunk)
 

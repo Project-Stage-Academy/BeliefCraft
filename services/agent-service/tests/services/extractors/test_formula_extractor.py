@@ -8,23 +8,6 @@ from pathlib import Path
 from app.services.extractors.formula_extractor import FormulaExtractor
 
 
-def _mock_rag_data_path() -> Path:
-    repo_root = Path(__file__).resolve().parents[3]
-    return (
-        repo_root
-        / "services"
-        / "rag-service"
-        / "src"
-        / "rag_service"
-        / "mock_vector_store_data.json"
-    )
-
-
-def _load_mock_chunks() -> list[dict]:
-    with _mock_rag_data_path().open(encoding="utf-8") as f:
-        return json.load(f)
-
-
 def test_extract_from_text_supports_latex_delimiters() -> None:
     extractor = FormulaExtractor()
     text = (
@@ -50,9 +33,9 @@ def test_extract_from_text_deduplicates_whitespace_variants() -> None:
     assert formulas[0].latex in {"x = y + z", "x=y+z"}
 
 
-def test_extract_from_rag_chunks_uses_real_numbered_formula_chunk() -> None:
+def test_extract_from_rag_chunks_uses_real_numbered_formula_chunk(mock_rag_chunks: list[dict]) -> None:
     extractor = FormulaExtractor()
-    chunks = _load_mock_chunks()
+    chunks = mock_rag_chunks
     formula_chunk = next(c for c in chunks if c.get("chunk_type") == "numbered_formula")
 
     formulas = extractor.extract_from_rag_chunks([formula_chunk])
@@ -66,9 +49,9 @@ def test_extract_from_rag_chunks_uses_real_numbered_formula_chunk() -> None:
     }
 
 
-def test_extract_from_rag_chunks_reads_embedded_latex_from_real_text_chunk() -> None:
+def test_extract_from_rag_chunks_reads_embedded_latex_from_real_text_chunk(mock_rag_chunks: list[dict]) -> None:
     extractor = FormulaExtractor()
-    chunks = _load_mock_chunks()
+    chunks = mock_rag_chunks
     text_chunk = next(
         c for c in chunks if c.get("chunk_type") == "text" and "$" in c.get("content", "")
     )
@@ -79,9 +62,9 @@ def test_extract_from_rag_chunks_reads_embedded_latex_from_real_text_chunk() -> 
     assert all("$$" not in formula.latex for formula in formulas)
 
 
-def test_extract_from_rag_chunks_supports_nested_metadata_shape_from_real_chunk() -> None:
+def test_extract_from_rag_chunks_supports_nested_metadata_shape_from_real_chunk(mock_rag_chunks: list[dict]) -> None:
     extractor = FormulaExtractor()
-    chunks = _load_mock_chunks()
+    chunks = mock_rag_chunks
     base_formula_chunk = next(c for c in chunks if c.get("chunk_type") == "numbered_formula")
 
     nested_shape_chunk = {
