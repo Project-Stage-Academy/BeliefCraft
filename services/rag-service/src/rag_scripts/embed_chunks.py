@@ -98,6 +98,7 @@ def insert_chunks(
     collection: Collection, chunks: list[dict[str, Any]], reference_map: ReferenceMap
 ) -> None:
     """Iterate through chunks and insert them into Weaviate."""
+    inserted_chunks_count = 0
     chunk_id_map: dict[str, dict[str, Any]] = {
         ch["chunk_id"]: ch for ch in chunks if "chunk_id" in ch
     }
@@ -128,6 +129,8 @@ def insert_chunks(
                     f"Warning: Duplicate UUID '{uuid}' detected. "
                     f"The previously inserted chunk with this UUID will be overwritten."
                 )
+            else:
+                inserted_chunks_count += 1
             seen_uuids.add(uuid)
             chunk_references = extract_references_from_chunk(chunk_to_add, reference_map)
             batch.add_object(
@@ -137,6 +140,7 @@ def insert_chunks(
             references.extend(chunk_references)
     # add references in batch after all chunks are inserted to avoid referencing non-existing UUIDs
     collection.data.reference_add_many(references)
+    print(f"Inserted {inserted_chunks_count} chunks with {len(references)} references.")
 
 
 def build_reference_map(chunks: list[dict[str, Any]]) -> ReferenceMap:
