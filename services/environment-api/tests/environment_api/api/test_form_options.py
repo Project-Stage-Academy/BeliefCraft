@@ -50,7 +50,7 @@ def test_form_options_populates_cache_on_miss(client, monkeypatch, seed_base_wor
     assert seed_base_world["supplier"].name in body["origins"]
     assert seed_base_world["warehouse"].name in body["destinations"]
     assert body["products"]
-    assert body["transport_modes"]
+    assert body["transport_modes"] == []
     assert cache.set_calls
 
 
