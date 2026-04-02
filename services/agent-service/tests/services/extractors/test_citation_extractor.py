@@ -125,7 +125,9 @@ def test_extract_from_tool_calls_uses_get_entity_arguments_as_fallbacks() -> Non
     assert citation.title == "Formula 16.4"
 
 
-def test_extract_from_tool_calls_uses_tool_category_when_present(mock_rag_chunks: list[dict]) -> None:
+def test_extract_from_tool_calls_uses_tool_category_when_present(
+    mock_rag_chunks: list[dict],
+) -> None:
     extractor = CitationExtractor()
     formula_chunk = next(c for c in mock_rag_chunks if c.get("chunk_type") == "numbered_formula")
 

@@ -2,9 +2,6 @@
 Tests for code snippet extraction and enrichment.
 """
 
-import json
-from pathlib import Path
-
 import pytest
 from app.models.agent_state import ToolCall
 from app.services.extractors.code_extractor import CodeExtractor
@@ -147,7 +144,9 @@ def test_extract_from_document_uses_nested_dependency_metadata_fields() -> None:
     ]
 
 
-def test_extract_from_document_reads_algorithm_chunk_content_from_mock_data(mock_rag_chunks: list[dict]) -> None:
+def test_extract_from_document_reads_algorithm_chunk_content_from_mock_data(
+    mock_rag_chunks: list[dict],
+) -> None:
     extractor = CodeExtractor()
     chunks = mock_rag_chunks
     algorithm_chunk = next(c for c in chunks if c.get("chunk_type") == "algorithm")
@@ -329,7 +328,9 @@ def test_extract_from_answer_and_tool_calls_deduplicates_across_sources() -> Non
     assert snippets[0].language == "python"
 
 
-def test_extract_from_document_supports_nested_document_shape_from_mock_chunk(mock_rag_chunks: list[dict]) -> None:
+def test_extract_from_document_supports_nested_document_shape_from_mock_chunk(
+    mock_rag_chunks: list[dict],
+) -> None:
     extractor = CodeExtractor()
     chunks = mock_rag_chunks
     algorithm_chunk = next(c for c in chunks if c.get("chunk_type") == "algorithm")

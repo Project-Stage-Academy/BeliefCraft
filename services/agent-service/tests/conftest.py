@@ -45,11 +45,7 @@ def mock_rag_chunks() -> list[dict]:
     services_dir = conftest_dir.parent.parent
 
     mock_data_path = (
-        services_dir
-        / "rag-service"
-        / "src"
-        / "rag_service"
-        / "mock_vector_store_data.json"
+        services_dir / "rag-service" / "src" / "rag_service" / "mock_vector_store_data.json"
     )
 
     with mock_data_path.open(encoding="utf-8") as f:

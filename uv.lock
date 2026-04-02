@@ -159,10 +159,8 @@ dependencies = [
     { name = "beliefcraft-database" },
     { name = "beliefcraft-environment-api" },
     { name = "beliefcraft-rag-service" },
-    { name = "boto3-stubs" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "python-fire" },
 ]
 
 [package.dev-dependencies]
@@ -194,10 +192,8 @@ requires-dist = [
     { name = "beliefcraft-database", editable = "packages/database" },
     { name = "beliefcraft-environment-api", editable = "services/environment-api" },
     { name = "beliefcraft-rag-service", editable = "services/rag-service" },
-    { name = "boto3-stubs", specifier = "~=1.42.59" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.0" },
-    { name = "python-fire", specifier = ">=0.1.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -2930,18 +2926,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/82/ed/0301aeeac3e5353ef3d94b6ec08bbcabd04a72018415dcb29e588514bba8/python_dotenv-1.2.2.tar.gz", hash = "sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3", size = 50135, upload-time = "2026-03-01T16:00:26.196Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl", hash = "sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a", size = 22101, upload-time = "2026-03-01T16:00:25.09Z" },
-]
-
-[[package]]
-name = "python-fire"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pygments" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/6f/44ae4333d02d597021b4abb47103a564a05404d82132d1517080ce124ff5/python-fire-0.1.0.tar.gz", hash = "sha256:ed3cb202288c6e742a077611fb884b154068758f9ec65eb827520d670bdbada9", size = 19941, upload-time = "2014-07-12T09:57:25.442Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/dd/e9/d7a7f52c698f76941dbd04bc950772dc08d2bb91245867f52ed304003ac9/python_fire-0.1.0-py2.py3-none-any.whl", hash = "sha256:21c1c1de2106844091f0b7485ed5aa94cc943a83b5218b913a19822395da4bc0", size = 14093, upload-time = "2014-07-12T09:57:29.909Z" },
 ]
 
 [[package]]
