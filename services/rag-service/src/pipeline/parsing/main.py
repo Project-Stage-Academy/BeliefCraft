@@ -569,7 +569,6 @@ class DocumentAssembler:
         entity_id: str | None = None,
     ) -> dict[str, Any]:
         final_type = "exercise" if meta.get("is_exercise") or c_type == "exercise" else c_type
-        extracted_id = entity_id or self._extract_id(content)
         if final_type in ["exercise", "example", "algorithm", "captioned_image", "numbered_table"]:
             content = re.sub(
                 r"^(Exercise|Figure|Table|Algorithm|Example)\s+\d+\.\d+\.", "", content, flags=re.I
@@ -579,7 +578,7 @@ class DocumentAssembler:
             "chunk_id": self._generate_deterministic_id(
                 final_type, meta.get("subsubsection_number"), content
             ),
-            "entity_id": extracted_id,
+            "entity_id": entity_id,
             "part": meta.get("part"),
             "part_title": meta.get("part_title"),
             "section_title": meta.get("section_title"),
