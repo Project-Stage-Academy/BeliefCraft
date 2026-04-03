@@ -381,7 +381,6 @@ class DocumentAssembler:
         for eid, v_obj in zip(
             (v.get("entity_id") for v in visual_items), visual_items, strict=False
         ):
-            used_block_ids: set[int] = set()
             # attach link to the closest valid paddle block above if this is a text figure
             if v_obj.get("chunk_type") == "text" and "image_index" in v_obj:
                 v_y, target_block = v_obj.get("bbox", [0, 0, 0, 0])[1], None
@@ -405,22 +404,17 @@ class DocumentAssembler:
                 bbox = block.get("block_bbox")
                 if bbox and self._is_inside(bbox, v_obj.get("bbox", [])):
                     used.add(idx)
-                    used_block_ids.add(block["block_id"])
 
                 if entity_number and entity_number in block.get("block_content", ""):
                     block_id = format_block_number(page_num, block["block_id"])
 
             meta_res = self.meta_extractor.process_content_and_get_meta(clean_content)
-            formated_used = [format_block_number(page_num, idx) for idx in sorted(used_block_ids)]
-            chunk_block_ids = formated_used.copy()
-            if block_id is not None:
-                chunk_block_ids.append(block_id)
             chunk = self._create_chunk_obj(
                 v_obj["chunk_type"].lower(),
                 clean_content,
                 page_num,
                 meta_res,
-                chunk_block_ids,
+                [block_id] if block_id is not None else [],
                 entity_id=eid,
             )
 
