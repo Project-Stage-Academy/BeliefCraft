@@ -574,6 +574,11 @@ class DocumentAssembler:
                 r"^(Exercise|Figure|Table|Algorithm|Example)\s+\d+\.\d+\.", "", content, flags=re.I
             ).strip()
 
+            if entity_id is None:
+                logger.warning(
+                    "Entity ID is None for chunk type %s with content: %s", final_type, content[:30]
+                )
+
         chunk: dict[str, Any] = {
             "chunk_id": self._generate_deterministic_id(
                 final_type, meta.get("subsubsection_number"), content
