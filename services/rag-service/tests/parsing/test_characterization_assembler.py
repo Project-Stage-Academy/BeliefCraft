@@ -17,6 +17,8 @@ from pipeline.parsing.main import (
     DocumentAssembler,
 )
 
+from .test_main_assembler import _with_block_ids
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ def _pages_with_content(n_blank: int, page_blocks: list) -> list:
     pages.append(
         {
             "page_num": n_blank + 1,
-            "prunedResult": {"parsing_res_list": page_blocks},
+            "prunedResult": {"parsing_res_list": _with_block_ids(page_blocks)},
         }
     )
     return pages
@@ -144,6 +146,11 @@ def test_block_completely_outside_region_goes_to_main_stream(env, monkeypatch) -
     env["blocks"].write_text(json.dumps(block_region), encoding="utf-8")
 
     blocks = [
+        {
+            "block_content": "Example 3.3. Region caption.",
+            "block_label": "text",
+            "block_bbox": [0, 0, 10, 10],
+        },
         {
             "block_content": "Far outside text.",
             "block_label": "text",
@@ -809,7 +816,7 @@ def test_assemble_skips_pages_before_start_page(env, monkeypatch) -> None:
         },
         {"block_content": "# 1 Trigger", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
     ]
-    pages = [{"page_num": 1, "prunedResult": {"parsing_res_list": blocks}}]
+    pages = [{"page_num": 1, "prunedResult": {"parsing_res_list": _with_block_ids(blocks)}}]
     (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
 
     assembler = _make(env)
@@ -985,8 +992,14 @@ def test_exercise_at_end_of_part_is_flushed_with_correct_metadata(env, monkeypat
     ]
     pages.extend(
         [
-            {"page_num": START_PAGE, "prunedResult": {"parsing_res_list": blocks_init + blocks_p1}},
-            {"page_num": START_PAGE + 1, "prunedResult": {"parsing_res_list": blocks_p2}},
+            {
+                "page_num": START_PAGE,
+                "prunedResult": {"parsing_res_list": _with_block_ids(blocks_init + blocks_p1)},
+            },
+            {
+                "page_num": START_PAGE + 1,
+                "prunedResult": {"parsing_res_list": _with_block_ids(blocks_p2)},
+            },
         ]
     )
     (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")

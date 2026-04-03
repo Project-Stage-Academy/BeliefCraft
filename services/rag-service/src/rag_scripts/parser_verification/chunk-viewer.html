@@ -667,7 +667,8 @@ function buildChunkCard(chunk) {
 
   // Referenced metadata
   const refEntries = Object.entries(chunk).filter(([key, val]) => {
-    if (key !== 'defined_in_chunk' && !key.startsWith('referenced_')) return false;
+    const isReferenceMeta = key === 'defined_in_chunk' || key === 'pdf_block_ids' || key.startsWith('referenced_');
+    if (!isReferenceMeta) return false;
     if (val === null || val === undefined) return false;
     if (typeof val === 'string' && val.trim() === '') return false;
     if (Array.isArray(val) && val.length === 0) return false;

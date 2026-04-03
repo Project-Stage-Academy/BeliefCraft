@@ -7,13 +7,23 @@ from pipeline.parsing.main import (
 )
 
 
+def _with_block_ids(blocks: list[dict]) -> list[dict]:
+    """Return a copy of blocks where each block has a stable 1-based block_id."""
+    normalized: list[dict] = []
+    for idx, block in enumerate(blocks, start=1):
+        block_copy = dict(block)
+        block_copy.setdefault("block_id", idx)
+        normalized.append(block_copy)
+    return normalized
+
+
 def _pages_with_content(n_blank: int, page_blocks: list) -> list:
     """Return n_blank empty pages followed by one page carrying page_blocks."""
     pages = [{"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(n_blank)]
     pages.append(
         {
             "page_num": n_blank + 1,
-            "prunedResult": {"parsing_res_list": page_blocks},
+            "prunedResult": {"parsing_res_list": _with_block_ids(page_blocks)},
         }
     )
     return pages
@@ -29,18 +39,20 @@ def mock_data_env(tmp_path):
     paddle_data = {
         "page_num": 1,
         "prunedResult": {
-            "parsing_res_list": [
-                {
-                    "block_content": "CHAPTER 1 INTRODUCTION",
-                    "block_label": "title",
-                    "block_bbox": [10, 10, 100, 20],
-                },
-                {
-                    "block_content": "This is a simple text paragraph.",
-                    "block_label": "text",
-                    "block_bbox": [10, 30, 100, 50],
-                },
-            ]
+            "parsing_res_list": _with_block_ids(
+                [
+                    {
+                        "block_content": "CHAPTER 1 INTRODUCTION",
+                        "block_label": "title",
+                        "block_bbox": [10, 10, 100, 20],
+                    },
+                    {
+                        "block_content": "This is a simple text paragraph.",
+                        "block_label": "text",
+                        "block_bbox": [10, 30, 100, 50],
+                    },
+                ]
+            )
         },
     }
     paddle_file.write_text(json.dumps([paddle_data]), encoding="utf-8")
@@ -206,18 +218,20 @@ def test_document_assembler_full_flow(mock_data_env, monkeypatch):
         {
             "page_num": 23,
             "prunedResult": {
-                "parsing_res_list": [
-                    {
-                        "block_content": "Some introductory text.",
-                        "block_label": "text",
-                        "block_bbox": [10, 30, 100, 50],
-                    },
-                    {
-                        "block_content": "# 2 NEXT SECTION",
-                        "block_label": "text",
-                        "block_bbox": [10, 60, 100, 80],
-                    },
-                ]
+                "parsing_res_list": _with_block_ids(
+                    [
+                        {
+                            "block_content": "Some introductory text.",
+                            "block_label": "text",
+                            "block_bbox": [10, 30, 100, 50],
+                        },
+                        {
+                            "block_content": "# 2 NEXT SECTION",
+                            "block_label": "text",
+                            "block_bbox": [10, 60, 100, 80],
+                        },
+                    ]
+                )
             },
         }
     )
@@ -283,7 +297,7 @@ def test_assembler_simple_helpers(mock_data_env):
     assert assembler._extract_id("Just text") is None
 
     meta = {"section_title": "Test"}
-    obj = assembler._create_chunk_obj("text", "content", 1, meta)
+    obj = assembler._create_chunk_obj("text", "content", 1, meta, ["1:1"])
     assert obj["chunk_type"] == "text"
     assert obj["page"] == 1
 
@@ -319,18 +333,20 @@ def test_paddle_ocr_content_used_not_markdown_field(mock_data_env, monkeypatch):
         # markdown field is present but _process_page never reads it
         "markdown": {"text": "Formula: $E=mc^2$"},
         "prunedResult": {
-            "parsing_res_list": [
-                {
-                    "block_content": "Formula: E=mc2",
-                    "block_label": "text",
-                    "block_bbox": [0, 0, 10, 10],
-                },
-                {
-                    "block_content": "# 2 Next Topic",
-                    "block_label": "text",
-                    "block_bbox": [0, 20, 10, 30],
-                },
-            ]
+            "parsing_res_list": _with_block_ids(
+                [
+                    {
+                        "block_content": "Formula: E=mc2",
+                        "block_label": "text",
+                        "block_bbox": [0, 0, 10, 10],
+                    },
+                    {
+                        "block_content": "# 2 Next Topic",
+                        "block_label": "text",
+                        "block_bbox": [0, 20, 10, 30],
+                    },
+                ]
+            )
         },
     }
     pages = blank_pages + [content_page]

@@ -373,6 +373,11 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """
         properties = dict(weaviate_object.properties or {})
         metadata = {**properties}
+
+        block_ids_field = "pdf_block_ids"
+        if block_ids_field in metadata:
+            del metadata[block_ids_field]
+
         content = metadata.pop("content", "")
 
         for field_name in REFERENCE_TYPE_MAP:
