@@ -123,7 +123,7 @@ def analyze(chunks: list[dict[str, Any]]) -> dict[str, Any]:
 
     report: dict[str, Any] = {"chunk_types": {}, "invalid_rows": invalid_rows}
     for chunk_type in sorted(ids_by_type):
-        unique_sorted_ids = sorted(set(ids_by_type[chunk_type]), key=_sort_key)
+        unique_sorted_ids = sorted(ids_by_type[chunk_type], key=_sort_key)
         gaps = detect_gaps(unique_sorted_ids)
 
         report["chunk_types"][chunk_type] = {
