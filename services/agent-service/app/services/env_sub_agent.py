@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from app.config_load import settings
 from app.core.exceptions import AgentExecutionError
@@ -17,7 +17,7 @@ from app.prompts.env_sub_agent_system_prompts import (
 from app.services.base_agent import BaseAgent
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
-from langgraph.graph import StateGraph
+from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 logger = get_logger(__name__)
@@ -51,10 +51,22 @@ class EnvSubAgent(BaseAgent):
 
         workflow.set_entry_point("plan")
         workflow.add_edge("plan", "execute")
-        workflow.add_edge("execute", "solve")
-        workflow.set_finish_point("solve")
+        workflow.add_conditional_edges(
+            "execute",
+            self._route_after_execute,
+            {
+                "solve": "solve",
+                "end": END,
+            },
+        )
+        workflow.add_edge("solve", END)
 
         return workflow.compile()
+
+    @staticmethod
+    def _route_after_execute(state: ReWOOState) -> Literal["solve", "end"]:
+        """Skip the solver when execution has already failed."""
+        return "end" if state.get("status") == "failed" else "solve"
 
     async def _plan_node(self, state: ReWOOState) -> dict[str, Any]:
         """Planner node: Generate structured execution plan from agent query."""

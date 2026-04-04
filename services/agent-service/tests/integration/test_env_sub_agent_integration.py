@@ -37,6 +37,13 @@ def agent(mock_registry: MagicMock) -> EnvSubAgent:
         return EnvSubAgent(tool_registry=mock_registry)
 
 
+def _make_lc_tool(name: str, result: object) -> MagicMock:
+    tool = MagicMock()
+    tool.name = name
+    tool.ainvoke = AsyncMock(return_value=result)
+    return tool
+
+
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_distills_inventory_discrepancy(agent: EnvSubAgent) -> None:
     agent.llm.structured_completion = AsyncMock(
@@ -56,45 +63,41 @@ async def test_env_sub_agent_run_distills_inventory_discrepancy(agent: EnvSubAge
         )
     )
 
-    async def mock_execute_tool(tool_name: str, arguments: dict) -> dict:
-        if tool_name == "list_inventory_moves":
-            return {
-                "status": "success",
-                "data": {
-                    "data": [
-                        {
-                            "move_id": "123e4567-e89b-12d3-a456-426614174000",
-                            "product_id": "SKU-1",
-                            "quantity": 10,
-                            "move_type": "transfer",
-                            "to_location_id": "WH-1-BIN-01",
-                        }
-                    ],
-                    "message": "Retrieved 1 inventory move.",
-                    "meta": {"count": 1, "trace_count": 1},
-                },
+    inventory_result = MagicMock()
+    inventory_result.success = True
+    inventory_result.data = {
+        "data": [
+            {
+                "move_id": "123e4567-e89b-12d3-a456-426614174000",
+                "product_id": "SKU-1",
+                "quantity": 10,
+                "move_type": "transfer",
+                "to_location_id": "WH-1-BIN-01",
             }
+        ],
+        "message": "Retrieved 1 inventory move.",
+        "meta": {"count": 1, "trace_count": 1},
+    }
 
-        if tool_name == "get_observed_inventory_snapshot":
-            return {
-                "status": "success",
-                "data": {
-                    "data": [
-                        {
-                            "product_id": "SKU-1",
-                            "location_code": "WH-1-BIN-01",
-                            "observed_quantity": 8,
-                            "quality_status": "good",
-                        }
-                    ],
-                    "message": "Retrieved 1 observed inventory row.",
-                    "meta": {"count": 1, "trace_count": 1},
-                },
+    observed_result = MagicMock()
+    observed_result.success = True
+    observed_result.data = {
+        "data": [
+            {
+                "product_id": "SKU-1",
+                "location_code": "WH-1-BIN-01",
+                "observed_quantity": 8,
+                "quality_status": "good",
             }
+        ],
+        "message": "Retrieved 1 observed inventory row.",
+        "meta": {"count": 1, "trace_count": 1},
+    }
 
-        raise AssertionError(f"Unexpected tool call: {tool_name}")
-
-    agent._execute_tool = AsyncMock(side_effect=mock_execute_tool)
+    agent.lc_tools = [
+        _make_lc_tool("list_inventory_moves", inventory_result),
+        _make_lc_tool("get_observed_inventory_snapshot", observed_result),
+    ]
 
     agent.llm.chat_completion = AsyncMock(
         return_value={
@@ -147,52 +150,48 @@ async def test_env_sub_agent_run_distills_device_health_findings(agent: EnvSubAg
         )
     )
 
-    async def mock_execute_tool(tool_name: str, arguments: dict) -> dict:
-        if tool_name == "get_device_health_summary":
-            return {
-                "status": "success",
-                "data": {
-                    "data": [
-                        {
-                            "device_id": "sensor-abc-123",
-                            "device_type": "temperature",
-                            "status": "degraded",
-                            "health_score": 0.45,
-                            "last_seen_at": "2026-04-02T09:00:00Z",
-                        },
-                        {
-                            "device_id": "sensor-xyz-789",
-                            "device_type": "barcode",
-                            "status": "online",
-                            "health_score": 0.92,
-                            "last_seen_at": "2026-04-04T09:55:00Z",
-                        },
-                    ],
-                    "message": "Retrieved 2 device health records.",
-                    "meta": {"count": 2, "trace_count": 2},
-                },
+    health_result = MagicMock()
+    health_result.success = True
+    health_result.data = {
+        "data": [
+            {
+                "device_id": "sensor-abc-123",
+                "device_type": "temperature",
+                "status": "degraded",
+                "health_score": 0.45,
+                "last_seen_at": "2026-04-02T09:00:00Z",
+            },
+            {
+                "device_id": "sensor-xyz-789",
+                "device_type": "barcode",
+                "status": "online",
+                "health_score": 0.92,
+                "last_seen_at": "2026-04-04T09:55:00Z",
+            },
+        ],
+        "message": "Retrieved 2 device health records.",
+        "meta": {"count": 2, "trace_count": 2},
+    }
+
+    anomalies_result = MagicMock()
+    anomalies_result.success = True
+    anomalies_result.data = {
+        "data": [
+            {
+                "device_id": "sensor-abc-123",
+                "anomaly_type": "stale_readings",
+                "severity": "high",
+                "details": "No recent scan in last 24 hours",
             }
+        ],
+        "message": "Detected 1 device anomaly.",
+        "meta": {"count": 1, "trace_count": 1},
+    }
 
-        if tool_name == "get_device_anomalies":
-            return {
-                "status": "success",
-                "data": {
-                    "data": [
-                        {
-                            "device_id": "sensor-abc-123",
-                            "anomaly_type": "stale_readings",
-                            "severity": "high",
-                            "details": "No recent scan in last 24 hours",
-                        }
-                    ],
-                    "message": "Detected 1 device anomaly.",
-                    "meta": {"count": 1, "trace_count": 1},
-                },
-            }
-
-        raise AssertionError(f"Unexpected tool call: {tool_name}")
-
-    agent._execute_tool = AsyncMock(side_effect=mock_execute_tool)
+    agent.lc_tools = [
+        _make_lc_tool("get_device_health_summary", health_result),
+        _make_lc_tool("get_device_anomalies", anomalies_result),
+    ]
 
     agent.llm.chat_completion = AsyncMock(
         return_value={
@@ -241,22 +240,20 @@ async def test_env_sub_agent_run_handles_solver_failure(agent: EnvSubAgent) -> N
         )
     )
 
-    agent._execute_tool = AsyncMock(
-        return_value={
-            "status": "success",
-            "data": {
-                "data": [
-                    {
-                        "move_id": "123e4567-e89b-12d3-a456-426614174000",
-                        "product_id": "SKU-1",
-                        "quantity": 10,
-                    }
-                ],
-                "message": "Retrieved 1 inventory move.",
-                "meta": {"count": 1, "trace_count": 1},
-            },
-        }
-    )
+    inventory_result = MagicMock()
+    inventory_result.success = True
+    inventory_result.data = {
+        "data": [
+            {
+                "move_id": "123e4567-e89b-12d3-a456-426614174000",
+                "product_id": "SKU-1",
+                "quantity": 10,
+            }
+        ],
+        "message": "Retrieved 1 inventory move.",
+        "meta": {"count": 1, "trace_count": 1},
+    }
+    agent.lc_tools = [_make_lc_tool("list_inventory_moves", inventory_result)]
 
     agent.llm.chat_completion = AsyncMock(side_effect=RuntimeError("solver LLM unavailable"))
 
@@ -274,9 +271,7 @@ async def test_env_sub_agent_run_handles_solver_failure(agent: EnvSubAgent) -> N
 
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_handles_empty_plan(agent: EnvSubAgent) -> None:
-    agent.llm.structured_completion = AsyncMock(
-        return_value=WarehousePlan(tool_calls=[])
-    )
+    agent.llm.structured_completion = AsyncMock(return_value=WarehousePlan(tool_calls=[]))
 
     final_state = await agent.run("Check inventory discrepancy for SKU-1")
 
