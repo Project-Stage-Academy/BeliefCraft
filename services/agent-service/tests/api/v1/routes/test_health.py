@@ -1,15 +1,13 @@
 from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import botocore.exceptions
 import pytest
-from pydantic import ValidationError
-from fastapi.testclient import TestClient
-
 from app.config_schema import Settings
-from app.core.constants import ERROR_PREFIX, HealthStatus
+from app.core.constants import HealthStatus
 from app.main import app
 from app.services.health_checker import HealthChecker, verify_aws_credentials_at_startup
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 # 1. FIXED: MOCK_SETTINGS matches your actual Pydantic schema
 # Added 'execution', 'langsmith' (without 'enabled'), and 'env_sub_agent'
@@ -97,6 +95,7 @@ def test_health_redis_failure(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 # Unit tests for HealthChecker
 # ---------------------------------------------------------------------------
+
 
 def _make_checker() -> HealthChecker:
     return HealthChecker(Settings(**MOCK_SETTINGS), MagicMock(), AsyncMock())

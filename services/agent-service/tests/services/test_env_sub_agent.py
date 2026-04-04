@@ -22,11 +22,13 @@ def mock_registry() -> MagicMock:
     mock_tool_1.metadata = ToolMetadata(
         name="get_inventory", description="Gets stock", category="environment", parameters={}
     )
+    mock_tool_1.run = AsyncMock()
 
     mock_tool_2 = MagicMock()
     mock_tool_2.metadata = ToolMetadata(
         name="get_devices", description="Gets sensors", category="environment", parameters={}
     )
+    mock_tool_2.run = AsyncMock()
 
     registry.list_tools.return_value = [mock_tool_1, mock_tool_2]
     return registry
@@ -156,16 +158,20 @@ class TestExecuteNode:
             tool_calls=[
                 PlannedToolCall(rationale="1", tool_name="tool_a", arguments={"id": 1}),
                 PlannedToolCall(rationale="2", tool_name="tool_b", arguments={"id": 2}),
-                # Same tool called twice should not overwrite keys
                 PlannedToolCall(rationale="3", tool_name="tool_a", arguments={"id": 3}),
             ]
         )
 
-        # Mock the underlying inherited `_execute_tool`
-        async def mock_execute_tool(name: str, args: dict) -> dict:
-            return {"status": "success", "data": f"{name}_{args['id']}_result"}
+        # Mock the LangChain structured tools
+        mock_tool_a = MagicMock()
+        mock_tool_a.name = "tool_a"
+        mock_tool_a.ainvoke = AsyncMock(return_value=MagicMock(success=True, data="tool_a_result"))
 
-        agent._execute_tool = mock_execute_tool  # type: ignore
+        mock_tool_b = MagicMock()
+        mock_tool_b.name = "tool_b"
+        mock_tool_b.ainvoke = AsyncMock(return_value=MagicMock(success=True, data="tool_b_result"))
+
+        agent.lc_tools = [mock_tool_a, mock_tool_b]
 
         result = await agent._execute_node(initial_state)
 
@@ -178,9 +184,9 @@ class TestExecuteNode:
         assert "tool_b_1" in obs
         assert "tool_a_2" in obs
 
-        assert obs["tool_a_0"]["response"]["data"] == "tool_a_1_result"
-        assert obs["tool_b_1"]["response"]["data"] == "tool_b_2_result"
-        assert obs["tool_a_2"]["response"]["data"] == "tool_a_3_result"
+        assert obs["tool_a_0"]["response"]["data"] == "tool_a_result"
+        assert obs["tool_b_1"]["response"]["data"] == "tool_b_result"
+        assert obs["tool_a_2"]["response"]["data"] == "tool_a_result"
 
         # Verify schema
         assert obs["tool_a_0"]["tool"] == "tool_a"
@@ -190,7 +196,7 @@ class TestExecuteNode:
     async def test_execute_node_handles_gather_exceptions(
         self, agent: EnvSubAgent, initial_state: ReWOOState
     ) -> None:
-        """Verifies that if `_execute_tool` violently crashes,
+        """Verifies that if tool.ainvoke violently crashes,
         gather() exceptions are formatted safely."""
         initial_state["plan"] = WarehousePlan(
             tool_calls=[
@@ -198,7 +204,10 @@ class TestExecuteNode:
             ]
         )
 
-        agent._execute_tool = AsyncMock(side_effect=RuntimeError("Catastrophic Failure"))
+        mock_tool = MagicMock()
+        mock_tool.name = "tool_crash"
+        mock_tool.ainvoke = AsyncMock(side_effect=RuntimeError("Catastrophic Failure"))
+        agent.lc_tools = [mock_tool]
 
         result = await agent._execute_node(initial_state)
 
@@ -207,7 +216,7 @@ class TestExecuteNode:
 
         assert obs["status"] == "error"
         assert "Catastrophic Failure" in obs["error"]
-        assert "Unhandled execution exception: RuntimeError" in obs["message"]
+        assert "Unhandled exception: RuntimeError" in obs["message"]
 
 
 # ---------------------------------------------------------------------------

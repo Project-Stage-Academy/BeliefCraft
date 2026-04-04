@@ -2,8 +2,9 @@ import asyncio
 from typing import Any, cast
 
 from app.config_load import settings
-from app.models.env_sub_agent_plans import WarehousePlan
-from app.models.env_sub_agent_state import ReWOOState
+from app.core.exceptions import AgentExecutionError
+from app.models.env_sub_agent_plans import PlannedToolCall, WarehousePlan
+from app.models.env_sub_agent_state import ReWOOState, create_initial_state
 from app.prompts.env_sub_agent_system_prompts import (
     ENV_SUB_AGENT_PLANNER_PROMPT,
     ENV_SUB_AGENT_SYSTEM_PROMPT,
@@ -57,14 +58,15 @@ class EnvSubAgent(BaseAgent):
 
         # 1. Format tool descriptions and parameters for the prompt
         tool_descriptions = "\n".join(
-            f"- {tool.metadata.name}: {tool.metadata.description}\n"
-            f"  Parameters: {tool.metadata.parameters}"
+            (
+                f"- {tool.metadata.name}: {tool.metadata.description}\n"
+                f"Parameters: {tool.metadata.parameters}"
+            )
             for tool in self.tool_registry.list_tools()
         )
 
         user_prompt = ENV_SUB_AGENT_PLANNER_PROMPT.format(
-            tool_descriptions=tool_descriptions,
-            agent_query=state.get("agent_query", ""),
+            tool_descriptions=tool_descriptions, agent_query=state.get("agent_query", "")
         )
 
         messages = [
@@ -75,8 +77,7 @@ class EnvSubAgent(BaseAgent):
         try:
             # 2. Call LLM using structured output with the Pydantic schema
             plan_data = await self.llm.structured_completion(
-                messages=messages,
-                schema=WarehousePlan,
+                messages=messages, schema=WarehousePlan
             )
 
             # Ensure we have a valid WarehousePlan object
@@ -89,10 +90,7 @@ class EnvSubAgent(BaseAgent):
                 planned_tools_count=len(plan_data.tool_calls),
             )
 
-            return {
-                "plan": plan_data,
-                "status": "executing",
-            }
+            return {"plan": plan_data, "status": "executing"}
 
         except Exception as e:
             logger.error(
@@ -114,27 +112,49 @@ class EnvSubAgent(BaseAgent):
             logger.warning("env_sub_agent_empty_plan", request_id=request_id)
             return {"status": "failed", "error": "No tools planned for execution"}
 
-        tasks = [self._execute_tool(call.tool_name, call.arguments) for call in plan.tool_calls]
+        # Map LangChain tools by name for quick lookup
+        lc_tool_map = {t.name: t for t in self.lc_tools}
+
+        async def _invoke_lc_tool(call: PlannedToolCall) -> dict[str, Any]:
+            tool = lc_tool_map.get(call.tool_name)
+            if not tool:
+                return {
+                    "status": "error",
+                    "error": f"Tool {call.tool_name} not found",
+                    "message": f"Tool {call.tool_name} not found",
+                }
+
+            # Let exceptions bubble up to asyncio.gather so it can format unhandled exceptions
+            result = await tool.ainvoke(call.arguments)
+
+            if result.success:
+                return {"status": "success", "data": result.data}
+
+            return {
+                "status": "error",
+                "error": result.error,
+                "message": f"Tool execution failed: {result.error}",
+            }
+
+        tasks = [_invoke_lc_tool(call) for call in plan.tool_calls]
 
         # Execute all independent tools in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         observations: dict[str, Any] = {}
+        safe_result: dict[str, Any] | BaseException
         for index, (call, result) in enumerate(zip(plan.tool_calls, results, strict=True)):
-            safe_result: dict[str, Any] | BaseException
-            # Handle potential unhandled exceptions from asyncio.gather
             if isinstance(result, Exception):
                 safe_result = {
                     "status": "error",
                     "error": str(result),
-                    "message": f"Unhandled execution exception: {type(result).__name__}",
+                    "message": f"Unhandled exception: {type(result).__name__}",
                 }
             else:
                 safe_result = result
 
             # Append index to key to prevent overwriting if the same tool is called multiple times
-            observation_key = f"{call.tool_name}_{index}"
-            observations[observation_key] = {
+            observations[f"{call.tool_name}_{index}"] = {
                 "tool": call.tool_name,
                 "arguments": call.arguments,
                 "response": safe_result,
@@ -146,30 +166,28 @@ class EnvSubAgent(BaseAgent):
             executed_tools_count=len(plan.tool_calls),
         )
 
-        return {
-            "observations": observations,
-            "status": "solving",
-        }
+        return {"observations": observations, "status": "solving"}
 
     def _solve_node(self, state: ReWOOState) -> ReWOOState:
         """Solver node: Solve a problem based on agent observations."""
         return state
 
-    async def run(
-        self,
-        agent_query: str,
-        **kwargs: Any,
-    ) -> ReWOOState:
-        from app.core.exceptions import AgentExecutionError
-        from app.models.env_sub_agent_state import create_initial_state
+    async def run(self, agent_query: str, **kwargs: Any) -> ReWOOState:
+        """Run the ReWOO loop for an agent query.
 
-        logger.info(
-            "env_sub_agent_run_start",
-            query=agent_query[:200],
-        )
+        Args:
+            agent_query: The query outlining what data to retrieve.
+            **kwargs: Optional metadata.
+
+        Returns:
+            Final ReWOOState with data retrieval plan and observations.
+
+        Raises:
+            AgentExecutionError: If the graph fails unexpectedly.
+        """
+        logger.info("env_sub_agent_run_start", query=agent_query[:200])
 
         initial_state = create_initial_state(agent_query=agent_query)
-
         try:
             final_state = cast(ReWOOState, await self.graph.ainvoke(initial_state))
         except Exception as e:
@@ -188,5 +206,4 @@ class EnvSubAgent(BaseAgent):
             status=final_state["status"],
             tokens=final_state["total_tokens"],
         )
-
         return final_state

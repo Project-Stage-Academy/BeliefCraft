@@ -1,6 +1,5 @@
 """Tests for the ReAct agent state machine."""
 
-import json
 from collections.abc import Generator
 from datetime import UTC, datetime
 from typing import Any
@@ -10,6 +9,7 @@ import pytest
 from app.models.agent_state import AgentState, create_initial_state
 from app.services.react_agent import ReActAgent
 from app.tools.factory import ToolRegistryFactory
+from langchain_core.messages import AIMessage, HumanMessage
 
 
 def _make_llm_response(
@@ -99,9 +99,10 @@ class TestThinkNode:
 
         result = await agent._think_node(initial_state)
 
-        # One new assistant message appended
+        # One new assistant message appended as an AIMessage object
         assert len(result["messages"]) == 1
-        assert result["messages"][0]["role"] == "assistant"
+        assert isinstance(result["messages"][0], AIMessage)
+        assert result["messages"][0].tool_calls[0]["name"] == "get_inventory"
 
         # One new thought recorded
         assert len(result["thoughts"]) == 1
@@ -142,33 +143,10 @@ class TestThinkNode:
         assert result["status"] == "completed"
 
     @pytest.mark.asyncio()
-    async def test_think_stores_tool_calls_on_message(
-        self, agent: ReActAgent, mock_llm_service: MagicMock, initial_state: AgentState
-    ) -> None:
-        tool_calls = [
-            {
-                "id": "tc_1",
-                "type": "function",
-                "function": {"name": "get_inventory", "arguments": "{}"},
-            }
-        ]
-        mock_llm_service.chat_completion.return_value = _make_llm_response(
-            content="Let me check...",
-            tool_calls=tool_calls,
-            finish_reason="tool_calls",
-        )
-
-        result = await agent._think_node(initial_state)
-        last_msg = result["messages"][-1]
-
-        assert last_msg["tool_calls"] == tool_calls
-
-    @pytest.mark.asyncio()
     async def test_think_no_tool_calls_omits_key_on_message(
         self, agent: ReActAgent, mock_llm_service: MagicMock, initial_state: AgentState
     ) -> None:
-        """When there are no tool calls, the assistant message should not
-        carry an empty tool_calls list."""
+        """When there are no tool calls, the AIMessage should have an empty tool_calls list."""
         mock_llm_service.chat_completion.return_value = _make_llm_response(
             content="All done.",
         )
@@ -176,7 +154,7 @@ class TestThinkNode:
         result = await agent._think_node(initial_state)
         last_msg = result["messages"][-1]
 
-        assert "tool_calls" not in last_msg
+        assert not last_msg.tool_calls
 
     @pytest.mark.asyncio()
     async def test_think_error_sets_failed_status(
@@ -209,350 +187,17 @@ class TestThinkNode:
         self, agent: ReActAgent, mock_llm_service: MagicMock, initial_state: AgentState
     ) -> None:
         """New assistant message is appended to the existing list, not replacing it."""
-        initial_state["messages"] = [{"role": "user", "content": "Hi"}]
+        initial_state["messages"] = [HumanMessage(content="Hi")]
         mock_llm_service.chat_completion.return_value = _make_llm_response(
             content="Hello!",
         )
 
         result = await agent._think_node(initial_state)
 
-        assert len(result["messages"]) == 2
-        assert result["messages"][0]["role"] == "user"
-        assert result["messages"][1]["role"] == "assistant"
-
-    def test_build_llm_messages_preserves_all_actions_from_single_turn(
-        self, agent: ReActAgent, initial_state: AgentState
-    ) -> None:
-        initial_state["thoughts"] = [
-            {"thought": "Collect diagnostics", "next_action": "tool_use"}  # type: ignore[list-item]
-        ]
-        initial_state["messages"] = [
-            {
-                "role": "assistant",
-                "content": "<thinking>Collect diagnostics</thinking>",
-                "tool_calls": [
-                    {
-                        "id": "tc_1",
-                        "type": "function",
-                        "function": {
-                            "name": "get_inventory_data",
-                            "arguments": '{"warehouse_id": "WH-001"}',
-                        },
-                    },
-                    {
-                        "id": "tc_2",
-                        "type": "function",
-                        "function": {
-                            "name": "search_knowledge_base",
-                            "arguments": '{"query": "inventory discrepancy"}',
-                        },
-                    },
-                ],
-            }
-        ]
-        initial_state["tool_calls"] = [
-            {
-                "tool_name": "get_inventory_data",
-                "arguments": {"warehouse_id": "WH-001"},
-                "result": {"items": [1, 2, 3]},
-            },  # type: ignore[list-item]
-            {
-                "tool_name": "search_knowledge_base",
-                "arguments": {"query": "inventory discrepancy"},
-                "result": {"documents": [{"id": "chunk-1"}]},
-            },  # type: ignore[list-item]
-        ]
-
-        messages = agent._build_llm_messages(initial_state)
-
-        prompt = messages[1]["content"]
-        assert prompt.count("<action tool=") == 2
-        assert '<action tool="get_inventory_data">' in prompt
-        assert '<action tool="search_knowledge_base">' in prompt
-
-
-# ---------------------------------------------------------------------------
-# Act node
-# ---------------------------------------------------------------------------
-
-
-class TestActNode:
-    @pytest.mark.asyncio()
-    async def test_act_executes_tool_calls(
-        self, agent: ReActAgent, initial_state: AgentState
-    ) -> None:
-        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
-            return_value={"status": "success", "data": {"items": [], "warehouse": "WH-001"}}
-        )
-        initial_state["messages"] = [
-            {
-                "role": "assistant",
-                "content": "Checking...",
-                "tool_calls": [
-                    {
-                        "id": "tc_1",
-                        "type": "function",
-                        "function": {
-                            "name": "get_inventory",
-                            "arguments": '{"warehouse": "WH-001"}',
-                        },
-                    }
-                ],
-            }
-        ]
-
-        result = await agent._act_node(initial_state)
-
-        assert len(result["tool_calls"]) == 1
-        assert result["tool_calls"][0].tool_name == "get_inventory"
-        assert result["tool_calls"][0].arguments == {"warehouse": "WH-001"}
-        assert result["tool_calls"][0].result is not None
-        assert result["iteration"] == 1
-
-    @pytest.mark.asyncio()
-    async def test_act_extracts_trace_meta_from_environment_tool_envelope(
-        self,
-        agent: ReActAgent,
-        initial_state: AgentState,
-    ) -> None:
-        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
-            return_value={
-                "status": "success",
-                "data": {
-                    "data": [{"product_id": "P-001"}],
-                    "message": "Retrieved 1 observed inventory rows.",
-                    "meta": {"count": 1, "trace_count": 1},
-                },
-            }
-        )
-        agent._get_tool_category = MagicMock(return_value="environment")
-        initial_state["messages"] = [
-            {
-                "role": "assistant",
-                "content": "Checking...",
-                "tool_calls": [
-                    {
-                        "id": "tc_1",
-                        "type": "function",
-                        "function": {
-                            "name": "get_observed_inventory_snapshot",
-                            "arguments": "{}",
-                        },
-                    }
-                ],
-            }
-        ]
-
-        result = await agent._act_node(initial_state)
-
-        assert result["tool_calls"][0].result == {"result": [{"product_id": "P-001"}]}
-        assert result["tool_calls"][0].trace_meta == {"count": 1, "trace_count": 1}
-        assert json.loads(result["messages"][-1]["content"]) == {
-            "result": [{"product_id": "P-001"}]
-        }
-
-    @pytest.mark.asyncio()
-    async def test_act_stores_tool_category_from_registry(
-        self,
-        agent: ReActAgent,
-        initial_state: AgentState,
-    ) -> None:
-        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
-            return_value={"status": "success", "data": {"documents": []}}
-        )
-        agent._get_tool_category = MagicMock(return_value="rag")
-        initial_state["messages"] = [
-            {
-                "role": "assistant",
-                "content": "Checking...",
-                "tool_calls": [
-                    {
-                        "id": "tc_1",
-                        "type": "function",
-                        "function": {
-                            "name": "search_knowledge_base",
-                            "arguments": '{"query": "policy iteration"}',
-                        },
-                    }
-                ],
-            }
-        ]
-
-        result = await agent._act_node(initial_state)
-
-        assert len(result["tool_calls"]) == 1
-        assert result["tool_calls"][0].category == "rag"
-
-    @pytest.mark.asyncio()
-    async def test_act_adds_tool_result_message(
-        self, agent: ReActAgent, initial_state: AgentState
-    ) -> None:
-        initial_state["messages"] = [
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "tc_1",
-                        "type": "function",
-                        "function": {"name": "get_inventory", "arguments": "{}"},
-                    }
-                ],
-            }
-        ]
-
-        result = await agent._act_node(initial_state)
-
-        tool_msgs = [m for m in result["messages"] if m["role"] == "tool"]
-        assert len(tool_msgs) == 1
-        assert tool_msgs[0]["tool_call_id"] == "tc_1"
-        assert tool_msgs[0]["name"] == "get_inventory"
-
-    @pytest.mark.asyncio()
-    async def test_act_handles_tool_error(
-        self, agent: ReActAgent, initial_state: AgentState
-    ) -> None:
-        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
-            return_value={
-                "status": "error",
-                "error": "Connection refused",
-                "message": "Tool execution failed: Connection refused",
-            }
-        )
-
-        initial_state["messages"] = [
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "tc_1",
-                        "type": "function",
-                        "function": {"name": "broken_tool", "arguments": "{}"},
-                    }
-                ],
-            }
-        ]
-
-        result = await agent._act_node(initial_state)
-
-        assert result["tool_calls"][0].error is not None
-        assert "Connection refused" in result["tool_calls"][0].error
-
-        # Error tool message is still sent so LLM can reason about it
-        tool_msgs = [m for m in result["messages"] if m["role"] == "tool"]
-        assert len(tool_msgs) == 1
-        assert "error" in json.loads(tool_msgs[0]["content"])
-
-    @pytest.mark.asyncio()
-    async def test_act_handles_multiple_tool_calls(
-        self, agent: ReActAgent, initial_state: AgentState
-    ) -> None:
-        initial_state["messages"] = [
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "tc_1",
-                        "type": "function",
-                        "function": {"name": "tool_a", "arguments": "{}"},
-                    },
-                    {
-                        "id": "tc_2",
-                        "type": "function",
-                        "function": {
-                            "name": "tool_b",
-                            "arguments": '{"key": "val"}',
-                        },
-                    },
-                ],
-            }
-        ]
-
-        result = await agent._act_node(initial_state)
-
-        assert len(result["tool_calls"]) == 2
-        tool_msgs = [m for m in result["messages"] if m["role"] == "tool"]
-        assert len(tool_msgs) == 2
-
-    @pytest.mark.asyncio()
-    async def test_act_no_tool_calls_in_message(
-        self, agent: ReActAgent, initial_state: AgentState
-    ) -> None:
-        """Act node handles messages without tool_calls gracefully."""
-        initial_state["messages"] = [{"role": "assistant", "content": "No tools needed."}]
-
-        result = await agent._act_node(initial_state)
-
-        assert len(result["tool_calls"]) == 0
-        assert result["iteration"] == 1
-
-    @pytest.mark.asyncio()
-    async def test_act_increments_iteration(
-        self, agent: ReActAgent, initial_state: AgentState
-    ) -> None:
-        initial_state["iteration"] = 3
-        initial_state["messages"] = [{"role": "assistant", "content": "done"}]
-
-        result = await agent._act_node(initial_state)
-
-        assert result["iteration"] == 4
-
-    @pytest.mark.asyncio()
-    async def test_act_preserves_existing_messages(
-        self, agent: ReActAgent, initial_state: AgentState
-    ) -> None:
-        initial_state["messages"] = [
-            {"role": "user", "content": "query"},
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "tc_1",
-                        "type": "function",
-                        "function": {"name": "t", "arguments": "{}"},
-                    }
-                ],
-            },
-        ]
-
-        result = await agent._act_node(initial_state)
-
-        # Original 2 messages + 1 new tool result
-        assert len(result["messages"]) == 3
-        assert result["messages"][0]["role"] == "user"
-        assert result["messages"][1]["role"] == "assistant"
-        assert result["messages"][2]["role"] == "tool"
-
-
-# ---------------------------------------------------------------------------
-# Parse tool arguments
-# ---------------------------------------------------------------------------
-
-
-class TestParseToolArguments:
-    def test_parse_valid_json_string(self) -> None:
-        result = ReActAgent._parse_tool_arguments('{"key": "value"}')
-        assert result == {"key": "value"}
-
-    def test_parse_dict_passthrough(self) -> None:
-        result = ReActAgent._parse_tool_arguments({"key": "value"})
-        assert result == {"key": "value"}
-
-    def test_parse_malformed_json_fallback(self) -> None:
-        result = ReActAgent._parse_tool_arguments("not valid json")
-        assert result == {"query": "not valid json"}
-
-    def test_parse_empty_string(self) -> None:
-        result = ReActAgent._parse_tool_arguments("")
-        assert result == {"query": ""}
-
-    def test_parse_nested_json(self) -> None:
-        raw = '{"filters": {"status": "active"}, "limit": 10}'
-        result = ReActAgent._parse_tool_arguments(raw)
-        assert result == {"filters": {"status": "active"}, "limit": 10}
+        assert (
+            len(result["messages"]) == 1
+        )  # LangGraph reducers handle the appending, so node just returns the new message
+        assert isinstance(result["messages"][0], AIMessage)
 
 
 # ---------------------------------------------------------------------------
@@ -655,67 +300,6 @@ class TestFinalizeNode:
 
 
 # ---------------------------------------------------------------------------
-# Tool registry integration
-# ---------------------------------------------------------------------------
-
-
-class TestToolRegistryIntegration:
-    @pytest.mark.asyncio()
-    async def test_execute_tool_with_registry_success(self, agent: ReActAgent) -> None:
-        """Test successful tool execution via registry."""
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.data = {"result": "success", "value": 42}
-        agent.tool_registry.execute_tool = AsyncMock(return_value=mock_result)
-
-        result = await agent._execute_tool("test_tool", {"param": "value"})
-
-        assert result == {"status": "success", "data": {"result": "success", "value": 42}}
-        agent.tool_registry.execute_tool.assert_called_once_with("test_tool", {"param": "value"})
-
-    @pytest.mark.asyncio()
-    async def test_execute_tool_with_registry_failure(self, agent: ReActAgent) -> None:
-        """Test tool execution failure via registry."""
-        mock_result = MagicMock()
-        mock_result.success = False
-        mock_result.error = "Tool not found"
-        agent.tool_registry.execute_tool = AsyncMock(return_value=mock_result)
-
-        result = await agent._execute_tool("missing_tool", {})
-
-        assert "error" in result
-        assert result["error"] == "Tool not found"
-        assert "Tool execution failed" in result["message"]
-
-    @pytest.mark.asyncio()
-    async def test_execute_tool_with_exception(self, agent: ReActAgent) -> None:
-        """Test tool execution with unexpected exception."""
-        agent.tool_registry.execute_tool = AsyncMock(side_effect=Exception("Connection error"))
-
-        result = await agent._execute_tool("failing_tool", {})
-
-        assert "error" in result
-        assert result["error"] == "Connection error"
-        assert "Unexpected tool error" in result["message"]
-
-    def test_get_tool_definitions_from_registry(self, agent: ReActAgent) -> None:
-        """Test getting tool definitions from registry."""
-        agent.tool_registry.get_openai_functions = MagicMock(
-            return_value=[
-                {"name": "tool1", "description": "Test tool 1"},
-                {"name": "tool2", "description": "Test tool 2"},
-            ]
-        )
-
-        result = agent._get_tool_definitions()
-
-        assert len(result) == 2
-        assert result[0]["name"] == "tool1"
-        assert result[1]["name"] == "tool2"
-        agent.tool_registry.get_openai_functions.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
 # Full run integration
 # ---------------------------------------------------------------------------
 
@@ -759,11 +343,13 @@ class TestRun:
             ),
         ]
 
+        # Since we use native ToolNode, if the LLM hallucinated a tool not in lc_tools,
+        # ToolNode automatically returns a ToolMessage with an error string and the loop continues,
+        # perfectly matching our chat_completion side effects.
         result = await agent.run("What is the inventory?")
 
         assert result["status"] == "completed"
-        assert result["iteration"] == 1
-        assert len(result["tool_calls"]) == 1
+        assert result["iteration"] == 2
         assert len(result["thoughts"]) == 2
         assert mock_llm_service.chat_completion.call_count == 2
 
