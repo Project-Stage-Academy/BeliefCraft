@@ -1,4 +1,7 @@
 import asyncio
+import json
+import re
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from app.config_load import settings
@@ -8,6 +11,8 @@ from app.models.env_sub_agent_state import ReWOOState, create_initial_state
 from app.prompts.env_sub_agent_system_prompts import (
     ENV_SUB_AGENT_PLANNER_PROMPT,
     ENV_SUB_AGENT_SYSTEM_PROMPT,
+    SOLVER_SYSTEM_PROMPT,
+    ENV_SUB_AGENT_SOLVER_SYSTEM_PROMPT,
 )
 from app.services.base_agent import BaseAgent
 from app.tools.registry import ToolRegistry
@@ -56,7 +61,6 @@ class EnvSubAgent(BaseAgent):
         request_id = state.get("request_id", "unknown")
         logger.info("env_sub_agent_plan_start", request_id=request_id)
 
-        # 1. Format tool descriptions and parameters for the prompt
         tool_descriptions = "\n".join(
             (
                 f"- {tool.metadata.name}: {tool.metadata.description}\n"
@@ -75,12 +79,10 @@ class EnvSubAgent(BaseAgent):
         ]
 
         try:
-            # 2. Call LLM using structured output with the Pydantic schema
             plan_data = await self.llm.structured_completion(
                 messages=messages, schema=WarehousePlan
             )
 
-            # Ensure we have a valid WarehousePlan object
             if isinstance(plan_data, dict):
                 plan_data = WarehousePlan(**plan_data)
 
@@ -168,9 +170,147 @@ class EnvSubAgent(BaseAgent):
 
         return {"observations": observations, "status": "solving"}
 
-    def _solve_node(self, state: ReWOOState) -> ReWOOState:
-        """Solver node: Solve a problem based on agent observations."""
-        return state
+    async def _solve_node(self, state: ReWOOState) -> dict[str, Any]:
+        """Distill raw executor observations into a clean factual summary."""
+        request_id = state.get("request_id", "unknown")
+
+        logger.info(
+            "solver_node_start",
+            request_id=request_id,
+            has_observations=bool(state.get("observations")),
+        )
+
+        if not state.get("observations"):
+            logger.warning("solver_no_observations", request_id=request_id)
+            return {
+                "state_summary": "- No observations were collected\n"
+                "- Insufficient data to provide summary",
+                "status": "completed",
+                "completed_at": datetime.now(UTC),
+            }
+
+        try:
+            observations_str = json.dumps(state["observations"], indent=2, ensure_ascii=False)
+
+            plan_obj = state.get("plan")
+            if plan_obj and hasattr(plan_obj, "tool_calls"):
+                plan_lines = [
+                    f"- {call.tool_name}({call.arguments})" for call in plan_obj.tool_calls
+                ]
+                plan_str = "\n".join(plan_lines) if plan_lines else "No tools planned"
+            else:
+                plan_str = "No plan available"
+
+            user_prompt = SOLVER_SYSTEM_PROMPT.format(
+                agent_query=state.get("agent_query", ""),
+                plan=plan_str,
+                observations=observations_str,
+            )
+
+            messages = [
+                {"role": "system", "content": ENV_SUB_AGENT_SOLVER_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ]
+
+            logger.debug(
+                "solver_calling_llm",
+                request_id=request_id,
+                observations_length=len(observations_str),
+            )
+
+            response = await self.llm.chat_completion(messages=messages)
+            summary = response["message"]["content"].strip()
+            tokens_used = response["tokens"]["total"]
+            current_tokens = state.get("total_tokens", 0)
+
+            if summary.startswith("```"):
+                lines = summary.split("\n")
+                summary = "\n".join(
+                    line for line in lines if not line.strip().startswith("```")
+                ).strip()
+
+            summary = self._sanitize_summary(summary)
+
+            if not summary or len(summary) < 10:
+                logger.warning("solver_empty_response", request_id=request_id)
+                summary = (
+                    "- Unable to distill observations into a meaningful summary\n"
+                    f"- Original query: {state.get('agent_query', 'unknown')}"
+                )
+
+            if not any(line.strip().startswith("-") for line in summary.split("\n")):
+                logger.warning("solver_missing_bullets", request_id=request_id)
+                summary = self._ensure_bullets(summary)
+
+            logger.info(
+                "solver_completed",
+                request_id=request_id,
+                summary_length=len(summary),
+                summary_lines=summary.count("\n") + 1,
+                tokens_used=tokens_used,
+            )
+
+            return {
+                "state_summary": summary,
+                "status": "completed",
+                "completed_at": datetime.now(UTC),
+                "total_tokens": current_tokens + tokens_used,
+            }
+
+        except Exception as e:
+            logger.error(
+                "solver_failed",
+                request_id=request_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+
+            return {
+                "state_summary": f"- Solver processing failed: {type(e).__name__}",
+                "status": "failed",
+                "completed_at": datetime.now(UTC),
+                "total_tokens": state.get("total_tokens", 0),
+                "error": str(e),
+            }
+
+    @staticmethod
+    def _sanitize_summary(text: str) -> str:
+        """Remove obvious technical identifiers from the solver summary."""
+        text = re.sub(
+            r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+            "[ID]",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(r"\b[0-9a-f]{24}\b", "[ID]", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"\b(item_id|device_uuid|database_id)\s*[:=]\s*[^\s,]+",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n\s*\n", "\n", text)
+        text = re.sub(r"\s*,\s*,", ", ", text)
+        text = re.sub(r"^\s*[-*]\s*,", "-", text, flags=re.MULTILINE)
+        return text.strip()
+
+    @staticmethod
+    def _ensure_bullets(text: str) -> str:
+        """Convert free-form text into one-fact-per-line bullet points."""
+        chunks = re.split(r"[.!?]\s+|\n+", text)
+        bullets: list[str] = []
+
+        for chunk in chunks:
+            cleaned = chunk.strip()
+            if cleaned and len(cleaned) > 5:
+                bullets.append(cleaned if cleaned.startswith("-") else f"- {cleaned}")
+
+        if not bullets:
+            return f"- {text.strip()}"
+
+        return "\n".join(bullets)
 
     async def run(self, agent_query: str, **kwargs: Any) -> ReWOOState:
         """Run the ReWOO loop for an agent query.

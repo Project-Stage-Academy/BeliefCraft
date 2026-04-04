@@ -224,9 +224,59 @@ class TestExecuteNode:
 # ---------------------------------------------------------------------------
 
 
-def test_solve_node_stub(agent: EnvSubAgent, initial_state: ReWOOState) -> None:
-    """Currently just a stub returning state unchanged."""
-    assert agent._solve_node(initial_state) == initial_state
+class TestSolveNode:
+    @pytest.mark.asyncio
+    async def test_solve_node_returns_bulleted_fallback_without_observations(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        result = await agent._solve_node(initial_state)
+
+        assert result["status"] == "completed"
+        assert result["state_summary"].startswith("- ")
+        assert "Insufficient data" in result["state_summary"]
+
+    @pytest.mark.asyncio
+    async def test_solve_node_uses_chat_completion_and_tracks_tokens(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        initial_state["observations"] = {
+            "inventory_moves_0": {
+                "tool": "list_inventory_moves",
+                "arguments": {"sku": "SKU-1"},
+                "response": {"status": "success", "data": {"moves": [{"quantity": 10}]}},
+            }
+        }
+        initial_state["total_tokens"] = 12
+
+        agent.llm.chat_completion = AsyncMock(
+            return_value={
+                "message": {"role": "assistant", "content": "- 10 units moved for SKU-1"},
+                "tool_calls": [],
+                "finish_reason": "stop",
+                "tokens": {"prompt": 8, "completion": 6, "total": 14},
+            }
+        )
+
+        result = await agent._solve_node(initial_state)
+
+        assert result["status"] == "completed"
+        assert result["state_summary"] == "- 10 units moved for SKU-1"
+        assert result["total_tokens"] == 26
+
+    @pytest.mark.asyncio
+    async def test_solve_node_surfaces_error_field_on_failure(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        initial_state["observations"] = {
+            "tool_0": {"tool": "get_inventory", "arguments": {}, "response": {"status": "success"}}
+        }
+        agent.llm.chat_completion = AsyncMock(side_effect=RuntimeError("solver boom"))
+
+        result = await agent._solve_node(initial_state)
+
+        assert result["status"] == "failed"
+        assert result["error"] == "solver boom"
+        assert result["state_summary"].startswith("- Solver processing failed:")
 
 
 # ---------------------------------------------------------------------------
