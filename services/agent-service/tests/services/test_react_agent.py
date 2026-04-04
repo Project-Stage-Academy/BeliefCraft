@@ -1,5 +1,6 @@
 """Tests for the ReAct agent state machine."""
 
+import json
 from collections.abc import Generator
 from datetime import UTC, datetime
 from typing import Any
@@ -352,6 +353,86 @@ class TestRun:
         assert result["iteration"] == 2
         assert len(result["thoughts"]) == 2
         assert mock_llm_service.chat_completion.call_count == 2
+
+    @pytest.mark.asyncio()
+    async def test_run_uses_env_sub_agent_facade_and_receives_summary(
+        self, mock_llm_service: MagicMock
+    ) -> None:
+        mock_env_tool = MagicMock()
+        mock_env_tool.metadata.name = "list_inventory_moves"
+
+        env_registry = MagicMock()
+        env_registry.list_tools.return_value = [mock_env_tool]
+
+        tool_registry = ToolRegistryFactory.create_react_agent_registry(
+            env_sub_registry=env_registry
+        )
+        agent = ReActAgent(tool_registry=tool_registry)
+
+        assert sorted(agent.tool_registry.tools) == ["call_env_sub_agent"]
+        assert "list_inventory_moves" not in agent.tool_registry.tools
+
+        mock_llm_service.chat_completion.side_effect = [
+            _make_llm_response(
+                content="I need environment facts before answering.",
+                tool_calls=[
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "call_env_sub_agent",
+                            "arguments": json.dumps(
+                                {
+                                    "agent_query": (
+                                        "Summarize warehouse facts for SKU-1 and highlight any "
+                                        "inventory discrepancies."
+                                    )
+                                }
+                            ),
+                        },
+                    }
+                ],
+                finish_reason="tool_calls",
+            ),
+            _make_llm_response(
+                content=(
+                    "FINAL ANSWER: The sub-agent found a 2-unit discrepancy for SKU-1 and no "
+                    "other major warehouse issues."
+                ),
+            ),
+        ]
+
+        with patch("app.services.env_sub_agent.EnvSubAgent") as mock_env_sub_agent_cls:
+            mock_env_sub_agent = mock_env_sub_agent_cls.return_value
+            mock_env_sub_agent.run = AsyncMock(
+                return_value={
+                    "status": "completed",
+                    "state_summary": (
+                        "- System records show 10 units of SKU-1\n"
+                        "- Physical count shows 8 units of SKU-1\n"
+                        "- Discrepancy: physical stock is 2 units lower than system records"
+                    ),
+                    "total_tokens": 32,
+                }
+            )
+            result = await agent.run("Check warehouse status for SKU-1")
+
+        assert result["status"] == "completed"
+        assert result["final_answer"] is not None
+        assert "2-unit discrepancy" in result["final_answer"]
+        mock_env_sub_agent_cls.assert_called_once_with(tool_registry=env_registry)
+        assert mock_env_sub_agent.run.await_count == 1
+        assert mock_env_sub_agent.run.await_args.kwargs == {
+            "agent_query": (
+                "Summarize warehouse facts for SKU-1 and highlight any inventory discrepancies."
+            )
+        }
+        assert any(
+            getattr(message, "type", "") == "tool"
+            and "Discrepancy: physical stock is 2 units lower than system records"
+            in str(message.content)
+            for message in result["messages"]
+        )
 
     @pytest.mark.asyncio()
     async def test_run_max_iterations(self, agent: ReActAgent, mock_llm_service: MagicMock) -> None:

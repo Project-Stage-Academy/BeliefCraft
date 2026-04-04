@@ -129,7 +129,9 @@ async def test_env_sub_agent_run_distills_inventory_discrepancy(agent: EnvSubAge
     assert final_state["completed_at"] is not None
     assert final_state["total_tokens"] == 32
 
-#===================================================================================#
+
+# ===================================================================================#
+
 
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_distills_device_health_findings(agent: EnvSubAgent) -> None:
@@ -224,7 +226,9 @@ async def test_env_sub_agent_run_distills_device_health_findings(agent: EnvSubAg
     assert final_state["completed_at"] is not None
     assert final_state["total_tokens"] == 32
 
-#==============================================================================#
+
+# ==============================================================================#
+
 
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_handles_solver_failure(agent: EnvSubAgent) -> None:
@@ -267,7 +271,9 @@ async def test_env_sub_agent_run_handles_solver_failure(agent: EnvSubAgent) -> N
     assert final_state["plan"] is not None
     assert final_state["completed_at"] is not None
 
-#===================================================================================#
+
+# ===================================================================================#
+
 
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_handles_empty_plan(agent: EnvSubAgent) -> None:
