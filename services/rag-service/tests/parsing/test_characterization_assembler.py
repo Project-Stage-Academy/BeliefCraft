@@ -278,34 +278,8 @@ def test_chunk_id_hash_suffix_is_sha256_of_content(env, monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_entity_id_extracted_from_named_entity_in_text(env, monkeypatch) -> None:
-    """Locks: a text chunk whose content contains 'Figure X.Y' (or similar named entity)
-    has entity_id set to the X.Y part extracted by _extract_id.
-    """
-    blocks = [
-        {
-            "block_content": "See Figure 1.2 above.",
-            "block_label": "text",
-            "block_bbox": [0, 0, 10, 10],
-        },
-        {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
-    ]
-    pages = _pages_with_content(START_PAGE - 1, blocks)
-    (env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
-
-    assembler = _make(env)
-    monkeypatch.setattr(assembler, "_save", lambda: None)
-    assembler.assemble()
-
-    text_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "text"), None)
-    assert text_chunk is not None
-    assert text_chunk["entity_id"] == "1.2"
-
-
-def test_entity_id_extracted_from_bare_number_pattern_in_text(env, monkeypatch) -> None:
-    """Locks: a text chunk whose content contains a bare 'X.Y' pattern (no named keyword)
-    has entity_id set to that X.Y value.
-    """
+def test_entity_id_is_empty_in_text_chunks(env, monkeypatch) -> None:
+    """Locks: text chunks should have entity_id equals to None"""
     blocks = [
         {"block_content": "The value is 4.4.", "block_label": "text", "block_bbox": [0, 0, 10, 10]},
         {"block_content": "# 2 Flush", "block_label": "text", "block_bbox": [0, 20, 10, 30]},
@@ -319,7 +293,7 @@ def test_entity_id_extracted_from_bare_number_pattern_in_text(env, monkeypatch) 
 
     text_chunk = next((c for c in assembler.final_chunks if c["chunk_type"] == "text"), None)
     assert text_chunk is not None
-    assert text_chunk["entity_id"] == "4.4"
+    assert text_chunk["entity_id"] is None
 
 
 def test_entity_id_is_none_when_content_has_no_id_pattern(env, monkeypatch) -> None:
