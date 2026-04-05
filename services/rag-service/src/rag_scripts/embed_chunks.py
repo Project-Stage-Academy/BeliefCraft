@@ -107,7 +107,7 @@ def insert_chunks(
     with collection.batch.dynamic() as batch:
         for chunk in chunks:
             chunk_to_add = chunk.copy()
-           # chunk_to_add.pop("chunk_id", "")
+            # chunk_to_add.pop("chunk_id", "")
             if "defined_in_chunk" in chunk_to_add:
                 parent_chunk_id = chunk_to_add["defined_in_chunk"]
                 referenced_chunk = chunk_id_map.get(parent_chunk_id)
