@@ -95,20 +95,33 @@ Example response (`AgentQueryResponse`):
     {
       "iteration": 1,
       "thought": "...",
-      "action": {
-        "tool": "get_order_backlog",
-        "arguments": {
-          "status": "pending"
+      "actions": [
+        {
+          "tool": "get_order_backlog",
+          "arguments": {
+            "status": "pending"
+          },
+          "observation": {
+            "data": []
+          }
         },
-        "result": {
-          "data": []
+        {
+          "tool": "search_knowledge_base",
+          "arguments": {
+            "query": "late-order risk heuristic"
+          },
+          "observation": "Received 2 documents"
         }
-      }
+      ]
     }
   ],
   "duration_seconds": 2.34
 }
 ```
+
+Trace shape note:
+- single-tool iteration: `reasoning_trace[i].action`
+- multi-tool iteration: `reasoning_trace[i].actions`
 
 ### GET `/api/v1/tools`
 Lists registered tools.

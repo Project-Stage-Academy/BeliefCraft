@@ -12,7 +12,6 @@ dependencies = [
     "beliefcraft-environment-api",
     "beliefcraft-rag-service",
     "beliefcraft-agent-service",
-    "respx>=0.22.0",
 ]
 
 [tool.uv.sources]
@@ -39,7 +38,9 @@ dev = [
     "respx>=0.22.0",
     "beautifulsoup4>=4.14.3",
     "opencv-python>=4.13.0.92",
-    "pact-python>=3.2.1"
+    "pact-python>=3.2.1",
+    "types-jinja2>=2.11.9",
+    "types-pillow>=10.2.0.20240822",
 ]
 
 [tool.uv.workspace]
@@ -131,7 +132,8 @@ module = [
     "langchain_aws.*",
     "langchain_core.*",
     "langgraph.*",
-    "alembic.*"
+    "alembic.*",
+    "testcontainers.*"
 ]
 ignore_missing_imports = true
 

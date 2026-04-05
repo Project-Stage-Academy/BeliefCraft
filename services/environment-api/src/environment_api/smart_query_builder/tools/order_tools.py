@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from common.schemas import AtRiskOrderRow, GetAtRiskOrdersRequest
-from common.schemas.common import ToolResult
+from common.schemas.common import Pagination, ToolResult, build_tool_meta
 
 from ..db.session import get_session
 from ..repo.orders import fetch_at_risk_order_rows
@@ -48,16 +48,16 @@ def get_at_risk_orders(
             return ToolResult(
                 data=[],
                 message="No results for at-risk orders.",
-                meta={
-                    "count": 0,
-                    "filters": {
+                meta=build_tool_meta(
+                    count=0,
+                    filters={
                         "horizon_hours": horizon_hours,
                         "min_sla_priority": min_sla_priority,
                         "status": status,
                         "top_missing_skus_limit": top_missing_skus_limit,
                     },
-                    "pagination": {"limit": limit, "offset": offset},
-                },
+                    pagination=Pagination(limit=limit, offset=offset),
+                ),
             )
 
         data: list[AtRiskOrderRow] = []
@@ -81,16 +81,16 @@ def get_at_risk_orders(
         return ToolResult(
             data=data,
             message=f"Retrieved {len(data)} at-risk orders.",
-            meta={
-                "count": len(data),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(data),
+                filters={
                     "horizon_hours": horizon_hours,
                     "min_sla_priority": min_sla_priority,
                     "status": status,
                     "top_missing_skus_limit": top_missing_skus_limit,
                 },
-                "pagination": {"limit": limit, "offset": offset},
-            },
+                pagination=Pagination(limit=limit, offset=offset),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to fetch at-risk orders.") from exc

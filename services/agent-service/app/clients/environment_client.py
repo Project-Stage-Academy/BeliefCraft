@@ -15,7 +15,7 @@ Example:
 from typing import Any, Protocol
 
 from app.clients.base_client import BaseAPIClient
-from app.config import get_settings
+from app.config_load import settings
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -84,6 +84,8 @@ class EnvironmentClientProtocol(Protocol):
         move_type: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]: ...
 
@@ -187,8 +189,9 @@ class EnvironmentAPIClient(BaseAPIClient):
 
     def __init__(self) -> None:
         """Initialize Environment API client with config from settings."""
-        settings = get_settings()
-        super().__init__(base_url=settings.ENVIRONMENT_API_URL, service_name="environment-api")
+        super().__init__(
+            base_url=settings.external_services.environment_api_url, service_name="environment-api"
+        )
 
     # ========== PROCUREMENT MODULE ==========
 
@@ -264,7 +267,7 @@ class EnvironmentAPIClient(BaseAPIClient):
         if purchase_order_id:
             params["purchase_order_id"] = purchase_order_id
         if purchase_order_ids:
-            params["purchase_order_ids"] = ",".join(purchase_order_ids)
+            params["purchase_order_ids"] = purchase_order_ids
 
         return await self.get(
             "/api/v1/smart-query/procurement/po-lines", params=params, timeout=timeout
@@ -302,6 +305,8 @@ class EnvironmentAPIClient(BaseAPIClient):
         move_type: str | None = None,
         from_ts: str | None = None,
         to_ts: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]:
         """Get inventory movement history."""
@@ -316,6 +321,10 @@ class EnvironmentAPIClient(BaseAPIClient):
             params["from_ts"] = from_ts
         if to_ts:
             params["to_ts"] = to_ts
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
 
         return await self.get("/api/v1/smart-query/inventory/moves", params=params, timeout=timeout)
 
@@ -483,7 +492,7 @@ class EnvironmentAPIClient(BaseAPIClient):
         window: int | None = None,
         timeout: float | None = None,
     ) -> dict[str, Any]:
-        """Detect anomalous device behavior."""
+        """Detect anomalous device behavior within a window measured in hours."""
         params: dict[str, Any] = {}
         if warehouse_id:
             params["warehouse_id"] = warehouse_id
@@ -504,8 +513,10 @@ class EnvironmentAPIClient(BaseAPIClient):
         """Get observed inventory snapshot with quality filtering."""
         params: dict[str, Any] = {}
         if quality_status_in:
-            params["quality_status_in"] = ",".join(quality_status_in)
+            params["quality_status_in"] = quality_status_in
 
         return await self.get(
-            "/api/v1/smart-query/inventory/current", params=params, timeout=timeout
+            "/api/v1/smart-query/inventory/observed-snapshot",
+            params=params,
+            timeout=timeout,
         )

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from .api.form_options import router as form_options_router
 from .api.smart_query import router as smart_query_router
 from .config_load import settings
 
@@ -16,3 +17,4 @@ def health() -> dict[str, str]:
 
 
 app.include_router(smart_query_router, prefix="/api/v1")
+app.include_router(form_options_router, prefix="/api/v1")

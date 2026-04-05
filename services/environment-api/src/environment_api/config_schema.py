@@ -34,6 +34,13 @@ class LoggingConfig(BaseModel):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(default="INFO")
 
 
+class CacheConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    redis_url: str = Field(default="redis://localhost:6379")
+    ttl_seconds: int = Field(default=1800, ge=0)
+
+
 class Settings(BaseSettings):
     """
     Root config schema for environment-api.
@@ -43,6 +50,7 @@ class Settings(BaseSettings):
     app: AppConfig = Field(default_factory=AppConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    cache: CacheConfig = Field(default_factory=CacheConfig)
 
     world: WorldConfig
     simulation: SimulationConfig

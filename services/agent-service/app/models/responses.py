@@ -121,6 +121,7 @@ class AgentRecommendationResponse(BaseModel):
 
     request_id: str = Field(..., min_length=1)
     query: str = Field(..., min_length=1)
+    final_answer: str | None = Field(default=None, description="Raw final answer from the agent")
 
     task: str = Field(..., min_length=1, description="High-level task identified")
     analysis: str = Field(..., min_length=1, description="Agent analysis summary")
@@ -131,7 +132,7 @@ class AgentRecommendationResponse(BaseModel):
     formulas: list[Formula] = Field(default_factory=list)
     code_snippets: list[CodeSnippet] = Field(default_factory=list)
 
-    recommendations: list[Recommendation] = Field(..., min_length=1)
+    recommendations: list[Recommendation] = Field(default_factory=list)
 
     citations: list[Citation] = Field(default_factory=list)
 

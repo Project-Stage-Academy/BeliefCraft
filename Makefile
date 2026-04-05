@@ -1,4 +1,4 @@
-.PHONY: setup dev up down build logs ps restart test lint format lint-format clean
+.PHONY: setup dev up down build logs ps restart test lint format lint-format clean evaluate evaluate-list evaluate-show
 
 setup:
 	uv sync --all-packages --all-groups --all-extras
@@ -39,5 +39,17 @@ lint-format:
 	make format
 	make lint
 
+pre-commit:
+	uv run pre-commit run --all-files
+
 clean:
 	docker compose down -v --remove-orphans
+
+evaluate:
+	docker compose exec agent-service /app/.venv/bin/python -m app.evaluation.cli run $(ARGS)
+
+evaluate-list:
+	docker compose exec agent-service /app/.venv/bin/python -m app.evaluation.cli list
+
+evaluate-show:
+	docker compose exec agent-service /app/.venv/bin/python -m app.evaluation.cli show $(ID)

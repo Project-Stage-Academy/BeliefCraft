@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
+from app.config_load import settings
 from app.core.exceptions import AgentExecutionError
 from app.models.agent_state import AgentState, ThoughtStep, ToolCall, create_initial_state
 from app.prompts.system_prompts import (
@@ -30,7 +31,7 @@ class ReActAgent:
             system_prompt: Custom system prompt. If None, uses default
                           WAREHOUSE_ADVISOR_SYSTEM_PROMPT.
         """
-        self.llm: LLMService = LLMService()
+        self.llm: LLMService = LLMService(model_id=settings.react_agent.model_id)
         self.system_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
         self.graph = self._build_graph()
 
@@ -103,8 +104,9 @@ class ReActAgent:
         """Build the message list for LLM input.
 
         The formatted ReAct prompt encodes iteration info, user query, and
-        XML history of prior thoughts/actions. Raw conversation messages
-        are NOT appended separately to avoid duplicating context.
+        XML history reconstructed from the stored assistant/tool messages.
+        Raw conversation messages are NOT appended separately because the
+        formatter already preserves exact assistant-turn boundaries there.
 
         Args:
             state: Current agent state.
@@ -114,7 +116,7 @@ class ReActAgent:
         """
         return [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": format_react_prompt(state)},  # type: ignore[arg-type]
+            {"role": "user", "content": format_react_prompt(state)},
         ]
 
     async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
@@ -276,8 +278,10 @@ class ReActAgent:
                 )
             else:
                 tool_data = result.get("data", {})
-                if not isinstance(tool_data, dict):
-                    tool_data = {"result": tool_data}
+                tool_meta = result.get("meta", {})
+                tool_data, tool_meta = self._normalize_tool_success_payload(
+                    tool_category, tool_data, tool_meta
+                )
                 logger.info(
                     "tool_execution_success",
                     request_id=request_id,
@@ -290,6 +294,7 @@ class ReActAgent:
                         category=tool_category,
                         arguments=func_args,
                         result=tool_data,
+                        trace_meta=tool_meta,
                     )
                 )
                 new_messages.append(
@@ -302,6 +307,30 @@ class ReActAgent:
                 )
 
         return new_messages, new_tool_calls
+
+    @staticmethod
+    def _normalize_tool_success_payload(
+        tool_category: str | None,
+        tool_data: Any,
+        tool_meta: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Normalize tool payloads before storing them in agent state."""
+        if (
+            tool_category == "environment"
+            and isinstance(tool_data, dict)
+            and "data" in tool_data
+            and isinstance(tool_data.get("meta"), dict)
+        ):
+            tool_meta = tool_data["meta"]
+            tool_data = tool_data["data"]
+
+        if not isinstance(tool_meta, dict):
+            tool_meta = {}
+
+        if not isinstance(tool_data, dict):
+            tool_data = {"result": tool_data}
+
+        return tool_data, tool_meta
 
     def _build_act_result(
         self,

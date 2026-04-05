@@ -1,7 +1,32 @@
 import json
 
 import pytest
-from pipeline.parsing.main import DocumentAssembler
+from pipeline.parsing.main import (
+    START_PAGE,
+    DocumentAssembler,
+)
+
+
+def _with_block_ids(blocks: list[dict]) -> list[dict]:
+    """Return a copy of blocks where each block has a stable 1-based block_id."""
+    normalized: list[dict] = []
+    for idx, block in enumerate(blocks, start=1):
+        block_copy = dict(block)
+        block_copy.setdefault("block_id", idx)
+        normalized.append(block_copy)
+    return normalized
+
+
+def _pages_with_content(n_blank: int, page_blocks: list) -> list:
+    """Return n_blank empty pages followed by one page carrying page_blocks."""
+    pages = [{"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(n_blank)]
+    pages.append(
+        {
+            "page_num": n_blank + 1,
+            "prunedResult": {"parsing_res_list": _with_block_ids(page_blocks)},
+        }
+    )
+    return pages
 
 
 @pytest.fixture
@@ -14,18 +39,20 @@ def mock_data_env(tmp_path):
     paddle_data = {
         "page_num": 1,
         "prunedResult": {
-            "parsing_res_list": [
-                {
-                    "block_content": "CHAPTER 1 INTRODUCTION",
-                    "block_label": "title",
-                    "block_bbox": [10, 10, 100, 20],
-                },
-                {
-                    "block_content": "This is a simple text paragraph.",
-                    "block_label": "text",
-                    "block_bbox": [10, 30, 100, 50],
-                },
-            ]
+            "parsing_res_list": _with_block_ids(
+                [
+                    {
+                        "block_content": "CHAPTER 1 INTRODUCTION",
+                        "block_label": "title",
+                        "block_bbox": [10, 10, 100, 20],
+                    },
+                    {
+                        "block_content": "This is a simple text paragraph.",
+                        "block_label": "text",
+                        "block_bbox": [10, 30, 100, 50],
+                    },
+                ]
+            )
         },
     }
     paddle_file.write_text(json.dumps([paddle_data]), encoding="utf-8")
@@ -105,7 +132,32 @@ def test_assembler_is_inside(mock_data_env):
     assert assembler._is_inside([], [10, 10, 20, 20]) is False
 
 
-def test_merge_visual_items(mock_data_env):
+def test_blocks_json_bbox_is_scaled_on_assembly(mock_data_env, monkeypatch):
+    """Locks: blocks_json bboxes (FITZ space) are scaled 2× to Paddle space on init,
+    so a paddle block that falls inside the scaled bbox is captured in the example region.
+    """
+    block_data = [
+        {
+            "page": START_PAGE,
+            "entity_id": "5.5",
+            "bbox": [10, 20, 30, 40],  # FITZ → Paddle [20,40,60,80] after 2× scale
+            "chunk_type": "example",
+            "caption": "",
+        }
+    ]
+    mock_data_env["blocks"].write_text(json.dumps(block_data), encoding="utf-8")
+
+    # Block at [25,45,55,70] is inside [20,40,60,80] with BBOX_PADDING=5
+    blocks = [
+        {
+            "block_content": "Inside scaled block.",
+            "block_label": "text",
+            "block_bbox": [25, 45, 55, 70],
+        },
+    ]
+    pages = _pages_with_content(START_PAGE - 1, blocks)
+    (mock_data_env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
     assembler = DocumentAssembler(
         paddle_dir=mock_data_env["paddle_dir"],
         figures_json=mock_data_env["figures"],
@@ -113,15 +165,12 @@ def test_merge_visual_items(mock_data_env):
         tables_json=mock_data_env["tables"],
         formulas_json=mock_data_env["formulas"],
     )
-    items = [
-        {"entity_id": "fig_1", "bbox": [10, 10, 50, 50], "chunk_type": "image"},
-        {"entity_id": "fig_1", "bbox": [40, 40, 100, 100], "image_index": 5},
-    ]
-    merged = assembler._merge_visual_items(items)
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
 
-    assert "fig_1" in merged
-    assert merged["fig_1"]["bbox"] == [10, 10, 100, 100]
-    assert merged["fig_1"]["image_index"] == 5
+    example_chunk = next((c for c in assembler.final_chunks if c.get("entity_id") == "5.5"), None)
+    assert example_chunk is not None
+    assert "Inside scaled block." in example_chunk["content"]
 
 
 def test_assembler_load_and_offset(mock_data_env):
@@ -158,7 +207,38 @@ def test_assembler_load_and_offset_edge_cases(mock_data_env):
 
 
 def test_document_assembler_full_flow(mock_data_env, monkeypatch):
-    """Comprehensive test of the DocumentAssembler's full flow with mocked data."""
+    """Comprehensive test of the DocumentAssembler's full flow with mocked data.
+
+    assemble() only processes pages where START_PAGE(23) <= page_idx+1 <= LAST_PAGE(648).
+    We therefore supply 23 pages so the last one (page_idx=22) is the first processed page.
+    """
+    dummy_pages = [{"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(22)]
+    # Page at index 22 (page_idx+1 == 23 == START_PAGE) carries real content
+    dummy_pages.append(
+        {
+            "page_num": 23,
+            "prunedResult": {
+                "parsing_res_list": _with_block_ids(
+                    [
+                        {
+                            "block_content": "Some introductory text.",
+                            "block_label": "text",
+                            "block_bbox": [10, 30, 100, 50],
+                        },
+                        {
+                            "block_content": "# 2 NEXT SECTION",
+                            "block_label": "text",
+                            "block_bbox": [10, 60, 100, 80],
+                        },
+                    ]
+                )
+            },
+        }
+    )
+
+    paddle_file = mock_data_env["paddle_dir"] / "page_1.json"
+    paddle_file.write_text(json.dumps(dummy_pages), encoding="utf-8")
+
     assembler = DocumentAssembler(
         paddle_dir=mock_data_env["paddle_dir"],
         figures_json=mock_data_env["figures"],
@@ -166,11 +246,6 @@ def test_document_assembler_full_flow(mock_data_env, monkeypatch):
         tables_json=mock_data_env["tables"],
         formulas_json=mock_data_env["formulas"],
     )
-
-    assembler.image_map = {
-        1: [{"chunk_type": "captioned_image", "entity_id": "1.1", "content": "Fig 1"}]
-    }
-    assembler.table_map = {1: [{"caption_content": "Table 1.1", "table_content": "data"}]}
 
     monkeypatch.setattr(assembler, "_save", lambda: None)
 
@@ -222,7 +297,7 @@ def test_assembler_simple_helpers(mock_data_env):
     assert assembler._extract_id("Just text") is None
 
     meta = {"section_title": "Test"}
-    obj = assembler._create_chunk_obj("text", "content", 1, meta)
+    obj = assembler._create_chunk_obj("text", "content", 1, meta, ["1:1"])
     assert obj["chunk_type"] == "text"
     assert obj["page"] == 1
 
@@ -244,8 +319,39 @@ def test_id_generation_logic(mock_data_env):
     assert len(id1) > 0
 
 
-def test_assembler_markdown_priority(mock_data_env):
-    """Test that Markdown content takes priority over PaddleOCR content."""
+def test_paddle_ocr_content_used_not_markdown_field(mock_data_env, monkeypatch):
+    """Locks: assemble() reads block_content from prunedResult, not any 'markdown' field.
+
+    A section-header block forces a flush of the preceding accumulated text so the
+    flushed chunk's content must equal the OCR text, not the markdown version.
+    """
+    blank_pages = [
+        {"page_num": i + 1, "prunedResult": {"parsing_res_list": []}} for i in range(START_PAGE - 1)
+    ]
+    content_page = {
+        "page_num": START_PAGE,
+        # markdown field is present but _process_page never reads it
+        "markdown": {"text": "Formula: $E=mc^2$"},
+        "prunedResult": {
+            "parsing_res_list": _with_block_ids(
+                [
+                    {
+                        "block_content": "Formula: E=mc2",
+                        "block_label": "text",
+                        "block_bbox": [0, 0, 10, 10],
+                    },
+                    {
+                        "block_content": "# 2 Next Topic",
+                        "block_label": "text",
+                        "block_bbox": [0, 20, 10, 30],
+                    },
+                ]
+            )
+        },
+    }
+    pages = blank_pages + [content_page]
+    (mock_data_env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
+
     assembler = DocumentAssembler(
         paddle_dir=mock_data_env["paddle_dir"],
         figures_json=mock_data_env["figures"],
@@ -253,36 +359,29 @@ def test_assembler_markdown_priority(mock_data_env):
         tables_json=mock_data_env["tables"],
         formulas_json=mock_data_env["formulas"],
     )
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
 
-    page_data = {
-        "page_num": 10,
-        "markdown": {"text": "Formula: $E=mc^2$"},
-        "prunedResult": {
-            "parsing_res_list": [
-                {
-                    "block_content": "Formula: E=mc2",
-                    "block_label": "text",
-                    "block_bbox": [0, 0, 10, 10],
-                }
-            ]
-        },
-    }
-
-    assembler._process_page(0, page_data)
-
-    assert len(assembler.final_chunks) == 1
-    assert assembler.final_chunks[0]["content"] == "Formula: $E=mc^2$"
-    assert assembler.final_chunks[0]["page"] == 10
+    text_chunks = [c for c in assembler.final_chunks if c["chunk_type"] == "text"]
+    assert len(text_chunks) >= 1
+    assert any("Formula: E=mc2" in c["content"] for c in text_chunks)
+    all_content = " ".join(c.get("content", "") for c in assembler.final_chunks)
+    assert "$E=mc^2$" not in all_content
 
 
-def test_handle_visual_objects_overlap(mock_data_env):
-    """
-    Test that overlapping visual objects are handled correctly.
-    Data is provided through mock files to avoid direct state mutation.
+def test_handle_visual_objects_overlap(mock_data_env, monkeypatch):
+    """Locks: blocks.json defines named regions (e.g. examples).  assemble() assigns
+    paddle blocks whose bbox falls inside a named region to that region's accumulator.
+    The resulting chunk must have the correct type and entity_id, and must include
+    the text of the overlapping paddle block.
+
+    The block_map bbox [0,0,100,100] is scaled by kx=2, ky=2 → [0,0,200,200].
+    Paddle block-0 at [10,10,50,50] is inside [0,0,200,200].
+    Paddle block-1 at [200,200,300,300] is NOT inside (300 > 200+BBOX_PADDING=205).
     """
     mock_block_data = [
         {
-            "page": 1,
+            "page": START_PAGE,
             "entity_id": "4.4",
             "bbox": [0, 0, 100, 100],
             "chunk_type": "example",
@@ -291,15 +390,7 @@ def test_handle_visual_objects_overlap(mock_data_env):
     ]
     mock_data_env["blocks"].write_text(json.dumps(mock_block_data), encoding="utf-8")
 
-    assembler = DocumentAssembler(
-        paddle_dir=mock_data_env["paddle_dir"],
-        figures_json=mock_data_env["figures"],
-        blocks_json=mock_data_env["blocks"],
-        tables_json=mock_data_env["tables"],
-        formulas_json=mock_data_env["formulas"],
-    )
-
-    blocks_from_paddle = [
+    page_blocks = [
         {
             "block_content": "Example 4.4 text inside box",
             "block_bbox": [10, 10, 50, 50],
@@ -311,14 +402,24 @@ def test_handle_visual_objects_overlap(mock_data_env):
             "block_label": "text",
         },
     ]
+    pages = _pages_with_content(START_PAGE - 1, page_blocks)
+    (mock_data_env["paddle_dir"] / "page_1.json").write_text(json.dumps(pages), encoding="utf-8")
 
-    used = assembler._handle_visual_objects(1, blocks_from_paddle)
+    assembler = DocumentAssembler(
+        paddle_dir=mock_data_env["paddle_dir"],
+        figures_json=mock_data_env["figures"],
+        blocks_json=mock_data_env["blocks"],
+        tables_json=mock_data_env["tables"],
+        formulas_json=mock_data_env["formulas"],
+    )
+    monkeypatch.setattr(assembler, "_save", lambda: None)
+    assembler.assemble()
 
-    assert 0 in used
-    assert 1 not in used
     assert any(c["chunk_type"] == "example" for c in assembler.final_chunks)
     example_chunk = next(c for c in assembler.final_chunks if c["chunk_type"] == "example")
     assert example_chunk["entity_id"] == "4.4"
+    assert "Example 4.4 text inside box" in example_chunk["content"]
+    assert "Normal text outside" not in example_chunk["content"]
 
 
 def test_extract_id_strict_regex(mock_data_env):

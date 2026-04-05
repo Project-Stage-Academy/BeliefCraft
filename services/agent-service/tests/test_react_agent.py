@@ -218,6 +218,56 @@ class TestThinkNode:
         assert result["messages"][0]["role"] == "user"
         assert result["messages"][1]["role"] == "assistant"
 
+    def test_build_llm_messages_preserves_all_actions_from_single_turn(
+        self, agent: ReActAgent, initial_state: AgentState
+    ) -> None:
+        initial_state["thoughts"] = [
+            {"thought": "Collect diagnostics", "next_action": "tool_use"}  # type: ignore[list-item]
+        ]
+        initial_state["messages"] = [
+            {
+                "role": "assistant",
+                "content": "<thinking>Collect diagnostics</thinking>",
+                "tool_calls": [
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_inventory_data",
+                            "arguments": '{"warehouse_id": "WH-001"}',
+                        },
+                    },
+                    {
+                        "id": "tc_2",
+                        "type": "function",
+                        "function": {
+                            "name": "search_knowledge_base",
+                            "arguments": '{"query": "inventory discrepancy"}',
+                        },
+                    },
+                ],
+            }
+        ]
+        initial_state["tool_calls"] = [
+            {
+                "tool_name": "get_inventory_data",
+                "arguments": {"warehouse_id": "WH-001"},
+                "result": {"items": [1, 2, 3]},
+            },  # type: ignore[list-item]
+            {
+                "tool_name": "search_knowledge_base",
+                "arguments": {"query": "inventory discrepancy"},
+                "result": {"documents": [{"id": "chunk-1"}]},
+            },  # type: ignore[list-item]
+        ]
+
+        messages = agent._build_llm_messages(initial_state)
+
+        prompt = messages[1]["content"]
+        assert prompt.count("<action tool=") == 2
+        assert '<action tool="get_inventory_data">' in prompt
+        assert '<action tool="search_knowledge_base">' in prompt
+
 
 # ---------------------------------------------------------------------------
 # Act node
@@ -256,6 +306,50 @@ class TestActNode:
         assert result["tool_calls"][0].arguments == {"warehouse": "WH-001"}
         assert result["tool_calls"][0].result is not None
         assert result["iteration"] == 1
+
+    @pytest.mark.asyncio()
+    @patch("app.services.react_agent.tool_registry")
+    async def test_act_extracts_trace_meta_from_environment_tool_envelope(
+        self,
+        mock_registry: MagicMock,
+        agent: ReActAgent,
+        initial_state: AgentState,
+    ) -> None:
+        agent._execute_tool = AsyncMock(  # type: ignore[method-assign]
+            return_value={
+                "status": "success",
+                "data": {
+                    "data": [{"product_id": "P-001"}],
+                    "message": "Retrieved 1 observed inventory rows.",
+                    "meta": {"count": 1, "trace_count": 1},
+                },
+            }
+        )
+        mock_registry.get_tool.return_value.get_metadata.return_value.category = "environment"
+        initial_state["messages"] = [
+            {
+                "role": "assistant",
+                "content": "Checking...",
+                "tool_calls": [
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_observed_inventory_snapshot",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
+            }
+        ]
+
+        result = await agent._act_node(initial_state)
+
+        assert result["tool_calls"][0].result == {"result": [{"product_id": "P-001"}]}
+        assert result["tool_calls"][0].trace_meta == {"count": 1, "trace_count": 1}
+        assert json.loads(result["messages"][-1]["content"]) == {
+            "result": [{"product_id": "P-001"}]
+        }
 
     @pytest.mark.asyncio()
     @patch("app.services.react_agent.tool_registry")

@@ -26,7 +26,7 @@ MethodRecord:
     "algorithm_number":     "1.1",            # entity_id of the defining algorithm
     "code":                 "<source of the method>",
     "class":                "cls:ClassName",  # ref -> ClassRecord.id
-    "initialized_classes":  ["cls:X", ...],
+    "referenced_classes":   ["cls:X", ...],
     "referenced_functions": ["fn:foo", ...],
     "referenced_methods":   ["mth:Bar.baz", ...],
   }
@@ -37,7 +37,7 @@ FunctionRecord:
     "name":                 "function_name",
     "algorithm_number":     "1.1",            # entity_id of the defining algorithm
     "code":                 "<source of the function>",
-    "initialized_classes":  ["cls:X", ...],
+    "referenced_classes":   ["cls:X", ...],
     "referenced_functions": ["fn:foo", ...],
     "referenced_methods":   ["mth:Bar.baz", ...],
   }
@@ -61,8 +61,18 @@ from pipeline.code_processing.python_code_processing.code_analyzer import (
     CodeAnalyzer,
     analyze_fragments,
 )
+from pipeline.code_processing.python_code_processing.constants import PYTHON_BUILTINS
 
 logger = get_logger(__name__)
+
+
+def _base_is_kept(base: ast.expr, known_classes: frozenset[str], class_name: str) -> bool:
+    if isinstance(base, ast.Name):
+        kept = base.id in PYTHON_BUILTINS or class_id(base.id) in known_classes
+        if not kept:
+            logger.warning("Class %s: dropping unknown base %r", class_name, base.id)
+        return kept
+    return True
 
 
 def class_id(name: str) -> str:
@@ -85,11 +95,15 @@ def function_id(name: str) -> str:
 # ------------------------------------------------------------------ #
 
 
-def _class_init_source(class_node: ast.ClassDef) -> str:
+def _class_init_source(class_node: ast.ClassDef, known_classes: frozenset[str]) -> str:
     """Return class header + __init__ method (and leading docstring if present)."""
-    bases = [ast.unparse(b) for b in class_node.bases]
+    kept_bases = [
+        ast.unparse(b) for b in class_node.bases if _base_is_kept(b, known_classes, class_node.name)
+    ]
     header = (
-        f"class {class_node.name}({', '.join(bases)}):" if bases else f"class {class_node.name}:"
+        f"class {class_node.name}({', '.join(kept_bases)}):"
+        if kept_bases
+        else f"class {class_node.name}:"
     )
 
     body = class_node.body
@@ -124,6 +138,22 @@ def _find_init(body: list[ast.stmt]) -> ast.FunctionDef | None:
     )
 
 
+def _parent_class_refs(class_node: ast.ClassDef, known: "_KnownIds") -> list[str]:
+    """Return cls: refs for base classes present in the analyzed fragments.
+
+    Bases that are builtins, external libs, or simply not in the document
+    are silently skipped.
+    """
+    refs = []
+    for base in class_node.bases:
+        if isinstance(base, ast.Name):
+            ref = class_id(base.id)
+            if ref in known.classes:
+                refs.append(ref)
+        # Subscript (dict[K,V]) and Attribute (module.Class) — skip
+    return sorted(refs)
+
+
 # ------------------------------------------------------------------ #
 # Known-id index
 # ------------------------------------------------------------------ #
@@ -151,21 +181,31 @@ class _KnownIds:
 # ------------------------------------------------------------------ #
 
 
+_SKIP_PARAM_NAMES: frozenset[str] = frozenset({"self", "cls"})
+
+
 def _refs_from_edges(
     caller: str,
     graph: dict[str, dict[str, str]],
     known: _KnownIds,
+    analyzer: CodeAnalyzer,
 ) -> tuple[list[str], list[str], list[str]]:
-    """Return ``(initialized_classes, referenced_functions, referenced_methods)`` for *caller*."""
-    inits: list[str] = []
+    """Return ``(referenced_classes, referenced_functions, referenced_methods)`` for *caller*.
+
+    ``referenced_classes`` includes both explicit constructor calls *and* classes
+    that appear as parameter type annotations — i.e. the function signature alone
+    declares a dependency on those classes.
+    """
+    inits: set[str] = set()
     funcs: list[str] = []
     meths: list[str] = []
 
+    # 1. Edges from the call graph
     for target, kind in graph.get(caller, {}).items():
         if kind == KIND_CLASS_INIT:
             ref = class_id(target)
             if ref in known.classes:
-                inits.append(ref)
+                inits.add(ref)
         elif kind == KIND_FUNCTION:
             ref = function_id(target)
             if ref in known.functions:
@@ -174,6 +214,14 @@ def _refs_from_edges(
             ref = method_id(target)
             if ref in known.methods:
                 meths.append(ref)
+
+    # 2. Parameter type annotations → add to referenced_classes
+    for var, typ in analyzer._local_vars.get(caller, {}).items():
+        if var in _SKIP_PARAM_NAMES:
+            continue
+        ref = class_id(typ)
+        if ref in known.classes:
+            inits.add(ref)
 
     return sorted(inits), sorted(funcs), sorted(meths)
 
@@ -193,17 +241,29 @@ def _fragment_algorithm_number(analyzer: CodeAnalyzer, key: str) -> str:
     return extract_entity_id_from_number(raw)
 
 
-def _build_classes(analyzer: CodeAnalyzer) -> list[dict[str, Any]]:
-    """Build class records (id, algorithm_number, name, code) from the analyzer."""
-    return [
-        {
-            "id": class_id(name),
-            "name": name,
-            "algorithm_number": _fragment_algorithm_number(analyzer, name),
-            "code": _class_init_source(node),
-        }
-        for name, node in analyzer.classes.items()
-    ]
+def _build_classes(
+    analyzer: CodeAnalyzer, graph: dict[str, dict[str, str]], known: _KnownIds
+) -> list[dict[str, Any]]:
+    result = []
+    for name, node in analyzer.classes.items():
+        parent_refs = _parent_class_refs(node, known)
+
+        init_key = f"{name}.__init__"
+        init_inits, init_funcs, init_meths = _refs_from_edges(init_key, graph, known, analyzer)
+
+        result.append(
+            {
+                "id": class_id(name),
+                "name": name,
+                "algorithm_number": _fragment_algorithm_number(analyzer, name),
+                "code": _class_init_source(node, known.classes),
+                "referenced_classes": sorted(set(parent_refs) | set(init_inits)),
+                "initialized_classes": sorted(set(parent_refs) | set(init_inits)),
+                "referenced_functions": init_funcs,
+                "referenced_methods": init_meths,
+            }
+        )
+    return result
 
 
 def _build_methods(
@@ -218,7 +278,7 @@ def _build_methods(
         if method_name == "__init__":
             continue  # already captured inside the class code
 
-        inits, funcs, meths = _refs_from_edges(qualified, graph, known)
+        inits, funcs, meths = _refs_from_edges(qualified, graph, known, analyzer)
         cls_ref = (
             class_id(cls_name) if class_id(cls_name) in known.classes else f"external:{cls_name}"
         )
@@ -231,6 +291,7 @@ def _build_methods(
                 "algorithm_number": _fragment_algorithm_number(analyzer, qualified),
                 "code": ast.unparse(node),
                 "class": cls_ref,
+                "referenced_classes": inits,
                 "initialized_classes": inits,
                 "referenced_functions": funcs,
                 "referenced_methods": meths,
@@ -247,13 +308,14 @@ def _build_functions(
     """Build function records with cross-references from analyzer and graph."""
     result = []
     for name, node in analyzer.functions.items():
-        inits, funcs, meths = _refs_from_edges(name, graph, known)
+        inits, funcs, meths = _refs_from_edges(name, graph, known, analyzer)
         result.append(
             {
                 "id": function_id(name),
                 "name": name,
                 "algorithm_number": _fragment_algorithm_number(analyzer, name),
                 "code": ast.unparse(node),
+                "referenced_classes": inits,
                 "initialized_classes": inits,
                 "referenced_functions": funcs,
                 "referenced_methods": meths,
@@ -281,7 +343,7 @@ def build_code_schema(fragments: Sequence[object]) -> dict[str, list[dict[str, A
     known = _KnownIds.from_analyzer(analyzer)
 
     return {
-        "classes": _build_classes(analyzer),
+        "classes": _build_classes(analyzer, graph, known),
         "methods": _build_methods(analyzer, graph, known),
         "functions": _build_functions(analyzer, graph, known),
     }

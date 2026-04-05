@@ -62,10 +62,10 @@ def mock_redis() -> AsyncMock:
 
 @pytest.fixture
 def mock_settings() -> MagicMock:
-    """Create mock settings."""
+    """Create mock settings mirroring the new nested schema."""
     settings = MagicMock()
-    settings.REDIS_URL = "redis://localhost:6379"
-    settings.CACHE_TTL_SECONDS = 3600
+    settings.redis.url = "redis://localhost:6379"
+    settings.redis.cache_ttl_seconds = 3600
     return settings
 
 
@@ -82,9 +82,8 @@ def mock_redis_infrastructure(mock_redis: AsyncMock) -> Generator[None, None, No
 
 @pytest.fixture(autouse=True)
 def mock_get_settings_fixture(mock_settings: MagicMock) -> Generator[None, None, None]:
-    """Automatically mock get_settings for all tests."""
-    with patch("app.tools.cached_tool.get_settings") as mock_get_settings:
-        mock_get_settings.return_value = mock_settings
+    """Automatically mock settings for all tests."""
+    with patch("app.tools.cached_tool.settings", mock_settings):
         yield
 
 

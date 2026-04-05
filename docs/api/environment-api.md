@@ -14,6 +14,7 @@ This service is **not** implemented as an MCP server in the current repository.
 - Local: `http://localhost:8000`
 - Health: `GET /health`
 - API group: `/api/v1/smart-query`
+- Form options: `GET /api/v1/form-options`
 
 ## Endpoint Contract
 All smart-query endpoints return:
@@ -21,9 +22,18 @@ All smart-query endpoints return:
 {
   "data": "...",
   "message": "...",
-  "meta": {}
+  "meta": {
+    "count": 0,
+    "trace_count": 0
+  }
 }
 ```
+
+`meta` follows the shared `ToolResultMeta` contract:
+- `count`: generic count of primary returned items
+- `trace_count`: optional public-trace count; defaults to `count`
+- `pagination`: optional `{ "limit": int, "offset": int }` for list endpoints
+- additional tool-specific fields such as `filters`, `warehouse_id`, or `observation_count`
 
 Validation and errors:
 - Invalid query params/domain validation: `422`
@@ -39,6 +49,18 @@ Example:
   "env": "local"
 }
 ```
+
+### GET `/api/v1/form-options`
+Returns dropdown options for UI forms.
+
+Response fields:
+- `origins`: unique `name` values from warehouses and suppliers
+- `destinations`: unique `name` values from warehouses
+- `products`: objects with `name` and `category`
+- `transport_modes`: unique route `mode` values
+
+Caching:
+- Server-side cache with TTL (`config/default.yaml` → `cache.ttl_seconds`)
 
 ### GET `/api/v1/smart-query/inventory/moves`
 Returns inventory movement records.

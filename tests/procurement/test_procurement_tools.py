@@ -33,9 +33,11 @@ def test_list_suppliers_returns_tool_result_with_meta(monkeypatch: pytest.Monkey
     assert len(result.data.suppliers) == 1
     assert result.data.suppliers[0].name == "Acme Supply"
     assert result.message == "Retrieved 1 suppliers."
-    assert result.meta["count"] == 1
-    assert result.meta["filters"]["region"] == "EU-WEST"
-    assert result.meta["pagination"] == {"limit": 5, "offset": 2}
+    assert result.meta.count == 1
+    assert result.meta.filters["region"] == "EU-WEST"
+    assert result.meta.pagination is not None
+    assert result.meta.pagination.limit == 5
+    assert result.meta.pagination.offset == 2
 
 
 def test_list_suppliers_wraps_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,6 +62,8 @@ def test_list_purchase_orders_serializes_statuses_in_meta(monkeypatch: pytest.Mo
 
     assert result.data.purchase_orders == []
     assert result.message == "No purchase orders matched filters."
-    assert result.meta["filters"]["status_in"] == ["submitted", "partial"]
-    assert result.meta["filters"]["include_names"] is True
-    assert result.meta["pagination"] == {"limit": 10, "offset": 0}
+    assert result.meta.filters["status_in"] == ["submitted", "partial"]
+    assert result.meta.filters["include_names"] is True
+    assert result.meta.pagination is not None
+    assert result.meta.pagination.limit == 10
+    assert result.meta.pagination.offset == 0

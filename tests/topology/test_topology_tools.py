@@ -34,9 +34,11 @@ def test_list_warehouses_returns_tool_result_with_meta(monkeypatch: pytest.Monke
     assert len(result.data.warehouses) == 1
     assert result.data.warehouses[0].id == warehouse_id
     assert result.message == "Retrieved 1 warehouses."
-    assert result.meta["count"] == 1
-    assert result.meta["filters"]["region"] == "EU-WEST"
-    assert result.meta["pagination"] == {"limit": 5, "offset": 2}
+    assert result.meta.count == 1
+    assert result.meta.filters["region"] == "EU-WEST"
+    assert result.meta.pagination is not None
+    assert result.meta.pagination.limit == 5
+    assert result.meta.pagination.offset == 2
 
 
 def test_get_locations_tree_builds_nested_structure(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,5 +1,8 @@
 """System prompts and formatting utilities for the warehouse advisor ReAct agent."""
 
+import json
+import re
+from collections.abc import Mapping
 from typing import Any
 
 # Base system prompt (without dynamic skill catalog)
@@ -8,8 +11,9 @@ powered by the "Algorithms for Decision Making" textbook.
 
 Your role:
 - Analyze warehouse state based on observations (potentially noisy/incomplete).
-- Apply decision-making algorithms (MDP, POMDP, Bayesian reasoning, inventory control).
-- Provide actionable recommendations with mathematical rigor.
+- Apply decision-making algorithms (MDP, POMDP, Bayesian reasoning, inventory control) \
+when they are relevant and requested.
+- Provide actionable recommendations grounded in tool evidence.
 
 CRITICAL INSTRUCTION:
 Before calling any tool or providing a final answer, you MUST analyze the situation \
@@ -17,9 +21,13 @@ inside <thinking> tags.
 
 Guidelines:
 1. ALWAYS use tools to gather information before reasoning.
-2. Consider uncertainty (noisy sensors, stochastic lead times).
-3. Reference specific algorithms and formulas from the knowledge base.
-4. Include Python code snippets for implementation.
+2. Follow the user's output constraints exactly. If the user asks for direct evidence \
+from tools, ground the answer in tool observations and omit algorithms, formulas, code \
+snippets, and recommendations unless the user explicitly requests them.
+3. Consider uncertainty (noisy sensors, stochastic lead times).
+4. Use knowledge base tools only when the user requests algorithms, theory, formulas, \
+or implementation details, or when that information is necessary and does not conflict \
+with the user's constraints.
 5. If data is conflicting, acknowledge uncertainty.
 
 Available tool categories:
@@ -32,11 +40,11 @@ Available tool categories:
 Response format:
 When you reach a conclusion, provide:
 - Task summary
-- Analysis
-- Relevant algorithm (citation)
-- Mathematical formula (LaTeX)
-- Python code snippet
-- Actionable recommendations
+- Analysis grounded in tool outputs
+- Relevant algorithm (citation) only when explicitly requested or necessary
+- Mathematical formula (LaTeX) only when explicitly requested
+- Python code snippet only when explicitly requested
+- Actionable recommendations only when requested or clearly helpful and not prohibited
 """
 
 # Legacy constant for backward compatibility
@@ -127,24 +135,215 @@ def _get_tool_call_attr(tool_call: dict[str, Any] | object, key: str) -> object:
 def _format_thought_content(thought: Any) -> str:
     """Extract the text content from a thought (model or plain value)."""
     if hasattr(thought, "thought"):
-        return str(thought.thought)
-    return str(thought)
+        content = thought.thought
+    elif isinstance(thought, Mapping):
+        content = thought.get("thought", thought)
+    else:
+        content = thought
+
+    content_str = str(content)
+    match = re.search(r"<thinking>(.*?)</thinking>", content_str, flags=re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    return content_str
 
 
-def _format_tool_call_xml(tool_call: dict[str, Any] | object) -> list[str]:
-    """Render a single tool call (action + observation) as XML lines."""
-    lines: list[str] = []
-    t_name = _get_tool_call_attr(tool_call, "tool_name")
-    t_args = _get_tool_call_attr(tool_call, "arguments")
-    lines.append(f'    <action tool="{t_name}">{t_args}</action>')
+def _parse_tool_arguments(raw_arguments: Any) -> Any:
+    """Parse tool arguments for display while preserving non-JSON inputs."""
+    if not isinstance(raw_arguments, str):
+        return raw_arguments
 
-    result = _get_tool_call_attr(tool_call, "result")
-    if result:
-        lines.append(f"    <observation>{result}</observation>")
+    try:
+        return json.loads(raw_arguments)
+    except json.JSONDecodeError:
+        return raw_arguments
+
+
+def _extract_message_tool_calls(message: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return tool calls declared on an assistant message."""
+    if not isinstance(message, dict):
+        return []
+
+    raw_tool_calls = message.get("tool_calls")
+    if isinstance(raw_tool_calls, list):
+        return [tool_call for tool_call in raw_tool_calls if isinstance(tool_call, dict)]
+    return []
+
+
+def _build_action_from_recorded_tool_call(
+    recorded_tool_call: dict[str, Any] | object,
+    *,
+    include_trace_meta: bool = False,
+) -> dict[str, Any]:
+    """Build a prompt/reasoning action from a recorded ToolCall."""
+    action: dict[str, Any] = {
+        "tool": _get_tool_call_attr(recorded_tool_call, "tool_name"),
+        "arguments": _get_tool_call_attr(recorded_tool_call, "arguments"),
+    }
+
+    error = _get_tool_call_attr(recorded_tool_call, "error")
+    if error:
+        action["observation"] = {"error": error}
+        return action
+
+    result = _get_tool_call_attr(recorded_tool_call, "result")
+    if result is not None:
+        if include_trace_meta:
+            trace_meta = _get_tool_call_attr(recorded_tool_call, "trace_meta")
+            if isinstance(trace_meta, dict) and trace_meta:
+                action["observation"] = {"data": result, "meta": trace_meta}
+                return action
+        action["observation"] = result
+
+    return action
+
+
+def _build_action_from_message_and_recorded_result(
+    raw_tool_call: dict[str, Any],
+    recorded_tool_call: dict[str, Any] | object | None,
+    *,
+    include_trace_meta: bool = False,
+) -> dict[str, Any]:
+    """Build a prompt/reasoning action for one assistant-declared tool call."""
+    function_payload = raw_tool_call.get("function")
+    tool_name = None
+    tool_arguments: Any = None
+
+    if isinstance(function_payload, dict):
+        tool_name = function_payload.get("name")
+        tool_arguments = _parse_tool_arguments(function_payload.get("arguments"))
+
+    action: dict[str, Any] = {
+        "tool": tool_name,
+        "arguments": tool_arguments,
+    }
+
+    if recorded_tool_call is None:
+        return action
+
+    recorded_action = _build_action_from_recorded_tool_call(
+        recorded_tool_call,
+        include_trace_meta=include_trace_meta,
+    )
+    action["tool"] = recorded_action.get("tool") or action["tool"]
+    action["arguments"] = recorded_action.get("arguments") or action["arguments"]
+
+    if "observation" in recorded_action:
+        action["observation"] = recorded_action["observation"]
+
+    return action
+
+
+def _build_iteration_history_from_messages(
+    state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
+) -> list[dict[str, Any]]:
+    """Build iteration history using assistant-turn boundaries from raw messages."""
+    thoughts = state["thoughts"]
+    recorded_tool_calls = state["tool_calls"]
+    assistant_messages = [
+        message
+        for message in state.get("messages", [])
+        if isinstance(message, dict) and message.get("role") == "assistant"
+    ]
+
+    history: list[dict[str, Any]] = []
+    tool_call_cursor = 0
+
+    for index, thought in enumerate(thoughts):
+        assistant_message = assistant_messages[index] if index < len(assistant_messages) else None
+        raw_tool_calls = _extract_message_tool_calls(assistant_message)
+        actions: list[dict[str, Any]] = []
+
+        for offset, raw_tool_call in enumerate(raw_tool_calls):
+            recorded_tool_call = None
+            recorded_index = tool_call_cursor + offset
+            if recorded_index < len(recorded_tool_calls):
+                recorded_tool_call = recorded_tool_calls[recorded_index]
+            actions.append(
+                _build_action_from_message_and_recorded_result(
+                    raw_tool_call,
+                    recorded_tool_call,
+                    include_trace_meta=include_trace_meta,
+                )
+            )
+
+        history.append(
+            {
+                "iteration": index + 1,
+                "thought": _format_thought_content(thought),
+                "actions": actions,
+            }
+        )
+        tool_call_cursor += len(raw_tool_calls)
+
+    return history
+
+
+def _build_iteration_history_from_flat_lists(
+    state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
+) -> list[dict[str, Any]]:
+    """Fallback history builder for tests or older states without raw messages."""
+    thoughts = state["thoughts"]
+    tool_calls = state["tool_calls"]
+    history: list[dict[str, Any]] = []
+
+    for index, thought in enumerate(thoughts):
+        actions: list[dict[str, Any]] = []
+        if index < len(tool_calls):
+            actions.append(
+                _build_action_from_recorded_tool_call(
+                    tool_calls[index],
+                    include_trace_meta=include_trace_meta,
+                )
+            )
+
+        history.append(
+            {
+                "iteration": index + 1,
+                "thought": _format_thought_content(thought),
+                "actions": actions,
+            }
+        )
+
+    return history
+
+
+def build_iteration_history(
+    state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
+) -> list[dict[str, Any]]:
+    """Return iteration history with exact assistant-turn to tool-call grouping."""
+    has_assistant_turns = any(
+        isinstance(message, dict) and message.get("role") == "assistant"
+        for message in state.get("messages", [])
+    )
+    if has_assistant_turns:
+        return _build_iteration_history_from_messages(
+            state,
+            include_trace_meta=include_trace_meta,
+        )
+    return _build_iteration_history_from_flat_lists(
+        state,
+        include_trace_meta=include_trace_meta,
+    )
+
+
+def _format_action_xml(action: dict[str, Any]) -> list[str]:
+    """Render a single action plus observation as XML lines."""
+    lines = [f'    <action tool="{action.get("tool")}">{action.get("arguments")}</action>']
+
+    if "observation" in action:
+        lines.append(f'    <observation>{action["observation"]}</observation>')
     return lines
 
 
-def format_react_prompt(state: dict[str, Any]) -> str:
+def format_react_prompt(state: Mapping[str, Any]) -> str:
     """Format the ReAct loop prompt with current state using XML structure
     optimized for Claude.
 
@@ -156,15 +355,12 @@ def format_react_prompt(state: dict[str, Any]) -> str:
         Formatted prompt string with XML-structured history.
     """
     history: list[str] = []
-    thoughts = state["thoughts"]
-    tool_calls = state["tool_calls"]
+    for iteration in build_iteration_history(state):
+        iter_log = [f'  <iteration index="{iteration["iteration"]}">']
+        iter_log.append(f'    <thinking>{iteration["thought"]}</thinking>')
 
-    for i, thought in enumerate(thoughts):
-        iter_log = [f'  <iteration index="{i + 1}">']
-        iter_log.append(f"    <thinking>{_format_thought_content(thought)}</thinking>")
-
-        if i < len(tool_calls):
-            iter_log.extend(_format_tool_call_xml(tool_calls[i]))
+        for action in iteration["actions"]:
+            iter_log.extend(_format_action_xml(action))
 
         iter_log.append("  </iteration>")
         history.extend(iter_log)

@@ -2,16 +2,15 @@
 Unit tests for extract_code_refs.py
 """
 
-import ast
-
 from pipeline.code_processing.python_code_processing.extract_code_refs import (
-    _CallCollector,
+    SchemaIndex,
+    _extract_consecutive_code_lines,
     _extract_fenced_blocks,
     _extract_inline_assignments,
     _is_code_line,
-    _strip_non_code,
     extract_code_blocks,
     extract_code_refs,
+    extract_code_refs_with_index,
 )
 
 # ------------------------------------------------------------------ #
@@ -76,27 +75,14 @@ def test_extract_fenced_blocks_non_python_ignored():
 
 
 # ------------------------------------------------------------------ #
-# _strip_non_code
+# _extract_consecutive_code_lines
 # ------------------------------------------------------------------ #
 
 
-def test_strip_non_code_removes_fenced_blocks():
-    text = "Before\n```python\ncode\n```\nAfter"
-    result = _strip_non_code(text)
-    assert "```python" not in result
-    assert "code" not in result
-
-
-def test_strip_non_code_removes_block_math():
-    text = "Some text $$x + y = z$$ more text"
-    result = _strip_non_code(text)
-    assert "$$" not in result
-
-
-def test_strip_non_code_removes_inline_math():
-    text = "Where $x$ is defined"
-    result = _strip_non_code(text)
-    assert "$x$" not in result
+def test_extract_consecutive_code_lines_groups_adjacent_code():
+    text = "Intro\nx = 1\ny = 2\nMiddle\nfoo()\nEnd"
+    blocks = _extract_consecutive_code_lines(text)
+    assert blocks == ["x = 1\ny = 2", "foo()"]
 
 
 # ------------------------------------------------------------------ #
@@ -139,7 +125,7 @@ def test_extract_code_blocks_bare_code_lines():
 
 
 def test_extract_code_blocks_empty_text():
-    assert extract_code_blocks("") == []
+    assert extract_code_blocks("") == [""]
 
 
 def test_extract_code_blocks_only_prose_no_crash():
@@ -149,52 +135,15 @@ def test_extract_code_blocks_only_prose_no_crash():
 
 
 # ------------------------------------------------------------------ #
-# _CallCollector
+# SchemaIndex
 # ------------------------------------------------------------------ #
 
 
-def _collect_from(code: str) -> "_CallCollector":
-    tree = ast.parse(code)
-    collector = _CallCollector()
-    collector.visit(tree)
-    return collector
-
-
-def test_call_collector_bare_function():
-    collector = _collect_from("foo()")
-    names = [c[0] for c in collector.calls]
-    assert "foo" in names
-
-
-def test_call_collector_method_call():
-    collector = _collect_from("obj.method()")
-    names = [c[0] for c in collector.calls]
-    assert "method" in names
-
-
-def test_call_collector_external_module_ignored():
-    collector = _collect_from("np.array([1, 2])")
-    names = [c[0] for c in collector.calls]
-    assert all("np" not in (n or "") for n in names)
-
-
-def test_call_collector_typed_var_resolved():
-    code = "obj = MyClass()\nobj.run()"
-    collector = _collect_from(code)
-    names = [c[0] for c in collector.calls]
-    assert "MyClass.run" in names
-
-
-def test_call_collector_kind_bare_for_simple_call():
-    collector = _collect_from("foo()")
-    kinds = [c[1] for c in collector.calls]
-    assert "bare" in kinds
-
-
-def test_call_collector_kind_method_for_attribute_call():
-    collector = _collect_from("obj.bar()")
-    kinds = [c[1] for c in collector.calls]
-    assert "method" in kinds
+def test_schema_index_builds_indexes_from_schema():
+    index = SchemaIndex.from_schema(_SAMPLE_SCHEMA)
+    assert index.classes == {"Engine", "Wheel"}
+    assert index.functions == {"compute", "helper"}
+    assert "Engine.start" in index.method_index["start"]
 
 
 # ------------------------------------------------------------------ #
@@ -214,42 +163,42 @@ _SAMPLE_SCHEMA = {
 
 def test_extract_code_refs_required_keys():
     refs = extract_code_refs("no code here at all.", _SAMPLE_SCHEMA)
-    assert set(refs.keys()) == {"initialized_classes", "referenced_functions", "referenced_methods"}
+    assert set(refs.keys()) == {"referenced_classes", "referenced_functions", "referenced_methods"}
 
 
 def test_extract_code_refs_empty_text():
     refs = extract_code_refs("", _SAMPLE_SCHEMA)
-    assert refs["initialized_classes"] == []
+    assert refs["referenced_classes"] == []
     assert refs["referenced_functions"] == []
     assert refs["referenced_methods"] == []
 
 
 def test_extract_code_refs_detects_function_call():
-    text = "```python\ncompute()\n```"
+    text = "```python\ndef run():\n    compute()\n```"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "fn:compute" in refs["referenced_functions"]
 
 
 def test_extract_code_refs_detects_class_instantiation():
-    text = "```python\ne = Engine()\n```"
+    text = "```python\ndef run():\n    e = Engine()\n```"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
-    assert "cls:Engine" in refs["initialized_classes"]
+    assert "cls:Engine" in refs["referenced_classes"]
 
 
 def test_extract_code_refs_detects_method_call():
-    text = "```python\ne = Engine()\ne.start()\n```"
+    text = "```python\ndef run():\n    e = Engine()\n    e.start()\n```"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "mth:Engine.start" in refs["referenced_methods"]
 
 
 def test_extract_code_refs_unknown_call_not_in_refs():
-    text = "```python\nunknown_func()\n```"
+    text = "```python\ndef run():\n    unknown_func()\n```"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "fn:unknown_func" not in refs["referenced_functions"]
 
 
 def test_extract_code_refs_sorted_output():
-    text = "```python\ncompute()\nhelper()\n```"
+    text = "```python\ndef run():\n    compute()\n    helper()\n```"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert refs["referenced_functions"] == sorted(refs["referenced_functions"])
 
@@ -262,23 +211,25 @@ def test_extract_code_refs_locally_defined_not_counted():
 
 
 def test_extract_code_refs_multiple_method_calls():
-    text = "```python\n" "e = Engine()\n" "e.start()\n" "e.stop()\n" "```"
+    text = (
+        "```python\n" "def run():\n" "    e = Engine()\n" "    e.start()\n" "    e.stop()\n" "```"
+    )
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "mth:Engine.start" in refs["referenced_methods"]
     assert "mth:Engine.stop" in refs["referenced_methods"]
 
 
 def test_extract_code_refs_no_duplicates():
-    text = "```python\n" "compute()\n" "compute()\n" "```"
+    text = "```python\ndef run():\n    compute()\n    compute()\n```"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert len(refs["referenced_functions"]) == len(set(refs["referenced_functions"]))
 
 
 def test_extract_code_refs_empty_schema():
     schema = {"classes": [], "functions": [], "methods": []}
-    text = "```python\ncompute()\n```"
+    text = "```python\ndef run():\n    compute()\n```"
     refs = extract_code_refs(text, schema)
-    assert refs["initialized_classes"] == []
+    assert refs["referenced_classes"] == []
     assert refs["referenced_functions"] == []
     assert refs["referenced_methods"] == []
 
@@ -291,8 +242,27 @@ def test_extract_code_refs_prose_with_inline_assignment_no_crash():
 
 def test_extract_code_refs_plain_python_no_fences():
     """Algorithm chunks contain plain Python code without markdown fences."""
-    text = "e = Engine()\ne.start()\ncompute()"
+    text = "def run():\n    e = Engine()\n    e.start()\n    compute()"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
-    assert "cls:Engine" in refs["initialized_classes"]
+    assert "cls:Engine" in refs["referenced_classes"]
     assert "mth:Engine.start" in refs["referenced_methods"]
     assert "fn:compute" in refs["referenced_functions"]
+
+
+def test_extract_code_refs_with_index_matches_single_call_api():
+    text = "def run():\n    e = Engine()\n    e.stop()\n    helper()"
+    index = SchemaIndex.from_schema(_SAMPLE_SCHEMA)
+    assert extract_code_refs_with_index(text, index) == extract_code_refs(text, _SAMPLE_SCHEMA)
+
+
+def test_extract_code_refs_type_hints_create_class_refs_without_constructor_calls():
+    text = "def infer(bn: Engine, query: list[str], evidence: Wheel) -> Engine:\n" "    return bn"
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
+    assert "cls:Engine" in refs["referenced_classes"]
+    assert "cls:Wheel" in refs["referenced_classes"]
+
+
+def test_extract_code_refs_inheritance_adds_parent_reference():
+    text = "class Child(Engine):\n    pass"
+    refs = extract_code_refs(text, _SAMPLE_SCHEMA)
+    assert "cls:Engine" in refs["referenced_classes"]

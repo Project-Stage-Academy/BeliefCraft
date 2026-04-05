@@ -1,12 +1,11 @@
 from datetime import UTC, datetime
 
-from app.config import Settings, get_settings
+from app.config_load import settings
 from app.services.health_checker import HealthChecker
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 router = APIRouter()
-settings_dependency = Depends(get_settings)
 
 
 class HealthResponse(BaseModel):
@@ -22,7 +21,6 @@ class HealthResponse(BaseModel):
 @router.get("/health", response_model=HealthResponse)
 async def health_check(
     request: Request,
-    settings: Settings = settings_dependency,
 ) -> HealthResponse:
     """
     Health check endpoint - verifies service and dependencies
@@ -36,8 +34,8 @@ async def health_check(
 
     return HealthResponse(
         status=overall_status,
-        service=settings.SERVICE_NAME,
-        version=settings.SERVICE_VERSION,
+        service=settings.app.name,
+        version=settings.app.version,
         timestamp=datetime.now(UTC).isoformat(),
         dependencies=dependencies,
     )

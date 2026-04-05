@@ -1,33 +1,60 @@
+# file: services/agent-service/tests/test_health.py
 from collections.abc import Iterator
-from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import botocore.exceptions
 import pytest
-from app.config import Settings, get_settings
+from app.config_schema import Settings
 from app.core.constants import ERROR_PREFIX, HealthStatus
-from app.main import app
 from app.services.health_checker import HealthChecker, verify_aws_credentials_at_startup
 from fastapi.testclient import TestClient
+
+MOCK_SETTINGS = {
+    "app": {
+        "name": "agent-service",
+        "version": "0.1.0",
+        "api_v1_prefix": "/api/v1",
+        "env": "local",
+        "skills_dir": "skills",
+        "cors_origins": ["*"],
+    },
+    "server": {"host": "0.0.0.0", "port": 8003},  # noqa: S104
+    "logging": {"level": "INFO"},
+    "external_services": {
+        "environment_api_url": "http://env-api:8000/api/v1",
+        "rag_api_url": "http://rag-api:8001/api/v1",
+    },
+    "redis": {"url": "redis://localhost:6379", "cache_ttl_seconds": 3600},
+    "bedrock": {
+        "region": "us-east-1",
+        "aws_access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "aws_secret_access_key": "wJalrXUtnFEMI/EXAMPLE",
+        "aws_profile": None,
+        "temperature": 0.0,
+        "max_tokens": 4000,
+        "connect_timeout_seconds": 60,
+        "read_timeout_seconds": 300,
+    },
+    "react_agent": {"model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0"},
+    "env_sub_agent": {"model_id": "anthropic.claude-haiku-4-5-20251001-v1:0"},
+    "execution": {"max_iterations": 10, "tool_timeout_seconds": 30},
+    "langsmith": {"tracing_v2": False, "api_key": None, "project": None},
+}
 
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    # Mock RAGMCPClient and STS to prevent actual connection attempts during lifespan
     with (
+        patch("app.config_load.settings", Settings(**MOCK_SETTINGS)),
         patch("app.clients.rag_mcp_client.RAGMCPClient") as mock_rag_mcp_class,
-        patch("app.services.health_checker.boto3") as mock_boto3,
+        patch("app.services.health_checker.verify_aws_credentials_at_startup"),
     ):
         mock_mcp_client = AsyncMock()
         mock_mcp_client.connect = AsyncMock()
         mock_mcp_client.close = AsyncMock()
         mock_rag_mcp_class.return_value = mock_mcp_client
 
-        # STS returns success by default
-        mock_sts = MagicMock()
-        mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
-        mock_boto3.Session.return_value.client.return_value = mock_sts
-        mock_boto3.client.return_value = mock_sts
+        from app.main import app
 
         with TestClient(app) as test_client:
             mock_redis = MagicMock()
@@ -39,36 +66,26 @@ def client() -> Iterator[TestClient]:
             ok_response.status_code = 200
             mock_http_client.get.return_value = ok_response
             app.state.http_client = mock_http_client
+
             yield test_client
 
 
+@patch("app.api.v1.routes.health.settings", Settings(**MOCK_SETTINGS))
 def test_health_endpoint_exists(client: TestClient) -> None:
     """Health endpoint should be accessible"""
     response = client.get("/api/v1/health")
     assert response.status_code == 200
 
 
-def test_health_all_services_healthy(client: TestClient) -> None:
+@patch("app.api.v1.routes.health.settings", Settings(**MOCK_SETTINGS))
+@patch("app.services.health_checker.boto3")
+def test_health_all_services_healthy(mock_boto3: MagicMock, client: TestClient) -> None:
     """Health check should return healthy when all deps are up"""
-
-    def override_get_settings() -> Settings:
-        mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
-        mock_settings.RAG_API_URL = "http://rag-api:8001/api/v1"
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.AWS_DEFAULT_REGION = "us-east-1"
-        mock_settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
-        mock_settings.AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
-        mock_settings.AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/EXAMPLE"
-        mock_settings.AWS_PROFILE = None
-        mock_settings.SERVICE_NAME = "agent-service"
-        mock_settings.SERVICE_VERSION = "0.1.0"
-        return cast(Settings, mock_settings)
-
-    app.dependency_overrides[get_settings] = override_get_settings
+    mock_sts = MagicMock()
+    mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
+    mock_boto3.client.return_value = mock_sts
 
     response = client.get("/api/v1/health")
-    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     data = response.json()
@@ -81,48 +98,33 @@ def test_health_all_services_healthy(client: TestClient) -> None:
 
 def test_health_missing_aws_config(client: TestClient) -> None:
     """Health check should show degraded when AWS region or model is missing"""
+    degraded_settings = MOCK_SETTINGS.copy()
+    degraded_settings["bedrock"]["region"] = ""
+    degraded_settings["react_agent"]["model_id"] = ""
+    settings_obj = Settings(**degraded_settings)
 
-    def override_get_settings() -> Settings:
-        mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
-        mock_settings.RAG_API_URL = "http://rag-api:8001/api/v1 "
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.AWS_DEFAULT_REGION = ""
-        mock_settings.BEDROCK_MODEL_ID = ""
-        mock_settings.SERVICE_NAME = "agent-service"
-        mock_settings.SERVICE_VERSION = "0.1.0"
-        return cast(Settings, mock_settings)
+    with patch("app.api.v1.routes.health.settings", settings_obj):
+        response = client.get("/api/v1/health")
 
-    app.dependency_overrides[get_settings] = override_get_settings
-
-    response = client.get("/api/v1/health")
-    app.dependency_overrides.clear()
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == HealthStatus.DEGRADED
-    assert data["dependencies"]["aws_bedrock"] == HealthStatus.MISSING_CONFIG
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == HealthStatus.DEGRADED
+        assert data["dependencies"]["aws_bedrock"] == HealthStatus.MISSING_CONFIG
 
 
-def test_health_redis_failure(client: TestClient) -> None:
+@patch("app.api.v1.routes.health.settings", Settings(**MOCK_SETTINGS))
+@patch("app.services.health_checker.boto3")
+def test_health_redis_failure(mock_boto3: MagicMock, client: TestClient) -> None:
     """Health check should show degraded when Redis is down"""
+    mock_sts = MagicMock()
+    mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
+    mock_boto3.client.return_value = mock_sts
 
-    def override_get_settings() -> Settings:
-        mock_settings = MagicMock(spec=Settings)
-        mock_settings.ENVIRONMENT_API_URL = "http://env-api:8000/api/v1"
-        mock_settings.RAG_API_URL = "http://rag-api:8001"
-        mock_settings.REDIS_URL = "redis://localhost:6379"
-        mock_settings.AWS_DEFAULT_REGION = "us-east-1"
-        mock_settings.BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
-        mock_settings.SERVICE_NAME = "agent-service"
-        mock_settings.SERVICE_VERSION = "0.1.0"
-        return cast(Settings, mock_settings)
+    from app.main import app
 
-    app.dependency_overrides[get_settings] = override_get_settings
     app.state.redis_client.ping.side_effect = Exception("Connection refused")
 
     response = client.get("/api/v1/health")
-    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     data = response.json()
@@ -137,15 +139,14 @@ def test_health_redis_failure(client: TestClient) -> None:
 
 def _make_checker(**overrides: str) -> HealthChecker:
     """Create a HealthChecker with a minimal mock Settings."""
-    defaults = {
-        "BEDROCK_MODEL_ID": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-        "AWS_DEFAULT_REGION": "us-east-1",
-        "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
-        "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-        "AWS_PROFILE": None,
-    }
-    defaults.update(overrides)
-    settings = MagicMock(spec=Settings, **defaults)
+    defaults = MOCK_SETTINGS.copy()
+    if overrides:
+        if "AWS_ACCESS_KEY_ID" in overrides:
+            defaults["bedrock"]["aws_access_key_id"] = overrides["AWS_ACCESS_KEY_ID"]
+        if "AWS_SECRET_ACCESS_KEY" in overrides:
+            defaults["bedrock"]["aws_secret_access_key"] = overrides["AWS_SECRET_ACCESS_KEY"]
+
+    settings = Settings(**defaults)
     return HealthChecker(settings, redis_client=MagicMock(), http_client=AsyncMock())
 
 
@@ -208,30 +209,26 @@ def test_startup_verification_succeeds(mock_boto3: MagicMock) -> None:
     mock_sts.get_caller_identity.return_value = {"Account": "123"}
     mock_boto3.client.return_value = mock_sts
 
-    settings = MagicMock(spec=Settings)
-    settings.AWS_PROFILE = None
-    settings.AWS_ACCESS_KEY_ID = "AKID"
-    settings.AWS_SECRET_ACCESS_KEY = "SECRET"
-    settings.AWS_DEFAULT_REGION = "us-east-1"
-
+    settings = Settings(**MOCK_SETTINGS)
     verify_aws_credentials_at_startup(settings)  # should not raise
 
 
-@patch.dict("os.environ", {"ENV": "production"})
+@patch.dict("os.environ", {"ENV": "prod"})
 @patch("app.services.health_checker.boto3")
 def test_startup_verification_fails_fast_in_production(mock_boto3: MagicMock) -> None:
     """Startup check should raise ConfigurationError in production if creds are bad."""
     from app.core.exceptions import ConfigurationError
 
     mock_boto3.client.return_value.get_caller_identity.side_effect = (
-        botocore.exceptions.NoCredentialsError()
+        botocore.exceptions.ClientError(
+            {"Error": {"Code": "InvalidClientTokenId", "Message": "bad"}}, "GetCallerIdentity"
+        )
     )
 
-    settings = MagicMock(spec=Settings)
-    settings.AWS_PROFILE = None
-    settings.AWS_ACCESS_KEY_ID = None
-    settings.AWS_SECRET_ACCESS_KEY = None
-    settings.AWS_DEFAULT_REGION = "us-east-1"
+    fail_settings = MOCK_SETTINGS.copy()
+    fail_settings["bedrock"]["aws_access_key_id"] = "FAKE_KEY"
+    fail_settings["bedrock"]["aws_secret_access_key"] = "FAKE_SECRET"
+    settings = Settings(**fail_settings)
 
     with pytest.raises(ConfigurationError):
         verify_aws_credentials_at_startup(settings)

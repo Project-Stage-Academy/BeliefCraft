@@ -4,8 +4,9 @@ import json
 from typing import Any
 
 import boto3
-from app.config import get_settings
+from app.config_load import settings
 from app.core.exceptions import LLMServiceError
+from botocore.config import Config
 from common.logging import get_logger
 from langchain_aws import ChatBedrock
 from langchain_core.messages import (
@@ -28,14 +29,17 @@ logger = get_logger(__name__)
 class LLMService:
     """Wrapper for AWS Bedrock (Claude) with retry logic and unified response format."""
 
-    def __init__(self, boto_client: Any = None, llm: Any = None) -> None:
+    def __init__(
+        self, boto_client: Any = None, llm: Any = None, model_id: str | None = None
+    ) -> None:
         """Initialize LLM service with optional dependency injection.
 
         Args:
             boto_client: Pre-configured boto3 Bedrock client. If None, creates default.
             llm: Pre-configured ChatBedrock instance. If None, creates default.
+            model_id: Specific Bedrock model ID. If None, uses settings default.
         """
-        self.settings = get_settings()
+        self.model_id = model_id or settings.react_agent.model_id
         self.boto_client = boto_client or self._create_boto_client()
         self.llm = llm or self._create_llm()
 
@@ -50,24 +54,29 @@ class LLMService:
         Returns:
             Configured boto3 bedrock-runtime client.
         """
-        region = self.settings.AWS_DEFAULT_REGION
+        region = settings.bedrock.region
+        client_config = Config(
+            connect_timeout=settings.bedrock.connect_timeout_seconds,
+            read_timeout=settings.bedrock.read_timeout_seconds,
+        )
 
-        if getattr(self.settings, "AWS_PROFILE", None):
-            logger.info("Using AWS profile '%s' for Bedrock client", self.settings.AWS_PROFILE)
+        if settings.bedrock.aws_profile:
+            logger.info("Using AWS profile '%s' for Bedrock client", settings.bedrock.aws_profile)
             session = boto3.Session(
-                profile_name=self.settings.AWS_PROFILE,
+                profile_name=settings.bedrock.aws_profile,
                 region_name=region,
             )
-            return session.client("bedrock-runtime")
+            return session.client("bedrock-runtime", config=client_config)
 
         client_kwargs: dict[str, Any] = {
             "service_name": "bedrock-runtime",
             "region_name": region,
+            "config": client_config,
         }
 
-        if self.settings.AWS_ACCESS_KEY_ID and self.settings.AWS_SECRET_ACCESS_KEY:
-            client_kwargs["aws_access_key_id"] = self.settings.AWS_ACCESS_KEY_ID
-            client_kwargs["aws_secret_access_key"] = self.settings.AWS_SECRET_ACCESS_KEY
+        if settings.bedrock.aws_access_key_id and settings.bedrock.aws_secret_access_key:
+            client_kwargs["aws_access_key_id"] = settings.bedrock.aws_access_key_id
+            client_kwargs["aws_secret_access_key"] = settings.bedrock.aws_secret_access_key
         else:
             logger.info("No explicit AWS credentials; using default boto3 credential chain")
 
@@ -81,10 +90,10 @@ class LLMService:
         """
         return ChatBedrock(
             client=self.boto_client,
-            model=self.settings.BEDROCK_MODEL_ID,
+            model=self.model_id,
             model_kwargs={
-                "temperature": self.settings.BEDROCK_TEMPERATURE,
-                "max_tokens": self.settings.BEDROCK_MAX_TOKENS,
+                "temperature": settings.bedrock.temperature,
+                "max_tokens": settings.bedrock.max_tokens,
             },
         )
 
@@ -173,7 +182,6 @@ class LLMService:
 
             response = await chain.ainvoke(lc_messages)
 
-            # Extract tokens from usage_metadata (LangChain/Bedrock standard format)
             usage_metadata = response.usage_metadata or {}
             prompt_tokens = usage_metadata.get("input_tokens", 0)
             completion_tokens = usage_metadata.get("output_tokens", 0)

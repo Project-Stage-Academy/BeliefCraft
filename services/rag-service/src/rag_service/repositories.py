@@ -6,7 +6,8 @@ import json
 import random
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 import weaviate
 from weaviate.collections.classes.filters import Filter
@@ -20,7 +21,6 @@ from .constants import (
     ENTITY_TYPE_TO_CHUNK_TYPE,
     REFERENCE_TYPE_MAP,
     TRAVERSE_TYPE_TO_REFERENCE_FIELD,
-    ChunkCodeRef,
     CodeEntityRef,
 )
 from .models import Document, EntityType, MetadataFilter, MetadataFilterOperator, MetadataFilters
@@ -107,10 +107,14 @@ class AbstractVectorStoreRepository(ABC):
         results = []
 
         for doc in docs:
+            metadata = doc.metadata or {}
             for field in traverse_types:
-                refs: list[str] = cast(
-                    list[str], doc.metadata.get(TRAVERSE_TYPE_TO_REFERENCE_FIELD[field])
-                )
+                raw_refs = metadata.get(TRAVERSE_TYPE_TO_REFERENCE_FIELD[field])
+                if not isinstance(raw_refs, list):
+                    continue
+                refs = [ref for ref in raw_refs if isinstance(ref, str)]
+                if not refs:
+                    continue
                 chunk_type_value = ENTITY_TYPE_TO_CHUNK_TYPE.get(field, field)
                 filters = MetadataFilters(
                     filters=[
@@ -154,24 +158,24 @@ class AbstractVectorStoreRepository(ABC):
         """
         results = await self.vector_search(query, k, filters)
         if traverse_types:
-            results.extend(
-                await self.expand_graph_by_ids([doc.id for doc in results], traverse_types)
-            )
+            root_ids = [doc.id for doc in results if doc.id is not None]
+            if root_ids:
+                results.extend(await self.expand_graph_by_ids(root_ids, traverse_types))
         return results
 
     @abstractmethod
-    async def get_related_code_definitions(self, document_ids: list[str]) -> str:
+    async def get_related_code_definitions(self, document_ids: list[str]) -> Document:
         """
-        Retrieve the Python source code related to the given chunk IDs (algorithms or examples).
+        Retrieve code-definition information related to the given chunk IDs
+        (algorithms or examples).
 
-        Follows code-definition references and returns all reachable code entities
-        (CodeClass, CodeMethod, CodeFunction) as an ordered Python source fragment.
+        Returns one wrapped document where only ``content`` is populated.
 
         Args:
             document_ids: IDs of chunks from which to follow code-definition references.
 
         Returns:
-            Python source string with all related code definitions in call order.
+            A single wrapped document with reconstructed code content.
         """
         pass
 
@@ -242,7 +246,7 @@ class FakeDataRepository(AbstractVectorStoreRepository):
                 results.append(self._to_document(self._by_id[doc_id]))
         return results
 
-    async def get_related_code_definitions(self, document_ids: list[str]) -> str:
+    async def get_related_code_definitions(self, document_ids: list[str]) -> Document:
         """Fake repository does not support code-definition retrieval."""
         raise NotImplementedError(
             f"{type(self).__name__} does not support get_related_code_definitions."
@@ -369,6 +373,11 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """
         properties = dict(weaviate_object.properties or {})
         metadata = {**properties}
+
+        block_ids_field = "pdf_block_ids"
+        if block_ids_field in metadata:
+            del metadata[block_ids_field]
+
         content = metadata.pop("content", "")
 
         for field_name in REFERENCE_TYPE_MAP:
@@ -550,7 +559,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         )
         return self._process_results(results.objects, expansion_fields=reference_fields)
 
-    async def get_related_code_definitions(self, document_ids: list[str]) -> str:
+    async def get_related_code_definitions(self, document_ids: list[str]) -> Document:
         """
         Fetch code-definition objects (CodeClass, CodeMethod, CodeFunction)
         linked from the given ``unified_collection`` chunk IDs and return them
@@ -559,30 +568,45 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         Args:
             document_ids: UUIDs of ``unified_collection`` chunks (algorithms or examples).
 
-        Returns:
-            Python source string with all related code definitions in call order.
+        Returns one wrapped document with reconstructed source in ``content``.
+        Other fields are left ``null``.
         """
+        chunk_type = "code_definitions"
+        generated_document_id = str(uuid4())
+
+        if not document_ids:
+            return Document(
+                id=generated_document_id,
+                content="",
+                cosine_similarity=None,
+                metadata={"chunk_type": chunk_type},
+            )
+
         results = await self._query(
             filters=Filter.by_id().contains_any(document_ids),
             return_references=self._build_top_level_code_def_refs(),
         )
-        docs = WeaviateCodeDefinitionProcessor.collect_code_definitions(
+        definitions = WeaviateCodeDefinitionProcessor.collect_code_definitions(
             results.objects, document_ids
         )
-        if docs:
-            return WeaviateCodeDefinitionProcessor.restore_code_fragment(docs)
-        return ""
+        source_fragment = WeaviateCodeDefinitionProcessor.restore_code_fragment(definitions)
+        return Document(
+            id=generated_document_id,
+            content=source_fragment,
+            cosine_similarity=None,
+            metadata={"chunk_type": chunk_type},
+        )
 
-    def _build_nested_code_def_refs(self, max_depth: int = 10) -> list[QueryReference]:
+    def _build_nested_code_def_refs(self, max_depth: int = 5) -> list[QueryReference]:
         """
         Build recursive QueryReference objects for the three nested
         code-definition cross-reference fields.
-
-        ``initialized_classes`` is always a leaf. ``referenced_methods`` and
-        ``referenced_functions`` are expanded up to *max_depth* levels.
+        ``referenced_classes``, ``referenced_methods``, and
+        ``referenced_functions`` are all expanded recursively up to
+        *max_depth* levels.
         """
         fields = (
-            CodeEntityRef.INITIALIZED_CLASSES,
+            CodeEntityRef.REFERENCED_CLASSES,
             CodeEntityRef.REFERENCED_METHODS,
             CodeEntityRef.REFERENCED_FUNCTIONS,
         )
@@ -598,10 +622,9 @@ class WeaviateRepository(AbstractVectorStoreRepository):
 
     def _sub_refs_for_code_def_field(self, field: str, max_depth: int) -> list[QueryReference]:
         """Return sub-references for one code-definition reference field.
-
-        Leaf fields (``initialized_classes`` or exhausted ``max_depth``) return an empty list.
+        Leaf fields return an empty list.
         """
-        if field == CodeEntityRef.INITIALIZED_CLASSES or max_depth == 0:
+        if max_depth == 0:
             return []
         sub_refs = self._build_nested_code_def_refs(max_depth - 1)
         if field == CodeEntityRef.REFERENCED_METHODS:
@@ -615,14 +638,13 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         """
         return [
             QueryReference(
-                link_on=ChunkCodeRef.REFERENCED_CLASSES,
+                link_on=CodeEntityRef.REFERENCED_CLASSES,
                 return_properties=True,
-                return_references=[
-                    QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)
-                ],
+                return_references=self._build_nested_code_def_refs()
+                + [QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)],
             ),
             QueryReference(
-                link_on=ChunkCodeRef.REFERENCED_METHODS,
+                link_on=CodeEntityRef.REFERENCED_METHODS,
                 return_properties=True,
                 return_references=self._build_nested_code_def_refs()
                 + [
@@ -631,7 +653,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
                 ],
             ),
             QueryReference(
-                link_on=ChunkCodeRef.REFERENCED_FUNCTIONS,
+                link_on=CodeEntityRef.REFERENCED_FUNCTIONS,
                 return_properties=True,
                 return_references=self._build_nested_code_def_refs()
                 + [QueryReference(link_on=ALGORITHM_REF_FIELD, return_properties=True)],

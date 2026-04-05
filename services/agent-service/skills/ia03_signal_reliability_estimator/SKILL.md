@@ -1,12 +1,12 @@
 ---
 name: signal-reliability-estimator
-description: "Classifies the reliability of each sensor device contributing to inventory observations by combining device health metrics into a single reliability score. Use before trusting any sensor reading, before running SKILL-IA-01, or when diagnosing why inventory data looks suspicious. Questions like 'Can I trust the sensors in Warehouse B?', 'Which devices are degraded right now?', 'Why does the inventory data look noisy today?'"
+description: "Classifies the reliability of each sensor device contributing to inventory observations by combining device health metrics into a single reliability score. Use before trusting any sensor reading, before running `bayesian-sensor-belief-updater`, or when diagnosing why inventory data looks suspicious. Questions like 'Can I trust the sensors in Warehouse B?', 'Which devices are degraded right now?', 'Why does the inventory data look noisy today?'"
 version: "1.0"
 tags: [sensor, reliability, device-health, anomaly, naive-bayes]
 dependencies: []
 ---
 
-# SKILL-IA-03 · Signal Reliability Estimator
+# Signal Reliability Estimator
 
 ## When to Use This Skill
 
@@ -14,7 +14,7 @@ Activate this skill when the user asks about:
 - Whether sensor data from a specific warehouse or location can be trusted
 - Which devices are currently degraded or anomalous
 - Why inventory readings look inconsistent or noisy
-- As a prerequisite check before running `SKILL-IA-01` or `SKILL-MD-03`
+- As a prerequisite check before running `bayesian-sensor-belief-updater` or `signal-conflict-resolver`
 - Questions like *"Are our sensors in Warehouse B reliable right now?"*
   or *"Which devices should I not trust today?"*
 
@@ -222,13 +222,13 @@ Result:
 Warehouse B has 1 unreliable device (D-102 — calibration drift, bias=4.5).
 Readings from D-102's locations should not be trusted without bias correction.
 Recommend: exclude D-102 observations from the order commit calculation,
-or run SKILL-IA-01 with reported_noise_sigma override for affected locations.
+or run `bayesian-sensor-belief-updater` with reported_noise_sigma override for affected locations.
 ```
 
 ---
 
 ## Feeds Into
 
-- `SKILL-IA-01` — uses `reliability_class` to decide whether to trust raw observations
-- `SKILL-MD-01` — applies `-0.15` confidence penalty per LOW-reliability device found
-- `SKILL-MD-03` — uses `reliability_score` per device to weight-average conflicting readings
+- `bayesian-sensor-belief-updater` — uses `reliability_class` to decide whether to trust raw observations
+- `decision-confidence-estimator` — applies `-0.15` confidence penalty per LOW-reliability device found
+- `signal-conflict-resolver` — uses `reliability_score` per device to weight-average conflicting readings

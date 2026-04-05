@@ -18,6 +18,413 @@ paths:
                   type: string
                 type: object
                 title: Response Health Health Get
+  /api/v1/smart-query/inventory/moves:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Inventory List Moves
+      operationId: inventory_list_moves_api_v1_smart_query_inventory_moves_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: move_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Move Type
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: To Ts
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory List Moves Api V1 Smart Query Inventory
+                  Moves Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/moves/{move_id}:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Inventory Get Move
+      operationId: inventory_get_move_api_v1_smart_query_inventory_moves__move_id__get
+      parameters:
+      - name: move_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Move Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Get Move Api V1 Smart Query Inventory Moves  Move
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/moves/{move_id}/audit-trace:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Inventory Get Move Audit Trace
+      operationId: inventory_get_move_audit_trace_api_v1_smart_query_inventory_moves__move_id__audit_trace_get
+      parameters:
+      - name: move_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Move Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Get Move Audit Trace Api V1 Smart Query
+                  Inventory Moves  Move Id  Audit Trace Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/adjustments-summary:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Inventory Adjustments Summary
+      operationId: inventory_adjustments_summary_api_v1_smart_query_inventory_adjustments_summary_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: product_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: To Ts
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Inventory Adjustments Summary Api V1 Smart Query Inventory
+                  Adjustments Summary Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/inventory/observed-snapshot:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Observed Inventory Snapshot
+      operationId: observed_inventory_snapshot_api_v1_smart_query_inventory_observed_snapshot_get
+      parameters:
+      - name: quality_status_in
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Quality Status In
+      - name: dev_mode
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Dev Mode
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Observed Inventory Snapshot Api V1 Smart Query Inventory
+                  Observed Snapshot Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/devices:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Devices List
+      operationId: devices_list_api_v1_smart_query_devices_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: device_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Type
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Devices List Api V1 Smart Query Devices Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/devices/health-summary:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Devices Health Summary
+      operationId: devices_health_summary_api_v1_smart_query_devices_health_summary_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: since_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Since Ts
+      - name: as_of
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: As Of
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Devices Health Summary Api V1 Smart Query Devices
+                  Health Summary Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/devices/anomalies:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Devices Anomalies
+      operationId: devices_anomalies_api_v1_smart_query_devices_anomalies_get
+      parameters:
+      - name: warehouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: window
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 720
+          minimum: 1
+          default: 24
+          title: Window
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Devices Anomalies Api V1 Smart Query Devices Anomalies
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/smart-query/devices/{device_id}:
+    get:
+      tags:
+      - smart-query
+      - smart-query
+      summary: Devices Get
+      operationId: devices_get_api_v1_smart_query_devices__device_id__get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Devices Get Api V1 Smart Query Devices  Device Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/smart-query/procurement/suppliers:
     get:
       tags:
@@ -696,205 +1103,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/smart-query/inventory/moves:
+  /api/v1/form-options:
     get:
       tags:
-      - smart-query
-      summary: Inventory List Moves
-      operationId: inventory_list_moves_api_v1_smart_query_inventory_moves_get
-      parameters:
-      - name: warehouse_id
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Warehouse Id
-      - name: product_id
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Product Id
-      - name: move_type
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Move Type
-      - name: from_ts
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            format: date-time
-          - type: 'null'
-          title: From Ts
-      - name: to_ts
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            format: date-time
-          - type: 'null'
-          title: To Ts
-      - name: limit
-        in: query
-        required: false
-        schema:
-          type: integer
-          maximum: 500
-          minimum: 1
-          default: 50
-          title: Limit
-      - name: offset
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 0
-          default: 0
-          title: Offset
+      - form-options
+      summary: Get Form Options
+      description: Return cached form options for dropdown fields.
+      operationId: get_form_options_api_v1_form_options_get
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Inventory List Moves Api V1 Smart Query Inventory
-                  Moves Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/smart-query/inventory/moves/{move_id}:
-    get:
-      tags:
-      - smart-query
-      summary: Inventory Get Move
-      operationId: inventory_get_move_api_v1_smart_query_inventory_moves__move_id__get
-      parameters:
-      - name: move_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Move Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-                title: Response Inventory Get Move Api V1 Smart Query Inventory Moves  Move
-                  Id  Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/smart-query/inventory/moves/{move_id}/audit-trace:
-    get:
-      tags:
-      - smart-query
-      summary: Inventory Get Move Audit Trace
-      operationId: inventory_get_move_audit_trace_api_v1_smart_query_inventory_moves__move_id__audit_trace_get
-      parameters:
-      - name: move_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Move Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-                title: Response Inventory Get Move Audit Trace Api V1 Smart Query
-                  Inventory Moves  Move Id  Audit Trace Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/smart-query/inventory/adjustments-summary:
-    get:
-      tags:
-      - smart-query
-      summary: Inventory Adjustments Summary
-      operationId: inventory_adjustments_summary_api_v1_smart_query_inventory_adjustments_summary_get
-      parameters:
-      - name: warehouse_id
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Warehouse Id
-      - name: product_id
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Product Id
-      - name: from_ts
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            format: date-time
-          - type: 'null'
-          title: From Ts
-      - name: to_ts
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            format: date-time
-          - type: 'null'
-          title: To Ts
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-                title: Response Inventory Adjustments Summary Api V1 Smart Query Inventory
-                  Adjustments Summary Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                $ref: '#/components/schemas/FormOptionsResponse'
 components:
   schemas:
+    FormOptionsResponse:
+      properties:
+        origins:
+          items:
+            type: string
+          type: array
+          title: Origins
+        destinations:
+          items:
+            type: string
+          type: array
+          title: Destinations
+        products:
+          items:
+            $ref: '#/components/schemas/ProductOption'
+          type: array
+          title: Products
+        transport_modes:
+          items:
+            type: string
+          type: array
+          title: Transport Modes
+      additionalProperties: false
+      type: object
+      required:
+      - origins
+      - destinations
+      - products
+      - transport_modes
+      title: FormOptionsResponse
     HTTPValidationError:
       properties:
         detail:
@@ -920,6 +1174,22 @@ components:
       - supplier
       - warehouse_supplier
       title: ProcurementGroupBy
+    ProductOption:
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: Name
+        category:
+          type: string
+          minLength: 1
+          title: Category
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - category
+      title: ProductOption
     TopologyLocationType:
       type: string
       enum:

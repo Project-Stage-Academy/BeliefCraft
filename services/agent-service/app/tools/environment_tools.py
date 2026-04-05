@@ -365,7 +365,8 @@ class ListInventoryMovesTool(APIClientTool):
             name="list_inventory_moves",
             description=(
                 "Get inventory movement history. "
-                "Use to track inventory movements across locations and time."
+                "Use to track inventory movements across locations and time. "
+                "Supports pagination to retrieve full history."
             ),
             parameters={
                 "type": "object",
@@ -387,6 +388,17 @@ class ListInventoryMovesTool(APIClientTool):
                         "type": "string",
                         "description": "Optional: End timestamp (ISO format)",
                     },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Optional: "
+                        + "Number of records to return (default 50, max 500). "
+                        + "Increase to gather larger datasets.",
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Optional: Number of records to skip. "
+                        + "Use for pagination if previous query returned the max limit.",
+                    },
                 },
                 "required": [],
             },
@@ -402,6 +414,8 @@ class ListInventoryMovesTool(APIClientTool):
                 move_type=kwargs.get("move_type"),
                 from_ts=kwargs.get("from_ts"),
                 to_ts=kwargs.get("to_ts"),
+                limit=kwargs.get("limit"),
+                offset=kwargs.get("offset"),
             )
 
 
@@ -944,7 +958,7 @@ class GetDeviceAnomaliesTool(APIClientTool):
                     },
                     "window": {
                         "type": "integer",
-                        "description": "Optional: Time window in minutes",
+                        "description": "Optional: Time window in hours",
                     },
                 },
                 "required": [],

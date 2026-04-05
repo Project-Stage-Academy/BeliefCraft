@@ -58,7 +58,7 @@ F Problems 609"""
 logger = get_logger(__name__)
 
 SEARCH_FILTER_FIELD_TO_METADATA_FIELD = {
-    "part": "part_number",
+    "part": "part",
     "section": "section_number",
     "subsection": "subsection_number",
     "subsubsection": "subsubsection_number",
@@ -205,29 +205,25 @@ class RagTools:
             list[str],
             "Algorithm or example document IDs to retrieve related code definitions.",
         ],
-    ) -> str:
+    ) -> Document:
         """
-        Retrieve Python source code definitions used by the specified documents
-        (algorithms or examples).
+        Retrieve related code definitions as one wrapped document.
 
-        Returns the class, method, and function definitions that are called or used
-        within the given algorithm or example but defined elsewhere. The collected
-        definitions are returned as a single ordered Python source fragment.
+        The returned document contains reconstructed source in ``content``.
+        Unused fields may be ``null``.
         """
         logger.info(
             "rag tool call",
             tool="get_related_code_definitions",
             document_ids=document_ids,
         )
-        source = await self._repository.get_related_code_definitions(document_ids)
-        if not source.strip():
-            source = "# No related code definitions found for the provided document IDs."
+        document = await self._repository.get_related_code_definitions(document_ids)
         logger.info(
             "rag tool result",
             tool="get_related_code_definitions",
-            source_len=len(source),
+            content_len=len(document.content),
         )
-        return source
+        return document
 
 
 def create_mcp_server(repository: AbstractVectorStoreRepository) -> FastMCP:

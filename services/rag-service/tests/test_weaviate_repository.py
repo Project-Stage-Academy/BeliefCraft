@@ -1,4 +1,5 @@
 import inspect
+from uuid import UUID
 
 import pytest
 import requests
@@ -12,10 +13,10 @@ from rag_service.constants import (
     CODE_METHOD_COLLECTION,
     COLLECTION_NAME,
     REFERENCE_TYPE_MAP,
-    ChunkCodeRef,
     CodeEntityRef,
 )
-from rag_service.models import EntityType, MetadataFilter, MetadataFilters
+from rag_service.mcp_tools import RagTools
+from rag_service.models import Document, EntityType, MetadataFilter, MetadataFilters
 from rag_service.repositories import WeaviateRepository
 from requests import HTTPError, Response, get
 from testcontainers.core.waiting_utils import wait_container_is_ready
@@ -98,18 +99,18 @@ async def _create_collections(client):
 
 async def _configure_cross_collection_refs(collection, code_classes, code_methods, code_functions):
     await _add_reference_if_missing(
-        collection, ChunkCodeRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
+        collection, CodeEntityRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
     )
     await _add_reference_if_missing(
-        collection, ChunkCodeRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
+        collection, CodeEntityRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
     )
     await _add_reference_if_missing(
-        collection, ChunkCodeRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
+        collection, CodeEntityRef.REFERENCED_FUNCTIONS, CODE_FUNCTION_COLLECTION
     )
 
     for code_collection in (code_classes, code_methods, code_functions):
         await _add_reference_if_missing(
-            code_collection, CodeEntityRef.INITIALIZED_CLASSES, CODE_CLASS_COLLECTION
+            code_collection, CodeEntityRef.REFERENCED_CLASSES, CODE_CLASS_COLLECTION
         )
         await _add_reference_if_missing(
             code_collection, CodeEntityRef.REFERENCED_METHODS, CODE_METHOD_COLLECTION
@@ -224,12 +225,12 @@ async def _seed_references(collection, code_methods, code_functions):
 
     await collection.data.reference_add(
         from_uuid=ROOT_UUID,
-        from_property=ChunkCodeRef.REFERENCED_METHODS,
+        from_property=CodeEntityRef.REFERENCED_METHODS,
         to=CODE_METHOD_UUID,
     )
     await collection.data.reference_add(
         from_uuid=ROOT_UUID,
-        from_property=ChunkCodeRef.REFERENCED_FUNCTIONS,
+        from_property=CodeEntityRef.REFERENCED_FUNCTIONS,
         to=CODE_CALLER_UUID,
     )
 
@@ -478,24 +479,98 @@ async def test_weaviate_search_with_expansion(repo):
 
 @pytest.mark.asyncio
 async def test_weaviate_get_related_code_definitions(repo):
-    """Verify code-definition graph traversal returns ordered, deduplicated source."""
+    """Verify code-definition graph traversal returns one wrapped content document."""
     repo._build_nested_code_def_refs = (  # type: ignore[method-assign]
         lambda max_depth=10: WeaviateRepository._build_nested_code_def_refs(repo, min(max_depth, 1))
     )
 
     result = await repo.get_related_code_definitions([ROOT_UUID])
 
-    assert result
-    assert "def helper():" in result
-    assert "def execute():" in result
-    assert "class Runner:" in result
-    assert "def run(self):" in result
+    assert isinstance(result, Document)
+    assert result.id is not None
+    assert str(UUID(result.id)) == result.id
+    assert result.metadata == {"chunk_type": "code_definitions"}
+    assert result.cosine_similarity is None
 
-    # Dependencies should appear before their callers.
-    assert result.index("def helper():") < result.index("def execute():")
+    assert "def helper():" in result.content
+    assert "def execute():" in result.content
+    assert "class Runner:" in result.content
+    assert "def run(self):" in result.content
+
+    # Dependencies should appear before their callers in reconstructed source.
+    assert result.content.index("def helper():") < result.content.index("def execute():")
 
     # Caller is referenced from both root and method, but should only appear once.
-    assert result.count("def execute():") == 1
+    assert result.content.count("def execute():") == 1
 
     # Unrelated function should never be pulled into the fragment.
-    assert "def unrelated():" not in result
+    assert "def unrelated():" not in result.content
+
+
+@pytest.mark.asyncio
+async def test_rag_tools_get_related_code_definitions_integration(repo):
+    """Verify RagTools delegates code-definition retrieval correctly against real Weaviate."""
+    repo._build_nested_code_def_refs = (  # type: ignore[method-assign]
+        lambda max_depth=10: WeaviateRepository._build_nested_code_def_refs(repo, min(max_depth, 1))
+    )
+
+    rag_tools = RagTools(repo)
+    result = await rag_tools.get_related_code_definitions([ROOT_UUID])
+
+    assert isinstance(result, Document)
+    assert result.id is not None
+    assert str(UUID(result.id)) == result.id
+    assert result.metadata == {"chunk_type": "code_definitions"}
+    assert result.cosine_similarity is None
+
+    assert "def helper():" in result.content
+    assert "def execute():" in result.content
+    assert "class Runner:" in result.content
+    assert "def run(self):" in result.content
+
+    # Dependencies should appear before their callers in reconstructed source.
+    assert result.content.index("def helper():") < result.content.index("def execute():")
+
+    # Caller is referenced from both root and method, but should only appear once.
+    assert result.content.count("def execute():") == 1
+
+    # Unrelated function should never be pulled into the fragment.
+    assert "def unrelated():" not in result.content
+
+
+@pytest.mark.asyncio
+async def test_rag_tools_get_related_code_definitions_integration_empty_ids(repo):
+    """Verify RagTools returns an empty wrapped content document for empty IDs."""
+    rag_tools = RagTools(repo)
+
+    result = await rag_tools.get_related_code_definitions([])
+
+    assert isinstance(result, Document)
+    assert result.id is not None
+    assert str(UUID(result.id)) == result.id
+    assert result.metadata == {"chunk_type": "code_definitions"}
+    assert result.cosine_similarity is None
+    assert result.content == ""
+
+
+@pytest.mark.asyncio
+async def test_rag_tools_get_related_code_definitions_integration_two_ids(repo):
+    """Verify RagTools handles multiple IDs while preserving reconstructed source output."""
+    repo._build_nested_code_def_refs = (  # type: ignore[method-assign]
+        lambda max_depth=10: WeaviateRepository._build_nested_code_def_refs(repo, min(max_depth, 1))
+    )
+
+    rag_tools = RagTools(repo)
+    result = await rag_tools.get_related_code_definitions([ROOT_UUID, OTHER_UUID])
+
+    assert isinstance(result, Document)
+    assert result.id is not None
+    assert str(UUID(result.id)) == result.id
+    assert result.metadata == {"chunk_type": "code_definitions"}
+    assert result.cosine_similarity is None
+
+    assert "def helper():" in result.content
+    assert "def execute():" in result.content
+    assert "class Runner:" in result.content
+    assert "def run(self):" in result.content
+    assert "def unrelated():" not in result.content

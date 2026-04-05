@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from common.schemas.common import ToolResult
+from common.schemas.common import Pagination, ToolResult, build_tool_meta
 from common.schemas.inventory import (
     GetInventoryAdjustmentsSummaryRequest,
     GetInventoryAdjustmentsSummaryResponse,
@@ -129,17 +129,17 @@ def list_inventory_moves(
                 if not response.moves
                 else f"Retrieved {len(response.moves)} inventory moves."
             ),
-            meta={
-                "count": len(response.moves),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(response.moves),
+                filters={
                     "warehouse_id": warehouse_id,
                     "product_id": product_id,
                     "move_type": move_type,
                     "from_ts": from_ts.isoformat() if from_ts else None,
                     "to_ts": to_ts.isoformat() if to_ts else None,
                 },
-                "pagination": {"limit": limit, "offset": offset},
-            },
+                pagination=Pagination(limit=limit, offset=offset),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to list inventory moves.") from exc
@@ -166,7 +166,7 @@ def get_inventory_move(
         return ToolResult(
             data=response,
             message="Retrieved inventory move details.",
-            meta={"move_id": move_id},
+            meta=build_tool_meta(count=1, move_id=move_id),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get inventory move.") from exc
@@ -199,10 +199,11 @@ def get_inventory_move_audit_trace(
                 if not observations
                 else f"Retrieved {len(observations)} observations for inventory move."
             ),
-            meta={
-                "move_id": move_id,
-                "observation_count": len(observations),
-            },
+            meta=build_tool_meta(
+                count=1 + len(observations),
+                move_id=move_id,
+                observation_count=len(observations),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get inventory move audit trace.") from exc
@@ -256,15 +257,16 @@ def get_inventory_adjustments_summary(
         return ToolResult(
             data=response,
             message=message,
-            meta={
-                "filters": {
+            meta=build_tool_meta(
+                count=count,
+                filters={
                     "warehouse_id": warehouse_id,
                     "product_id": product_id,
                     "from_ts": from_ts.isoformat() if from_ts else None,
                     "to_ts": to_ts.isoformat() if to_ts else None,
                 },
-                "reason_breakdown_count": len(by_reason),
-            },
+                reason_breakdown_count=len(by_reason),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get inventory adjustments summary.") from exc

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from common.schemas.common import ToolResult
+from common.schemas.common import Pagination, ToolResult, build_tool_meta
 from common.schemas.procurement import (
     GetPurchaseOrderRequest,
     GetPurchaseOrderResponse,
@@ -190,16 +190,16 @@ def list_suppliers(
                 if not response.suppliers
                 else f"Retrieved {len(response.suppliers)} suppliers."
             ),
-            meta={
-                "count": len(response.suppliers),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(response.suppliers),
+                filters={
                     "region": request.region,
                     "reliability_min": request.reliability_min,
                     "reliability_max": request.reliability_max,
                     "name_like": request.name_like,
                 },
-                "pagination": {"limit": request.limit, "offset": request.offset},
-            },
+                pagination=Pagination(limit=request.limit, offset=request.offset),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to list suppliers.") from exc
@@ -224,7 +224,7 @@ def get_supplier(
         return ToolResult(
             data=response,
             message="Retrieved supplier details.",
-            meta={"supplier_id": supplier_id},
+            meta=build_tool_meta(count=1, supplier_id=supplier_id),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get supplier.") from exc
@@ -274,9 +274,9 @@ def list_purchase_orders(
                 if not response.purchase_orders
                 else f"Retrieved {len(response.purchase_orders)} purchase orders."
             ),
-            meta={
-                "count": len(response.purchase_orders),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(response.purchase_orders),
+                filters={
                     "supplier_id": str(request.supplier_id) if request.supplier_id else None,
                     "destination_warehouse_id": (
                         str(request.destination_warehouse_id)
@@ -298,8 +298,8 @@ def list_purchase_orders(
                     ),
                     "include_names": request.include_names,
                 },
-                "pagination": {"limit": request.limit, "offset": request.offset},
-            },
+                pagination=Pagination(limit=request.limit, offset=request.offset),
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to list purchase orders.") from exc
@@ -328,10 +328,11 @@ def get_purchase_order(
         return ToolResult(
             data=response,
             message="Retrieved purchase order details.",
-            meta={
-                "purchase_order_id": purchase_order_id,
-                "include_names": include_names,
-            },
+            meta=build_tool_meta(
+                count=1,
+                purchase_order_id=purchase_order_id,
+                include_names=include_names,
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get purchase order.") from exc
@@ -365,9 +366,9 @@ def list_po_lines(
                 if not response.po_lines
                 else f"Retrieved {len(response.po_lines)} PO lines."
             ),
-            meta={
-                "count": len(response.po_lines),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(response.po_lines),
+                filters={
                     "purchase_order_id": (
                         str(request.purchase_order_id) if request.purchase_order_id else None
                     ),
@@ -379,7 +380,7 @@ def list_po_lines(
                     "product_id": str(request.product_id) if request.product_id else None,
                     "include_product_fields": request.include_product_fields,
                 },
-            },
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to list PO lines.") from exc
@@ -421,9 +422,9 @@ def get_procurement_pipeline_summary(
                 if not response.rows
                 else f"Retrieved {len(response.rows)} procurement pipeline rows."
             ),
-            meta={
-                "count": len(response.rows),
-                "filters": {
+            meta=build_tool_meta(
+                count=len(response.rows),
+                filters={
                     "destination_warehouse_id": (
                         str(request.destination_warehouse_id)
                         if request.destination_warehouse_id
@@ -435,7 +436,7 @@ def get_procurement_pipeline_summary(
                     "group_by": request.group_by.value,
                     "include_names": request.include_names,
                 },
-            },
+            ),
         )
     except Exception as exc:
         raise RuntimeError("Unable to get procurement pipeline summary.") from exc
