@@ -1,395 +1,202 @@
+"""Tests for RAGTestCase Pydantic model."""
+
 import pytest
 from pydantic import ValidationError
-from rag_service.models import EntityType, SearchFilters
-from retrieval.models import RAGTestCase, ScenarioVariant
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+from retrieval.models import RAGTestCase
 
 
 @pytest.fixture()
-def baseline_variant() -> ScenarioVariant:
-    return ScenarioVariant(variant="baseline")
-
-
-@pytest.fixture()
-def minimal_test_case(baseline_variant: ScenarioVariant) -> RAGTestCase:
+def minimal_test_case() -> RAGTestCase:
+    """Minimal valid RAGTestCase."""
     return RAGTestCase(
         id="tc_test_001",
         description="A minimal test case",
         base_query="What is a POMDP?",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=[baseline_variant],
+        expected_chunk_ids=["text_7a0afb97"],
     )
 
 
-# ---------------------------------------------------------------------------
-# ScenarioVariant — happy paths
-# ---------------------------------------------------------------------------
+def test_rag_test_case_creates_with_minimal_fields():
+    """RAGTestCase can be created with only required fields."""
+    tc = RAGTestCase(
+        id="tc_001",
+        base_query="What is belief state planning?",
+        expected_chunk_ids=["text_abc123"],
+    )
+
+    assert tc.id == "tc_001"
+    assert tc.base_query == "What is belief state planning?"
+    assert tc.expected_chunk_ids == ["text_abc123"]
+    assert tc.description == ""
+    assert tc.paraphrases == []
+    assert tc.pdf_block_ids_map == {}
+    assert tc.split is None
 
 
-@pytest.mark.parametrize(
-    "variant",
-    [
-        "baseline",  # pure semantic search
-        "filtered",  # correct metadata filter applied
-        "contradictory",  # mismatched filter → expect empty
-    ],
-)
-def test_scenario_variant_accepts_all_valid_variant_values(variant: str) -> None:
-    result = ScenarioVariant(variant=variant)
-
-    assert result.variant == variant
-
-
-def test_scenario_variant_baseline_has_correct_defaults() -> None:
-    result = ScenarioVariant(variant="baseline")
-
-    assert result.filters is None
-    assert result.boost_params is None
-    assert result.traverse_types is None
-    assert result.expect_empty is False
-    assert result.latency_budget_ms == 1000
-
-
-def test_scenario_variant_stores_search_filters() -> None:
-    filters = SearchFilters(part="I", section="3")
-
-    result = ScenarioVariant(variant="filtered", filters=filters)
-
-    assert result.filters is not None
-    assert result.filters.part == "I"
-    assert result.filters.section == "3"
-
-
-def test_scenario_variant_contradictory_stores_expect_empty_flag() -> None:
-    result = ScenarioVariant(variant="contradictory", expect_empty=True)
-
-    assert result.expect_empty is True
-
-
-def test_scenario_variant_stores_traverse_types() -> None:
-    types = [EntityType.FORMULA, EntityType.ALGORITHM]
-
-    result = ScenarioVariant(variant="baseline", traverse_types=types)
-
-    assert result.traverse_types == [EntityType.FORMULA, EntityType.ALGORITHM]
-
-
-def test_scenario_variant_stores_custom_latency_budget() -> None:
-    result = ScenarioVariant(variant="baseline", latency_budget_ms=1500)
-
-    assert result.latency_budget_ms == 1500
-
-
-def test_scenario_variant_stores_boost_params() -> None:
-    params = {"alpha": 0.7, "beta": 0.3}
-
-    result = ScenarioVariant(variant="filtered", boost_params=params)
-
-    assert result.boost_params == {"alpha": 0.7, "beta": 0.3}
-
-
-# ---------------------------------------------------------------------------
-# ScenarioVariant — edge cases & error states
-# ---------------------------------------------------------------------------
-
-
-def test_scenario_variant_invalid_variant_raises_validation_error() -> None:
-    with pytest.raises(ValidationError):
-        ScenarioVariant(variant="unknown")  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize(
-    "budget",
-    [
-        0,  # boundary — zero is not positive
-        -1,  # negative
-        -500,
-    ],
-)
-def test_scenario_variant_non_positive_latency_budget_raises_validation_error(
-    budget: int,
-) -> None:
-    with pytest.raises(ValidationError):
-        ScenarioVariant(variant="baseline", latency_budget_ms=budget)
-
-
-def test_scenario_variant_traverse_types_empty_list_is_valid() -> None:
-    result = ScenarioVariant(variant="baseline", traverse_types=[])
-
-    assert result.traverse_types == []
-
-
-def test_scenario_variant_all_entity_types_accepted_in_traverse_types() -> None:
-    all_types = list(EntityType)
-
-    result = ScenarioVariant(variant="baseline", traverse_types=all_types)
-
-    assert result.traverse_types == all_types
-
-
-# ---------------------------------------------------------------------------
-# RAGTestCase — happy paths
-# ---------------------------------------------------------------------------
-
-
-def test_rag_test_case_creates_with_all_fields(baseline_variant: ScenarioVariant) -> None:
+def test_rag_test_case_creates_with_all_fields():
+    """RAGTestCase stores all optional fields correctly."""
     tc = RAGTestCase(
         id="tc_belief_update",
         description="Belief update via Bayes rule",
         base_query="How does Bayesian belief update work in a POMDP?",
-        expected_chunk_ids=["uuid-abc", "uuid-def"],
-        scenarios=[baseline_variant],
-        expected_metadata={"chunk_type": "text", "part": "I"},
-        domain="book",
+        paraphrases=[
+            "Explain belief updates in POMDPs",
+            "How to update beliefs in partially observable environments?",
+        ],
+        expected_chunk_ids=["text_abc123", "text_def456"],
+        pdf_block_ids_map={
+            "text_abc123": ["592:16", "592:17"],
+            "text_def456": ["593:0"],
+        },
+        split="validation",
     )
 
     assert tc.id == "tc_belief_update"
+    assert tc.description == "Belief update via Bayes rule"
     assert tc.base_query == "How does Bayesian belief update work in a POMDP?"
+    assert len(tc.paraphrases) == 2
     assert len(tc.expected_chunk_ids) == 2
-    assert tc.domain == "book"
+    assert "text_abc123" in tc.pdf_block_ids_map
+    assert tc.split == "validation"
 
 
 @pytest.mark.parametrize(
-    "domain",
-    [
-        "book",  # standard book knowledge
-        "warehouse",  # warehouse simulation domain
-        "cross_domain",  # cross-domain link pointer
-    ],
+    "split_value",
+    ["validation", "test", None],
 )
-def test_rag_test_case_accepts_all_valid_domains(
-    domain: str, baseline_variant: ScenarioVariant
-) -> None:
+def test_rag_test_case_accepts_valid_split_values(split_value):
+    """RAGTestCase accepts validation, test, or None for split field."""
     tc = RAGTestCase(
         id="tc_x",
-        description="domain test",
         base_query="query",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=[baseline_variant],
-        domain=domain,  # type: ignore[arg-type]
+        expected_chunk_ids=["text_001"],
+        split=split_value,
     )
 
-    assert tc.domain == domain
+    assert tc.split == split_value
 
 
-def test_rag_test_case_domain_defaults_to_book(baseline_variant: ScenarioVariant) -> None:
+def test_rag_test_case_rejects_invalid_split():
+    """RAGTestCase rejects invalid split values."""
+    with pytest.raises(ValidationError):
+        RAGTestCase(
+            id="tc_x",
+            base_query="query",
+            expected_chunk_ids=["text_001"],
+            split="invalid",  # type: ignore[arg-type]
+        )
+
+
+def test_rag_test_case_empty_expected_chunk_ids_is_valid():
+    """RAGTestCase allows empty expected_chunk_ids list."""
     tc = RAGTestCase(
         id="tc_x",
-        description="desc",
-        base_query="q",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=[baseline_variant],
-    )
-
-    assert tc.domain == "book"
-
-
-def test_rag_test_case_expected_metadata_defaults_to_empty_dict(
-    baseline_variant: ScenarioVariant,
-) -> None:
-    tc = RAGTestCase(
-        id="tc_x",
-        description="desc",
-        base_query="q",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=[baseline_variant],
-    )
-
-    assert tc.expected_metadata == {}
-
-
-def test_rag_test_case_empty_expected_chunk_ids_is_valid(
-    baseline_variant: ScenarioVariant,
-) -> None:
-    tc = RAGTestCase(
-        id="tc_x",
-        description="desc",
-        base_query="q",
+        base_query="query",
         expected_chunk_ids=[],
-        scenarios=[baseline_variant],
     )
 
     assert tc.expected_chunk_ids == []
 
 
-def test_rag_test_case_stores_multiple_scenarios() -> None:
-    variants = [
-        ScenarioVariant(variant="baseline"),
-        ScenarioVariant(variant="filtered", filters=SearchFilters(part="II")),
-        ScenarioVariant(variant="contradictory", expect_empty=True),
-    ]
-
-    tc = RAGTestCase(
-        id="tc_multi",
-        description="multi scenario",
-        base_query="entropy in decision making",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=variants,
-    )
-
-    assert len(tc.scenarios) == 3
-    assert tc.scenarios[0].variant == "baseline"
-    assert tc.scenarios[1].variant == "filtered"
-    assert tc.scenarios[2].variant == "contradictory"
-
-
-def test_rag_test_case_expected_metadata_is_independent_per_instance(
-    baseline_variant: ScenarioVariant,
-) -> None:
-    tc1 = RAGTestCase(
-        id="tc_1",
-        description="d",
-        base_query="q",
-        expected_chunk_ids=[],
-        scenarios=[baseline_variant],
-    )
-    tc2 = RAGTestCase(
-        id="tc_2",
-        description="d",
-        base_query="q",
-        expected_chunk_ids=[],
-        scenarios=[baseline_variant],
-    )
-
-    tc1.expected_metadata["key"] = "value"
-
-    assert "key" not in tc2.expected_metadata
-
-
-# ---------------------------------------------------------------------------
-# RAGTestCase — error states
-# ---------------------------------------------------------------------------
-
-
-def test_rag_test_case_invalid_domain_raises_validation_error(
-    baseline_variant: ScenarioVariant,
-) -> None:
-    with pytest.raises(ValidationError):
-        RAGTestCase(
-            id="tc_x",
-            description="desc",
-            base_query="q",
-            expected_chunk_ids=["uuid-001"],
-            scenarios=[baseline_variant],
-            domain="unknown_domain",  # type: ignore[arg-type]
-        )
-
-
-def test_rag_test_case_missing_required_fields_raises_validation_error() -> None:
-    with pytest.raises(ValidationError):
-        RAGTestCase(  # type: ignore[call-arg]
-            id="tc_x",
-        )
-
-
-# ---------------------------------------------------------------------------
-# RAGTestCase — paraphrases field
-# ---------------------------------------------------------------------------
-
-
-def test_rag_test_case_paraphrases_defaults_to_empty_list(
-    baseline_variant: ScenarioVariant,
-) -> None:
+def test_rag_test_case_empty_paraphrases_is_default():
+    """Paraphrases defaults to empty list."""
     tc = RAGTestCase(
         id="tc_x",
-        description="d",
-        base_query="q",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=[baseline_variant],
+        base_query="query",
+        expected_chunk_ids=["text_001"],
     )
 
     assert tc.paraphrases == []
 
 
-def test_rag_test_case_stores_paraphrases(baseline_variant: ScenarioVariant) -> None:
-    phrases = ["How does X work?", "Explain X in detail."]
+def test_rag_test_case_pdf_block_ids_map_defaults_to_empty_dict():
+    """pdf_block_ids_map defaults to empty dict."""
+    tc = RAGTestCase(
+        id="tc_x",
+        base_query="query",
+        expected_chunk_ids=["text_001"],
+    )
+
+    assert tc.pdf_block_ids_map == {}
+
+
+def test_rag_test_case_stores_multiple_paraphrases():
+    """RAGTestCase stores list of paraphrases correctly."""
+    paraphrases = [
+        "First paraphrase",
+        "Second paraphrase",
+        "Third paraphrase",
+    ]
 
     tc = RAGTestCase(
         id="tc_x",
-        description="d",
-        base_query="What is X?",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=[baseline_variant],
-        paraphrases=phrases,
+        base_query="query",
+        expected_chunk_ids=["text_001"],
+        paraphrases=paraphrases,
     )
 
-    assert tc.paraphrases == phrases
+    assert len(tc.paraphrases) == 3
+    assert tc.paraphrases == paraphrases
 
 
-def test_rag_test_case_paraphrases_are_independent_per_instance(
-    baseline_variant: ScenarioVariant,
-) -> None:
+def test_rag_test_case_pdf_block_ids_map_structure():
+    """pdf_block_ids_map correctly maps chunk_id to list of pdf_block_ids."""
+    pdf_map = {
+        "text_7a0afb97": ["592:16", "592:17", "592:18"],
+        "text_abc123": ["88:11"],
+        "algorithm_xyz": ["105:3", "105:4"],
+    }
+
+    tc = RAGTestCase(
+        id="tc_x",
+        base_query="query",
+        expected_chunk_ids=["text_7a0afb97", "text_abc123"],
+        pdf_block_ids_map=pdf_map,
+    )
+
+    assert tc.pdf_block_ids_map == pdf_map
+    assert tc.pdf_block_ids_map["text_7a0afb97"] == ["592:16", "592:17", "592:18"]
+
+
+def test_rag_test_case_description_can_be_empty_string():
+    """Description can be explicitly set to empty string."""
+    tc = RAGTestCase(
+        id="tc_x",
+        description="",
+        base_query="query",
+        expected_chunk_ids=["text_001"],
+    )
+
+    assert tc.description == ""
+
+
+def test_rag_test_case_instances_are_independent():
+    """Multiple instances don't share mutable defaults."""
     tc1 = RAGTestCase(
         id="tc_1",
-        description="d",
-        base_query="q",
-        expected_chunk_ids=[],
-        scenarios=[baseline_variant],
+        base_query="query1",
+        expected_chunk_ids=["text_001"],
     )
     tc2 = RAGTestCase(
         id="tc_2",
-        description="d",
-        base_query="q",
-        expected_chunk_ids=[],
-        scenarios=[baseline_variant],
+        base_query="query2",
+        expected_chunk_ids=["text_002"],
     )
 
-    tc1.paraphrases.append("extra")
+    tc1.paraphrases.append("paraphrase1")
+    tc1.pdf_block_ids_map["text_001"] = ["1:0"]
 
-    assert "extra" not in tc2.paraphrases
-
-
-# ---------------------------------------------------------------------------
-# RAGTestCase — split field
-# ---------------------------------------------------------------------------
+    assert tc2.paraphrases == []
+    assert tc2.pdf_block_ids_map == {}
 
 
-def test_rag_test_case_split_defaults_to_none(baseline_variant: ScenarioVariant) -> None:
+def test_rag_test_case_validates_chunk_id_format():
+    """Expected chunk IDs must be strings (stable parser IDs like 'text_7a0afb97')."""
     tc = RAGTestCase(
         id="tc_x",
-        description="d",
-        base_query="q",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=[baseline_variant],
+        base_query="query",
+        expected_chunk_ids=["text_7a0afb97", "algorithm_abc123", "exercise_def456"],
     )
 
-    assert tc.split is None
-
-
-@pytest.mark.parametrize(
-    "split",
-    [
-        "validation",  # used during experiments
-        "test",  # evaluated only at cycle end
-    ],
-)
-def test_rag_test_case_accepts_valid_split_values(
-    split: str, baseline_variant: ScenarioVariant
-) -> None:
-    tc = RAGTestCase(
-        id="tc_x",
-        description="d",
-        base_query="q",
-        expected_chunk_ids=["uuid-001"],
-        scenarios=[baseline_variant],
-        split=split,  # type: ignore[arg-type]
-    )
-
-    assert tc.split == split
-
-
-def test_rag_test_case_invalid_split_raises_validation_error(
-    baseline_variant: ScenarioVariant,
-) -> None:
-    with pytest.raises(ValidationError):
-        RAGTestCase(
-            id="tc_x",
-            description="d",
-            base_query="q",
-            expected_chunk_ids=["uuid-001"],
-            scenarios=[baseline_variant],
-            split="train",  # type: ignore[arg-type]
-        )
+    assert all(isinstance(cid, str) for cid in tc.expected_chunk_ids)
+    assert "text_7a0afb97" in tc.expected_chunk_ids

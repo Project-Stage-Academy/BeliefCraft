@@ -101,7 +101,8 @@ def insert_chunks(
     references: list[DataReference | DataReferenceMulti] = []
     with collection.batch.dynamic() as batch:
         for chunk in chunks:
-            chunk.pop("chunk_id", "")
+            # Keep chunk_id as metadata field for golden set evaluation mapping
+            # chunk.pop("chunk_id", "")
             uuid = generate_deterministic_uuid(chunk)
             chunk_references = extract_references_from_chunk(chunk, reference_map)
             batch.add_object(
@@ -128,8 +129,8 @@ def main() -> None:
         description="Load and embed document chunks from JSON into Weaviate. Passes 'content' "
         "field to embedding model, sets up cross-references for fields: 'referenced_formulas', "
         "'referenced_algorithms', 'referenced_tables', 'referenced_figures', 'referenced_examples',"
-        " 'referenced_exercises'. Ignores 'chunk_id' and generates own UUIDs. All other"
-        " fields are treated as metadata and stored in Weaviate as is without embedding."
+        " 'referenced_exercises'. Preserves 'chunk_id' and 'pdf_block_ids' as metadata fields. "
+        "All other fields are treated as metadata and stored in Weaviate as is without embedding."
     )
     parser.add_argument("file_path", help="Path to the JSON file containing chunks.", type=Path)
     parser.add_argument(

@@ -4,6 +4,7 @@
 
 # rag parser data
 data_source/
+ULTIMATE_BOOK_DATA*.json
 
 # JetBrains
 .idea/
@@ -65,11 +66,9 @@ coverage.xml
 cover/
 
 # RAG retrieval evaluation test artifacts
-services/rag-service/tests/retrieval/.eval_cache/
-services/rag-service/tests/retrieval/golden_set.json
-services/rag-service/tests/retrieval/eval_report.json
-services/rag-service/tests/retrieval/IMPLEMENTATION_SUMMARY.md
-services/rag-service/tests/retrieval/retrieval_coverage.md
+services/rag-service/tests/retrieval/evaluation_results.json
+services\rag-service\tests\retrieval\MIGRATION_V2.md
+services/rag-service/tests/retrieval/manual_review.py
 
 # Translations
 *.mo

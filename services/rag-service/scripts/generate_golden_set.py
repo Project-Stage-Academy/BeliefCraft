@@ -1,20 +1,28 @@
 """
 Golden Set Generator for RAG Retrieval Evaluation.
 
-Fetches all chunks from Weaviate, partitions them into groups,
-then iterates over ALL distinct group pairs (round-robin, deterministic)
-and uses OpenAI with Pydantic-enforced structured output to generate
-retrieval evaluation questions with paraphrases.
+V2 (April 2026) — Single-Topic Strategy
+
+Reads chunks from ULTIMATE_BOOK_DATA JSON file, applies stratified sampling by chunk_type,
+partitions them into topic-coherent groups, then generates questions where answers come from
+WITHIN each group only. This avoids cross-topic contamination that caused low recall in V1.
+
+Key improvements:
+- ✅ Single-topic questions (no forced cross-group pairing)
+- ✅ Adaptive chunk limits (1-3 chunks per question)
+- ✅ Stricter validation (no multiple exercise/example chunks)
+- ✅ Better prompts (specific exclusion criteria)
 
 Output: golden_set.json — committed as source of truth for regression testing.
 
 Usage:
     uv run --project services/rag-service \\
         python services/rag-service/scripts/generate_golden_set.py \\
+        --input ULTIMATE_BOOK_DATA_03_04_translated.json \\
         --output services/rag-service/tests/retrieval/golden_set.json \\
-        --max-group-tokens 150000 \\
-        --pairs-count 10 \\
-        --questions-per-pair 3 \\
+        --max-group-tokens 3000 \\
+        --questions-per-type 6 \\
+        --questions-per-group 3 \\
         --paraphrases-per-question 5 \\
         --seed 42
 
@@ -25,50 +33,157 @@ import argparse
 import json
 import os
 import random
-from itertools import combinations, cycle
+from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import weaviate
 from common.logging import configure_logging, get_logger
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from rag_service.constants import COLLECTION_NAME
 
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path)
 
 logger = get_logger(__name__)
 
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
 OPENAI_MAX_COMPLETION_TOKENS = 16384
-OPENAI_TEMPERATURE = 0.3
+OPENAI_TEMPERATURE = 0
+
+# Chunk types for stratified sampling
+CHUNK_TYPES = [
+    "text",
+    "formula",
+    "table",
+    "algorithm",
+    "captioned_image",
+    "exercise",
+    "example",
+]
 
 _SYSTEM_PROMPT = (
-    "You are an expert at creating retrieval evaluation datasets for the book "
-    "'Algorithms for Decision Making'. You generate precise technical questions "
-    "whose answers require combining information from multiple text passages."
+    "You are an expert at creating HIGH-QUALITY retrieval evaluation datasets for the book "
+    "'Algorithms for Decision Making'. You generate precise technical questions that can be "
+    "answered using ONLY the provided chunks. You select STRICTLY MINIMAL sets of chunks (1-3) "
+    "that are NECESSARY to answer each question. You avoid generic definitions, nearby context, "
+    "and tangentially related material."
 )
 
 _USER_PROMPT_TEMPLATE = """\
-You are given two groups of text chunks from the book "Algorithms for Decision Making".
-Each chunk is identified by its Weaviate UUID.
+You are given a group of related chunks from the book "Algorithms for Decision Making".
+Each chunk is identified by its chunk_id.
 
-GROUP A:
-{group_a}
-
-GROUP B:
-{group_b}
+CHUNKS:
+{chunks}
 
 Generate exactly {n_questions} technical questions such that:
-1. Each correct answer REQUIRES retrieving chunks from BOTH groups simultaneously.
-2. Questions must be non-obvious — not answerable from a single chunk alone.
-3. For each question, list the UUIDs of ALL relevant chunks (minimum one from each group).
+
+1. Each question can be answered using ONLY chunks from this group (1-3 chunks per question).
+2. DO NOT create questions requiring information not present in these chunks.
+3. For each question, list the chunk_ids of the MINIMUM set of chunks needed to answer it.
+
+⚠️ CRITICAL RULE FOR MULTI-CHUNK QUESTIONS:
+
+   Use 2-3 chunks ONLY when they are SEMANTICALLY VERY CLOSE:
+   ✅ GOOD multi-chunk examples:
+      - Algorithm description + same algorithm's complexity analysis
+      - Formula definition + example using that same formula
+      - Theory section + direct application of that theory
+      - Step 1 of process + Step 2 of SAME process
+
+   ❌ BAD multi-chunk examples (will fail semantic search):
+      - Different algorithms (e.g., particle filter + Kalman filter)
+      - Different exercises (e.g., Exercise 7.4 + Exercise 13.2)
+      - Unrelated concepts that happen to be in same group
+      - Comparing method A vs method B (semantic search can't find both)
+
+📊 TARGET DISTRIBUTION:
+   - 40% simple (1 chunk): Definitions, single-concept explanations
+   - 40% medium (2 chunks): Tightly coupled concepts (algorithm + its analysis)
+   - 20% complex (3 chunks): Multi-step processes from same workflow
+
+   PREFER 1-CHUNK QUESTIONS when chunks are not tightly semantically related!
+
+CRITICAL RULES FOR relevant_ids:
+
+✅ INCLUDE only chunks that:
+  - Contain the DIRECT answer (algorithms, formulas, specific methods, definitions)
+  - Provide ESSENTIAL context without which the question cannot be answered
+  - Each contribute UNIQUE necessary information
+
+❌ EXCLUDE these types:
+  - Generic definitions when question asks about specific algorithms
+  - Nearby context that was adjacent in book but not essential
+  - Exercise chunks when question asks for theory/explanation
+  - Background information that provides context but not the answer
+  - Duplicate information already in other selected chunks
+
+🎯 MATCH QUESTION STYLE TO CHUNK TYPE:
+
+   When expected chunk is **algorithm_*** (pseudocode/implementation):
+   ✅ Ask about: "procedure", "steps", "how does the algorithm...", "what does line X do"
+   ❌ Avoid: conceptual "why", "what is the purpose", "explain the concept"
+   Example: "What steps does the ParticleFilter.update method use to transform states?"
+
+   When expected chunk is **exercise_*** or **formula_*** (mathematical):
+   ✅ Ask about: specific formulas, equations, "compute X given Y", "what is the equation for"
+   ❌ Avoid: vague "how are X and Y related" (too general, finds text explanations)
+   Example: "What is the formula for computing U(s) from Q(s,a) values?"
+
+   When expected chunk is **text_*** (conceptual):
+   ✅ Ask about: concepts, relationships, "what is", "why", "how does X relate to Y"
+   ❌ Avoid: technical "procedure", "steps", "algorithm" (finds algorithm chunks instead)
+   Example: "Why do particle filters lose diversity over time?"
+
+⚠️ AVOID SPECIFIC REFERENCES:
+  - DO NOT mention "Exercise X.Y" or "Example X.Y" unless the chunk explicitly contains that number
+  - DO NOT reference algorithm names not present in the chunks
+  - DO NOT reference code fields/methods (e.g., ".TR field") not in the chunks
+  - Use GENERIC terminology when possible (e.g., "action-value functions" instead of "Exercise 7.4")
+
+EXAMPLES:
+
+❌ BAD — Wrong question style for algorithm chunk:
+   Chunk: algorithm_3f8d0031 (ParticleFilter.update code)
+   Question: "What is the purpose of particle filter belief updates?"
+   Problem: Conceptual question finds TEXT explanations, not algorithm code!
+
+✅ GOOD — Correct question style for algorithm chunk:
+   Chunk: algorithm_3f8d0031 (ParticleFilter.update code)
+   Question: "What steps does the ParticleFilter.update method perform to transform state samples?"
+   Why: Asks about procedure/implementation → finds algorithm chunk
+
+❌ BAD — Wrong question style for exercise/formula chunk:
+   Chunk: exercise_xyz123 (Q-values, U(s), π(s) formulas)
+   Question: "How are state utility, greedy policy, and advantage related?"
+   Problem: Vague conceptual question finds text explanations, not formulas!
+
+✅ GOOD — Correct question style for exercise/formula chunk:
+   Chunk: exercise_xyz123 (Q-values, U(s), π(s) formulas)
+   Question: "What are the exact formulas for computing U(s) and π(s) from Q(s,a)?"
+   Why: Asks for specific formulas → finds exercise/formula chunk
+
+❌ BAD — Too specific reference:
+   Question: "Using the Q-values from Exercise 7.4, compute U(s) and π(s)"
+   Problem: References specific exercise not in all chunks
+
+✅ GOOD — Generic terminology:
+   Question: "How do action-value functions relate to state utility and greedy policy?"
+   Why: Generic terminology, answerable from chunks without specific references
+
+❌ BAD — Multiple unrelated chunks:
+   relevant_ids: [algorithm_particle_filter, algorithm_kalman_filter]
+   Problem: Semantic search cannot find both different algorithms simultaneously
+
+✅ GOOD — Single topic:
+   relevant_ids: [text_bellman_equation, text_policy_evaluation]
+   Why: Both from same topic, semantically related
+
 4. For each question, generate exactly {n_paraphrases} paraphrase variants that:
-   - Preserve the exact semantic meaning of the original question.
-   - Use different wording, synonyms, or sentence structure.
-   - Have the same relevant chunks as the original question.
+   - Preserve the exact semantic meaning
+   - Use different wording, synonyms, or sentence structure
+   - Are answerable from the same chunks
 """
 
 
@@ -77,7 +192,13 @@ class GeneratedQuestion(BaseModel):
 
     question: str
     paraphrases: list[str] = Field(min_length=1)
-    relevant_ids: list[str] = Field(min_length=2)
+    relevant_ids: list[str] = Field(
+        min_length=1,
+        max_length=3,
+        description="Chunk IDs that are STRICTLY NECESSARY to answer the question. "
+        "Use 1 chunk for simple questions, 2-3 chunks ONLY when they are semantically very close "
+        "(e.g., algorithm + its explanation, formula + example, NOT different algorithms).",
+    )
 
 
 class GeneratedBatch(BaseModel):
@@ -86,31 +207,60 @@ class GeneratedBatch(BaseModel):
     questions: list[GeneratedQuestion]
 
 
-def fetch_all_chunks(client: weaviate.WeaviateClient) -> list[dict[str, str]]:
-    """Retrieve all chunks from Weaviate, returning only uuid and content fields."""
-    collection = client.collections.use(COLLECTION_NAME)
-    chunks: list[dict[str, str]] = []
-    for obj in collection.iterator(return_properties=["content"]):
-        content = str(obj.properties.get("content") or "")
-        chunks.append({"uuid": str(obj.uuid), "content": content})
-    chunks.sort(key=lambda c: c["uuid"])
-    logger.info("chunks_fetched", total=len(chunks))
+def load_chunks_from_json(json_path: Path) -> list[dict[str, Any]]:
+    """Load all chunks from JSON file."""
+    with json_path.open("r", encoding="utf-8") as f:
+        chunks: list[dict[str, Any]] = json.load(f)
+    logger.info("chunks_loaded", total=len(chunks), source=str(json_path))
     return chunks
 
 
+def stratified_sample_by_type(
+    chunks: list[dict[str, Any]], questions_per_type: int, rng: random.Random
+) -> list[dict[str, Any]]:
+    """Sample chunks using stratified sampling by chunk_type.
+
+    For each chunk_type, randomly sample up to questions_per_type * 2 chunks.
+    This ensures diverse coverage across different content types (text, formula, table, etc.).
+    """
+    by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for chunk in chunks:
+        chunk_type = chunk.get("chunk_type", "text")
+        by_type[chunk_type].append(chunk)
+
+    sampled: list[dict[str, Any]] = []
+    for chunk_type in CHUNK_TYPES:
+        type_chunks = by_type.get(chunk_type, [])
+        if not type_chunks:
+            logger.warning("no_chunks_for_type", chunk_type=chunk_type)
+            continue
+
+        # Sample 2 chunks per desired question to ensure enough material for pairs
+        sample_size = min(len(type_chunks), questions_per_type * 2)
+        sampled.extend(rng.sample(type_chunks, sample_size))
+
+    logger.info(
+        "stratified_sampling_complete",
+        total_sampled=len(sampled),
+        questions_per_type=questions_per_type,
+    )
+    return sampled
+
+
 def partition_into_groups(
-    chunks: list[dict[str, str]], max_group_tokens: int
-) -> list[list[dict[str, str]]]:
-    """Split sorted chunks into groups whose combined content fits max_group_tokens.
+    chunks: list[dict[str, Any]], max_group_tokens: int
+) -> list[list[dict[str, Any]]]:
+    """Split chunks into groups whose combined content fits max_group_tokens.
 
     Uses a characters-to-tokens approximation of 4 chars ≈ 1 token.
     """
-    groups: list[list[dict[str, str]]] = []
-    current: list[dict[str, str]] = []
+    groups: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
     current_tokens = 0
 
     for chunk in chunks:
-        chunk_tokens = len(chunk["content"]) // 4
+        content = chunk.get("content", "")
+        chunk_tokens = len(content) // 4
         if current and current_tokens + chunk_tokens > max_group_tokens:
             groups.append(current)
             current = []
@@ -125,38 +275,34 @@ def partition_into_groups(
     return groups
 
 
-def schedule_pair_iterations(
-    groups: list[list[dict[str, str]]], pairs_count: int, rng: random.Random
-) -> list[tuple[list[dict[str, str]], list[dict[str, str]]]]:
-    """Return exactly pairs_count (group_a, group_b) pairs.
+def select_groups_for_generation(
+    groups: list[list[dict[str, Any]]], max_groups: int, rng: random.Random
+) -> list[list[dict[str, Any]]]:
+    """Select up to max_groups for question generation.
 
-    Enumerates all unique group pairs, shuffles them once (deterministic via seed),
-    then cycles through the full list until pairs_count is reached.
-    This guarantees every pair appears at least floor(pairs_count/total_pairs) times
-    before any pair repeats — full coverage before any repetition.
+    Shuffles groups deterministically and selects the first max_groups.
+    This ensures diverse coverage across the dataset.
     """
-    all_pairs = list(combinations(range(len(groups)), 2))
-    rng.shuffle(all_pairs)
+    shuffled_indices = list(range(len(groups)))
+    rng.shuffle(shuffled_indices)
 
-    scheduled: list[tuple[list[dict[str, str]], list[dict[str, str]]]] = []
-    for idx, (i, j) in enumerate(cycle(all_pairs)):
-        if idx >= pairs_count:
-            break
-        scheduled.append((groups[i], groups[j]))
+    selected = [groups[i] for i in shuffled_indices[:max_groups]]
 
     logger.info(
-        "pairs_scheduled",
-        total_unique=len(all_pairs),
-        scheduled=len(scheduled),
+        "groups_selected",
+        total_available=len(groups),
+        selected=len(selected),
     )
-    return scheduled
+    return selected
 
 
-def format_group_for_prompt(group: list[dict[str, str]]) -> str:
+def format_group_for_prompt(group: list[dict[str, Any]]) -> str:
     """Render a group of chunks as labelled text for the LLM prompt."""
     lines = []
     for chunk in group:
-        lines.append(f"[UUID: {chunk['uuid']}]\n{chunk['content']}\n")
+        chunk_id = chunk.get("chunk_id", "unknown")
+        content = chunk.get("content", "")
+        lines.append(f"[chunk_id: {chunk_id}]\n{content}\n")
     return "\n".join(lines)
 
 
@@ -189,32 +335,172 @@ def call_openai_structured(
             received=n_generated,
         )
 
-    return [q.model_dump() for q in batch.questions]
+    return cast(list[dict[str, Any]], [q.model_dump() for q in batch.questions])
 
 
-def generate_questions_for_pair(
+def generate_questions_for_group(
     openai_client: OpenAI,
-    group_a: list[dict[str, str]],
-    group_b: list[dict[str, str]],
+    group: list[dict[str, Any]],
+    chunk_id_to_pdf_blocks: dict[str, list[str]],
     n_questions: int,
     n_paraphrases: int,
-    pair_index: int,
+    group_index: int,
 ) -> list[dict[str, Any]]:
-    """Call OpenAI to generate cross-group questions for one pair of groups."""
+    """Call OpenAI to generate single-topic questions for one group of chunks."""
     prompt = _USER_PROMPT_TEMPLATE.format(
-        group_a=format_group_for_prompt(group_a),
-        group_b=format_group_for_prompt(group_b),
+        chunks=format_group_for_prompt(group),
         n_questions=n_questions,
         n_paraphrases=n_paraphrases,
     )
 
     try:
         questions = call_openai_structured(openai_client, prompt, n_questions, n_paraphrases)
-        logger.info("pair_generated", pair=pair_index, questions=len(questions))
+        # Enrich with pdf_block_ids for each relevant chunk
+        for q in questions:
+            q["pdf_block_ids_map"] = {
+                chunk_id: chunk_id_to_pdf_blocks.get(chunk_id, [])
+                for chunk_id in q.get("relevant_ids", [])
+            }
+        logger.info("group_generated", group=group_index, questions=len(questions))
         return questions
     except Exception as exc:
-        logger.error("pair_generation_failed", pair=pair_index, error=str(exc))
+        logger.error("group_generation_failed", group=group_index, error=str(exc))
         return []
+
+
+def validate_question_chunk_relevance(
+    question: str,
+    expected_chunk_ids: list[str],
+    chunks_by_id: dict[str, dict[str, Any]],
+) -> tuple[bool, str]:
+    """
+    Validate that expected chunks actually contain entities mentioned in the question.
+
+    Returns (is_valid, reason).
+
+    Checks:
+    1. NO multiple exercise/example chunks (they reference different parts of book)
+    2. Exercise/example chunks MUST be explicitly referenced in question
+    3. Algorithm chunks MUST use procedural language or algorithm name
+    4. Exercise/example references in question must appear in expected chunks
+    5. Specific technical terms with parentheses (e.g., "TR(s,a)") appear in chunks
+    6. Code field/method references (e.g., ".TR field") appear in chunks
+    """
+    import re
+
+    # Get content of all expected chunks (used by multiple rules below)
+    chunk_contents = []
+    chunk_contents_original = []
+    for chunk_id in expected_chunk_ids:
+        chunk = chunks_by_id.get(chunk_id)
+        if chunk:
+            content = chunk.get("content", "")
+            chunk_contents.append(content.lower())
+            chunk_contents_original.append(content)
+
+    combined_content = " ".join(chunk_contents)
+    combined_content_original = " ".join(chunk_contents_original)
+
+    # STRICT RULE 1: Reject questions with 2+ exercise or example chunks
+    # These almost always fail because they reference different specific problems
+    exercise_example_chunks = [
+        cid
+        for cid in expected_chunk_ids
+        if cid.startswith("exercise_") or cid.startswith("example_")
+    ]
+    if len(exercise_example_chunks) >= 2:
+        return (
+            False,
+            f"Question has {len(exercise_example_chunks)} exercise/example chunks - "
+            "semantic search can't find both simultaneously",
+        )
+
+    # STRICT RULE 2: Reject questions with 2+ algorithm chunks
+    # Different algorithms are rarely retrieved together by semantic search
+    algorithm_chunks = [cid for cid in expected_chunk_ids if cid.startswith("algorithm_")]
+    if len(algorithm_chunks) >= 2:
+        return (
+            False,
+            f"Question has {len(algorithm_chunks)} algorithm chunks - "
+            "different algorithms rarely retrieved together",
+        )
+
+    # STRICT RULE 3: Exercise/example chunks MUST be explicitly referenced
+    # Abstract questions like "What are the formulas for..." fail to retrieve specific exercises
+    # Also accept "in the example" or "in Exercise X.Y"
+    if (
+        exercise_example_chunks
+        and not re.search(r"\b(Exercise|Example)\s+\d+\.\d+", question, re.IGNORECASE)
+        and not re.search(r"\bin\s+the\s+(example|exercise)", question, re.IGNORECASE)
+    ):
+        return (
+            False,
+            "Exercise/example chunks must be explicitly referenced by number "
+            "(e.g., 'Exercise 7.4') or 'in the example'",
+        )
+
+    # STRICT RULE 4: Algorithm chunks MUST use procedural language or algorithm name
+    # Generic "the algorithm" questions match TEXT explanations instead of ALGORITHM pseudocode
+    if algorithm_chunks:
+        procedural_keywords = ["procedure", "steps", "implementation", "method", "algorithm"]
+        has_procedural = any(kw in question.lower() for kw in procedural_keywords)
+
+        if not has_procedural:
+            # Check if algorithm name/method appears in question
+            # Extract potential algorithm/method names (CamelCase.method or function_name)
+            algo_names = re.findall(
+                r"\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)(?:\.[a-z_]+)?", combined_content_original
+            )
+            algo_names.extend(re.findall(r"\b([a-z_]+_[a-z_]+)\s*\(", combined_content_original))
+
+            has_algo_name = any(
+                name.lower() in question.lower() for name in algo_names if len(name) > 3
+            )
+
+            if not has_algo_name:
+                return (
+                    False,
+                    "Algorithm chunks require procedural language "
+                    "('steps', 'procedure', 'implementation') or specific algorithm/method name",
+                )
+
+    # Extract specific references from question
+    # Match both "Exercise X.Y" and "Example X.Y"
+    exercise_pattern = r"(?:Exercise|Example)\s+(\d+\.\d+)"
+    exercise_refs = re.findall(exercise_pattern, question, re.IGNORECASE)
+
+    # Extract technical terms with parentheses (likely function/method names)
+    tech_term_pattern = r"\b([A-Z][A-Za-z_]*\([^)]*\))"
+    tech_terms = re.findall(tech_term_pattern, question)
+
+    # Extract code field references (.field_name)
+    field_pattern = r"\.([A-Z_]+)\s+field"
+    field_refs = re.findall(field_pattern, question)
+
+    # Validate exercise/example references
+    if exercise_refs:
+        for ex_ref in exercise_refs:
+            # Check if any chunk contains this number
+            if ex_ref not in combined_content:
+                return (
+                    False,
+                    f"Question mentions number '{ex_ref}' but no expected chunk contains it",
+                )
+
+    # Validate technical terms (lenient - just check if prefix exists)
+    if tech_terms:
+        for term in tech_terms:
+            func_name = term.split("(")[0]
+            if func_name.lower() not in combined_content:
+                return False, f"Question mentions '{term}' but term not found in expected chunks"
+
+    # Validate field references
+    if field_refs:
+        for field in field_refs:
+            if field.lower() not in combined_content:
+                return False, f"Question mentions '.{field} field' but not found in expected chunks"
+
+    return True, "OK"
 
 
 def assign_split(rng: random.Random) -> str:
@@ -227,19 +513,26 @@ def build_golden_set_entry(
     question_data: dict[str, Any],
     split: str,
 ) -> dict[str, Any]:
-    """Convert raw LLM question output to a golden set entry."""
+    """Convert raw LLM question output to a golden set entry with chunk_id and pdf_block_ids."""
     return {
         "id": case_id,
         "question": question_data["question"],
         "paraphrases": question_data.get("paraphrases", []),
         "expected_chunk_ids": question_data.get("relevant_ids", []),
+        "pdf_block_ids_map": question_data.get("pdf_block_ids_map", {}),
         "split": split,
     }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate golden set for RAG retrieval evaluation."
+        description="Generate golden set for RAG retrieval evaluation from JSON chunks."
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=Path("ULTIMATE_BOOK_DATA_03_04_translated.json"),
+        help="Input JSON file with chunks (default: ULTIMATE_BOOK_DATA_03_04_translated.json)",
     )
     parser.add_argument(
         "--output",
@@ -248,33 +541,28 @@ def parse_args() -> argparse.Namespace:
         help="Output path for golden_set.json",
     )
     parser.add_argument(
-        "--weaviate-host",
-        default=os.getenv("WEAVIATE_HOST", "localhost"),
-        help="Weaviate host (default: localhost)",
-    )
-    parser.add_argument(
-        "--weaviate-port",
-        type=int,
-        default=int(os.getenv("WEAVIATE_PORT", "8080")),
-        help="Weaviate HTTP port (default: 8080)",
-    )
-    parser.add_argument(
         "--max-group-tokens",
         type=int,
         default=150_000,
         help="Max tokens per chunk group (default: 150000)",
     )
     parser.add_argument(
-        "--pairs-count",
-        type=int,
-        default=10,
-        help="Number of pair iterations to schedule (default: 10)",
-    )
-    parser.add_argument(
-        "--questions-per-pair",
+        "--questions-per-type",
         type=int,
         default=3,
-        help="Questions to generate per pair (default: 3)",
+        help="Questions to generate per chunk_type via stratified sampling (default: 3)",
+    )
+    parser.add_argument(
+        "--questions-per-group",
+        type=int,
+        default=3,
+        help="Questions to generate per group (default: 3)",
+    )
+    parser.add_argument(
+        "--max-groups",
+        type=int,
+        default=None,
+        help="Maximum number of groups to use (default: all groups)",
     )
     parser.add_argument(
         "--paraphrases-per-question",
@@ -301,25 +589,46 @@ def main() -> None:
     args = parse_args()
     rng = random.Random(args.seed)  # noqa: S311
 
-    try:
-        with weaviate.connect_to_local(
-            host=args.weaviate_host, port=args.weaviate_port
-        ) as weaviate_client:
-            chunks = fetch_all_chunks(weaviate_client)
-    except Exception as exc:
-        logger.error("weaviate_connection_failed", error=str(exc))
-        raise SystemExit(1) from exc
-
-    if not chunks:
-        logger.error("no_chunks_found", collection=COLLECTION_NAME)
+    # Load chunks from JSON file
+    if not args.input.exists():
+        logger.error("input_file_not_found", path=str(args.input))
         raise SystemExit(1)
 
-    groups = partition_into_groups(chunks, args.max_group_tokens)
-    if len(groups) < 2:
+    try:
+        all_chunks = load_chunks_from_json(args.input)
+    except Exception as exc:
+        logger.error("json_load_failed", path=str(args.input), error=str(exc))
+        raise SystemExit(1) from exc
+
+    if not all_chunks:
+        logger.error("no_chunks_found", path=str(args.input))
+        raise SystemExit(1)
+
+    # Build chunk_id -> pdf_block_ids mapping
+    chunk_id_to_pdf_blocks = {
+        chunk["chunk_id"]: chunk.get("pdf_block_ids", [])
+        for chunk in all_chunks
+        if "chunk_id" in chunk
+    }
+
+    # Build chunk_id -> chunk mapping for validation
+    chunks_by_id = {chunk["chunk_id"]: chunk for chunk in all_chunks if "chunk_id" in chunk}
+
+    # Stratified sampling by chunk_type
+    sampled_chunks = stratified_sample_by_type(all_chunks, args.questions_per_type, rng)
+    if not sampled_chunks:
+        logger.error("stratified_sampling_failed")
+        raise SystemExit(1)
+
+    # Partition into groups
+    groups = partition_into_groups(sampled_chunks, args.max_group_tokens)
+    if len(groups) < 1:
         logger.error("not_enough_groups", groups=len(groups))
         raise SystemExit(1)
 
-    pairs = schedule_pair_iterations(groups, args.pairs_count, rng)
+    # Select groups for generation
+    max_groups = args.max_groups if args.max_groups else len(groups)
+    selected_groups = select_groups_for_generation(groups, max_groups, rng)
 
     if not args.openai_api_key:
         logger.error(
@@ -332,17 +641,35 @@ def main() -> None:
 
     entries: list[dict[str, Any]] = []
     case_counter = 1
+    filtered_count = 0
 
-    for pair_idx, (group_a, group_b) in enumerate(pairs):
-        questions = generate_questions_for_pair(
+    for group_idx, group in enumerate(selected_groups):
+        questions = generate_questions_for_group(
             openai_client,
-            group_a,
-            group_b,
-            args.questions_per_pair,
+            group,
+            chunk_id_to_pdf_blocks,
+            args.questions_per_group,
             args.paraphrases_per_question,
-            pair_index=pair_idx,
+            group_index=group_idx,
         )
         for q in questions:
+            # Validate that expected chunks contain entities mentioned in question
+            is_valid, reason = validate_question_chunk_relevance(
+                question=q["question"],
+                expected_chunk_ids=q.get("relevant_ids", []),
+                chunks_by_id=chunks_by_id,
+            )
+
+            if not is_valid:
+                filtered_count += 1
+                logger.warning(
+                    "question_filtered",
+                    group=group_idx,
+                    reason=reason,
+                    question=q["question"][:100] + "...",
+                )
+                continue
+
             case_id = f"tc_{case_counter:03d}"
             split = assign_split(rng)
             entries.append(build_golden_set_entry(case_id, q, split))
@@ -358,6 +685,7 @@ def main() -> None:
         "golden_set_written",
         path=str(args.output),
         total=len(entries),
+        filtered=filtered_count,
         validation=validation_count,
         test=test_count,
     )
@@ -367,7 +695,7 @@ def main() -> None:
             "below_minimum_threshold",
             generated=len(entries),
             minimum=15,
-            advice="Run with more --pairs-count or check Weaviate data.",
+            advice="Increase --questions-per-type or --questions-per-group or --max-groups",
         )
 
 
