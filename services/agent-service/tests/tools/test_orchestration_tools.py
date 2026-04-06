@@ -75,9 +75,8 @@ async def test_execute_failure_with_error(mock_sub_agent_class, mock_validate, t
         return_value={"status": "failed", "error": "API rate limit exceeded."}
     )
 
-    result = await tool.execute(agent_query="Get history.")
-
-    assert result == {"error": "API rate limit exceeded."}
+    with pytest.raises(RuntimeError, match="API rate limit exceeded."):
+        await tool.execute(agent_query="Get history.")
 
 
 @pytest.mark.asyncio
@@ -87,6 +86,5 @@ async def test_execute_failure_fallback_error(mock_sub_agent_class, mock_validat
     mock_instance = mock_sub_agent_class.return_value
     mock_instance.run = AsyncMock(return_value={"status": "failed"})
 
-    result = await tool.execute(agent_query="Get history.")
-
-    assert result == {"error": "Sub-agent execution failed"}
+    with pytest.raises(RuntimeError, match="Sub-agent execution failed"):
+        await tool.execute(agent_query="Get history.")
