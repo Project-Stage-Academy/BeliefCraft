@@ -1,7 +1,8 @@
 from datetime import UTC, datetime
 
-from app.models.agent_state import AgentState, ThoughtStep, ToolCall
+from app.models.agent_state import AgentState, ThoughtStep
 from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
+from langchain_core.messages import AIMessage, ToolMessage
 
 
 def _base_state() -> AgentState:
@@ -28,27 +29,22 @@ def test_formats_single_action_iteration() -> None:
     state = _base_state()
     state["thoughts"] = [ThoughtStep(thought="Check inventory", next_action="tool_use")]
     state["messages"] = [
-        {
-            "role": "assistant",
-            "content": "<thinking>Check inventory</thinking>",
-            "tool_calls": [
+        AIMessage(
+            content="<thinking>Check inventory</thinking>",
+            tool_calls=[
                 {
                     "id": "tc_1",
-                    "type": "function",
-                    "function": {
-                        "name": "get_inventory_data",
-                        "arguments": '{"warehouse_id": "WH-001"}',
-                    },
+                    "name": "get_inventory_data",
+                    "args": {"warehouse_id": "WH-001"},
                 }
             ],
-        }
-    ]
-    state["tool_calls"] = [
-        ToolCall(
-            tool_name="get_inventory_data",
-            arguments={"warehouse_id": "WH-001"},
-            result={"items": [1, 2, 3]},
-        )
+        ),
+        ToolMessage(
+            tool_call_id="tc_1",
+            name="get_inventory_data",
+            content="",
+            artifact={"items": [1, 2, 3]},
+        ),
     ]
 
     result = formatter.format(state)
@@ -63,28 +59,25 @@ def test_formats_enveloped_list_payload_iteration() -> None:
     state = _base_state()
     state["thoughts"] = [ThoughtStep(thought="Check observations", next_action="tool_use")]
     state["messages"] = [
-        {
-            "role": "assistant",
-            "content": "<thinking>Check observations</thinking>",
-            "tool_calls": [
+        AIMessage(
+            content="<thinking>Check observations</thinking>",
+            tool_calls=[
                 {
                     "id": "tc_1",
-                    "type": "function",
-                    "function": {
-                        "name": "get_observed_inventory_snapshot",
-                        "arguments": "{}",
-                    },
+                    "name": "get_observed_inventory_snapshot",
+                    "args": {},
                 }
             ],
-        }
-    ]
-    state["tool_calls"] = [
-        ToolCall(
-            tool_name="get_observed_inventory_snapshot",
-            arguments={},
-            result={"result": [{"id": "row-1"}, {"id": "row-2"}, {"id": "row-3"}]},
-            trace_meta={"count": 3},
-        )
+        ),
+        ToolMessage(
+            tool_call_id="tc_1",
+            name="get_observed_inventory_snapshot",
+            content="",
+            artifact={
+                "data": {"result": [{"id": "row-1"}, {"id": "row-2"}, {"id": "row-3"}]},
+                "meta": {"count": 3},
+            },
+        ),
     ]
 
     result = formatter.format(state)
@@ -97,28 +90,22 @@ def test_formats_enveloped_nested_list_payload_iteration() -> None:
     state = _base_state()
     state["thoughts"] = [ThoughtStep(thought="Check moves", next_action="tool_use")]
     state["messages"] = [
-        {
-            "role": "assistant",
-            "content": "<thinking>Check moves</thinking>",
-            "tool_calls": [
+        AIMessage(
+            content="<thinking>Check moves</thinking>",
+            tool_calls=[
                 {
                     "id": "tc_1",
-                    "type": "function",
-                    "function": {
-                        "name": "list_inventory_moves",
-                        "arguments": '{"from_ts": "2026-03-01T00:00:00Z"}',
-                    },
+                    "name": "list_inventory_moves",
+                    "args": {"from_ts": "2026-03-01T00:00:00Z"},
                 }
             ],
-        }
-    ]
-    state["tool_calls"] = [
-        ToolCall(
-            tool_name="list_inventory_moves",
-            arguments={"from_ts": "2026-03-01T00:00:00Z"},
-            result={"moves": [{"id": "m-1"}, {"id": "m-2"}]},
-            trace_meta={"count": 2},
-        )
+        ),
+        ToolMessage(
+            tool_call_id="tc_1",
+            name="list_inventory_moves",
+            content="",
+            artifact={"data": {"moves": [{"id": "m-1"}, {"id": "m-2"}]}, "meta": {"count": 2}},
+        ),
     ]
 
     result = formatter.format(state)
@@ -131,28 +118,25 @@ def test_formats_enveloped_single_object_payload_iteration() -> None:
     state = _base_state()
     state["thoughts"] = [ThoughtStep(thought="Check location", next_action="tool_use")]
     state["messages"] = [
-        {
-            "role": "assistant",
-            "content": "<thinking>Check location</thinking>",
-            "tool_calls": [
+        AIMessage(
+            content="<thinking>Check location</thinking>",
+            tool_calls=[
                 {
                     "id": "tc_1",
-                    "type": "function",
-                    "function": {
-                        "name": "get_location",
-                        "arguments": '{"location_id": "loc-1"}',
-                    },
+                    "name": "get_location",
+                    "args": {"location_id": "loc-1"},
                 }
             ],
-        }
-    ]
-    state["tool_calls"] = [
-        ToolCall(
-            tool_name="get_location",
-            arguments={"location_id": "loc-1"},
-            result={"location": {"id": "loc-1", "code": "WH-01-DOCK"}},
-            trace_meta={"count": 1, "location_id": "loc-1"},
-        )
+        ),
+        ToolMessage(
+            tool_call_id="tc_1",
+            name="get_location",
+            content="",
+            artifact={
+                "data": {"location": {"id": "loc-1", "code": "WH-01-DOCK"}},
+                "meta": {"count": 1, "location_id": "loc-1"},
+            },
+        ),
     ]
 
     result = formatter.format(state)
@@ -165,35 +149,32 @@ def test_formats_enveloped_audit_trace_payload_iteration() -> None:
     state = _base_state()
     state["thoughts"] = [ThoughtStep(thought="Check audit trace", next_action="tool_use")]
     state["messages"] = [
-        {
-            "role": "assistant",
-            "content": "<thinking>Check audit trace</thinking>",
-            "tool_calls": [
+        AIMessage(
+            content="<thinking>Check audit trace</thinking>",
+            tool_calls=[
                 {
                     "id": "tc_1",
-                    "type": "function",
-                    "function": {
-                        "name": "get_inventory_move_audit_trace",
-                        "arguments": '{"move_id": "move-1"}',
-                    },
+                    "name": "get_inventory_move_audit_trace",
+                    "args": {"move_id": "move-1"},
                 }
             ],
-        }
-    ]
-    state["tool_calls"] = [
-        ToolCall(
-            tool_name="get_inventory_move_audit_trace",
-            arguments={"move_id": "move-1"},
-            result={
-                "move": {"id": "move-1"},
-                "observations": [{"id": "obs-1"}, {"id": "obs-2"}],
+        ),
+        ToolMessage(
+            tool_call_id="tc_1",
+            name="get_inventory_move_audit_trace",
+            content="",
+            artifact={
+                "data": {
+                    "move": {"id": "move-1"},
+                    "observations": [{"id": "obs-1"}, {"id": "obs-2"}],
+                },
+                "meta": {
+                    "count": 3,
+                    "move_id": "move-1",
+                    "observation_count": 2,
+                },
             },
-            trace_meta={
-                "count": 3,
-                "move_id": "move-1",
-                "observation_count": 2,
-            },
-        )
+        ),
     ]
 
     result = formatter.format(state)
@@ -206,39 +187,36 @@ def test_formats_enveloped_tree_payload_iteration() -> None:
     state = _base_state()
     state["thoughts"] = [ThoughtStep(thought="Check topology", next_action="tool_use")]
     state["messages"] = [
-        {
-            "role": "assistant",
-            "content": "<thinking>Check topology</thinking>",
-            "tool_calls": [
+        AIMessage(
+            content="<thinking>Check topology</thinking>",
+            tool_calls=[
                 {
                     "id": "tc_1",
-                    "type": "function",
-                    "function": {
-                        "name": "get_locations_tree",
-                        "arguments": '{"warehouse_id": "wh-1"}',
-                    },
+                    "name": "get_locations_tree",
+                    "args": {"warehouse_id": "wh-1"},
                 }
             ],
-        }
-    ]
-    state["tool_calls"] = [
-        ToolCall(
-            tool_name="get_locations_tree",
-            arguments={"warehouse_id": "wh-1"},
-            result={
-                "warehouse_id": "wh-1",
-                "warehouse_name": "WH-01",
-                "roots": [{"id": "root-1"}, {"id": "root-2"}],
-                "node_count": 5,
-                "root_count": 2,
+        ),
+        ToolMessage(
+            tool_call_id="tc_1",
+            name="get_locations_tree",
+            content="",
+            artifact={
+                "data": {
+                    "warehouse_id": "wh-1",
+                    "warehouse_name": "WH-01",
+                    "roots": [{"id": "root-1"}, {"id": "root-2"}],
+                    "node_count": 5,
+                    "root_count": 2,
+                },
+                "meta": {
+                    "count": 5,
+                    "warehouse_id": "wh-1",
+                    "node_count": 5,
+                    "root_count": 2,
+                },
             },
-            trace_meta={
-                "count": 5,
-                "warehouse_id": "wh-1",
-                "node_count": 5,
-                "root_count": 2,
-            },
-        )
+        ),
     ]
 
     result = formatter.format(state)
@@ -251,39 +229,32 @@ def test_formats_multi_action_iteration() -> None:
     state = _base_state()
     state["thoughts"] = [ThoughtStep(thought="Collect diagnostics", next_action="tool_use")]
     state["messages"] = [
-        {
-            "role": "assistant",
-            "content": "<thinking>Collect diagnostics</thinking>",
-            "tool_calls": [
+        AIMessage(
+            content="<thinking>Collect diagnostics</thinking>",
+            tool_calls=[
                 {
                     "id": "tc_1",
-                    "type": "function",
-                    "function": {
-                        "name": "get_inventory_data",
-                        "arguments": '{"warehouse_id": "WH-001"}',
-                    },
+                    "name": "get_inventory_data",
+                    "args": {"warehouse_id": "WH-001"},
                 },
                 {
                     "id": "tc_2",
-                    "type": "function",
-                    "function": {
-                        "name": "search_knowledge_base",
-                        "arguments": '{"query": "inventory discrepancy"}',
-                    },
+                    "name": "search_knowledge_base",
+                    "args": {"query": "inventory discrepancy"},
                 },
             ],
-        }
-    ]
-    state["tool_calls"] = [
-        ToolCall(
-            tool_name="get_inventory_data",
-            arguments={"warehouse_id": "WH-001"},
-            result={"items": [1, 2, 3]},
         ),
-        ToolCall(
-            tool_name="search_knowledge_base",
-            arguments={"query": "inventory discrepancy"},
-            result={"documents": [{"id": "chunk-1"}]},
+        ToolMessage(
+            tool_call_id="tc_1",
+            name="get_inventory_data",
+            content="",
+            artifact={"items": [1, 2, 3]},
+        ),
+        ToolMessage(
+            tool_call_id="tc_2",
+            name="search_knowledge_base",
+            content="",
+            artifact={"documents": [{"id": "chunk-1"}]},
         ),
     ]
 
