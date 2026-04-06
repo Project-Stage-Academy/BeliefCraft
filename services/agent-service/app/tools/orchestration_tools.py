@@ -1,4 +1,3 @@
-# file: services/agent-service/app/tools/orchestration_tools.py
 """Orchestration tools for agent-to-agent communication."""
 
 from typing import Any
@@ -37,8 +36,8 @@ class CallEnvSubAgentTool(BaseTool):
                     "agent_query": {
                         "type": "string",
                         "description": (
-                            "Clear, specific natural language instructions ",
-                            "outlining exactly what data to retrieve and summarize.",
+                            "Clear, specific natural language instructions "
+                            "outlining exactly what data to retrieve and summarize."
                         ),
                     }
                 },
