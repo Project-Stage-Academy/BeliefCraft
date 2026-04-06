@@ -1,4 +1,5 @@
-from app.models.agent_state import ThoughtStep, ToolCall
+from langchain_core.messages import AIMessage, ToolMessage
+
 from app.prompts.system_prompts import (
     REACT_LOOP_PROMPT,
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
@@ -74,8 +75,7 @@ class TestFormatReactPromptEmpty:
             "iteration": 1,
             "max_iterations": 10,
             "user_query": "What is the stock level?",
-            "thoughts": [],
-            "tool_calls": [],
+            "messages": [],
         }
         result = format_react_prompt(state)
         assert "1/10" in result
@@ -86,8 +86,7 @@ class TestFormatReactPromptEmpty:
             "iteration": 1,
             "max_iterations": 5,
             "user_query": "test query",
-            "thoughts": [],
-            "tool_calls": [],
+            "messages": [],
         }
         result = format_react_prompt(state)
         assert "<iteration" not in result
@@ -97,8 +96,7 @@ class TestFormatReactPromptEmpty:
             "iteration": 1,
             "max_iterations": 5,
             "user_query": "Check warehouse status",
-            "thoughts": [],
-            "tool_calls": [],
+            "messages": [],
         }
         result = format_react_prompt(state)
         assert "<query>" in result
@@ -107,25 +105,25 @@ class TestFormatReactPromptEmpty:
 
 
 class TestFormatReactPromptWithThoughtSteps:
-    """Tests for format_react_prompt with ThoughtStep model objects."""
+    """Tests for format_react_prompt using native LangChain messages."""
 
     def test_single_iteration_with_models(self) -> None:
-        thought = ThoughtStep(
-            thought="I need to check inventory",
-            reasoning="User asked about stock",
-            next_action="call_search_tool",
-        )
-        tool_call = ToolCall(
-            tool_name="search_inventory",
-            arguments={"warehouse_id": "WH-001"},
-            result={"stock": 42},
-        )
         state = {
             "iteration": 2,
             "max_iterations": 10,
             "user_query": "What is the stock level?",
-            "thoughts": [thought],
-            "tool_calls": [tool_call],
+            "messages": [
+                AIMessage(
+                    content="<thinking>I need to check inventory</thinking>",
+                    tool_calls=[{"id": "tc_1", "name": "search_inventory", "args": {"warehouse_id": "WH-001"}}]
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="search_inventory",
+                    content="",
+                    artifact={"stock": 42}
+                )
+            ]
         }
         result = format_react_prompt(state)
         assert '<iteration index="1">' in result
@@ -135,23 +133,25 @@ class TestFormatReactPromptWithThoughtSteps:
         assert "42" in result
 
     def test_trace_meta_is_not_injected_into_prompt_history(self) -> None:
-        thought = ThoughtStep(
-            thought="I need to check inventory",
-            reasoning="User asked about stock",
-            next_action="call_search_tool",
-        )
-        tool_call = ToolCall(
-            tool_name="search_inventory",
-            arguments={"warehouse_id": "WH-001"},
-            result={"stock": 42},
-            trace_meta={"count": 1, "filters": {"warehouse_id": "WH-001"}},
-        )
         state = {
             "iteration": 2,
             "max_iterations": 10,
             "user_query": "What is the stock level?",
-            "thoughts": [thought],
-            "tool_calls": [tool_call],
+            "messages": [
+                AIMessage(
+                    content="<thinking>I need to check inventory</thinking>",
+                    tool_calls=[{"id": "tc_1", "name": "search_inventory", "args": {"warehouse_id": "WH-001"}}]
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="search_inventory",
+                    content="",
+                    artifact={
+                        "data": {"stock": 42},
+                        "meta": {"count": 1, "filters": {"warehouse_id": "WH-001"}}
+                    }
+                )
+            ]
         }
 
         result = format_react_prompt(state)
@@ -161,36 +161,22 @@ class TestFormatReactPromptWithThoughtSteps:
         assert "'count': 1" not in result
 
     def test_multiple_iterations(self) -> None:
-        thoughts = [
-            ThoughtStep(
-                thought="Search for item A",
-                reasoning="Need data",
-                next_action="search",
-            ),
-            ThoughtStep(
-                thought="Now check risk",
-                reasoning="Have data, assess risk",
-                next_action="calculate",
-            ),
-        ]
-        tool_calls = [
-            ToolCall(
-                tool_name="search",
-                arguments={"item": "A"},
-                result={"count": 10},
-            ),
-            ToolCall(
-                tool_name="calculate_risk",
-                arguments={"item": "A", "count": 10},
-                result={"risk": 0.15},
-            ),
-        ]
         state = {
             "iteration": 3,
             "max_iterations": 10,
             "user_query": "Assess risk for item A",
-            "thoughts": thoughts,
-            "tool_calls": tool_calls,
+            "messages": [
+                AIMessage(
+                    content="<thinking>Search for item A</thinking>",
+                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"item": "A"}}]
+                ),
+                ToolMessage(tool_call_id="tc_1", name="search", content="", artifact={"count": 10}),
+                AIMessage(
+                    content="<thinking>Now check risk</thinking>",
+                    tool_calls=[{"id": "tc_2", "name": "calculate_risk", "args": {"item": "A", "count": 10}}]
+                ),
+                ToolMessage(tool_call_id="tc_2", name="calculate_risk", content="", artifact={"risk": 0.15})
+            ]
         }
         result = format_react_prompt(state)
         assert '<iteration index="1">' in result
@@ -201,73 +187,37 @@ class TestFormatReactPromptWithThoughtSteps:
         assert '<action tool="calculate_risk">' in result
 
     def test_tool_call_without_result(self) -> None:
-        thought = ThoughtStep(
-            thought="Try search",
-            reasoning="Need info",
-            next_action="search",
-        )
-        tool_call = ToolCall(
-            tool_name="search",
-            arguments={"query": "test"},
-            result=None,
-        )
         state = {
             "iteration": 1,
             "max_iterations": 5,
             "user_query": "test",
-            "thoughts": [thought],
-            "tool_calls": [tool_call],
+            "messages": [
+                AIMessage(
+                    content="<thinking>Try search</thinking>",
+                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"query": "test"}}]
+                )
+            ]
         }
         result = format_react_prompt(state)
         assert "<observation>" not in result
         assert '<action tool="search">' in result
 
     def test_single_iteration_renders_all_actions_from_same_assistant_turn(self) -> None:
-        thought = ThoughtStep(
-            thought="Collect warehouse diagnostics",
-            reasoning="Need both inventory and policy data",
-            next_action="tool_use",
-        )
-        inventory_call = ToolCall(
-            tool_name="get_inventory_data",
-            arguments={"warehouse_id": "WH-001"},
-            result={"items": [1, 2, 3]},
-        )
-        kb_call = ToolCall(
-            tool_name="search_knowledge_base",
-            arguments={"query": "inventory discrepancy"},
-            result={"documents": [{"id": "chunk-1"}]},
-        )
         state = {
             "iteration": 2,
             "max_iterations": 10,
             "user_query": "Analyze discrepancy risk",
-            "thoughts": [thought],
-            "tool_calls": [inventory_call, kb_call],
             "messages": [
-                {
-                    "role": "assistant",
-                    "content": "<thinking>Collect warehouse diagnostics</thinking>",
-                    "tool_calls": [
-                        {
-                            "id": "tc_1",
-                            "type": "function",
-                            "function": {
-                                "name": "get_inventory_data",
-                                "arguments": '{"warehouse_id": "WH-001"}',
-                            },
-                        },
-                        {
-                            "id": "tc_2",
-                            "type": "function",
-                            "function": {
-                                "name": "search_knowledge_base",
-                                "arguments": '{"query": "inventory discrepancy"}',
-                            },
-                        },
-                    ],
-                }
-            ],
+                AIMessage(
+                    content="<thinking>Collect warehouse diagnostics</thinking>",
+                    tool_calls=[
+                        {"id": "tc_1", "name": "get_inventory_data", "args": {"warehouse_id": "WH-001"}},
+                        {"id": "tc_2", "name": "search_knowledge_base", "args": {"query": "inventory discrepancy"}}
+                    ]
+                ),
+                ToolMessage(tool_call_id="tc_1", name="get_inventory_data", content="", artifact={"items": [1, 2, 3]}),
+                ToolMessage(tool_call_id="tc_2", name="search_knowledge_base", content="", artifact={"documents": [{"id": "chunk-1"}]})
+            ]
         }
 
         result = format_react_prompt(state)
@@ -278,96 +228,50 @@ class TestFormatReactPromptWithThoughtSteps:
         assert "chunk-1" in result
 
 
-class TestFormatReactPromptWithDicts:
-    """Tests for format_react_prompt with raw dict tool calls."""
+class TestFormatReactPromptMessageEdgeCases:
+    """Tests for edge cases parsing native LangChain messages."""
 
-    def test_dict_tool_call(self) -> None:
-        thought = ThoughtStep(
-            thought="Check stock",
-            reasoning="User query",
-            next_action="search",
-        )
-        tool_call = {
-            "tool_name": "get_inventory",
-            "arguments": {"sku": "ABC-123"},
-            "result": {"quantity": 50},
-        }
+    def test_error_tool_message_renders_error_observation(self) -> None:
         state = {
             "iteration": 1,
             "max_iterations": 5,
-            "user_query": "Check stock for ABC-123",
-            "thoughts": [thought],
-            "tool_calls": [tool_call],
-        }
-        result = format_react_prompt(state)
-        assert '<action tool="get_inventory">' in result
-        assert "<observation>" in result
-        assert "50" in result
-
-    def test_dict_tool_call_without_result(self) -> None:
-        thought = ThoughtStep(
-            thought="Check",
-            reasoning="r",
-            next_action="a",
-        )
-        tool_call = {
-            "tool_name": "search",
-            "arguments": {"q": "test"},
-            "result": None,
-        }
-        state = {
-            "iteration": 1,
-            "max_iterations": 5,
-            "user_query": "test",
-            "thoughts": [thought],
-            "tool_calls": [tool_call],
-        }
-        result = format_react_prompt(state)
-        assert "<observation>" not in result
-
-    def test_dict_thought_uses_only_embedded_thought_text(self) -> None:
-        state = {
-            "iteration": 2,
-            "max_iterations": 5,
-            "user_query": "Analyze discrepancy risk",
-            "thoughts": [
-                {
-                    "thought": "<thinking>Check recent moves</thinking>\nNeed device health next.",
-                    "next_action": "tool_use",
-                    "timestamp": "2026-03-17T11:32:33.498991Z",
-                }
-            ],
-            "tool_calls": [
-                {
-                    "tool_name": "list_inventory_moves",
-                    "arguments": {"from_ts": "2026-03-09T00:00:00Z"},
-                    "result": {"data": {"moves": []}},
-                }
-            ],
+            "user_query": "Check stock",
             "messages": [
-                {
-                    "role": "assistant",
-                    "content": "Check recent moves",
-                    "tool_calls": [
-                        {
-                            "id": "tc_1",
-                            "type": "function",
-                            "function": {
-                                "name": "list_inventory_moves",
-                                "arguments": '{"from_ts": "2026-03-09T00:00:00Z"}',
-                            },
-                        }
-                    ],
-                }
-            ],
+                AIMessage(
+                    content="<thinking>Check</thinking>",
+                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"q": "test"}}]
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="search",
+                    content="API rate limit exceeded",
+                    status="error"
+                )
+            ]
         }
-
         result = format_react_prompt(state)
+        assert '<action tool="search">' in result
+        assert "<observation>{'error': 'API rate limit exceeded'}</observation>" in result
 
-        assert "<thinking>Check recent moves</thinking>" in result
-        assert "Need device health next." not in result
-        assert "'next_action': 'tool_use'" not in result
-        assert "'timestamp': '2026-03-17T11:32:33.498991Z'" not in result
+    def test_tool_message_without_artifact_falls_back_to_content(self) -> None:
+        state = {
+            "iteration": 1,
+            "max_iterations": 5,
+            "user_query": "Check stock",
+            "messages": [
+                AIMessage(
+                    content="<thinking>Check</thinking>",
+                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"q": "test"}}]
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="search",
+                    content="Plain text result",
+                )
+            ]
+        }
+        result = format_react_prompt(state)
+        assert "<observation>Plain text result</observation>" in result
 
 
 class TestFormatReactPromptUnpairedThoughts:
@@ -375,29 +279,24 @@ class TestFormatReactPromptUnpairedThoughts:
 
     def test_final_thought_without_tool_call(self) -> None:
         """A trailing thought (e.g. final answer) must not be dropped."""
-        thoughts = [
-            ThoughtStep(thought="Search first", next_action="tool_use"),
-            ThoughtStep(thought="Now I know the answer", next_action="answer"),
-        ]
-        tool_calls = [
-            ToolCall(
-                tool_name="search",
-                arguments={"q": "test"},
-                result={"count": 5},
-            ),
-        ]
         state = {
             "iteration": 2,
             "max_iterations": 10,
             "user_query": "test",
-            "thoughts": thoughts,
-            "tool_calls": tool_calls,
+            "messages": [
+                AIMessage(
+                    content="<thinking>Search first</thinking>",
+                    tool_calls=[{"id": "t1", "name": "search", "args": {"q": "test"}}]
+                ),
+                ToolMessage(tool_call_id="t1", name="search", content="", artifact={"count": 5}),
+                AIMessage(content="<thinking>Now I know the answer</thinking>")
+            ]
         }
         result = format_react_prompt(state)
         assert '<iteration index="1">' in result
         assert '<iteration index="2">' in result
         assert "Now I know the answer" in result
-        # The second iteration should have thinking but no action
+        # The first iteration should have thinking and action
         assert '<action tool="search">' in result
 
 
@@ -409,8 +308,7 @@ class TestFormatReactPromptIterationDisplay:
             "iteration": 3,
             "max_iterations": 7,
             "user_query": "test",
-            "thoughts": [],
-            "tool_calls": [],
+            "messages": [],
         }
         result = format_react_prompt(state)
         assert "3/7" in result
@@ -420,8 +318,7 @@ class TestFormatReactPromptIterationDisplay:
             "iteration": 1,
             "max_iterations": 10,
             "user_query": "test",
-            "thoughts": [],
-            "tool_calls": [],
+            "messages": [],
         }
         result = format_react_prompt(state)
         assert "1/10" in result
@@ -431,8 +328,7 @@ class TestFormatReactPromptIterationDisplay:
             "iteration": 10,
             "max_iterations": 10,
             "user_query": "test",
-            "thoughts": [],
-            "tool_calls": [],
+            "messages": [],
         }
         result = format_react_prompt(state)
         assert "10/10" in result
