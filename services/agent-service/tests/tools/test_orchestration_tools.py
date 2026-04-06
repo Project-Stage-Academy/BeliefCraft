@@ -1,64 +1,92 @@
-"""Orchestration tools for agent-to-agent communication."""
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from typing import Any
+import pytest
+from app.tools.base import ToolMetadata
+from app.tools.orchestration_tools import CallEnvSubAgentTool
 
-from app.tools.base import BaseTool, ToolMetadata
-from app.tools.registry import ToolRegistry
+
+@pytest.fixture
+def mock_registry():
+    registry_mock = MagicMock()
+
+    tool_1 = MagicMock()
+    tool_1.metadata.name = "get_stock_levels"
+
+    tool_2 = MagicMock()
+    tool_2.metadata.name = "get_pallet_location"
+
+    registry_mock.list_tools.return_value = [tool_1, tool_2]
+    return registry_mock
 
 
-class CallEnvSubAgentTool(BaseTool):
-    """Delegates environment data gathering to the ReWOO sub-agent."""
+@pytest.fixture
+def tool(mock_registry):
+    return CallEnvSubAgentTool(env_registry=mock_registry)
 
-    def __init__(self, env_registry: ToolRegistry) -> None:
-        self.env_registry = env_registry
 
-        capabilities = [f"{t.metadata.name}" for t in self.env_registry.list_tools()]
-        self._capability_summary = ", ".join(capabilities)
+def test_get_metadata(tool):
+    metadata = tool.get_metadata()
 
-        super().__init__()
+    assert isinstance(metadata, ToolMetadata)
+    assert metadata.name == "call_env_sub_agent"
+    assert "[get_stock_levels, get_pallet_location]" in metadata.description
+    assert "agent_query" in metadata.parameters["properties"]
+    assert metadata.parameters["required"] == ["agent_query"]
 
-    def get_metadata(self) -> ToolMetadata:
-        return ToolMetadata(
-            name="call_env_sub_agent",
-            description=(
-                "Delegate warehouse environment data retrieval to a specialized sub-agent. "
-                "This sub-agent executes API calls and returns a concise, factual text summary "
-                "of the current reality. "
-                "The sub-agent has access to the following "
-                f"specific data endpoints: [{self._capability_summary}]. "
-                "Provide a highly specific natural language query. "
-                "Include exact identifiers (UUIDs, SKUs, POs) and explicitly state what "
-                "metrics, statuses, historical trends, or anomalies you need."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "agent_query": {
-                        "type": "string",
-                        "description": (
-                            "Clear, specific natural language instructions ",
-                            "outlining exactly what data to retrieve and summarize.",
-                        ),
-                    }
-                },
-                "required": ["agent_query"],
-            },
-            category="utility",
-            skip_cache=True,
-        )
 
-    async def execute(self, **kwargs: Any) -> dict[str, Any]:
-        self._validate_required_params(["agent_query"], kwargs)
+@pytest.mark.asyncio
+@patch.object(CallEnvSubAgentTool, "_validate_required_params")
+@patch("app.services.env_sub_agent.EnvSubAgent")
+async def test_execute_success_with_summary(mock_sub_agent_class, mock_validate, tool):
+    mock_instance = mock_sub_agent_class.return_value
+    mock_instance.run = AsyncMock(
+        return_value={"status": "success", "state_summary": "All palettes are in sector 4G."}
+    )
 
-        from app.services.env_sub_agent import EnvSubAgent
+    result = await tool.execute(agent_query="Where are the palettes?")
 
-        sub_agent = EnvSubAgent(tool_registry=self.env_registry)
-        final_state = await sub_agent.run(agent_query=kwargs["agent_query"])
+    mock_validate.assert_called_once_with(
+        ["agent_query"], {"agent_query": "Where are the palettes?"}
+    )
+    mock_sub_agent_class.assert_called_once_with(tool_registry=tool.env_registry)
+    mock_instance.run.assert_awaited_once_with(agent_query="Where are the palettes?")
 
-        if final_state.get("status") == "failed":
-            return {"error": final_state.get("error", "Sub-agent execution failed")}
+    assert result == {"summary": "All palettes are in sector 4G."}
 
-        return {
-            "summary": final_state.get("state_summary")
-            or "Sub-agent completed but generated no summary.",
-        }
+
+@pytest.mark.asyncio
+@patch.object(CallEnvSubAgentTool, "_validate_required_params")
+@patch("app.services.env_sub_agent.EnvSubAgent")
+async def test_execute_success_no_summary(mock_sub_agent_class, mock_validate, tool):
+    mock_instance = mock_sub_agent_class.return_value
+    mock_instance.run = AsyncMock(return_value={"status": "success", "state_summary": ""})
+
+    result = await tool.execute(agent_query="Check anomalies.")
+
+    assert result == {"summary": "Sub-agent completed but generated no summary."}
+
+
+@pytest.mark.asyncio
+@patch.object(CallEnvSubAgentTool, "_validate_required_params")
+@patch("app.services.env_sub_agent.EnvSubAgent")
+async def test_execute_failure_with_error(mock_sub_agent_class, mock_validate, tool):
+    mock_instance = mock_sub_agent_class.return_value
+    mock_instance.run = AsyncMock(
+        return_value={"status": "failed", "error": "API rate limit exceeded."}
+    )
+
+    result = await tool.execute(agent_query="Get history.")
+
+    assert result == {"error": "API rate limit exceeded."}
+
+
+@pytest.mark.asyncio
+@patch.object(CallEnvSubAgentTool, "_validate_required_params")
+@patch("app.services.env_sub_agent.EnvSubAgent")
+async def test_execute_failure_fallback_error(mock_sub_agent_class, mock_validate, tool):
+    mock_instance = mock_sub_agent_class.return_value
+    mock_instance.run = AsyncMock(return_value={"status": "failed"})
+
+    result = await tool.execute(agent_query="Get history.")
+
+    assert result == {"error": "Sub-agent execution failed"}
