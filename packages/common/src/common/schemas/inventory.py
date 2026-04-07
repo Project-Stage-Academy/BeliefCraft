@@ -47,6 +47,7 @@ class ListInventoryMovesRequest(Pagination):
 
     warehouse_id: str | None = None
     product_id: str | None = None
+    sku: str | None = None
     move_type: str | None = None
     from_ts: datetime | None = None
     to_ts: datetime | None = None
@@ -137,6 +138,7 @@ class InventoryAdjustmentByReason(BaseModel):
 class GetInventoryAdjustmentsSummaryRequest(BaseModel):
     warehouse_id: str | None = None
     product_id: str | None = None
+    sku: str | None = None
     from_ts: datetime | None = None
     to_ts: datetime | None = None
 

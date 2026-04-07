@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from app.config_load import settings
 from app.core.exceptions import AgentExecutionError
 from app.models.env_sub_agent_plans import PlannedToolCall, WarehousePlan
 from app.models.env_sub_agent_state import ReWOOState, create_initial_state
@@ -36,7 +37,10 @@ def mock_registry() -> MagicMock:
 
 @pytest.fixture
 def agent(mock_registry: MagicMock) -> EnvSubAgent:
-    with patch("app.services.base_agent.LLMService"):
+    with (
+        patch("app.services.base_agent.LLMService"),
+        patch("app.services.env_sub_agent.LLMService"),
+    ):
         return EnvSubAgent(tool_registry=mock_registry)
 
 
@@ -58,6 +62,20 @@ def test_initialization_requires_registry() -> None:
 def test_initialization_builds_graph(agent: EnvSubAgent) -> None:
     assert agent.graph is not None
     assert agent.system_prompt is not None
+
+
+def test_initialization_uses_separate_planner_and_solver_models(
+    mock_registry: MagicMock,
+) -> None:
+    with (
+        patch("app.services.base_agent.LLMService") as planner_llm_cls,
+        patch("app.services.env_sub_agent.LLMService") as solver_llm_cls,
+    ):
+        agent = EnvSubAgent(tool_registry=mock_registry)
+
+    planner_llm_cls.assert_called_once_with(model_id=settings.env_sub_agent.planner_model_id)
+    solver_llm_cls.assert_called_once_with(model_id=settings.env_sub_agent.solver_model_id)
+    assert agent.solver_llm is solver_llm_cls.return_value
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +266,7 @@ class TestSolveNode:
         }
         initial_state["total_tokens"] = 12
 
-        agent.llm.chat_completion = AsyncMock(
+        agent.solver_llm.chat_completion = AsyncMock(
             return_value={
                 "message": {"role": "assistant", "content": "- 10 units moved for SKU-1"},
                 "tool_calls": [],
@@ -270,7 +288,7 @@ class TestSolveNode:
         initial_state["observations"] = {
             "tool_0": {"tool": "get_inventory", "arguments": {}, "response": {"status": "success"}}
         }
-        agent.llm.chat_completion = AsyncMock(side_effect=RuntimeError("solver boom"))
+        agent.solver_llm.chat_completion = AsyncMock(side_effect=RuntimeError("solver boom"))
 
         result = await agent._solve_node(initial_state)
 

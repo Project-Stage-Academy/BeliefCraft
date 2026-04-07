@@ -15,6 +15,7 @@ from app.prompts.env_sub_agent_system_prompts import (
     SOLVER_SYSTEM_PROMPT,
 )
 from app.services.base_agent import BaseAgent
+from app.services.llm_service import LLMService
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langgraph.graph import END, StateGraph
@@ -36,10 +37,11 @@ class EnvSubAgent(BaseAgent):
         resolved_prompt = system_prompt or ENV_SUB_AGENT_SYSTEM_PROMPT
 
         super().__init__(
-            model_id=settings.env_sub_agent.model_id,
+            model_id=settings.env_sub_agent.planner_model_id,
             system_prompt=resolved_prompt,
             tool_registry=tool_registry,
         )
+        self.solver_llm = LLMService(model_id=settings.env_sub_agent.solver_model_id)
 
     def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:
         """Build ReWOO state machine with plan/execute/solve nodes."""
@@ -230,7 +232,7 @@ class EnvSubAgent(BaseAgent):
                 observations_length=len(observations_str),
             )
 
-            response = await self.llm.chat_completion(messages=messages)
+            response = await self.solver_llm.chat_completion(messages=messages)
             summary = response["message"]["content"].strip()
             tokens_used = response["tokens"]["total"]
             current_tokens = state.get("total_tokens", 0)

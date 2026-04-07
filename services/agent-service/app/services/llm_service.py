@@ -82,20 +82,82 @@ class LLMService:
 
         return boto3.client(**client_kwargs)
 
+    def _create_bedrock_control_client(self) -> Any:
+        """Create Bedrock control-plane client for model metadata lookups."""
+        region = settings.bedrock.region
+        client_config = Config(
+            connect_timeout=settings.bedrock.connect_timeout_seconds,
+            read_timeout=settings.bedrock.read_timeout_seconds,
+        )
+
+        if settings.bedrock.aws_profile:
+            session = boto3.Session(
+                profile_name=settings.bedrock.aws_profile,
+                region_name=region,
+            )
+            return session.client("bedrock", config=client_config)
+
+        client_kwargs: dict[str, Any] = {
+            "service_name": "bedrock",
+            "region_name": region,
+            "config": client_config,
+        }
+
+        if settings.bedrock.aws_access_key_id and settings.bedrock.aws_secret_access_key:
+            client_kwargs["aws_access_key_id"] = settings.bedrock.aws_access_key_id
+            client_kwargs["aws_secret_access_key"] = settings.bedrock.aws_secret_access_key
+
+        return boto3.client(**client_kwargs)
+
+    def _resolve_inference_profile_base_model_id(self) -> str | None:
+        """Resolve the foundation model behind a Bedrock inference profile ARN."""
+        if not self.model_id.startswith("arn:") or "inference-profile" not in self.model_id:
+            return None
+
+        try:
+            control_client = self._create_bedrock_control_client()
+            response = control_client.get_inference_profile(
+                inferenceProfileIdentifier=self.model_id
+            )
+        except Exception:
+            logger.warning(
+                "bedrock_inference_profile_lookup_failed",
+                model_id=self.model_id,
+                exc_info=True,
+            )
+            return None
+
+        models = response.get("models", [])
+        if not models:
+            return None
+
+        model_arn = models[0].get("modelArn")
+        if not model_arn or "/" not in model_arn:
+            return None
+
+        return str(model_arn).split("/")[-1]
+
     def _create_llm(self) -> ChatBedrock:
         """Create and configure ChatBedrock LLM instance.
 
         Returns:
             Configured ChatBedrock instance.
         """
-        return ChatBedrock(
-            client=self.boto_client,
-            model=self.model_id,
-            model_kwargs={
+        llm_kwargs: dict[str, Any] = {
+            "client": self.boto_client,
+            "model": self.model_id,
+            "model_kwargs": {
                 "temperature": settings.bedrock.temperature,
                 "max_tokens": settings.bedrock.max_tokens,
             },
-        )
+        }
+
+        if self.model_id.startswith("arn:"):
+            llm_kwargs["provider"] = "anthropic"
+            if base_model_id := self._resolve_inference_profile_base_model_id():
+                llm_kwargs["base_model_id"] = base_model_id
+
+        return ChatBedrock(**llm_kwargs)
 
     def _convert_messages_to_langchain(self, messages: list[dict[str, Any]]) -> list[BaseMessage]:
         """Convert dictionary messages to LangChain Message objects."""

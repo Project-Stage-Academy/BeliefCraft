@@ -33,7 +33,10 @@ def mock_registry() -> MagicMock:
 
 @pytest.fixture
 def agent(mock_registry: MagicMock) -> EnvSubAgent:
-    with patch("app.services.base_agent.LLMService"):
+    with (
+        patch("app.services.base_agent.LLMService"),
+        patch("app.services.env_sub_agent.LLMService"),
+    ):
         return EnvSubAgent(tool_registry=mock_registry)
 
 
@@ -99,7 +102,7 @@ async def test_env_sub_agent_run_distills_inventory_discrepancy(agent: EnvSubAge
         _make_lc_tool("get_observed_inventory_snapshot", observed_result),
     ]
 
-    agent.llm.chat_completion = AsyncMock(
+    agent.solver_llm.chat_completion = AsyncMock(
         return_value={
             "message": {
                 "role": "assistant",
@@ -195,7 +198,7 @@ async def test_env_sub_agent_run_distills_device_health_findings(agent: EnvSubAg
         _make_lc_tool("get_device_anomalies", anomalies_result),
     ]
 
-    agent.llm.chat_completion = AsyncMock(
+    agent.solver_llm.chat_completion = AsyncMock(
         return_value={
             "message": {
                 "role": "assistant",
@@ -259,7 +262,7 @@ async def test_env_sub_agent_run_handles_solver_failure(agent: EnvSubAgent) -> N
     }
     agent.lc_tools = [_make_lc_tool("list_inventory_moves", inventory_result)]
 
-    agent.llm.chat_completion = AsyncMock(side_effect=RuntimeError("solver LLM unavailable"))
+    agent.solver_llm.chat_completion = AsyncMock(side_effect=RuntimeError("solver LLM unavailable"))
 
     final_state = await agent.run("Check inventory discrepancy for SKU-1")
 

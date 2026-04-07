@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from common.schemas.common import Pagination, ToolResult, build_tool_meta
 from common.schemas.inventory import (
@@ -55,6 +56,16 @@ def _to_optional_str(value: Any) -> str | None:
     return str(value)
 
 
+def _looks_like_uuid(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _inventory_move_from_row(row: Any) -> InventoryMoveRow:
     return InventoryMoveRow(
         id=_to_str(row["id"]),
@@ -95,6 +106,7 @@ def _observation_for_move_from_row(row: Any) -> ObservationForMove:
 def list_inventory_moves(
     warehouse_id: str | None = None,
     product_id: str | None = None,
+    sku: str | None = None,
     move_type: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
@@ -108,7 +120,8 @@ def list_inventory_moves(
     try:
         request = ListInventoryMovesRequest(
             warehouse_id=warehouse_id,
-            product_id=product_id,
+            product_id=product_id if _looks_like_uuid(product_id) else None,
+            sku=sku or (product_id if not _looks_like_uuid(product_id) else None),
             move_type=move_type,
             from_ts=from_ts,
             to_ts=to_ts,
@@ -133,7 +146,8 @@ def list_inventory_moves(
                 count=len(response.moves),
                 filters={
                     "warehouse_id": warehouse_id,
-                    "product_id": product_id,
+                    "product_id": request.product_id,
+                    "sku": request.sku,
                     "move_type": move_type,
                     "from_ts": from_ts.isoformat() if from_ts else None,
                     "to_ts": to_ts.isoformat() if to_ts else None,
@@ -212,6 +226,7 @@ def get_inventory_move_audit_trace(
 def get_inventory_adjustments_summary(
     warehouse_id: str | None = None,
     product_id: str | None = None,
+    sku: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
 ) -> ToolResult[GetInventoryAdjustmentsSummaryResponse]:
@@ -222,7 +237,8 @@ def get_inventory_adjustments_summary(
     try:
         request = GetInventoryAdjustmentsSummaryRequest(
             warehouse_id=warehouse_id,
-            product_id=product_id,
+            product_id=product_id if _looks_like_uuid(product_id) else None,
+            sku=sku or (product_id if not _looks_like_uuid(product_id) else None),
             from_ts=from_ts,
             to_ts=to_ts,
         )
@@ -261,7 +277,8 @@ def get_inventory_adjustments_summary(
                 count=count,
                 filters={
                     "warehouse_id": warehouse_id,
-                    "product_id": product_id,
+                    "product_id": request.product_id,
+                    "sku": request.sku,
                     "from_ts": from_ts.isoformat() if from_ts else None,
                     "to_ts": to_ts.isoformat() if to_ts else None,
                 },

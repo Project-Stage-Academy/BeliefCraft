@@ -20,6 +20,7 @@ router = APIRouter(prefix="/inventory", tags=["smart-query"])
 def inventory_list_moves(
     warehouse_id: str | None = None,
     product_id: str | None = None,
+    sku: str | None = None,
     move_type: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
@@ -30,6 +31,7 @@ def inventory_list_moves(
         lambda: list_inventory_moves(
             warehouse_id=warehouse_id,
             product_id=product_id,
+            sku=sku,
             move_type=move_type,
             from_ts=from_ts,
             to_ts=to_ts,
@@ -53,6 +55,7 @@ def inventory_get_move_audit_trace(move_id: str) -> dict[str, Any]:
 def inventory_adjustments_summary(
     warehouse_id: str | None = None,
     product_id: str | None = None,
+    sku: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
 ) -> dict[str, Any]:
@@ -60,6 +63,7 @@ def inventory_adjustments_summary(
         lambda: get_inventory_adjustments_summary(
             warehouse_id=warehouse_id,
             product_id=product_id,
+            sku=sku,
             from_ts=from_ts,
             to_ts=to_ts,
         )
