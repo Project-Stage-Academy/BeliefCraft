@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
-from typing import Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 from uuid import uuid4
 
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 
@@ -44,11 +46,7 @@ class AgentState(TypedDict):
     # Reasoning trace
     thoughts: list[ThoughtStep]
     tool_calls: list[ToolCall]
-
-    # LLM interaction
-    messages: list[dict[str, Any]]  # Chat history for LLM
-
-    # Output
+    messages: Annotated[list[AnyMessage], add_messages]
     final_answer: str | None
     status: Literal["running", "completed", "failed", "max_iterations"]
     error: str | None

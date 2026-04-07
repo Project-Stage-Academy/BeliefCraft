@@ -3,7 +3,7 @@
 from typing import Any
 
 from app.models.agent_state import AgentState
-from app.prompts.system_prompts import build_iteration_history
+from app.services.message_parser import MessageParser
 
 
 class ReasoningTraceFormatter:
@@ -23,7 +23,9 @@ class ReasoningTraceFormatter:
         """
         reasoning_trace: list[dict[str, Any]] = []
 
-        for iteration in build_iteration_history(final_state, include_trace_meta=True):
+        for iteration in MessageParser.build_iteration_history(
+            final_state, include_trace_meta=True
+        ):
             entry = self._format_entry(iteration)
             reasoning_trace.append(entry)
 
