@@ -20,9 +20,9 @@ from app.services.extractors.tool_result_utils import (
     tool_call_field,
 )
 from app.services.llm_service import LLMService
+from app.services.message_parser import MessageParser
 from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
 from common.logging import get_logger
-from langchain_core.messages import ToolMessage
 
 logger = get_logger(__name__)
 
@@ -36,12 +36,7 @@ def _coerce_status(status: str) -> _ResponseStatus:
 
 
 class RecommendationGenerator:
-    """
-    Generate structured recommendations from agent state.
-
-    Orchestrates formula/code/citation extraction, LLM-based answer parsing,
-    reasoning trace assembly, and warning detection.
-    """
+    """Generate structured recommendations from agent state."""
 
     def __init__(
         self,
@@ -59,41 +54,6 @@ class RecommendationGenerator:
         self.final_answer_parser = final_answer_parser or FinalAnswerParser(resolved_llm)
         self.reasoning_trace_formatter = reasoning_trace_formatter or ReasoningTraceFormatter()
 
-    def _build_tool_executions(self, messages: list[Any]) -> list[dict[str, Any]]:
-        from langchain_core.messages import AIMessage
-
-        executions = []
-        for i, msg in enumerate(messages):
-            if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", []):
-                for tc in msg.tool_calls:
-                    tool_msg = next(
-                        (
-                            m
-                            for m in messages[i + 1 :]
-                            if isinstance(m, ToolMessage) and m.tool_call_id == tc["id"]
-                        ),
-                        None,
-                    )
-
-                    result = None
-                    error = None
-                    if tool_msg:
-                        result = getattr(tool_msg, "artifact", None)
-                        if result is None:
-                            result = tool_msg.content
-                        if getattr(tool_msg, "status", None) == "error":
-                            error = str(tool_msg.content)
-
-                    executions.append(
-                        {
-                            "tool_name": tc["name"],
-                            "arguments": tc["args"],
-                            "result": result,
-                            "error": error,
-                        }
-                    )
-        return executions
-
     async def generate(self, agent_state: AgentState) -> AgentRecommendationResponse:
         logger.info("generating_recommendation", request_id=agent_state.get("request_id"))
 
@@ -109,7 +69,7 @@ class RecommendationGenerator:
         recommendations = structured.get("recommendations") or []
         confidence = structured.get("confidence")
 
-        tool_executions = self._build_tool_executions(agent_state.get("messages", []))
+        tool_executions = MessageParser.extract_tool_executions(agent_state.get("messages", []))
 
         formulas = self._extract_formulas(tool_executions, final_answer)
         code_snippets = self._extract_code_snippets(tool_executions, final_answer)

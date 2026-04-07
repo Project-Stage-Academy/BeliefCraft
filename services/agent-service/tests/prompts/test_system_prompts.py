@@ -1,11 +1,10 @@
-from langchain_core.messages import AIMessage, ToolMessage
-
 from app.prompts.system_prompts import (
     REACT_LOOP_PROMPT,
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
     format_react_prompt,
     get_warehouse_advisor_prompt,
 )
+from langchain_core.messages import AIMessage, ToolMessage
 
 
 class TestWarehouseAdvisorSystemPrompt:
@@ -115,15 +114,18 @@ class TestFormatReactPromptWithThoughtSteps:
             "messages": [
                 AIMessage(
                     content="<thinking>I need to check inventory</thinking>",
-                    tool_calls=[{"id": "tc_1", "name": "search_inventory", "args": {"warehouse_id": "WH-001"}}]
+                    tool_calls=[
+                        {
+                            "id": "tc_1",
+                            "name": "search_inventory",
+                            "args": {"warehouse_id": "WH-001"},
+                        }
+                    ],
                 ),
                 ToolMessage(
-                    tool_call_id="tc_1",
-                    name="search_inventory",
-                    content="",
-                    artifact={"stock": 42}
-                )
-            ]
+                    tool_call_id="tc_1", name="search_inventory", content="", artifact={"stock": 42}
+                ),
+            ],
         }
         result = format_react_prompt(state)
         assert '<iteration index="1">' in result
@@ -140,7 +142,13 @@ class TestFormatReactPromptWithThoughtSteps:
             "messages": [
                 AIMessage(
                     content="<thinking>I need to check inventory</thinking>",
-                    tool_calls=[{"id": "tc_1", "name": "search_inventory", "args": {"warehouse_id": "WH-001"}}]
+                    tool_calls=[
+                        {
+                            "id": "tc_1",
+                            "name": "search_inventory",
+                            "args": {"warehouse_id": "WH-001"},
+                        }
+                    ],
                 ),
                 ToolMessage(
                     tool_call_id="tc_1",
@@ -148,10 +156,10 @@ class TestFormatReactPromptWithThoughtSteps:
                     content="",
                     artifact={
                         "data": {"stock": 42},
-                        "meta": {"count": 1, "filters": {"warehouse_id": "WH-001"}}
-                    }
-                )
-            ]
+                        "meta": {"count": 1, "filters": {"warehouse_id": "WH-001"}},
+                    },
+                ),
+            ],
         }
 
         result = format_react_prompt(state)
@@ -168,15 +176,19 @@ class TestFormatReactPromptWithThoughtSteps:
             "messages": [
                 AIMessage(
                     content="<thinking>Search for item A</thinking>",
-                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"item": "A"}}]
+                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"item": "A"}}],
                 ),
                 ToolMessage(tool_call_id="tc_1", name="search", content="", artifact={"count": 10}),
                 AIMessage(
                     content="<thinking>Now check risk</thinking>",
-                    tool_calls=[{"id": "tc_2", "name": "calculate_risk", "args": {"item": "A", "count": 10}}]
+                    tool_calls=[
+                        {"id": "tc_2", "name": "calculate_risk", "args": {"item": "A", "count": 10}}
+                    ],
                 ),
-                ToolMessage(tool_call_id="tc_2", name="calculate_risk", content="", artifact={"risk": 0.15})
-            ]
+                ToolMessage(
+                    tool_call_id="tc_2", name="calculate_risk", content="", artifact={"risk": 0.15}
+                ),
+            ],
         }
         result = format_react_prompt(state)
         assert '<iteration index="1">' in result
@@ -194,9 +206,9 @@ class TestFormatReactPromptWithThoughtSteps:
             "messages": [
                 AIMessage(
                     content="<thinking>Try search</thinking>",
-                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"query": "test"}}]
+                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"query": "test"}}],
                 )
-            ]
+            ],
         }
         result = format_react_prompt(state)
         assert "<observation>" not in result
@@ -211,13 +223,31 @@ class TestFormatReactPromptWithThoughtSteps:
                 AIMessage(
                     content="<thinking>Collect warehouse diagnostics</thinking>",
                     tool_calls=[
-                        {"id": "tc_1", "name": "get_inventory_data", "args": {"warehouse_id": "WH-001"}},
-                        {"id": "tc_2", "name": "search_knowledge_base", "args": {"query": "inventory discrepancy"}}
-                    ]
+                        {
+                            "id": "tc_1",
+                            "name": "get_inventory_data",
+                            "args": {"warehouse_id": "WH-001"},
+                        },
+                        {
+                            "id": "tc_2",
+                            "name": "search_knowledge_base",
+                            "args": {"query": "inventory discrepancy"},
+                        },
+                    ],
                 ),
-                ToolMessage(tool_call_id="tc_1", name="get_inventory_data", content="", artifact={"items": [1, 2, 3]}),
-                ToolMessage(tool_call_id="tc_2", name="search_knowledge_base", content="", artifact={"documents": [{"id": "chunk-1"}]})
-            ]
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="get_inventory_data",
+                    content="",
+                    artifact={"items": [1, 2, 3]},
+                ),
+                ToolMessage(
+                    tool_call_id="tc_2",
+                    name="search_knowledge_base",
+                    content="",
+                    artifact={"documents": [{"id": "chunk-1"}]},
+                ),
+            ],
         }
 
         result = format_react_prompt(state)
@@ -239,15 +269,15 @@ class TestFormatReactPromptMessageEdgeCases:
             "messages": [
                 AIMessage(
                     content="<thinking>Check</thinking>",
-                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"q": "test"}}]
+                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"q": "test"}}],
                 ),
                 ToolMessage(
                     tool_call_id="tc_1",
                     name="search",
                     content="API rate limit exceeded",
-                    status="error"
-                )
-            ]
+                    status="error",
+                ),
+            ],
         }
         result = format_react_prompt(state)
         assert '<action tool="search">' in result
@@ -261,14 +291,14 @@ class TestFormatReactPromptMessageEdgeCases:
             "messages": [
                 AIMessage(
                     content="<thinking>Check</thinking>",
-                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"q": "test"}}]
+                    tool_calls=[{"id": "tc_1", "name": "search", "args": {"q": "test"}}],
                 ),
                 ToolMessage(
                     tool_call_id="tc_1",
                     name="search",
                     content="Plain text result",
-                )
-            ]
+                ),
+            ],
         }
         result = format_react_prompt(state)
         assert "<observation>Plain text result</observation>" in result
@@ -286,11 +316,11 @@ class TestFormatReactPromptUnpairedThoughts:
             "messages": [
                 AIMessage(
                     content="<thinking>Search first</thinking>",
-                    tool_calls=[{"id": "t1", "name": "search", "args": {"q": "test"}}]
+                    tool_calls=[{"id": "t1", "name": "search", "args": {"q": "test"}}],
                 ),
                 ToolMessage(tool_call_id="t1", name="search", content="", artifact={"count": 5}),
-                AIMessage(content="<thinking>Now I know the answer</thinking>")
-            ]
+                AIMessage(content="<thinking>Now I know the answer</thinking>"),
+            ],
         }
         result = format_react_prompt(state)
         assert '<iteration index="1">' in result

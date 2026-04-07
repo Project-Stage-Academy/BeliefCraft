@@ -1,3 +1,5 @@
+"""Raw string templates for the Environment Retrieval Sub-agent."""
+
 ENV_SUB_AGENT_SYSTEM_PROMPT = """
 You are the Environment Retrieval Sub-agent for a stochastic warehouse simulation.
 

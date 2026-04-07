@@ -4,8 +4,6 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from langchain_core.messages import AIMessage, ToolMessage
-
 # Base system prompt (without dynamic skill catalog)
 _BASE_WAREHOUSE_ADVISOR_PROMPT = """You are an expert warehouse operations advisor \
 powered by the "Algorithms for Decision Making" textbook.
@@ -134,66 +132,6 @@ def _format_thought_content(content: Any) -> str:
     return content_str
 
 
-def build_iteration_history(
-    state: Mapping[str, Any],
-    *,
-    include_trace_meta: bool = False,
-) -> list[dict[str, Any]]:
-    """Build iteration history directly from LangChain AIMessage and ToolMessage sequences."""
-    messages = state.get("messages", [])
-    history = []
-    iteration_index = 1
-
-    for i, msg in enumerate(messages):
-        if isinstance(msg, AIMessage) and (msg.content or getattr(msg, "tool_calls", [])):
-            actions = []
-            tool_calls = getattr(msg, "tool_calls", [])
-
-            for tc in tool_calls:
-                tool_msg = next(
-                    (
-                        m
-                        for m in messages[i + 1 :]
-                        if isinstance(m, ToolMessage) and m.tool_call_id == tc["id"]
-                    ),
-                    None,
-                )
-
-                action = {
-                    "tool": tc["name"],
-                    "arguments": tc["args"],
-                }
-
-                if tool_msg:
-                    obs = getattr(tool_msg, "artifact", None)
-                    if obs is None:
-                        obs = tool_msg.content
-
-                    if getattr(tool_msg, "status", None) == "error":
-                        action["observation"] = {"error": str(tool_msg.content)}
-                    else:
-                        if include_trace_meta and isinstance(obs, dict):
-                            action["observation"] = obs
-                        else:
-                            action["observation"] = (
-                                obs.get("data", obs) if isinstance(obs, dict) else obs
-                            )
-
-                actions.append(action)
-
-            if str(msg.content).strip() or actions:
-                history.append(
-                    {
-                        "iteration": iteration_index,
-                        "thought": _format_thought_content(msg.content),
-                        "actions": actions,
-                    }
-                )
-                iteration_index += 1
-
-    return history
-
-
 def _format_action_xml(action: dict[str, Any]) -> list[str]:
     """Render a single action plus observation as XML lines."""
     lines = [f'    <action tool="{action.get("tool")}">{action.get("arguments")}</action>']
@@ -213,8 +151,10 @@ def format_react_prompt(state: Mapping[str, Any]) -> str:
     Returns:
         Formatted prompt string with XML-structured history.
     """
+    from app.services.message_parser import MessageParser
+
     history: list[str] = []
-    for iteration in build_iteration_history(state):
+    for iteration in MessageParser.build_iteration_history(state):
         iter_log = [f'  <iteration index="{iteration["iteration"]}">']
         iter_log.append(f'    <thinking>{iteration["thought"]}</thinking>')
 
