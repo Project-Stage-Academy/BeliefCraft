@@ -133,7 +133,8 @@ module = [
     "langchain_core.*",
     "langgraph.*",
     "alembic.*",
-    "testcontainers.*"
+    "testcontainers.*",
+    "openai.*"
 ]
 ignore_missing_imports = true
 

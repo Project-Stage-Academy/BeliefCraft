@@ -1,0 +1,247 @@
+[
+  {
+    "id": "tc_001",
+    "question": "In importance sampling for trajectory-based estimation, what weight is assigned to each sample drawn from the proposal distribution?",
+    "paraphrases": [
+      "When trajectories are sampled from the proposal distribution, what is the sample weight used in importance sampling?",
+      "What ratio weights each trajectory sample under the proposal distribution?",
+      "How are samples reweighted when estimating with trajectories drawn from P'?",
+      "What is the importance-sampling weight for trajectory i in the proposal-based estimator?",
+      "In the weighted-sample approximation, what factor multiplies each sampled trajectory?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "text_a7d43995",
+        "pdf_block_ids": [
+          "309:7",
+          "309:8",
+          "309:9",
+          "309:10",
+          "309:11",
+          "309:12",
+          "309:13",
+          "309:14",
+          "309:15",
+          "309:16",
+          "309:17",
+          "309:18"
+        ]
+      }
+    ],
+    "split": "test"
+  },
+  {
+    "id": "tc_002",
+    "question": "What does particle injection do in a particle filter, and what trade-off does it introduce?",
+    "paraphrases": [
+      "How does particle injection help prevent particle deprivation, and what is its downside?",
+      "What is the purpose of injecting random particles, and how does it affect posterior accuracy?",
+      "In a particle filter, why are particles injected from a broader distribution?",
+      "What effect does particle injection have on particle deprivation and belief accuracy?",
+      "How does injecting particles from a uniform distribution influence the particle filter?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "text_1166a556",
+        "pdf_block_ids": [
+          "416:2",
+          "416:3"
+        ]
+      }
+    ],
+    "split": "validation"
+  },
+  {
+    "id": "tc_003",
+    "question": "How does the fast informed bound update its alpha vectors, and what is its per-iteration computational cost?",
+    "paraphrases": [
+      "What is the update equation for the fast informed bound, and how many operations does each iteration require?",
+      "How are alpha vectors computed in the fast informed bound, including its complexity?",
+      "What recurrence defines the fast informed bound, and what is its iteration cost?",
+      "In the fast informed bound method, how is each alpha vector updated and what is the operation count per iteration?",
+      "What formula does the fast informed bound use for alpha-vector updates, and what is its asymptotic per-iteration cost?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "text_7103be91",
+        "pdf_block_ids": [
+          "451:11",
+          "451:12",
+          "451:13",
+          "451:14",
+          "451:15"
+        ]
+      }
+    ],
+    "split": "validation"
+  },
+  {
+    "id": "tc_004",
+    "question": "What is the recursive formula for the joint utility of a conditional plan in a multi-agent partially observed game when starting from state s?",
+    "paraphrases": [
+      "How is the joint utility U^π(s) computed recursively for a conditional plan in a POMG?",
+      "What recursion defines the utility of a joint policy from state s in terms of rewards, transitions, observations, and continuation policies?",
+      "What equation gives U^π(s) for a joint conditional plan starting in state s?",
+      "How do reward, transition, observation, and next-node utilities combine in the recursive joint utility expression?",
+      "What is the recursive definition of the joint utility function for a conditional plan policy in state s?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "text_26.2.1_dd01c587",
+        "pdf_block_ids": [
+          "557:4",
+          "557:5",
+          "558:2",
+          "558:3",
+          "558:4"
+        ]
+      }
+    ],
+    "split": "validation"
+  },
+  {
+    "id": "tc_005",
+    "question": "What does the ExactInference.infer method do to compute a joint distribution over the query variables from a Bayesian network and evidence?",
+    "paraphrases": [
+      "How does ExactInference.infer produce a factor over the query variables given a Bayesian network and evidence?",
+      "What are the steps performed by ExactInference.infer when doing exact inference in a discrete Bayesian network?",
+      "In ExactInference.infer, how are the network factors, evidence, and non-query variables processed?",
+      "How does the ExactInference.infer procedure transform the Bayesian network factors into a normalized query distribution?",
+      "What sequence of operations does ExactInference.infer apply to obtain the final factor over the query variables?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_e9ee5708",
+        "pdf_block_ids": [
+          "70:2",
+          "70:12"
+        ]
+      }
+    ],
+    "split": "validation"
+  },
+  {
+    "id": "tc_006",
+    "question": "What does local approximation value iteration do on the hex world problem, and why is the resulting policy not optimal?",
+    "paraphrases": [
+      "How is local approximation value iteration applied to the hex world problem, and what is the quality of the resulting policy?",
+      "What is the outcome of using local approximation value iteration with five outlined states in the hex world problem?",
+      "How does the local approximation value iteration method approximate the value function in the hex world example, and what limitation does it have?",
+      "In the hex world problem, what approximation scheme is used for the value function and what kind of policy does it produce?",
+      "What is the effect of local approximation value iteration on the hex world value function, and why is the policy only reasonable rather than optimal?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "captioned_image_dd9fb909",
+        "pdf_block_ids": [
+          "188:3"
+        ]
+      }
+    ],
+    "split": "validation"
+  },
+  {
+    "id": "tc_007",
+    "question": "How does trust region policy optimization use the KL-divergence constraint and line search to update the policy?",
+    "paraphrases": [
+      "What role does the elliptical KL-divergence constraint play in trust region policy optimization, and how is the step size chosen?",
+      "How does TRPO search for an improved policy while respecting the divergence constraint?",
+      "In trust region policy optimization, how are the natural policy gradient direction and line search combined?",
+      "What procedure does trust region policy optimization follow after computing the natural policy gradient ascent direction?",
+      "How does the second-order KL approximation shape the update step in trust region policy optimization?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "captioned_image_0a0a79f1",
+        "pdf_block_ids": [
+          "281:3"
+        ]
+      }
+    ],
+    "split": "validation"
+  },
+  {
+    "id": "tc_008",
+    "question": "What update rule does the NaturalPolicyUpdate.update method use to compute the new parameter vector from the policy gradient estimate and Fisher matrix?",
+    "paraphrases": [
+      "How does NaturalPolicyUpdate.update calculate the next parameter vector using the gradient estimate and Fisher information matrix?",
+      "What is the parameter update performed by the NaturalPolicyUpdate.update method?",
+      "In NaturalPolicyUpdate.update, how are the gradient estimate and Fisher matrix combined to produce theta prime?",
+      "What formula does NaturalPolicyUpdate.update use for updating theta?",
+      "How does the natural policy update step compute the new theta from del_U, F, and epsilon?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_3940a0fd",
+        "pdf_block_ids": [
+          "277:2",
+          "277:3"
+        ]
+      }
+    ],
+    "split": "test"
+  },
+  {
+    "id": "tc_009",
+    "question": "How does the GibbsSampling.infer method generate an approximate posterior factor from a Bayesian network, evidence, and a query set?",
+    "paraphrases": [
+      "What steps does GibbsSampling.infer use to estimate the query distribution in a Bayesian network?",
+      "How does GibbsSampling.infer produce a normalized factor over the query variables?",
+      "In GibbsSampling.infer, how are burn-in, skipping, and repeated sampling used to form the output factor?",
+      "What is the procedure implemented by GibbsSampling.infer for Bayesian network inference with evidence?",
+      "How does the Gibbs sampling inference method turn sampled assignments into a factor over the query variables?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_c2a2a036",
+        "pdf_block_ids": [
+          "84:3",
+          "84:2"
+        ]
+      }
+    ],
+    "split": "validation"
+  },
+  {
+    "id": "tc_010",
+    "question": "What condition determines how many particles are injected in the AdaptiveInjectionParticleFilter.update method, and how are the new states chosen?",
+    "paraphrases": [
+      "In AdaptiveInjectionParticleFilter.update, when does the method inject particles and how are injected versus resampled states selected?",
+      "What rule does AdaptiveInjectionParticleFilter.update use to decide the number of injected particles?",
+      "How does the adaptive injection particle filter update compute m_inject and form the next particle set?",
+      "What does AdaptiveInjectionParticleFilter.update do when the fast moving average falls below the slow moving average threshold?",
+      "How are particle weights, moving averages, and injection sampling used in AdaptiveInjectionParticleFilter.update?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_46470a80",
+        "pdf_block_ids": [
+          "417:6",
+          "417:11"
+        ]
+      }
+    ],
+    "split": "validation"
+  },
+  {
+    "id": "tc_011",
+    "question": "In Bayesian network sampling, how does BayesianNetwork.sample generate a full assignment using the factors and topological order?",
+    "paraphrases": [
+      "What steps does BayesianNetwork.sample follow to construct an assignment from a Bayesian network?",
+      "How does the Bayesian network sampling method use conditional factors while iterating through the graph order?",
+      "In the sampling procedure for a Bayesian network, how are variable values drawn one by one?",
+      "What is the mechanism by which BayesianNetwork.sample fills in each variable of an assignment?",
+      "How does the sample method combine topological sorting, conditioning, and factor sampling to produce an assignment?"
+    ],
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_5687807b",
+        "pdf_block_ids": [
+          "77:4",
+          "77:6"
+        ]
+      }
+    ],
+    "split": "validation"
+  }
+]
