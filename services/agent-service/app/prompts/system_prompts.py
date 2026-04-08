@@ -4,6 +4,8 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from langchain_core.messages import AIMessage, ToolMessage
+
 # Base system prompt (without dynamic skill catalog)
 _BASE_WAREHOUSE_ADVISOR_PROMPT = """You are an expert warehouse operations advisor \
 powered by the "Algorithms for Decision Making" textbook.
@@ -130,6 +132,249 @@ def _format_thought_content(content: Any) -> str:
     if match:
         return match.group(1).strip()
     return content_str
+
+
+def _parse_tool_arguments(raw_arguments: Any) -> Any:
+    """Parse tool arguments for display while preserving non-JSON inputs."""
+    if not isinstance(raw_arguments, str):
+        return raw_arguments
+
+    try:
+        return json.loads(raw_arguments)
+    except json.JSONDecodeError:
+        return raw_arguments
+
+
+def _normalize_ai_message_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized_calls: list[dict[str, Any]] = []
+    for tool_call in tool_calls:
+        if not isinstance(tool_call, dict):
+            continue
+
+        if "function" in tool_call:
+            normalized_calls.append(tool_call)
+            continue
+
+        normalized_calls.append(
+            {
+                "id": tool_call.get("id"),
+                "type": "function",
+                "function": {
+                    "name": tool_call.get("name"),
+                    "arguments": json.dumps(tool_call.get("args", {})),
+                },
+            }
+        )
+    return normalized_calls
+
+
+def _extract_message_tool_calls(message: Any) -> list[dict[str, Any]]:
+    """Return tool calls declared on an assistant message."""
+    if isinstance(message, AIMessage):
+        raw_tool_calls = getattr(message, "tool_calls", None) or []
+        if isinstance(raw_tool_calls, list):
+            return _normalize_ai_message_tool_calls(raw_tool_calls)
+        return []
+
+    if isinstance(message, dict):
+        raw_tool_calls = message.get("tool_calls")
+        if isinstance(raw_tool_calls, list):
+            return [tool_call for tool_call in raw_tool_calls if isinstance(tool_call, dict)]
+    return []
+
+
+def _is_assistant_message(message: Any) -> bool:
+    if isinstance(message, AIMessage):
+        return True
+    return isinstance(message, dict) and message.get("role") == "assistant"
+
+
+def _parse_tool_observation(content: Any) -> Any:
+    if isinstance(content, str):
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            return content
+    return content
+
+
+def _extract_tool_observations_by_id(messages: list[Any]) -> dict[str, Any]:
+    observations: dict[str, Any] = {}
+    for message in messages:
+        if isinstance(message, ToolMessage):
+            observations[message.tool_call_id] = _parse_tool_observation(message.content)
+            continue
+
+        if isinstance(message, dict) and message.get("role") == "tool":
+            tool_call_id = message.get("tool_call_id")
+            if tool_call_id:
+                observations[str(tool_call_id)] = _parse_tool_observation(message.get("content"))
+    return observations
+
+
+def _build_action_from_recorded_tool_call(
+    recorded_tool_call: dict[str, Any] | object,
+    *,
+    include_trace_meta: bool = False,
+) -> dict[str, Any]:
+    """Build a prompt/reasoning action from a recorded ToolCall."""
+    action: dict[str, Any] = {
+        "tool": _get_tool_call_attr(recorded_tool_call, "tool_name"),
+        "arguments": _get_tool_call_attr(recorded_tool_call, "arguments"),
+    }
+
+    error = _get_tool_call_attr(recorded_tool_call, "error")
+    if error:
+        action["observation"] = {"error": error}
+        return action
+
+    result = _get_tool_call_attr(recorded_tool_call, "result")
+    if result is not None:
+        if include_trace_meta:
+            trace_meta = _get_tool_call_attr(recorded_tool_call, "trace_meta")
+            if isinstance(trace_meta, dict) and trace_meta:
+                action["observation"] = {"data": result, "meta": trace_meta}
+                return action
+        action["observation"] = result
+
+    return action
+
+
+def _build_action_from_message_and_recorded_result(
+    raw_tool_call: dict[str, Any],
+    recorded_tool_call: dict[str, Any] | object | None,
+    *,
+    include_trace_meta: bool = False,
+) -> dict[str, Any]:
+    """Build a prompt/reasoning action for one assistant-declared tool call."""
+    function_payload = raw_tool_call.get("function")
+    tool_name = None
+    tool_arguments: Any = None
+
+    if isinstance(function_payload, dict):
+        tool_name = function_payload.get("name")
+        tool_arguments = _parse_tool_arguments(function_payload.get("arguments"))
+
+    action: dict[str, Any] = {
+        "tool": tool_name,
+        "arguments": tool_arguments,
+    }
+
+    if recorded_tool_call is None:
+        return action
+
+    recorded_action = _build_action_from_recorded_tool_call(
+        recorded_tool_call,
+        include_trace_meta=include_trace_meta,
+    )
+    action["tool"] = recorded_action.get("tool") or action["tool"]
+    action["arguments"] = recorded_action.get("arguments") or action["arguments"]
+
+    if "observation" in recorded_action:
+        action["observation"] = recorded_action["observation"]
+
+    return action
+
+
+def _build_iteration_history_from_messages(
+    state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
+) -> list[dict[str, Any]]:
+    """Build iteration history using assistant-turn boundaries from raw messages."""
+    thoughts = state["thoughts"]
+    recorded_tool_calls = state["tool_calls"]
+    messages = state.get("messages", [])
+    assistant_messages = [message for message in messages if _is_assistant_message(message)]
+    tool_observations_by_id = _extract_tool_observations_by_id(messages)
+
+    history: list[dict[str, Any]] = []
+    tool_call_cursor = 0
+
+    for index, thought in enumerate(thoughts):
+        assistant_message = assistant_messages[index] if index < len(assistant_messages) else None
+        raw_tool_calls = _extract_message_tool_calls(assistant_message)
+        actions: list[dict[str, Any]] = []
+
+        for offset, raw_tool_call in enumerate(raw_tool_calls):
+            recorded_tool_call = None
+            recorded_index = tool_call_cursor + offset
+            if recorded_index < len(recorded_tool_calls):
+                recorded_tool_call = recorded_tool_calls[recorded_index]
+            actions.append(
+                _build_action_from_message_and_recorded_result(
+                    raw_tool_call,
+                    recorded_tool_call,
+                    include_trace_meta=include_trace_meta,
+                )
+            )
+            tool_call_id = raw_tool_call.get("id")
+            if tool_call_id and "observation" not in actions[-1]:
+                observation = tool_observations_by_id.get(str(tool_call_id))
+                if observation is not None:
+                    actions[-1]["observation"] = observation
+
+        history.append(
+            {
+                "iteration": index + 1,
+                "thought": _format_thought_content(thought),
+                "actions": actions,
+            }
+        )
+        tool_call_cursor += len(raw_tool_calls)
+
+    return history
+
+
+def _build_iteration_history_from_flat_lists(
+    state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
+) -> list[dict[str, Any]]:
+    """Fallback history builder for tests or older states without raw messages."""
+    thoughts = state["thoughts"]
+    tool_calls = state["tool_calls"]
+    history: list[dict[str, Any]] = []
+
+    for index, thought in enumerate(thoughts):
+        actions: list[dict[str, Any]] = []
+        if index < len(tool_calls):
+            actions.append(
+                _build_action_from_recorded_tool_call(
+                    tool_calls[index],
+                    include_trace_meta=include_trace_meta,
+                )
+            )
+
+        history.append(
+            {
+                "iteration": index + 1,
+                "thought": _format_thought_content(thought),
+                "actions": actions,
+            }
+        )
+
+    return history
+
+
+def build_iteration_history(
+    state: Mapping[str, Any],
+    *,
+    include_trace_meta: bool = False,
+) -> list[dict[str, Any]]:
+    """Return iteration history with exact assistant-turn to tool-call grouping."""
+    has_assistant_turns = any(
+        _is_assistant_message(message) for message in state.get("messages", [])
+    )
+    if has_assistant_turns:
+        return _build_iteration_history_from_messages(
+            state,
+            include_trace_meta=include_trace_meta,
+        )
+    return _build_iteration_history_from_flat_lists(
+        state,
+        include_trace_meta=include_trace_meta,
+    )
 
 
 def _format_action_xml(action: dict[str, Any]) -> list[str]:

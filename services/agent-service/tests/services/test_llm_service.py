@@ -335,51 +335,7 @@ class TestLLMServiceInit:
                 },
             )
 
-    def test_uses_bedrock_provider_for_inference_profile_arn(
-        self, mock_settings: MagicMock
-    ) -> None:
-        inference_profile_arn = (
-            "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/test-profile"
-        )
-
-        with (
-            patch("app.services.llm_service.settings", mock_settings),
-            patch("app.services.llm_service.boto3") as mock_boto3,
-            patch("app.services.llm_service.ChatBedrock") as mock_chat_bedrock,
-        ):
-            runtime_client = MagicMock()
-            control_client = MagicMock()
-            control_client.get_inference_profile.return_value = {
-                "models": [
-                    {
-                        "modelArn": (
-                            "arn:aws:bedrock:us-east-1::foundation-model/"
-                            "anthropic.claude-haiku-4-5-20251001-v1:0"
-                        )
-                    }
-                ]
-            }
-            mock_boto3.client.side_effect = [runtime_client, control_client]
-            mock_chat_bedrock.return_value = MagicMock()
-
-            LLMService(model_id=inference_profile_arn)
-
-            mock_chat_bedrock.assert_called_once_with(
-                client=runtime_client,
-                model=inference_profile_arn,
-                provider="anthropic",
-                base_model_id="anthropic.claude-haiku-4-5-20251001-v1:0",
-                model_kwargs={
-                    "temperature": 0.0,
-                    "max_tokens": 4000,
-                },
-            )
-
-            control_client.get_inference_profile.assert_called_once_with(
-                inferenceProfileIdentifier=inference_profile_arn
-            )
-
-    def test_skips_profile_lookup_for_non_arn_model(self, mock_settings: MagicMock) -> None:
+    def test_uses_explicit_model_id_as_is(self, mock_settings: MagicMock) -> None:
         with (
             patch("app.services.llm_service.settings", mock_settings),
             patch("app.services.llm_service.boto3") as mock_boto3,

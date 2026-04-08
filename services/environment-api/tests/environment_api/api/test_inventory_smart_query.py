@@ -6,9 +6,7 @@ from database.enums import MoveType
 from database.models import InventoryMove
 
 
-def test_inventory_moves_accepts_sku_like_product_id(
-    client, db_session, seed_base_world
-) -> None:
+def test_inventory_moves_accepts_sku_like_product_id(client, db_session, seed_base_world) -> None:
     product = seed_base_world["product"]
     dock = seed_base_world["dock"]
 

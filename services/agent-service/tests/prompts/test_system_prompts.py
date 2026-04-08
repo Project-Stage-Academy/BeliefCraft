@@ -257,6 +257,43 @@ class TestFormatReactPromptWithThoughtSteps:
         assert '<action tool="search_knowledge_base">' in result
         assert "chunk-1" in result
 
+    def test_langchain_message_history_includes_tool_observation(self) -> None:
+        thought = ThoughtStep(
+            thought="Need warehouse facts",
+            reasoning="Need environment evidence",
+            next_action="tool_use",
+        )
+        state = {
+            "iteration": 2,
+            "max_iterations": 10,
+            "user_query": "Summarize inventory moves for PHA-22602565",
+            "thoughts": [thought],
+            "tool_calls": [],
+            "messages": [
+                AIMessage(
+                    content="<thinking>Need warehouse facts</thinking>",
+                    tool_calls=[
+                        {
+                            "name": "call_env_sub_agent",
+                            "args": {"agent_query": "Summarize recent inventory moves"},
+                            "id": "tc_1",
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="call_env_sub_agent",
+                    content='{"summary": "- Found 2 recent outbound moves"}',
+                ),
+            ],
+        }
+
+        result = format_react_prompt(state)
+
+        assert '<action tool="call_env_sub_agent">' in result
+        assert "<observation>" in result
+        assert "Found 2 recent outbound moves" in result
+
 
 class TestFormatReactPromptMessageEdgeCases:
     """Tests for edge cases parsing native LangChain messages."""
