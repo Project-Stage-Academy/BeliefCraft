@@ -33,13 +33,19 @@ uv run uvicorn app.main:app --reload --port 8003
 docker-compose up agent-service
 ```
 
+Docker Compose injects internal service URLs automatically:
+- `ENVIRONMENT_API_URL=http://environment-api:8000`
+- `RAG_API_URL=http://rag-service:8001`
+- `REDIS_URL=redis://redis:6379`
+
 ## Essential Configuration
 
 Create `.env` file with these **required** variables:
 
 ```bash
-ENVIRONMENT_API_URL=http://localhost:8001/api/v1
+ENVIRONMENT_API_URL=http://localhost:8000
 RAG_API_URL=http://localhost:8001
+REDIS_URL=redis://localhost:6379
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 

@@ -197,7 +197,7 @@ class SkillStore:
         self,
         skills_dir: str | Path,
         *,
-        enforce_name_matches_dir: bool = True,
+        enforce_name_matches_dir: bool = False,
         allowed_root: str | Path | None = None,
     ) -> None:
         self.skills_dir = Path(skills_dir).resolve()
@@ -224,8 +224,10 @@ class SkillStore:
         """Discover skills by scanning for directories containing SKILL.md.
 
         Contract:
-        - skill directory name must be kebab-case (recommended; not enforced here).
-        - YAML 'name' must match directory name if enforce_name_matches_dir=True.
+        - YAML frontmatter `name` is the canonical skill identifier.
+        - Directory name is treated as a storage/location identifier.
+        - YAML `name` must match directory name only if enforce_name_matches_dir=True.
+        - Canonical skill names must be unique across directories.
         - Only directories with direct child SKILL.md are treated as skills.
           (We do not rglob SKILL.md everywhere, to avoid unexpected discovery.)
         """
@@ -275,19 +277,28 @@ class SkillStore:
                         f"name={metadata.name!r} dir={dir_name!r}"
                     )
 
-                # Cache key is the directory name (== metadata.name when enforced).
-                # This keeps tool calls stable and avoids aliasing.
-                self._metadata_cache[dir_name] = SkillMetadata(
+                if metadata.name in self._metadata_cache:
+                    existing = self._metadata_cache[metadata.name]
+                    existing_dir = existing.path.parent.name if existing.path else "<unknown>"
+                    raise ValueError(
+                        "Duplicate canonical skill name detected. "
+                        f"name={metadata.name!r} existing_dir={existing_dir!r} dir={dir_name!r}"
+                    )
+
+                # Cache key is the canonical skill name declared in frontmatter.
+                self._metadata_cache[metadata.name] = SkillMetadata(
                     name=metadata.name,
                     description=metadata.description,
                     version=metadata.version,
                     tags=metadata.tags,
                     dependencies=metadata.dependencies,
                     path=skill_file.resolve(),
+                    extra=metadata.extra,
                 )
                 logger.debug(
                     "skill_registered",
-                    skill_name=dir_name,
+                    skill_name=metadata.name,
+                    skill_dir=dir_name,
                     version=metadata.version,
                 )
             except Exception as e:
@@ -316,7 +327,7 @@ class SkillStore:
     # -------------------- Activation (Tier 2) --------------------
 
     def load(self, skill_name: str) -> ParsedSkill | None:
-        """Load SKILL.md body for a skill by name (directory name)."""
+        """Load SKILL.md body for a skill by canonical frontmatter name."""
         load_start = time.perf_counter()
 
         if skill_name in self._content_cache:
@@ -342,13 +353,35 @@ class SkillStore:
 
         try:
             parsed = parse_skill_file(metadata.path)
-            # Enforce again at load time to avoid tampering after scan.
-            if self.enforce_name_matches_dir and parsed.metadata.name != skill_name:
+
+            # Enforce canonical skill identity again at load time to avoid
+            # serving the wrong skill if frontmatter changed after the scan.
+            if parsed.metadata.name != skill_name:
                 raise ValueError(
-                    f"Skill frontmatter name must match directory name. "
-                    f"name={parsed.metadata.name!r} dir={skill_name!r}"
+                    "Skill frontmatter name no longer matches the canonical skill key. "
+                    f"name={parsed.metadata.name!r} expected={skill_name!r}"
                 )
-            self._content_cache[skill_name] = parsed
+
+            if self.enforce_name_matches_dir and parsed.metadata.path is not None:
+                dir_name = parsed.metadata.path.parent.name
+                if parsed.metadata.name != dir_name:
+                    raise ValueError(
+                        f"Skill frontmatter name must match directory name. "
+                        f"name={parsed.metadata.name!r} dir={dir_name!r}"
+                    )
+
+            self._content_cache[skill_name] = ParsedSkill(
+                metadata=SkillMetadata(
+                    name=parsed.metadata.name,
+                    description=parsed.metadata.description,
+                    version=parsed.metadata.version,
+                    tags=parsed.metadata.tags,
+                    dependencies=parsed.metadata.dependencies,
+                    path=parsed.metadata.path,
+                    extra=parsed.metadata.extra,
+                ),
+                content=parsed.content,
+            )
             logger.info(
                 "skill_load_cache_miss",
                 tier=2,
@@ -356,7 +389,7 @@ class SkillStore:
                 duration_ms=int((time.perf_counter() - load_start) * 1000),
                 content_length=len(parsed.content),
             )
-            return parsed
+            return self._content_cache[skill_name]
         except Exception as e:
             logger.error(
                 "skill_load_error",

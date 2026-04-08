@@ -70,7 +70,13 @@ The packages/database/.env is pinned in discord chat.
 
 ### Option A: Full Docker (default)
 
-All services run in containers. See next section for clean start.
+All services run in containers. Docker Compose injects internal hostnames for `agent-service`:
+
+- `ENVIRONMENT_API_URL=http://environment-api:8000`
+- `RAG_API_URL=http://rag-service:8001`
+- `REDIS_URL=redis://redis:6379`
+
+See next section for clean start.
 
 ### Option B: Local Python services + Docker infrastructure
 

@@ -77,7 +77,7 @@ class LoadSkillTool(BaseTool):
         Load a skill by name.
 
         Args:
-            skill_name: Name of the skill (directory name)
+            skill_name: Canonical skill name from SKILL.md frontmatter
             **kwargs: Additional parameters (ignored)
 
         Returns:
@@ -204,7 +204,7 @@ class ReadSkillFilesTool(BaseTool):
         Read multiple supporting files from a skill directory.
 
         Args:
-            skill_name: Name of the skill (directory name)
+            skill_name: Canonical skill name from SKILL.md frontmatter
             filenames: List of relative paths to files (max 3)
             **kwargs: Additional parameters (ignored)
 
