@@ -1,3 +1,4 @@
+from app.models.agent_state import ThoughtStep
 from app.prompts.system_prompts import (
     REACT_LOOP_PROMPT,
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,

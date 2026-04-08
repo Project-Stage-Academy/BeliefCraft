@@ -1,5 +1,6 @@
 """System prompts and formatting utilities for the warehouse advisor ReAct agent."""
 
+import json
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -126,6 +127,13 @@ If you are ready to answer, start your response with "FINAL ANSWER:".
 """
 
 
+def _get_tool_call_attr(tool_call: dict[str, Any] | object, key: str) -> object:
+    """Read an attribute from a ToolCall regardless of whether it's a dict or model."""
+    if isinstance(tool_call, dict):
+        return tool_call.get(key)
+    return getattr(tool_call, key, None)
+
+
 def _format_thought_content(content: Any) -> str:
     content_str = str(content)
     match = re.search(r"<thinking>(.*?)</thinking>", content_str, flags=re.DOTALL)
@@ -198,11 +206,25 @@ def _parse_tool_observation(content: Any) -> Any:
     return content
 
 
+def _extract_tool_message_observation(message: ToolMessage) -> Any:
+    payload = getattr(message, "artifact", None)
+    if payload is None:
+        payload = message.content
+
+    if getattr(message, "status", None) == "error":
+        return {"error": str(message.content)}
+
+    if isinstance(payload, dict) and {"data", "meta"}.issubset(payload):
+        return payload.get("data")
+
+    return payload
+
+
 def _extract_tool_observations_by_id(messages: list[Any]) -> dict[str, Any]:
     observations: dict[str, Any] = {}
     for message in messages:
         if isinstance(message, ToolMessage):
-            observations[message.tool_call_id] = _parse_tool_observation(message.content)
+            observations[message.tool_call_id] = _extract_tool_message_observation(message)
             continue
 
         if isinstance(message, dict) and message.get("role") == "tool":
@@ -282,8 +304,8 @@ def _build_iteration_history_from_messages(
     include_trace_meta: bool = False,
 ) -> list[dict[str, Any]]:
     """Build iteration history using assistant-turn boundaries from raw messages."""
-    thoughts = state["thoughts"]
-    recorded_tool_calls = state["tool_calls"]
+    thoughts = state.get("thoughts", [])
+    recorded_tool_calls = state.get("tool_calls", [])
     messages = state.get("messages", [])
     assistant_messages = [message for message in messages if _is_assistant_message(message)]
     tool_observations_by_id = _extract_tool_observations_by_id(messages)
@@ -291,8 +313,7 @@ def _build_iteration_history_from_messages(
     history: list[dict[str, Any]] = []
     tool_call_cursor = 0
 
-    for index, thought in enumerate(thoughts):
-        assistant_message = assistant_messages[index] if index < len(assistant_messages) else None
+    for index, assistant_message in enumerate(assistant_messages):
         raw_tool_calls = _extract_message_tool_calls(assistant_message)
         actions: list[dict[str, Any]] = []
 
@@ -317,7 +338,9 @@ def _build_iteration_history_from_messages(
         history.append(
             {
                 "iteration": index + 1,
-                "thought": _format_thought_content(thought),
+                "thought": _format_thought_content(
+                    thoughts[index] if index < len(thoughts) else assistant_message.content
+                ),
                 "actions": actions,
             }
         )
@@ -332,8 +355,8 @@ def _build_iteration_history_from_flat_lists(
     include_trace_meta: bool = False,
 ) -> list[dict[str, Any]]:
     """Fallback history builder for tests or older states without raw messages."""
-    thoughts = state["thoughts"]
-    tool_calls = state["tool_calls"]
+    thoughts = state.get("thoughts", [])
+    tool_calls = state.get("tool_calls", [])
     history: list[dict[str, Any]] = []
 
     for index, thought in enumerate(thoughts):
@@ -396,10 +419,8 @@ def format_react_prompt(state: Mapping[str, Any]) -> str:
     Returns:
         Formatted prompt string with XML-structured history.
     """
-    from app.services.message_parser import MessageParser
-
     history: list[str] = []
-    for iteration in MessageParser.build_iteration_history(state):
+    for iteration in build_iteration_history(state):
         iter_log = [f'  <iteration index="{iteration["iteration"]}">']
         iter_log.append(f'    <thinking>{iteration["thought"]}</thinking>')
 
