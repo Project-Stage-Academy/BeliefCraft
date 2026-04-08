@@ -98,20 +98,48 @@ def insert_chunks(
     collection: Collection, chunks: list[dict[str, Any]], reference_map: ReferenceMap
 ) -> None:
     """Iterate through chunks and insert them into Weaviate."""
+    inserted_chunks_count = 0
+    chunk_id_map: dict[str, dict[str, Any]] = {
+        ch["chunk_id"]: ch for ch in chunks if "chunk_id" in ch
+    }
     references: list[DataReference | DataReferenceMulti] = []
+    seen_uuids: set[str] = set()
     with collection.batch.dynamic() as batch:
         for chunk in chunks:
-            # Keep chunk_id as metadata field for golden set evaluation mapping
-            uuid = generate_deterministic_uuid(chunk)
-            chunk_references = extract_references_from_chunk(chunk, reference_map)
+            chunk_to_add = chunk.copy()
+            if "defined_in_chunk" in chunk_to_add:
+                parent_chunk_id = chunk_to_add["defined_in_chunk"]
+                referenced_chunk = chunk_id_map.get(parent_chunk_id)
+                if referenced_chunk is None:
+                    print(
+                        f"Warning: Chunk references unknown parent chunk_id='{parent_chunk_id}' "
+                        f"via 'defined_in_chunk'. Skipping field."
+                    )
+                    chunk_to_add.pop("defined_in_chunk")
+                else:
+                    referenced_chunk_for_uuid = referenced_chunk.copy()
+                    referenced_chunk_for_uuid.pop("chunk_id", "")
+                    chunk_to_add["defined_in_chunk"] = generate_deterministic_uuid(
+                        referenced_chunk_for_uuid
+                    )
+            uuid = generate_deterministic_uuid(chunk_to_add)
+            if uuid in seen_uuids:
+                print(
+                    f"Warning: Duplicate UUID '{uuid}' detected. "
+                    f"The previously inserted chunk with this UUID will be overwritten."
+                )
+            else:
+                inserted_chunks_count += 1
+            seen_uuids.add(uuid)
+            chunk_references = extract_references_from_chunk(chunk_to_add, reference_map)
             batch.add_object(
-                properties=chunk,
+                properties=chunk_to_add,
                 uuid=uuid,
             )
             references.extend(chunk_references)
     # add references in batch after all chunks are inserted to avoid referencing non-existing UUIDs
     collection.data.reference_add_many(references)
-    print(f"Inserted {len(chunks)} chunks with {len(references)} references.")
+    print(f"Inserted {inserted_chunks_count} chunks with {len(references)} references.")
 
 
 def build_reference_map(chunks: list[dict[str, Any]]) -> ReferenceMap:
@@ -129,8 +157,8 @@ def main() -> None:
         description="Load and embed document chunks from JSON into Weaviate. Passes 'content' "
         "field to embedding model, sets up cross-references for fields: 'referenced_formulas', "
         "'referenced_algorithms', 'referenced_tables', 'referenced_figures', 'referenced_examples',"
-        " 'referenced_exercises'. Preserves 'chunk_id' and 'pdf_block_ids' as metadata fields. "
-        "All other fields are treated as metadata and stored in Weaviate as is without embedding."
+        " 'referenced_exercises'. Ignores 'chunk_id' and generates own UUIDs. All other"
+        " fields are treated as metadata and stored in Weaviate as is without embedding."
     )
     parser.add_argument("file_path", help="Path to the JSON file containing chunks.", type=Path)
     parser.add_argument(
