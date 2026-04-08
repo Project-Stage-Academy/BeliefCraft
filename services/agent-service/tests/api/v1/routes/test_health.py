@@ -9,8 +9,6 @@ from app.services.health_checker import HealthChecker, verify_aws_credentials_at
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-# 1. FIXED: MOCK_SETTINGS matches your actual Pydantic schema
-# Added 'execution', 'langsmith' (without 'enabled'), and 'env_sub_agent'
 MOCK_SETTINGS = {
     "app": {"name": "agent-service", "version": "0.1.0"},
     "external_services": {
@@ -27,7 +25,10 @@ MOCK_SETTINGS = {
     "react_agent": {"model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0"},
     "execution": {},
     "langsmith": {},
-    "env_sub_agent": {"model_id": "test-model"},
+    "env_sub_agent": {
+        "planner_model_id": "test-planner-model",
+        "solver_model_id": "test-solver-model",
+    },
 }
 
 
@@ -56,8 +57,6 @@ def client() -> Iterator[TestClient]:
             yield test_client
 
 
-# 2. FIXED: Patching 'app.api.v1.routes.health.settings'
-# We removed the patch for health_checker.settings because it was causing AttributeError
 @patch("app.api.v1.routes.health.settings", Settings(**MOCK_SETTINGS))
 def test_health_endpoint_exists(client: TestClient) -> None:
     response = client.get("/api/v1/health")
@@ -108,7 +107,6 @@ def test_verify_credentials_success(mock_boto3: MagicMock) -> None:
     assert checker._verify_aws_credentials() == HealthStatus.HEALTHY
 
 
-# 3. FIXED: Handled Pydantic's strict production validation
 @patch.dict("os.environ", {"ENV": "prod"})
 @patch("app.services.health_checker.boto3")
 def test_startup_verification_fails_fast_in_production(mock_boto3: MagicMock) -> None:
