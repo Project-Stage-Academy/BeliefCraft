@@ -37,28 +37,20 @@ def test_load_golden_set_includes_paraphrases():
     assert all(isinstance(p, str) for p in first_case.paraphrases)
 
 
-def test_load_golden_set_includes_expected_chunk_ids():
-    """Expected chunk IDs list is populated with stable parser IDs."""
+def test_load_golden_set_includes_expected_chunks():
+    """Expected chunks list is populated with chunk_id and pdf_block_ids."""
     cases = load_golden_set()
     first_case = cases[0]
-    assert isinstance(first_case.expected_chunk_ids, list)
-    assert len(first_case.expected_chunk_ids) >= 1
-    assert all(isinstance(cid, str) for cid in first_case.expected_chunk_ids)
-    # Chunk IDs should be stable parser IDs, not UUIDs
-    assert all("_" in cid or cid.startswith("text") for cid in first_case.expected_chunk_ids)
+    assert isinstance(first_case.expected_chunks, list)
+    assert len(first_case.expected_chunks) >= 1
 
-
-def test_load_golden_set_includes_pdf_block_ids_map():
-    """pdf_block_ids_map is loaded from JSON."""
-    cases = load_golden_set()
-    first_case = cases[0]
-    assert isinstance(first_case.pdf_block_ids_map, dict)
-    # Map may be empty or populated
-    if first_case.pdf_block_ids_map:
-        for chunk_id, block_ids in first_case.pdf_block_ids_map.items():
-            assert isinstance(chunk_id, str)
-            assert isinstance(block_ids, list)
-            assert all(isinstance(bid, str) for bid in block_ids)
+    for chunk in first_case.expected_chunks:
+        assert hasattr(chunk, "chunk_id")
+        assert hasattr(chunk, "pdf_block_ids")
+        assert isinstance(chunk.chunk_id, str)
+        assert isinstance(chunk.pdf_block_ids, list)
+        # Chunk IDs should be stable parser IDs, not UUIDs
+        assert "_" in chunk.chunk_id or chunk.chunk_id.startswith("text")
 
 
 def test_load_golden_set_generates_description():
@@ -112,6 +104,5 @@ def test_load_golden_set_all_required_fields_present():
     for case in cases:
         assert case.id
         assert case.base_query
-        assert isinstance(case.expected_chunk_ids, list)
+        assert isinstance(case.expected_chunks, list)
         assert isinstance(case.paraphrases, list)
-        assert isinstance(case.pdf_block_ids_map, dict)

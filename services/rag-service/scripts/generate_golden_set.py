@@ -122,9 +122,18 @@ CRITICAL RULES FOR relevant_ids:
 🎯 MATCH QUESTION STYLE TO CHUNK TYPE:
 
    When expected chunk is **algorithm_*** (pseudocode/implementation):
-   ✅ Ask about: "procedure", "steps", "how does the algorithm...", "what does line X do"
-   ❌ Avoid: conceptual "why", "what is the purpose", "explain the concept"
-   Example: "What steps does the ParticleFilter.update method use to transform states?"
+   ✅ MUST include specific algorithm/method name
+      (e.g., ParticleFilter.update, VariableElimination.infer)
+   ✅ Ask about: "What steps does [MethodName]...", "How does [AlgorithmName] procedure..."
+   ❌ NEVER use generic: "the algorithm", "particle filter update", "the method"
+      without specific name
+     - "What steps does the ParticleFilter.update method use to transform states?"
+     - "How does the VariableElimination.infer procedure combine conditioned factors?"
+
+   BAD Examples (will match text explanations instead):
+     - "How does particle filter update work?" (no method name → finds text)
+     - "In the update, how are states sampled?" (generic "the update" → finds text)
+     - "Given a belief, how does the algorithm decide?" (no algorithm name → finds text)
 
    When expected chunk is **exercise_*** or **formula_*** (mathematical):
    ✅ Ask about: specific formulas, equations, "compute X given Y", "what is the equation for"
@@ -134,6 +143,7 @@ CRITICAL RULES FOR relevant_ids:
    When expected chunk is **text_*** (conceptual):
    ✅ Ask about: concepts, relationships, "what is", "why", "how does X relate to Y"
    ❌ Avoid: technical "procedure", "steps", "algorithm" (finds algorithm chunks instead)
+   ❌ Avoid: formula notation questions (finds numbered_formula chunks instead)
    Example: "Why do particle filters lose diversity over time?"
 
 ⚠️ AVOID SPECIFIC REFERENCES:
@@ -144,15 +154,21 @@ CRITICAL RULES FOR relevant_ids:
 
 EXAMPLES:
 
+❌ BAD — Generic algorithm reference without method name:
+   Chunk: algorithm_3f8d0031 (ParticleFilter.update code)
+   Question: "In the particle filter update, how are next states sampled, weighted, and resampled?"
+   Problem: No method name! "particle filter update" matches TEXT explanations
+            better than algorithm code.
+
+✅ GOOD — Specific method name:
+   Chunk: algorithm_3f8d0031 (ParticleFilter.update code)
+   Question: "What steps does the ParticleFilter.update method perform to transform state samples?"
+   Why: Contains "ParticleFilter.update" → retrieval finds algorithm chunk, not text
+
 ❌ BAD — Wrong question style for algorithm chunk:
    Chunk: algorithm_3f8d0031 (ParticleFilter.update code)
    Question: "What is the purpose of particle filter belief updates?"
    Problem: Conceptual question finds TEXT explanations, not algorithm code!
-
-✅ GOOD — Correct question style for algorithm chunk:
-   Chunk: algorithm_3f8d0031 (ParticleFilter.update code)
-   Question: "What steps does the ParticleFilter.update method perform to transform state samples?"
-   Why: Asks about procedure/implementation → finds algorithm chunk
 
 ❌ BAD — Wrong question style for exercise/formula chunk:
    Chunk: exercise_xyz123 (Q-values, U(s), π(s) formulas)
@@ -355,12 +371,15 @@ def generate_questions_for_group(
 
     try:
         questions = call_openai_structured(openai_client, prompt, n_questions, n_paraphrases)
-        # Enrich with pdf_block_ids for each relevant chunk
+        # Enrich with expected_chunks structure (chunk_id + pdf_block_ids)
         for q in questions:
-            q["pdf_block_ids_map"] = {
-                chunk_id: chunk_id_to_pdf_blocks.get(chunk_id, [])
+            q["expected_chunks"] = [
+                {
+                    "chunk_id": chunk_id,
+                    "pdf_block_ids": chunk_id_to_pdf_blocks.get(chunk_id, []),
+                }
                 for chunk_id in q.get("relevant_ids", [])
-            }
+            ]
         logger.info("group_generated", group=group_index, questions=len(questions))
         return questions
     except Exception as exc:
@@ -439,29 +458,74 @@ def validate_question_chunk_relevance(
             "(e.g., 'Exercise 7.4') or 'in the example'",
         )
 
-    # STRICT RULE 4: Algorithm chunks MUST use procedural language or algorithm name
-    # Generic "the algorithm" questions match TEXT explanations instead of ALGORITHM pseudocode
+    # STRICT RULE 4: Algorithm chunks MUST use procedural language AND algorithm/method name
+    # Generic "the algorithm" or "particle filter update" questions match TEXT explanations
+    # instead of ALGORITHM pseudocode — REQUIRE specific names like "ParticleFilter.update"
     if algorithm_chunks:
-        procedural_keywords = ["procedure", "steps", "implementation", "method", "algorithm"]
-        has_procedural = any(kw in question.lower() for kw in procedural_keywords)
+        # Extract potential algorithm/method names from chunks (CamelCase.method or function_name)
+        algo_names = set()
 
-        if not has_procedural:
-            # Check if algorithm name/method appears in question
-            # Extract potential algorithm/method names (CamelCase.method or function_name)
-            algo_names = re.findall(
-                r"\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)(?:\.[a-z_]+)?", combined_content_original
+        # CamelCase class names and methods (e.g., ParticleFilter, VariableElimination.infer)
+        for match in re.findall(
+            r"\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)(?:\.([a-z_]+))?", combined_content_original
+        ):
+            class_name = match[0]
+            method_name = match[1]
+            if len(class_name) > 3:
+                algo_names.add(class_name)
+            if method_name and len(method_name) > 2:
+                algo_names.add(f"{class_name}.{method_name}")
+
+        # Function names (e.g., particle_filter_update, variable_elimination)
+        algo_names.update(
+            match
+            for match in re.findall(r"\b([a-z_]+_[a-z_]+)\s*\(", combined_content_original)
+            if len(match) > 5
+        )
+
+        # Check if ANY algorithm/method name appears in question
+        has_algo_name = any(name.lower() in question.lower() for name in algo_names)
+
+        if not has_algo_name:
+            return (
+                False,
+                f"Algorithm chunks REQUIRE specific algorithm/method name in question "
+                f"(e.g., {', '.join(list(algo_names)[:3])}...) - "
+                "generic 'the algorithm' or 'particle filter' matches text explanations instead",
             )
-            algo_names.extend(re.findall(r"\b([a-z_]+_[a-z_]+)\s*\(", combined_content_original))
 
-            has_algo_name = any(
-                name.lower() in question.lower() for name in algo_names if len(name) > 3
+    # STRICT RULE 5: Reject formula-focused questions when expected chunk is text type
+    # Questions like "How is X expressed?" match numbered_formula chunks better than text chunks
+    # that contain the same formula + explanation
+    if expected_chunk_ids:
+        # Check if all expected chunks are text type (not numbered_formula)
+        text_only_chunks = all(
+            not cid.startswith("numbered_formula_") for cid in expected_chunk_ids
+        )
+
+        if text_only_chunks:
+            # Indicators of formula-focused questions
+            formula_focus_patterns = [
+                r"\b(expressed|written|formulated|represented)\s+(as|in|recursively)\b",
+                r"\b(equation|formula|expression)\s+(form|notation|is)\b",
+                r"\b(linear\s+system|matrix\s+(form|equation|notation))\b",
+                r"\b(recursive\s+(form|equation|expression))\b",
+                r"\bhow\s+(is|are|do)\s+.*\s+(expressed|written|formulated|represented)\b",
+            ]
+
+            # Check if question contains mathematical notation (LaTeX, Greek letters)
+            has_math_notation = bool(re.search(r"[\\^_{}]|\\[a-zA-Z]+|[αβγδεπθλμσΣ∑∏]", question))
+
+            # Check if formula-focused language appears
+            is_formula_focused = any(
+                re.search(pattern, question, re.IGNORECASE) for pattern in formula_focus_patterns
             )
 
-            if not has_algo_name:
+            if is_formula_focused or has_math_notation:
                 return (
                     False,
-                    "Algorithm chunks require procedural language "
-                    "('steps', 'procedure', 'implementation') or specific algorithm/method name",
+                    "Formula-focused questions (notation/structure) are rejected for text chunks - "
+                    "numbered_formula chunks will rank higher despite text having explanation",
                 )
 
     # Extract specific references from question
@@ -513,13 +577,12 @@ def build_golden_set_entry(
     question_data: dict[str, Any],
     split: str,
 ) -> dict[str, Any]:
-    """Convert raw LLM question output to a golden set entry with chunk_id and pdf_block_ids."""
+    """Convert raw LLM question output to a golden set entry with expected_chunks."""
     return {
         "id": case_id,
         "question": question_data["question"],
         "paraphrases": question_data.get("paraphrases", []),
-        "expected_chunk_ids": question_data.get("relevant_ids", []),
-        "pdf_block_ids_map": question_data.get("pdf_block_ids_map", {}),
+        "expected_chunks": question_data.get("expected_chunks", []),
         "split": split,
     }
 

@@ -174,12 +174,13 @@ async def run_evaluation() -> int:
         for case in test_cases:
             queries_to_test = [case.base_query] + case.paraphrases
             case_results: list[dict] = []
+            expected_chunk_ids = [chunk.chunk_id for chunk in case.expected_chunks]
 
             for query in queries_to_test:
                 metrics = await evaluate_retrieval(
                     repository=repository,
                     query=query,
-                    expected_chunk_ids=case.expected_chunk_ids,
+                    expected_chunk_ids=expected_chunk_ids,
                     k=k,
                 )
 
@@ -202,7 +203,7 @@ async def run_evaluation() -> int:
                 {
                     "test_case_id": case.id,
                     "description": case.description,
-                    "expected_chunk_ids": case.expected_chunk_ids,
+                    "expected_chunks": [chunk.model_dump() for chunk in case.expected_chunks],
                     "split": case.split,
                     "queries": case_results,
                     "avg_recall": avg_recall,

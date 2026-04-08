@@ -37,8 +37,7 @@ def load_golden_set(path: Path | str | None = None) -> list[RAGTestCase]:
                 description=description,
                 base_query=entry["question"],
                 paraphrases=entry.get("paraphrases", []),
-                expected_chunk_ids=entry["expected_chunk_ids"],
-                pdf_block_ids_map=entry.get("pdf_block_ids_map", {}),
+                expected_chunks=entry["expected_chunks"],
                 split=entry.get("split"),
             )
         )

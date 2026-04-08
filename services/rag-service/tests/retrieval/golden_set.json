@@ -1,168 +1,108 @@
 [
   {
     "id": "tc_001",
-    "question": "What steps does the ParticleFilter.update method use to update its state samples from an action and observation?",
+    "question": "What steps does the VariableElimination.infer method use to compute a normalized factor for a Bayesian network query given evidence?",
     "paraphrases": [
-      "How does ParticleFilter.update transform the current particle states using an action and observation?",
-      "What is the update procedure in ParticleFilter.update for producing a new particle set?",
-      "Which operations does ParticleFilter.update perform on the sampled states, weights, and resampling step?",
-      "How does the particle filter update its belief vector after receiving action a and observation o?",
-      "What sequence of computations does ParticleFilter.update apply to the stored states?"
+      "How does VariableElimination.infer produce the final normalized factor from a Bayesian network, query variables, and evidence?",
+      "What is the procedure implemented by VariableElimination.infer for inference with conditioned factors and elimination ordering?",
+      "In VariableElimination.infer, how are factors conditioned, eliminated, multiplied, and normalized to answer a query?",
+      "How does the VariableElimination.infer algorithm process factors in the specified ordering to return an inference result?",
+      "What operations does VariableElimination.infer perform on the factors before returning the final factor?"
     ],
-    "expected_chunk_ids": [
-      "algorithm_3f8d0031"
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_f62de12c",
+        "pdf_block_ids": [
+          "74:4",
+          "74:6"
+        ]
+      }
     ],
-    "pdf_block_ids_map": {
-      "algorithm_3f8d0031": [
-        "414:3",
-        "414:2"
-      ]
-    },
     "split": "validation"
   },
   {
     "id": "tc_002",
-    "question": "What is the exact procedure used by the variable elimination method to compute a normalized factor for a query given evidence?",
+    "question": "How does the ParticleFilter.update method resample belief states after applying the transition and observation models?",
     "paraphrases": [
-      "How does VariableElimination.infer process factors, eliminate non-query variables, and normalize the result?",
-      "What are the steps of the sum-product variable elimination algorithm implemented in VariableElimination.infer?",
-      "How does the inference method condition on evidence, eliminate variables in the given ordering, and combine the remaining factors?",
-      "What does VariableElimination.infer do to produce the final factor for the query variables?",
-      "How is the output factor computed and normalized in the variable elimination implementation?"
+      "What steps does ParticleFilter.update use to transform and resample the state samples in the particle filter?",
+      "In ParticleFilter.update, how are successor states generated, weighted by observations, and drawn again?",
+      "How does the particle filter update procedure use the transition function and observation likelihood to refresh the particle set?",
+      "What is the resampling process implemented by ParticleFilter.update after propagating the current states?",
+      "How does ParticleFilter.update combine transition sampling, observation weighting, and categorical resampling?"
     ],
-    "expected_chunk_ids": [
-      "algorithm_f62de12c"
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_3f8d0031",
+        "pdf_block_ids": [
+          "414:3",
+          "414:2"
+        ]
+      }
     ],
-    "pdf_block_ids_map": {
-      "algorithm_f62de12c": [
-        "74:4",
-        "74:6"
-      ]
-    },
     "split": "validation"
   },
   {
     "id": "tc_003",
-    "question": "How is the value of information computed for a query given evidence in the simple problem method?",
+    "question": "What computational complexity does forward search have in terms of the number of states, actions, and search depth?",
     "paraphrases": [
-      "What formula does value_of_information use to evaluate a query under observed evidence?",
-      "How does the method compute VOI by combining the current solution with outcomes over query assignments?",
-      "What are the steps for calculating value_of_information from evidence, inference, and alternative query assignments?",
-      "How does the simple problem method aggregate expected solution values to obtain value of information?",
-      "What computation does value_of_information perform using the inference result and the solve method?"
+      "How does the worst-case complexity of forward search scale with |S|, |A|, and depth d?",
+      "What is the branching factor and resulting time complexity of forward search up to depth d?",
+      "Express the worst-case complexity of forward search as a function of state count, action count, and depth.",
+      "What complexity bound is given for expanding the forward-search tree to depth d?",
+      "How expensive is forward search in the worst case when it expands all transitions to depth d?"
     ],
-    "expected_chunk_ids": [
-      "algorithm_344c6e82"
+    "expected_chunks": [
+      {
+        "chunk_id": "text_a42955d3",
+        "pdf_block_ids": [
+          "205:5",
+          "205:6",
+          "205:9"
+        ]
+      }
     ],
-    "pdf_block_ids_map": {
-      "algorithm_344c6e82": [
-        "143:7",
-        "143:10"
-      ]
-    },
     "split": "validation"
   },
   {
     "id": "tc_004",
-    "question": "What is the Bellman expectation equation for a policy, and how can policy evaluation be written in matrix form?",
+    "question": "What optimization problem does the CorrelatedEquilibrium.solve method set up to compute a correlated equilibrium, and what constraints does it impose on the policy?",
     "paraphrases": [
-      "What equation defines policy evaluation in terms of immediate reward and discounted next-state values, and what is its matrix form?",
-      "How is the Bellman expectation equation written for a policy, and how does it translate into matrix notation?",
-      "What are the formulas for U^π(s) and the corresponding matrix equation used for policy evaluation?",
-      "How does the book express policy evaluation using the Bellman expectation equation and a linear system?",
-      "What is the state-value equation for a policy, and what matrix equation does it become?"
+      "How does the CorrelatedEquilibrium.solve method formulate the linear program for a correlated equilibrium, including its constraints?",
+      "What objective and constraints are used by CorrelatedEquilibrium.solve to find a correlated equilibrium policy?",
+      "In the CorrelatedEquilibrium.solve procedure, how is the linear program defined for the joint policy?",
+      "What linear program does CorrelatedEquilibrium.solve use, and what conditions must the policy satisfy?",
+      "How does the solve method for correlated equilibrium choose the objective and enforce feasibility of the policy?"
     ],
-    "expected_chunk_ids": [
-      "text_8dfdf890"
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_6e302f37",
+        "pdf_block_ids": [
+          "525:3",
+          "525:4"
+        ]
+      }
     ],
-    "pdf_block_ids_map": {
-      "text_8dfdf890": [
-        "158:13",
-        "158:14",
-        "160:2",
-        "160:3",
-        "160:4",
-        "160:5"
-      ]
-    },
     "split": "validation"
   },
   {
     "id": "tc_005",
-    "question": "What is the computational complexity of forward search as a function of the branching factor and search depth?",
+    "question": "What does the ExactInference.infer method do to compute a joint distribution over the query variables from a Bayesian network and evidence?",
     "paraphrases": [
-      "How does the cost of forward search scale with |S|, |A|, and depth d?",
-      "What worst-case complexity is given for expanding the forward-search tree to depth d?",
-      "How expensive is forward search in terms of the number of states, actions, and search depth?",
-      "What is the asymptotic runtime of forward search when all transitions are expanded up to depth d?",
-      "What complexity bound does the book give for the forward-search tree?"
+      "How does ExactInference.infer produce a factor over the query variables given a Bayesian network and evidence?",
+      "What are the steps performed by ExactInference.infer when doing exact inference in a discrete Bayesian network?",
+      "In ExactInference.infer, how are the network factors, evidence, and non-query variables processed?",
+      "How does the ExactInference.infer procedure transform the Bayesian network factors into a normalized query distribution?",
+      "What sequence of operations does ExactInference.infer apply to obtain the final factor over the query variables?"
     ],
-    "expected_chunk_ids": [
-      "text_a42955d3"
+    "expected_chunks": [
+      {
+        "chunk_id": "algorithm_e9ee5708",
+        "pdf_block_ids": [
+          "70:2",
+          "70:12"
+        ]
+      }
     ],
-    "pdf_block_ids_map": {
-      "text_a42955d3": [
-        "205:5",
-        "205:6",
-        "205:9"
-      ]
-    },
-    "split": "validation"
-  },
-  {
-    "id": "tc_006",
-    "question": "What is the formula for the posterior over a binary parameter θ given observations o1:m under a uniform prior, and what normalization integral is used?",
-    "paraphrases": [
-      "How is p(θ | o1:m) derived for the binary distribution model with a uniform prior, and what integral normalizes it?",
-      "What posterior density over θ results from observing o1:m, and how is its constant of proportionality computed?",
-      "Given P(o^1 | θ)=θ and a uniform prior, what is the expression for p(θ | o1:m) and the associated Beta integral?",
-      "What does the posterior over θ look like after m binary observations, and what integral gives the normalization factor?",
-      "How do you write the posterior for θ in the binary model, and what gamma-function integral normalizes it?"
-    ],
-    "expected_chunk_ids": [
-      "text_4.2.1_d78e7e6b"
-    ],
-    "pdf_block_ids_map": {
-      "text_4.2.1_d78e7e6b": [
-        "99:11",
-        "99:12",
-        "100:2",
-        "100:3",
-        "100:4",
-        "100:5",
-        "100:6",
-        "100:7",
-        "100:8",
-        "100:9",
-        "100:10",
-        "100:11",
-        "100:12",
-        "100:13",
-        "100:14",
-        "100:15"
-      ]
-    },
-    "split": "validation"
-  },
-  {
-    "id": "tc_007",
-    "question": "What does the exact inference algorithm do with the product of factors, evidence, and non-query variables to produce the output factor?",
-    "paraphrases": [
-      "How does exact inference transform the network factors and evidence into a factor over the query variables?",
-      "What are the steps of the exact inference method from factor multiplication through marginalization and normalization?",
-      "In exact inference, how are evidence and hidden variables handled before returning the result?",
-      "How does the exact inference procedure compute the joint distribution over the query variables?",
-      "What operations does the exact inference algorithm apply to obtain the final normalized factor?"
-    ],
-    "expected_chunk_ids": [
-      "algorithm_e9ee5708"
-    ],
-    "pdf_block_ids_map": {
-      "algorithm_e9ee5708": [
-        "70:2",
-        "70:12"
-      ]
-    },
     "split": "validation"
   }
 ]

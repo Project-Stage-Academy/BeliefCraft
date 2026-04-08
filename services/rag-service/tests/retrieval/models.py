@@ -10,6 +10,19 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class ExpectedChunk(BaseModel):
+    """Expected chunk with traceability to PDF blocks.
+
+    Args:
+        chunk_id: Stable chunk identifier from JSON parser (e.g. ``text_7a0afb97``).
+        pdf_block_ids: Corresponding PDF block IDs for traceability
+            (e.g. ``["23:0", "23:1"]``).
+    """
+
+    chunk_id: str
+    pdf_block_ids: list[str] = Field(default_factory=list)
+
+
 class RAGTestCase(BaseModel):
     """Canonical representation of a single retrieval test case.
 
@@ -18,14 +31,11 @@ class RAGTestCase(BaseModel):
         description: Human-readable one-liner for documentation.
         base_query: Text question submitted to the retrieval pipeline.
         paraphrases: Alternative phrasings of ``base_query`` with identical
-            ``expected_chunk_ids``. Each paraphrase is evaluated as an
+            ``expected_chunks``. Each paraphrase is evaluated as an
             independent query to test semantic search robustness.
-        expected_chunk_ids: Ground-truth chunk_ids (from JSON parser, e.g.
-            ``text_7a0afb97``) that MUST appear in results for the test to pass.
-            These are stable identifiers, not Weaviate UUIDs.
-        pdf_block_ids_map: Mapping from chunk_id to corresponding pdf_block_ids
-            (e.g. ``{"text_7a0afb97": ["23:0", "23:1"]}``). Used for traceability
-            to original PDF blocks.
+        expected_chunks: Ground-truth chunks that MUST appear in results.
+            Each chunk includes stable chunk_id and corresponding pdf_block_ids
+            for traceability.
         split: Dataset split assignment (``validation`` or ``test``).
     """
 
@@ -33,6 +43,5 @@ class RAGTestCase(BaseModel):
     description: str = ""
     base_query: str
     paraphrases: list[str] = Field(default_factory=list)
-    expected_chunk_ids: list[str]
-    pdf_block_ids_map: dict[str, list[str]] = Field(default_factory=dict)
+    expected_chunks: list[ExpectedChunk]
     split: Literal["validation", "test"] | None = None
