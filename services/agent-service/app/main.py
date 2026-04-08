@@ -3,6 +3,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 import redis
 import structlog
@@ -17,6 +18,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 logger = configure_logging()
+
+
+async def _close_resource_safely(resource: Any, *, event: str, message: str) -> None:
+    """Attempt async resource cleanup without interrupting service shutdown/startup fallback."""
+    try:
+        await resource.close()
+    except Exception as e:
+        logger.warning(
+            event,
+            error=str(e),
+            error_type=type(e).__name__,
+            message=message,
+        )
 
 
 @asynccontextmanager
@@ -96,7 +110,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             error_type=type(e).__name__,
             message="Service will continue with skill tools only",
         )
-        await mcp_client.close()
+        await _close_resource_safely(
+            mcp_client,
+            event="failed_to_cleanup_mcp_client_after_startup_error",
+            message="MCP cleanup failed after startup error, continuing without RAG tools",
+        )
 
     # Register skill tools and get store
     skill_tools = []
@@ -138,7 +156,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("agent_service_stopping")
 
         if hasattr(app.state, "rag_mcp_client"):
-            await app.state.rag_mcp_client.close()
+            await _close_resource_safely(
+                app.state.rag_mcp_client,
+                event="failed_to_close_rag_mcp_client_on_shutdown",
+                message="RAG MCP client cleanup failed during shutdown",
+            )
 
         app.state.redis_client.close()
         app.state.redis_pool.disconnect()

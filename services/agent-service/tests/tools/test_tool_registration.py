@@ -198,7 +198,7 @@ class TestSkillToolsRegistration:
         with tempfile.TemporaryDirectory() as tmpdir:
             skills_dir = Path(tmpdir)
 
-            skill_dir = skills_dir / "test-skill"
+            skill_dir = skills_dir / "test-skill-dir"
             skill_dir.mkdir()
             (skill_dir / "SKILL.md").write_text(
                 """---

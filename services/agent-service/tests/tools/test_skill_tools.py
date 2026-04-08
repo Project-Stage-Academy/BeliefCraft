@@ -21,7 +21,7 @@ def temp_skills_dir() -> Generator[Path, None, None]:
         skills_dir = Path(tmpdir)
 
         # Create skill with supporting files
-        skill_dir = skills_dir / "test-diagnostic-skill"
+        skill_dir = skills_dir / "test-diagnostic-skill-dir"
         skill_dir.mkdir()
         (skill_dir / "SKILL.md").write_text(
             """---
@@ -148,6 +148,22 @@ class TestLoadSkillTool:
 
         assert "error" not in result
         assert result["skill_name"] == "test-diagnostic-skill"
+
+    @pytest.mark.asyncio
+    async def test_execute_uses_canonical_name_when_directory_differs(
+        self, skill_store: SkillStore
+    ) -> None:
+        """Test that tool lookup uses frontmatter name, not directory name."""
+        tool = LoadSkillTool(skill_store)
+
+        success = await tool.execute(skill_name="test-diagnostic-skill")
+        failure = await tool.execute(skill_name="test-diagnostic-skill-dir")
+
+        assert "error" not in success
+        assert success["skill_name"] == "test-diagnostic-skill"
+        assert "error" in failure
+        assert "available_skills" in failure
+        assert "test-diagnostic-skill" in failure["available_skills"]
 
     def test_metadata_updates_with_skill_names(self, temp_skills_dir: Path) -> None:
         """Test that metadata reflects current skill names."""

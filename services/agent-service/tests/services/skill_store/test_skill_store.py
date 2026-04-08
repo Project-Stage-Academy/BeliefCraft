@@ -43,7 +43,7 @@ Step 2: Do something else.
         )
 
         # Create skill with supporting files
-        skill2_dir = skills_dir / "test-skill-two"
+        skill2_dir = skills_dir / "test-skill-two-dir"
         skill2_dir.mkdir()
         (skill2_dir / "SKILL.md").write_text(
             """---
@@ -146,6 +146,37 @@ description: Name doesn't match directory
         assert "wrong-dir-name" not in skills
         assert "correct-name" not in skills
 
+    def test_scan_uses_frontmatter_name_as_canonical_key(self, temp_skills_dir: Path) -> None:
+        """Test that frontmatter.name is the canonical skill identifier."""
+        store = SkillStore(skills_dir=temp_skills_dir)
+        skills = store.scan()
+
+        assert "test-skill-two" in skills
+        assert "test-skill-two-dir" not in skills
+        assert skills["test-skill-two"].path is not None
+        assert skills["test-skill-two"].path.parent.name == "test-skill-two-dir"
+
+    def test_scan_rejects_duplicate_canonical_skill_names(self, temp_skills_dir: Path) -> None:
+        """Test that duplicate frontmatter names are rejected to avoid aliasing."""
+        duplicate_dir = temp_skills_dir / "zzz-duplicate"
+        duplicate_dir.mkdir()
+        (duplicate_dir / "SKILL.md").write_text(
+            """---
+name: test-skill-one
+description: Duplicate skill that should not override the original
+---
+
+# Duplicate
+""",
+            encoding="utf-8",
+        )
+
+        store = SkillStore(skills_dir=temp_skills_dir)
+        skills = store.scan()
+
+        assert len(skills) == 2
+        assert skills["test-skill-one"].description == "First test skill for unit testing"
+
 
 class TestSkillStoreLoading:
     """Test skill content loading (Tier 2)."""
@@ -167,6 +198,20 @@ class TestSkillStoreLoading:
         assert "Test Skill One" in parsed.content
         assert "Step 1:" in parsed.content
         assert "---" not in parsed.content  # Frontmatter should be stripped
+
+    def test_load_skill_by_canonical_name_when_directory_differs(
+        self, temp_skills_dir: Path
+    ) -> None:
+        """Test loading a skill by frontmatter name when directory name differs."""
+        store = SkillStore(skills_dir=temp_skills_dir)
+        store.scan()
+
+        parsed = store.load("test-skill-two")
+
+        assert parsed is not None
+        assert parsed.metadata.name == "test-skill-two"
+        assert parsed.metadata.path is not None
+        assert parsed.metadata.path.parent.name == "test-skill-two-dir"
 
     def test_load_skill_not_found(self, temp_skills_dir: Path) -> None:
         """Test loading non-existent skill."""
