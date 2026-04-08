@@ -33,6 +33,7 @@ already have, unless it is very critical to call a tool.
 
 Available tool categories:
 - Warehouse observation tools: Query inventory, orders, devices, locations.
+- Code tool: Execute Python code for calculations, data processing, or simulations.
 - Knowledge base tools: Search algorithms and decision-making concepts.
 - Skill tools: Load domain-specific diagnostic workflows for complex investigations.
 
