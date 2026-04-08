@@ -251,7 +251,8 @@ def test_insert_chunks_preserves_chunk_id_for_defined_in_references():
     parent_uuid = generate_deterministic_uuid(parent_canonical)
     added_child_properties = mock_batch.add_object.call_args_list[1].kwargs["properties"]
     assert added_child_properties["defined_in_chunk"] == parent_uuid
-    assert "chunk_id" not in added_child_properties
+    # chunk_id now preserved for golden set validation
+    assert added_child_properties["chunk_id"] == "child_id"
 
 
 def test_defined_in_chunk_uuid_consistent_for_parent_without_entity_id():
@@ -271,14 +272,18 @@ def test_defined_in_chunk_uuid_consistent_for_parent_without_entity_id():
 
     insert_chunks(mock_collection, [parent, child], {})
 
-    parent_canonical = {"content": "raw parent text", "chunk_type": "text"}
-    expected_parent_uuid = generate_deterministic_uuid(parent_canonical)
+    # UUID now includes chunk_id when no entity_id
+    parent_with_chunk_id = {"chunk_id": "p1", "content": "raw parent text", "chunk_type": "text"}
+    expected_parent_uuid = generate_deterministic_uuid(parent_with_chunk_id)
     inserted_parent_uuid = mock_batch.add_object.call_args_list[0].kwargs["uuid"]
+    # defined_in_chunk still uses canonical (without chunk_id) for reference resolution
+    parent_canonical = {"content": "raw parent text", "chunk_type": "text"}
+    expected_defined_in_uuid = generate_deterministic_uuid(parent_canonical)
     inserted_child_defined_in = mock_batch.add_object.call_args_list[1].kwargs["properties"][
         "defined_in_chunk"
     ]
     assert inserted_parent_uuid == expected_parent_uuid
-    assert inserted_child_defined_in == expected_parent_uuid
+    assert inserted_child_defined_in == expected_defined_in_uuid
 
 
 def test_multiple_children_reference_same_parent_via_defined_in_chunk():
@@ -326,9 +331,17 @@ def test_chunk_uuid_computed_after_defined_in_chunk_correction():
 
     insert_chunks(mock_collection, [parent, child], {})
 
+    # defined_in_chunk uses canonical parent (without chunk_id) for reference resolution
     parent_canonical = {"content": "parent", "chunk_type": "text"}
-    parent_uuid = generate_deterministic_uuid(parent_canonical)
-    corrected_child = {"content": "child", "chunk_type": "text", "defined_in_chunk": parent_uuid}
+    parent_uuid_canonical = generate_deterministic_uuid(parent_canonical)
+
+    # Child UUID includes chunk_id AND corrected defined_in_chunk
+    corrected_child = {
+        "chunk_id": "cid",
+        "content": "child",
+        "chunk_type": "text",
+        "defined_in_chunk": parent_uuid_canonical,
+    }
     expected_child_uuid = generate_deterministic_uuid(corrected_child)
 
     inserted_child_uuid = mock_batch.add_object.call_args_list[1].kwargs["uuid"]
