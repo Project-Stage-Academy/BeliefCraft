@@ -67,7 +67,6 @@ cover/
 
 # RAG retrieval evaluation test artifacts
 services/rag-service/tests/retrieval/evaluation_results.json
-services\rag-service\tests\retrieval\MIGRATION_V2.md
 services/rag-service/tests/retrieval/manual_review.py
 
 # Translations
