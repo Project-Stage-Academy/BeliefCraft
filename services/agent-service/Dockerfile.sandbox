@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+RUN useradd -m -u 1000 sandboxuser
+
+RUN pip install --no-cache-dir \
+    numpy \
+    pandas \
+    scipy \
+    scikit-learn \
+    matplotlib \
+    seaborn
+
+USER sandboxuser
+WORKDIR /home/sandboxuser
