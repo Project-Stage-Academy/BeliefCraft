@@ -242,6 +242,6 @@ class ToolRegistry:
         return stats
 
 
-# Global registry instance
-# Import this singleton in other modules
-tool_registry = ToolRegistry()
+# NOTE: Global singleton has been removed.
+# All tool registries are now per-agent instances created via ToolRegistryFactory.
+# See app.tools.factory for agent-specific registry builders.

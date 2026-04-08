@@ -82,7 +82,13 @@ To ensure high instruction adherence and clean context, the development workflow
 
 ### Non-Native Agent Protocol
 
-If you do not natively support agent skills, you MUST read the `SKILL.md` file from `.agents/skills/[skill-name]/SKILL.md` before starting any task corresponding to that skill.
+If you do not natively support agent skills, you MUST read the `SKILL.md` file from `.agents/skills/[skill-name]/SKILL.md` before starting any task corresponding to that skill. Skills are:
+- **plan** (`.agents/skills/plan/SKILL.md`): Define interfaces, stubs, and technical strategy without implementation.
+- **test** (`.agents/skills/test/SKILL.md`): Write exhaustive Arrange-Act-Assert tests before implementation.
+- **implement** (`.agents/skills/implement/SKILL.md`): Write minimal code to pass tests, strictly following type safety and ruff compliance.
+- **refactor** (`.agents/skills/refactor/SKILL.md`): Optimize and clean up passing code while maintaining test coverage.
+- **document** (`.agents/skills/document/SKILL.md`): Update docstrings, API contracts, and `/docs` with final changes.
+- **context-engineering** (`.agents/skills/context-engineering/SKILL.md`): Fix mistakes by updating AGENTS.md and workflow instructions.
 
 ---
 
@@ -147,3 +153,6 @@ If there was error with documentation MCP server, try calling it again. NEVER as
 - **Tool Payload Contracts**: Hardcoding current payload field names into generic trace/result formatting: Prefer stable envelope semantics (`{data,message,meta}`), generic count hints like `count`/`*_count`, and structural collection counting before relying on tool-specific field names.
 - **Loquacity**: Providing long explanations or repeating known constraints: ALWAYS be concise and follow the "Minimal Output" mandate.
 - **Standalone Scripts**: Using relative imports (`.module`) in utility scripts meant for direct execution with `python script.py` or in library modules imported by them: Use same-directory imports (`from module import ...`) for standalone scripts and their dependencies; reserve relative imports for test files run by pytest.
+- **Service-Level AGENTS.md Neglect**: Ignoring specialized role descriptions in `services/*/AGENTS.md` and `packages/*/AGENTS.md`: ALWAYS read the service-specific AGENTS.md first to understand the specialized engineering role and domain patterns for that service.
+- **Pre-commit Skipping**: Finishing a task without running pre-commit hooks: ALWAYS run `uv run pre-commit run --all-files` before considering work complete.
+- **Skill Path Confusion**: Trying to find skills in the root `.agents/` folder instead of `.agents/skills/[skill-name]/`: ALWAYS use `.agents/skills/[skill-name]/SKILL.md` for skill definitions.
