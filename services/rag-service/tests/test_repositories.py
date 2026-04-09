@@ -144,7 +144,7 @@ async def test_search_with_expansion_boosts_matching_tagged_documents(repo, monk
     results = await repo.search_with_expansion(
         query="coordination",
         k=2,
-        search_boosting=SearchTags(
+        search_tags=SearchTags(
             bc_concepts=["MULTI_AGENT_COORDINATION"],
             bc_db_tables=["observations"],
         ),
