@@ -23,7 +23,14 @@ from .constants import (
     TRAVERSE_TYPE_TO_REFERENCE_FIELD,
     CodeEntityRef,
 )
-from .models import Document, EntityType, MetadataFilter, MetadataFilterOperator, MetadataFilters
+from .models import (
+    Document,
+    EntityType,
+    MetadataFilter,
+    MetadataFilterOperator,
+    MetadataFilters,
+    SearchTags,
+)
 
 if TYPE_CHECKING:
     from .config import Settings
@@ -33,6 +40,9 @@ class AbstractVectorStoreRepository(ABC):
     """
     Abstract base class for vector store repositories.
     """
+
+    _CONCEPT_MATCH_BONUS = 0.1
+    _DB_TABLE_MATCH_BONUS = 0.1
 
     def __init__(self, settings: "Settings") -> None:
         self._settings = settings
@@ -104,7 +114,7 @@ class AbstractVectorStoreRepository(ABC):
             return []
 
         docs = await self.get_by_ids(document_ids)
-        results = []
+        results: list[Document] = []
 
         for doc in docs:
             metadata = doc.metadata or {}
@@ -124,7 +134,9 @@ class AbstractVectorStoreRepository(ABC):
                             value=chunk_type_value,
                         ),
                         MetadataFilter(
-                            field="entity_id", operator=MetadataFilterOperator.IN, value=refs
+                            field="entity_id",
+                            operator=MetadataFilterOperator.IN,
+                            value=refs,
                         ),
                     ],
                     condition="and",
@@ -132,12 +144,96 @@ class AbstractVectorStoreRepository(ABC):
                 results.extend(await self.vector_search("", k=len(refs), filters=filters))
         return results
 
+    @staticmethod
+    def _to_string_set(values: Any) -> set[str]:
+        """Normalize list-like metadata into a comparable string set."""
+        if not isinstance(values, list):
+            return set()
+        return {value for value in values if isinstance(value, str)}
+
+    @classmethod
+    def _boost_score(cls, document: Document, boosting: SearchTags) -> float:
+        metadata = document.metadata or {}
+        doc_concepts = cls._to_string_set(metadata.get("bc_concepts"))
+        doc_tables = cls._to_string_set(metadata.get("bc_db_tables"))
+
+        concept_overlap = len(doc_concepts.intersection(set(boosting.bc_concepts)))
+        table_overlap = len(doc_tables.intersection(set(boosting.bc_db_tables)))
+
+        base_similarity = (
+            document.cosine_similarity if document.cosine_similarity is not None else 0.0
+        )
+        boosted_similarity = (
+            base_similarity
+            + (concept_overlap * cls._CONCEPT_MATCH_BONUS)
+            + (table_overlap * cls._DB_TABLE_MATCH_BONUS)
+        )
+        return min(boosted_similarity, 1.0)
+
+    @classmethod
+    def _apply_search_boosting(
+        cls,
+        documents: list[Document],
+        boosting: SearchTags | None,
+    ) -> list[Document]:
+        """Boost similarity scores and rerank root semantic results by the boosted score."""
+        if boosting is None:
+            return documents
+
+        if not boosting.bc_concepts and not boosting.bc_db_tables:
+            return documents
+
+        boosted_documents = [
+            document.model_copy(update={"cosine_similarity": cls._boost_score(document, boosting)})
+            for document in documents
+        ]
+
+        scored_documents = [
+            (
+                idx,
+                document.cosine_similarity if document.cosine_similarity is not None else 0.0,
+                document,
+            )
+            for idx, document in enumerate(boosted_documents)
+        ]
+        scored_documents.sort(key=lambda item: (-item[1], item[0]))
+        return [document for _, _, document in scored_documents]
+
+    @staticmethod
+    def _deduplicate_documents(documents: list[Document]) -> list[Document]:
+        """Deduplicate documents by id while preserving input order."""
+        unique_documents: list[Document] = []
+        seen_ids: set[str] = set()
+
+        for document in documents:
+            document_id = document.id
+            if document_id is None:
+                unique_documents.append(document)
+                continue
+            if document_id in seen_ids:
+                continue
+            seen_ids.add(document_id)
+            unique_documents.append(document)
+
+        return unique_documents
+
+    @staticmethod
+    def _candidate_limit_for_boosting(k: int, boosting: SearchTags | None) -> int:
+        """Compute root candidate pool size for optional boosted reranking."""
+        if boosting is None:
+            return k
+        if not boosting.bc_concepts and not boosting.bc_db_tables:
+            return k
+
+        return k + 10
+
     async def search_with_expansion(
         self,
         query: str,
         k: int,
         filters: MetadataFilters | None = None,
         traverse_types: list[EntityType] | None = None,
+        search_tags: SearchTags | None = None,
     ) -> list[Document]:
         """
         Vector search with optional graph expansion.
@@ -156,7 +252,9 @@ class AbstractVectorStoreRepository(ABC):
         Returns:
             List of documents including expanded linked documents.
         """
-        results = await self.vector_search(query, k, filters)
+        candidate_k = self._candidate_limit_for_boosting(k, search_tags)
+        results = await self.vector_search(query, candidate_k, filters)
+        results = self._apply_search_boosting(results, search_tags)[:k]
         if traverse_types:
             root_ids = [doc.id for doc in results if doc.id is not None]
             if root_ids:
@@ -215,7 +313,11 @@ class FakeDataRepository(AbstractVectorStoreRepository):
             case MetadataFilterOperator.EQ:
                 return val == field.value
             case MetadataFilterOperator.IN:
-                return val in field.value if isinstance(field.value, list) else val == field.value
+                if not isinstance(field.value, list):
+                    return val == field.value
+                if isinstance(val, list):
+                    return any(item in field.value for item in val)
+                return val in field.value
         return False
 
     def _matches_filters(self, doc: dict[str, Any], filters: MetadataFilters) -> bool:
@@ -537,6 +639,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         k: int,
         filters: MetadataFilters | None = None,
         traverse_types: list[EntityType] | None = None,
+        search_tags: SearchTags | None = None,
     ) -> list[Document]:
         """
         Vector search with optional graph expansion in a single operation.
@@ -550,14 +653,26 @@ class WeaviateRepository(AbstractVectorStoreRepository):
         Returns:
             List of root and expanded documents.
         """
+        candidate_k = self._candidate_limit_for_boosting(k, search_tags)
         reference_fields = [TRAVERSE_TYPE_TO_REFERENCE_FIELD[t] for t in (traverse_types or [])]
         results = await self._query(
             query_text=query,
-            limit=k,
+            limit=candidate_k,
             filters=self._convert_filters(filters),
             return_references=self._get_return_references(reference_fields),
         )
-        return self._process_results(results.objects, expansion_fields=reference_fields)
+        root_documents = self._apply_search_boosting(
+            [self._to_document(obj) for obj in results.objects],
+            search_tags,
+        )[:k]
+
+        if not reference_fields:
+            return root_documents
+
+        expanded_documents = self._process_results(
+            results.objects, expansion_fields=reference_fields, include_root=False
+        )
+        return self._deduplicate_documents(root_documents + expanded_documents)
 
     async def get_related_code_definitions(self, document_ids: list[str]) -> Document:
         """

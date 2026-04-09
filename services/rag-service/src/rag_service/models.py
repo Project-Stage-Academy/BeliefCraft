@@ -70,3 +70,10 @@ class MetadataFilters(BaseModel):
 
     filters: list[MetadataFilter] = Field(default_factory=list)
     condition: Literal["and", "or"] = Field(default="and")
+
+
+class SearchTags(BaseModel):
+    """Optional metadata tags used to boost semantically matched chunks."""
+
+    bc_concepts: list[str] = Field(default_factory=list)
+    bc_db_tables: list[str] = Field(default_factory=list)

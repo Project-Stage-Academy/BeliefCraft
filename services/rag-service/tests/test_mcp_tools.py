@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from rag_service.mcp_tools import RagTools
-from rag_service.models import Document, EntityType, SearchFilters
+from rag_service.models import Document, EntityType, SearchFilters, SearchTags
 
 
 @pytest.fixture
@@ -32,6 +32,36 @@ def test_convert_search_filters():
     assert "subsubsection_number" not in fields
 
 
+def test_convert_search_filters_uses_only_metadata_fields():
+    """Verify only metadata fields contribute to filter conversion."""
+    filters = SearchFilters(part="I")
+
+    internal_filters = RagTools._convert_search_filters(filters)
+
+    assert internal_filters is not None
+    assert [f.field for f in internal_filters.filters] == ["part"]
+
+
+def test_extract_search_tags_from_explicit_parameter():
+    """Verify explicit search_tags parameter is used when provided."""
+    tags = RagTools._extract_search_tags(
+        SearchTags(
+            bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
+            bc_db_tables=["observations"],
+        )
+    )
+
+    assert tags == SearchTags(
+        bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
+        bc_db_tables=["observations"],
+    )
+
+
+def test_extract_search_tags_returns_none_for_empty_payload():
+    """Verify empty explicit search_tags payload is treated as no tags."""
+    assert RagTools._extract_search_tags(SearchTags()) is None
+
+
 @pytest.mark.asyncio
 async def test_search_knowledge_base_delegation(rag_tools, mock_repo):
     """Verify search_knowledge_base tool delegates correctly to the repository."""
@@ -53,6 +83,69 @@ async def test_search_knowledge_base_delegation(rag_tools, mock_repo):
     assert filters.filters[0].field == "part"
     assert filters.filters[0].value == "I"
     assert args[3] == [EntityType.FORMULA]
+    assert args[4] is None
+
+
+@pytest.mark.asyncio
+async def test_search_knowledge_base_passes_search_tags(rag_tools, mock_repo):
+    """Verify explicit search_tags is forwarded as boosting config."""
+    mock_repo.search_with_expansion.return_value = [MagicMock(id="doc1")]
+
+    await rag_tools.search_knowledge_base(
+        query="test query",
+        search_tags=SearchTags(
+            bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
+            bc_db_tables=["sensor_devices", "observations"],
+        ),
+    )
+
+    args, kwargs = mock_repo.search_with_expansion.call_args
+    assert args[2] is None
+    assert args[3] is None
+    assert args[4] == SearchTags(
+        bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
+        bc_db_tables=["sensor_devices", "observations"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_knowledge_base_passes_explicit_search_tags(rag_tools, mock_repo):
+    """Verify explicit search_tags argument is forwarded to repository."""
+    mock_repo.search_with_expansion.return_value = [MagicMock(id="doc1")]
+
+    await rag_tools.search_knowledge_base(
+        query="test query",
+        filters=SearchFilters(part="I"),
+        search_tags=SearchTags(
+            bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
+            bc_db_tables=["sensor_devices", "observations"],
+        ),
+    )
+
+    args, kwargs = mock_repo.search_with_expansion.call_args
+    assert args[2] is not None
+    assert args[3] is None
+    assert args[4] == SearchTags(
+        bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
+        bc_db_tables=["sensor_devices", "observations"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_knowledge_base_ignores_empty_search_tags(rag_tools, mock_repo):
+    """Verify empty search_tags payload is normalized to None."""
+    mock_repo.search_with_expansion.return_value = [MagicMock(id="doc1")]
+
+    await rag_tools.search_knowledge_base(
+        query="test query",
+        filters=SearchFilters(part="I"),
+        search_tags=SearchTags(),
+    )
+
+    args, kwargs = mock_repo.search_with_expansion.call_args
+    assert args[2] is not None
+    assert args[3] is None
+    assert args[4] is None
 
 
 @pytest.mark.asyncio

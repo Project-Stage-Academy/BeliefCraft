@@ -13,6 +13,7 @@ from .models import (
     MetadataFilterOperator,
     MetadataFilters,
     SearchFilters,
+    SearchTags,
 )
 from .repositories import AbstractVectorStoreRepository
 
@@ -99,6 +100,15 @@ class RagTools:
 
         return MetadataFilters(filters=metadata_filters, condition="and")
 
+    @staticmethod
+    def _extract_search_tags(search_tags: SearchTags | None) -> SearchTags | None:
+        """Normalize optional explicit search tags config."""
+        if search_tags is None:
+            return None
+        if search_tags.bc_concepts or search_tags.bc_db_tables:
+            return search_tags
+        return None
+
     async def search_knowledge_base(
         self,
         query: Annotated[str, "Text query for semantic search."],
@@ -110,6 +120,10 @@ class RagTools:
         filters: Annotated[
             SearchFilters | None,
             "Metadata filters to restrict search scope .",
+        ] = None,
+        search_tags: Annotated[
+            SearchTags | None,
+            "Optional concept/table tags used for similarity boosting.",
         ] = None,
     ) -> list[Document]:
         """Universal knowledge base search.
@@ -123,10 +137,16 @@ class RagTools:
             k=k,
             traverse_types=[t.value for t in traverse_types] if traverse_types else [],
             filters=filters.model_dump() if filters else None,
+            search_tags=search_tags.model_dump() if search_tags else None,
         )
         metadata_filters = self._convert_search_filters(filters)
+        resolved_boosting = self._extract_search_tags(search_tags)
         documents = await self._repository.search_with_expansion(
-            query, k, metadata_filters, traverse_types
+            query,
+            k,
+            metadata_filters,
+            traverse_types,
+            resolved_boosting,
         )
         logger.info(
             "rag tool result",
