@@ -303,6 +303,50 @@ class TestExtractThought:
         assert result == "I should search the inventory database."
 
 
+class TestStructuredCompletion:
+    @pytest.mark.asyncio()
+    async def test_returns_parsed_result_by_default(self, llm_service: LLMService) -> None:
+        mock_chain = MagicMock()
+        mock_chain.ainvoke = AsyncMock(
+            return_value={"parsed": {"field": "value"}, "raw": AIMessage(content="")}
+        )
+        llm_service.llm.with_structured_output = MagicMock(return_value=mock_chain)
+
+        result = await llm_service.structured_completion(
+            messages=[{"role": "user", "content": "Plan"}],
+            schema={"type": "object"},
+        )
+
+        assert result == {"field": "value"}
+        llm_service.llm.with_structured_output.assert_called_once_with(
+            {"type": "object"},
+            include_raw=True,
+        )
+
+    @pytest.mark.asyncio()
+    async def test_returns_parsed_result_with_token_usage_when_requested(
+        self, llm_service: LLMService
+    ) -> None:
+        raw_message = AIMessage(
+            content="",
+            usage_metadata={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+        )
+        mock_chain = MagicMock()
+        mock_chain.ainvoke = AsyncMock(
+            return_value={"parsed": {"field": "value"}, "raw": raw_message}
+        )
+        llm_service.llm.with_structured_output = MagicMock(return_value=mock_chain)
+
+        result = await llm_service.structured_completion(
+            messages=[{"role": "user", "content": "Plan"}],
+            schema={"type": "object"},
+            include_usage=True,
+        )
+
+        assert result["result"] == {"field": "value"}
+        assert result["tokens"] == {"prompt": 11, "completion": 7, "total": 18}
+
+
 class TestLLMServiceInit:
     def test_uses_settings_values(self, mock_settings: MagicMock) -> None:
         # Patch settings directly

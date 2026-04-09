@@ -260,6 +260,8 @@ class LLMService:
         self,
         messages: list[dict[str, Any]],
         schema: Any,
+        *,
+        include_usage: bool = False,
     ) -> Any:
         """
         Invoke model with native structured output enforcement.
@@ -279,11 +281,24 @@ class LLMService:
             )
 
             lc_messages = self._convert_messages_to_langchain(messages)
-            chain = self.llm.with_structured_output(schema)
+            chain = self.llm.with_structured_output(schema, include_raw=True)
             result = await chain.ainvoke(lc_messages)
 
-            logger.info("llm_structured_response")
-            return result
+            parsed_result = result.get("parsed") if isinstance(result, dict) else result
+            raw_message = result.get("raw") if isinstance(result, dict) else None
+            usage_metadata = getattr(raw_message, "usage_metadata", {}) or {}
+            prompt_tokens = usage_metadata.get("input_tokens", 0)
+            completion_tokens = usage_metadata.get("output_tokens", 0)
+            tokens = {
+                "prompt": prompt_tokens,
+                "completion": completion_tokens,
+                "total": prompt_tokens + completion_tokens,
+            }
+
+            logger.info("llm_structured_response", tokens=tokens["total"])
+            if include_usage:
+                return {"result": parsed_result, "tokens": tokens}
+            return parsed_result
 
         except LLMServiceError:
             raise

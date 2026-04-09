@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
@@ -93,9 +94,18 @@ class EnvSubAgent(BaseAgent):
         ]
 
         try:
-            plan_data = await self.llm.structured_completion(
-                messages=messages, schema=WarehousePlan
+            plan_response = await self.llm.structured_completion(
+                messages=messages,
+                schema=WarehousePlan,
+                include_usage=True,
             )
+            if isinstance(plan_response, dict) and "result" in plan_response:
+                plan_data = plan_response["result"]
+                planner_tokens = plan_response.get("tokens", {}).get("total", 0)
+            else:
+                plan_data = plan_response
+                planner_tokens = 0
+            current_tokens = state.get("total_tokens", 0)
 
             if isinstance(plan_data, dict):
                 plan_data = WarehousePlan(**plan_data)
@@ -106,7 +116,11 @@ class EnvSubAgent(BaseAgent):
                 planned_tools_count=len(plan_data.tool_calls),
             )
 
-            return {"plan": plan_data, "status": "executing"}
+            return {
+                "plan": plan_data,
+                "status": "executing",
+                "total_tokens": current_tokens + planner_tokens,
+            }
 
         except Exception as e:
             logger.error(
@@ -116,7 +130,11 @@ class EnvSubAgent(BaseAgent):
                 error_type=type(e).__name__,
                 exc_info=True,
             )
-            return {"status": "failed", "error": str(e)}
+            return {
+                "status": "failed",
+                "error": str(e),
+                "completed_at": datetime.now(UTC),
+            }
 
     async def _execute_node(self, state: ReWOOState) -> dict[str, Any]:
         """Executor node: Execute all planned steps in parallel and collect observations."""
@@ -126,7 +144,11 @@ class EnvSubAgent(BaseAgent):
         plan: WarehousePlan | None = state.get("plan")
         if not plan or not plan.tool_calls:
             logger.warning("env_sub_agent_empty_plan", request_id=request_id)
-            return {"status": "failed", "error": "No tools planned for execution"}
+            return {
+                "status": "failed",
+                "error": "No tools planned for execution",
+                "completed_at": datetime.now(UTC),
+            }
 
         # Map LangChain tools by name for quick lookup
         lc_tool_map = {t.name: t for t in self.lc_tools}
@@ -204,7 +226,8 @@ class EnvSubAgent(BaseAgent):
             }
 
         try:
-            observations_str = json.dumps(state["observations"], indent=2, ensure_ascii=False)
+            observations = self._sanitize_observations_for_solver(state["observations"])
+            observations_str = json.dumps(observations, indent=2, ensure_ascii=False)
 
             plan_obj = state.get("plan")
             if plan_obj and hasattr(plan_obj, "tool_calls"):
@@ -289,6 +312,34 @@ class EnvSubAgent(BaseAgent):
             }
 
     @staticmethod
+    def _sanitize_observations_for_solver(payload: Any) -> Any:
+        """Remove technical identifiers from raw observations before building the solver prompt."""
+        if isinstance(payload, Mapping):
+            sanitized: dict[Any, Any] = {}
+            for key, value in payload.items():
+                if isinstance(key, str) and re.fullmatch(
+                    r"[a-zA-Z_]*?(?:id|uuid)", key, flags=re.IGNORECASE
+                ):
+                    sanitized[key] = "[ID]"
+                else:
+                    sanitized[key] = EnvSubAgent._sanitize_observations_for_solver(value)
+            return sanitized
+
+        if isinstance(payload, list):
+            return [EnvSubAgent._sanitize_observations_for_solver(item) for item in payload]
+
+        if isinstance(payload, str):
+            if re.fullmatch(
+                r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                payload,
+                flags=re.IGNORECASE,
+            ):
+                return "[ID]"
+            if re.fullmatch(r"[0-9a-f]{24}", payload, flags=re.IGNORECASE):
+                return "[ID]"
+        return payload
+
+    @staticmethod
     def _sanitize_summary(text: str) -> str:
         """Remove obvious technical identifiers from the solver summary."""
         text = re.sub(
@@ -299,8 +350,8 @@ class EnvSubAgent(BaseAgent):
         )
         text = re.sub(r"\b[0-9a-f]{24}\b", "[ID]", text, flags=re.IGNORECASE)
         text = re.sub(
-            r"\b(item_id|device_uuid|database_id)\s*[:=]\s*[^\s,]+",
-            "",
+            r"\b([a-zA-Z_]*?(?:id|uuid))\b\s*[:=]\s*[^\s,]+",
+            lambda match: f"{match.group(1)}: [ID]",
             text,
             flags=re.IGNORECASE,
         )

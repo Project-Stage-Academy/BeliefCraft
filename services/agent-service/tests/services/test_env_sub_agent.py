@@ -99,12 +99,18 @@ class TestPlanNode:
             ]
         )
 
-        agent.llm.structured_completion = AsyncMock(return_value=mock_plan)
+        agent.llm.structured_completion = AsyncMock(
+            return_value={
+                "result": mock_plan,
+                "tokens": {"prompt": 9, "completion": 4, "total": 13},
+            }
+        )
 
         result = await agent._plan_node(initial_state)
 
         assert result["status"] == "executing"
         assert result["plan"] is mock_plan
+        assert result["total_tokens"] == 13
         agent.llm.structured_completion.assert_called_once()
 
     @pytest.mark.asyncio
@@ -118,13 +124,19 @@ class TestPlanNode:
             ]
         }
 
-        agent.llm.structured_completion = AsyncMock(return_value=raw_dict_plan)
+        agent.llm.structured_completion = AsyncMock(
+            return_value={
+                "result": raw_dict_plan,
+                "tokens": {"prompt": 7, "completion": 5, "total": 12},
+            }
+        )
 
         result = await agent._plan_node(initial_state)
 
         assert result["status"] == "executing"
         assert isinstance(result["plan"], WarehousePlan)
         assert result["plan"].tool_calls[0].tool_name == "get_devices"
+        assert result["total_tokens"] == 12
 
     @pytest.mark.asyncio
     async def test_plan_node_handles_llm_exception(
@@ -137,6 +149,31 @@ class TestPlanNode:
 
         assert result["status"] == "failed"
         assert "API Timeout" in result["error"]
+        assert result["completed_at"] is not None
+
+    @pytest.mark.asyncio
+    async def test_plan_node_accumulates_existing_total_tokens(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        initial_state["total_tokens"] = 10
+        mock_plan = WarehousePlan(
+            tool_calls=[
+                PlannedToolCall(
+                    rationale="Need stock", tool_name="get_inventory", arguments={"wh": "A"}
+                )
+            ]
+        )
+        agent.llm.structured_completion = AsyncMock(
+            return_value={
+                "result": mock_plan,
+                "tokens": {"prompt": 6, "completion": 3, "total": 9},
+            }
+        )
+
+        result = await agent._plan_node(initial_state)
+
+        assert result["status"] == "executing"
+        assert result["total_tokens"] == 19
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +192,7 @@ class TestExecuteNode:
 
         assert result["status"] == "failed"
         assert "No tools planned" in result["error"]
+        assert result["completed_at"] is not None
 
     @pytest.mark.asyncio
     async def test_execute_node_fails_on_empty_tool_calls(
@@ -165,6 +203,7 @@ class TestExecuteNode:
 
         assert result["status"] == "failed"
         assert "No tools planned" in result["error"]
+        assert result["completed_at"] is not None
 
     @pytest.mark.asyncio
     async def test_execute_node_concurrent_success(
@@ -243,6 +282,66 @@ class TestExecuteNode:
 
 
 class TestSolveNode:
+    def test_sanitize_observations_for_solver_masks_nested_id_fields(
+        self, agent: EnvSubAgent
+    ) -> None:
+        raw_observations = {
+            "inventory_moves_0": {
+                "tool": "list_inventory_moves",
+                "arguments": {
+                    "product_id": "04fc58b7-f457-4661-a916-3c3d0ac93cdf",
+                    "sku": "PHA-22602565",
+                },
+                "response": {
+                    "status": "success",
+                    "data": {
+                        "moves": [
+                            {
+                                "id": "123e4567-e89b-12d3-a456-426614174000",
+                                "from_location_id": "6901725d-1dbd-4146-a02e-2d7bc1111111",
+                                "device_id": "sensor-abc-123",
+                            }
+                        ]
+                    },
+                },
+            }
+        }
+
+        sanitized = agent._sanitize_observations_for_solver(raw_observations)
+        serialized = str(sanitized)
+
+        assert "04fc58b7-f457-4661-a916-3c3d0ac93cdf" not in serialized
+        assert "123e4567-e89b-12d3-a456-426614174000" not in serialized
+        assert "6901725d-1dbd-4146-a02e-2d7bc1111111" not in serialized
+        assert "sensor-abc-123" not in serialized
+        assert sanitized["inventory_moves_0"]["arguments"]["product_id"] == "[ID]"
+        assert sanitized["inventory_moves_0"]["arguments"]["sku"] == "PHA-22602565"
+        assert sanitized["inventory_moves_0"]["response"]["data"]["moves"][0]["id"] == "[ID]"
+        assert (
+            sanitized["inventory_moves_0"]["response"]["data"]["moves"][0]["from_location_id"]
+            == "[ID]"
+        )
+        assert sanitized["inventory_moves_0"]["response"]["data"]["moves"][0]["device_id"] == "[ID]"
+
+    def test_sanitize_summary_masks_generic_id_fields(self, agent: EnvSubAgent) -> None:
+        raw_summary = (
+            "id: 123e4567-e89b-12d3-a456-426614174000, "
+            "product_id=04fc58b7-f457-4661-a916-3c3d0ac93cdf, "
+            "from_location_id=6901725d-1dbd-4146-a02e-2d7bc1111111, "
+            "device_id=sensor-abc-123"
+        )
+
+        sanitized = agent._sanitize_summary(raw_summary)
+
+        assert "123e4567-e89b-12d3-a456-426614174000" not in sanitized
+        assert "04fc58b7-f457-4661-a916-3c3d0ac93cdf" not in sanitized
+        assert "6901725d-1dbd-4146-a02e-2d7bc1111111" not in sanitized
+        assert "sensor-abc-123" not in sanitized
+        assert "id: [ID]" in sanitized
+        assert "product_id: [ID]" in sanitized
+        assert "from_location_id: [ID]" in sanitized
+        assert "device_id: [ID]" in sanitized
+
     @pytest.mark.asyncio
     async def test_solve_node_returns_bulleted_fallback_without_observations(
         self, agent: EnvSubAgent, initial_state: ReWOOState
@@ -280,6 +379,52 @@ class TestSolveNode:
         assert result["status"] == "completed"
         assert result["state_summary"] == "- 10 units moved for SKU-1"
         assert result["total_tokens"] == 26
+        solver_messages = agent.solver_llm.chat_completion.call_args.kwargs["messages"]
+        solver_prompt = solver_messages[1]["content"]
+        assert "inventory_moves_0" in solver_prompt
+
+    @pytest.mark.asyncio
+    async def test_solve_node_sanitizes_observations_before_solver_prompt(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        initial_state["observations"] = {
+            "inventory_moves_0": {
+                "tool": "list_inventory_moves",
+                "arguments": {"product_id": "04fc58b7-f457-4661-a916-3c3d0ac93cdf"},
+                "response": {
+                    "status": "success",
+                    "data": {
+                        "moves": [
+                            {
+                                "id": "123e4567-e89b-12d3-a456-426614174000",
+                                "to_location_id": "6901725d-1dbd-4146-a02e-2d7bc1111111",
+                            }
+                        ]
+                    },
+                },
+            }
+        }
+
+        agent.solver_llm.chat_completion = AsyncMock(
+            return_value={
+                "message": {"role": "assistant", "content": "- Sanitized summary"},
+                "tool_calls": [],
+                "finish_reason": "stop",
+                "tokens": {"prompt": 8, "completion": 6, "total": 14},
+            }
+        )
+
+        await agent._solve_node(initial_state)
+
+        solver_messages = agent.solver_llm.chat_completion.call_args.kwargs["messages"]
+        solver_prompt = solver_messages[1]["content"]
+
+        assert "04fc58b7-f457-4661-a916-3c3d0ac93cdf" not in solver_prompt
+        assert "123e4567-e89b-12d3-a456-426614174000" not in solver_prompt
+        assert "6901725d-1dbd-4146-a02e-2d7bc1111111" not in solver_prompt
+        assert '"product_id": "[ID]"' in solver_prompt
+        assert '"id": "[ID]"' in solver_prompt
+        assert '"to_location_id": "[ID]"' in solver_prompt
 
     @pytest.mark.asyncio
     async def test_solve_node_surfaces_error_field_on_failure(
