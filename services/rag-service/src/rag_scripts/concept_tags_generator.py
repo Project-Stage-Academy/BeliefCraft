@@ -9,7 +9,7 @@ This script:
 5. Outputs: concept_tags.json — a simple list of reusable tags
 
 Usage:
-    python generate_concept_tags.py \
+    python concept_tags_generator.py \
         --input  ULTIMATE_BOOK_DATA_03_04_translated.json \
         --output concept_tags.json \
         --tokens-per-batch 6000 \

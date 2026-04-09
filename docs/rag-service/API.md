@@ -48,7 +48,7 @@ with TracedHttpClient is provided below after the tool descriptions.
 - `k` (integer, optional, default: 5): Number of initial relevant documents to retrieve.
 - `traverse_types` (array of `EntityType`, optional): Types of objects for search results expansion via links (e.g., `["formula", "algorithm"]`).
 - `filters` (`SearchFilters`, optional): Metadata filters to restrict search scope.
-- `search_tags` (`SearchBoosting`, optional): Tag-based similarity boosting using `bc_concepts` and `bc_db_tables`.
+- `search_tags` (`SearchTags`, optional): Tag-based similarity boosting using `bc_concepts` and `bc_db_tables`.
 
 #### `expand_graph_by_ids`
 **Retrieve linked objects for specific document IDs.**
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 - `subsubsection`: Subsubsection number (e.g., "2.3.1").
 - `page_number`: Integer page number.
 
-### `SearchBoosting`
+### `SearchTags`
 - `bc_concepts`: Optional array of concept tags used for similarity boosting (e.g., `"SENSOR_FUSION_STATE_ESTIMATION"`).
 - `bc_db_tables`: Optional array of environment DB table tags used for similarity boosting (e.g., `"observations"`).
 

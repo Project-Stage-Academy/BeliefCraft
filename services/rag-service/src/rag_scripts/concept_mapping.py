@@ -1,5 +1,5 @@
 """
-enrich_chunks.py — Single-entry pipeline to enrich ULTIMATE_BOOK_DATA_03_04_translated.json
+concept_mapping.py — Single-entry pipeline to enrich ULTIMATE_BOOK_DATA_03_04_translated.json
 with bc_concepts and bc_db_tables using AWS Bedrock (claude-haiku-4-5).
 
 Phases:
@@ -8,7 +8,7 @@ Phases:
   3. Merge everything              → ULTIMATE_BOOK_DATA_enriched.json
 
 Usage:
-    python enrich_chunks.py \
+    python concept_mapping.py \
         --input       ULTIMATE_BOOK_DATA_03_04_translated.json \
         --tags-input  concept_tags.json \
         --concepts    chunk_concepts.jsonl \
