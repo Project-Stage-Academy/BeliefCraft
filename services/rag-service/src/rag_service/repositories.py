@@ -248,6 +248,7 @@ class AbstractVectorStoreRepository(ABC):
             filters: Optional metadata filters to restrict search scope.
             traverse_types: Optional list of linked object types to
                             expand (e.g., ["formula", "algorithm"]).
+            search_tags: Optional concept/table tags used to boost similarity ranking.
 
         Returns:
             List of documents including expanded linked documents.
@@ -649,6 +650,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             k: Maximum number of root documents to return.
             filters: Optional metadata filters.
             traverse_types: Optional list of linked object types to expand.
+            search_tags: Optional concept/table tags used to boost similarity ranking.
 
         Returns:
             List of root and expanded documents.
