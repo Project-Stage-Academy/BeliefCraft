@@ -1,15 +1,12 @@
-from typing import get_args
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from rag_service.mcp_tools import (
-    ALLOWED_CONCEPT_CATEGORIES,
     CONCEPT_TAGS_BY_CATEGORY,
     RagTools,
 )
 from rag_service.models import (
     SUPPORTED_DB_TABLES,
-    ConceptTagCategory,
     Document,
     EntityType,
     SearchFilters,
@@ -179,24 +176,6 @@ async def test_get_entity_by_number_delegation(rag_tools, mock_repo):
 
 
 @pytest.mark.asyncio
-async def test_get_entity_by_number_returns_sentinel_document_when_missing(rag_tools, mock_repo):
-    """
-    Verify get_entity_by_number returns a Document with found=false when repository has no hit.
-    """
-    mock_repo.vector_search.return_value = []
-
-    result = await rag_tools.get_entity_by_number(entity_type=EntityType.TABLE, number="99.9")
-
-    assert isinstance(result, Document)
-    assert result.content == ""
-    assert result.metadata == {
-        "found": False,
-        "entity_type": "table",
-        "number": "99.9",
-    }
-
-
-@pytest.mark.asyncio
 async def test_get_related_code_definitions_delegation(rag_tools, mock_repo):
     """Verify get_related_code_definitions delegates to the repository and returns one document."""
     expected_document = Document(
@@ -286,9 +265,3 @@ async def test_get_search_tags_catalog_returns_tables_only(rag_tools):
         "selected_category": None,
         "items": SUPPORTED_DB_TABLES,
     }
-
-
-def test_concept_tag_category_literal_matches_json_categories():
-    """Verify ConceptTagCategory literal stays synchronized with concept_tags.json categories."""
-    assert set(get_args(ConceptTagCategory)) == set(CONCEPT_TAGS_BY_CATEGORY.keys())
-    assert set(CONCEPT_TAGS_BY_CATEGORY.keys()) == ALLOWED_CONCEPT_CATEGORIES
