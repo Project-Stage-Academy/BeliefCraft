@@ -80,6 +80,17 @@ Follows `referenced_classes`, `referenced_methods`, and `referenced_functions` l
 - `content` contains the reconstructed ordered Python source fragment.
 - `id`, `metadata`, and `cosine_similarity` may be `null`.
 
+#### `get_search_tags_catalog`
+**Get standardized tag values for focused retrieval.**
+
+This tool provides curated tag values used by the RAG boosting layer. It is intended to be called before `search_knowledge_base` to select valid concept or database-table tags and then pass them into `search_tags`.
+
+**Arguments:**
+- `tag_type` (string, required): Choose which catalog to retrieve. Allowed values: `"concepts"`, `"tables"`.
+- `category` (`ConceptTagCategory`, optional): Restricts concept tags to one category. Used only when `tag_type="concepts"`.
+
+**Returns:** A single `Document` containing catalog items in metadata.
+
 ---
 
 ## Client Usage Example
@@ -161,6 +172,14 @@ if __name__ == "__main__":
 ### `SearchTags`
 - `bc_concepts`: Optional array of concept tags used for similarity boosting (e.g., `"SENSOR_FUSION_STATE_ESTIMATION"`).
 - `bc_db_tables`: Optional array of environment DB table tags used for similarity boosting (e.g., `"observations"`).
+
+### `ConceptTagCategory`
+- `POMDP_AND_BELIEF`
+- `REINFORCEMENT_LEARNING`
+- `PLANNING_AND_SEARCH`
+- `PROBABILISTIC_INFERENCE`
+- `RISK_AND_ROBUSTNESS`
+- `MULTI_AGENT_AND_SUPPLY_CHAIN`
 
 ### `Document`
 The response object for search and retrieval tools.

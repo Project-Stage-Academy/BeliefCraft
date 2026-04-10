@@ -22,6 +22,15 @@ class EntityType(StrEnum):
 
 Part = Literal["I", "II", "III", "IV", "V", "Appendices"]
 
+ConceptTagCategory = Literal[
+    "POMDP_AND_BELIEF",
+    "REINFORCEMENT_LEARNING",
+    "PLANNING_AND_SEARCH",
+    "PROBABILISTIC_INFERENCE",
+    "RISK_AND_ROBUSTNESS",
+    "MULTI_AGENT_AND_SUPPLY_CHAIN",
+]
+
 
 class SearchFilters(BaseModel):
     """Tool-level filters for knowledge base search."""
@@ -77,3 +86,38 @@ class SearchTags(BaseModel):
 
     bc_concepts: list[str] = Field(default_factory=list)
     bc_db_tables: list[str] = Field(default_factory=list)
+
+
+class MissingEntityMetadata(BaseModel):
+    """Metadata payload for entity lookups that miss."""
+
+    found: Literal[False] = False
+    entity_type: str
+    number: str
+
+
+class SearchTagsCatalogMetadata(BaseModel):
+    """Metadata payload for search tag catalog responses."""
+
+    tag_type: Literal["concepts", "tables"]
+    selected_category: str | None = None
+    items: list[str] = Field(default_factory=list)
+
+
+SUPPORTED_DB_TABLES = [
+    "warehouses",
+    "suppliers",
+    "leadtime_models",
+    "routes",
+    "shipments",
+    "products",
+    "locations",
+    "inventory_balances",
+    "inventory_moves",
+    "orders",
+    "order_lines",
+    "purchase_orders",
+    "po_lines",
+    "sensor_devices",
+    "observations",
+]
