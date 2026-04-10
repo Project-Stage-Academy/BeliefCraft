@@ -72,11 +72,20 @@ async def test_execute_success_no_summary(mock_sub_agent_class, mock_validate, t
 async def test_execute_failure_with_error(mock_sub_agent_class, mock_validate, tool):
     mock_instance = mock_sub_agent_class.return_value
     mock_instance.run = AsyncMock(
-        return_value={"status": "failed", "error": "API rate limit exceeded."}
+        return_value={
+            "status": "failed",
+            "error": "API rate limit exceeded.",
+            "state_summary": "- Environment API rate limit exceeded during inventory lookup.",
+        }
     )
 
-    with pytest.raises(RuntimeError, match="API rate limit exceeded."):
-        await tool.execute(agent_query="Get history.")
+    result = await tool.execute(agent_query="Get history.")
+
+    assert result == {
+        "status": "failed",
+        "error": "API rate limit exceeded.",
+        "summary": "- Environment API rate limit exceeded during inventory lookup.",
+    }
 
 
 @pytest.mark.asyncio
@@ -86,5 +95,10 @@ async def test_execute_failure_fallback_error(mock_sub_agent_class, mock_validat
     mock_instance = mock_sub_agent_class.return_value
     mock_instance.run = AsyncMock(return_value={"status": "failed"})
 
-    with pytest.raises(RuntimeError, match="Sub-agent execution failed"):
-        await tool.execute(agent_query="Get history.")
+    result = await tool.execute(agent_query="Get history.")
+
+    assert result == {
+        "status": "failed",
+        "error": "Sub-agent execution failed",
+        "summary": "Sub-agent failed before generating a summary.",
+    }

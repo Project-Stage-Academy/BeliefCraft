@@ -56,7 +56,12 @@ class CallEnvSubAgentTool(BaseTool):
         final_state = await sub_agent.run(agent_query=kwargs["agent_query"])
 
         if final_state.get("status") == "failed":
-            raise RuntimeError(final_state.get("error", "Sub-agent execution failed"))
+            return {
+                "status": "failed",
+                "error": final_state.get("error", "Sub-agent execution failed"),
+                "summary": final_state.get("state_summary")
+                or "Sub-agent failed before generating a summary.",
+            }
 
         return {
             "summary": final_state.get("state_summary")

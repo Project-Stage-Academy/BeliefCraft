@@ -435,6 +435,67 @@ class TestRun:
         )
 
     @pytest.mark.asyncio()
+    async def test_run_receives_structured_sub_agent_failure_observation(
+        self, mock_llm_service: MagicMock
+    ) -> None:
+        mock_env_tool = MagicMock()
+        mock_env_tool.metadata.name = "list_inventory_moves"
+
+        env_registry = MagicMock()
+        env_registry.list_tools.return_value = [mock_env_tool]
+
+        tool_registry = ToolRegistryFactory.create_react_agent_registry(
+            env_sub_registry=env_registry
+        )
+        agent = ReActAgent(tool_registry=tool_registry)
+
+        mock_llm_service.chat_completion.side_effect = [
+            _make_llm_response(
+                content="I need environment facts before answering.",
+                tool_calls=[
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "call_env_sub_agent",
+                            "arguments": json.dumps({"agent_query": "Check SKU-1 history"}),
+                        },
+                    }
+                ],
+                finish_reason="tool_calls",
+            ),
+            _make_llm_response(
+                content=(
+                    "FINAL ANSWER: The environment lookup failed due to an upstream rate limit, "
+                    "so inventory history could not be verified."
+                ),
+            ),
+        ]
+
+        with patch("app.services.env_sub_agent.EnvSubAgent") as mock_env_sub_agent_cls:
+            mock_env_sub_agent = mock_env_sub_agent_cls.return_value
+            mock_env_sub_agent.run = AsyncMock(
+                return_value={
+                    "status": "failed",
+                    "error": "API rate limit exceeded.",
+                    "state_summary": (
+                        "- Environment API rate limit exceeded during inventory lookup."
+                    ),
+                }
+            )
+            result = await agent.run("Check warehouse status for SKU-1")
+
+        assert result["status"] == "completed"
+        assert result["final_answer"] is not None
+        assert "rate limit" in result["final_answer"]
+        assert any(
+            getattr(message, "type", "") == "tool"
+            and "Environment API rate limit exceeded during inventory lookup"
+            in str(message.content)
+            for message in result["messages"]
+        )
+
+    @pytest.mark.asyncio()
     async def test_run_max_iterations(self, agent: ReActAgent, mock_llm_service: MagicMock) -> None:
         """Agent stops before hitting the iteration limit (early check in _think_node)."""
         mock_llm_service.chat_completion.return_value = _make_llm_response(
