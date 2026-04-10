@@ -46,6 +46,10 @@ class TagList(BaseModel):
     tags: list[str]
 
 
+class CanonicalTagList(BaseModel):
+    tags: list[str]
+
+
 _prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -80,6 +84,32 @@ Bad: chapter_7_intro (too specific), optimization (too vague), VERY_LONG_TAG_NAM
     ]
 )
 
+_semantic_dedup_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You normalize concept tags for retrieval systems. Remove semantically duplicate tags "
+            "while preserving distinct concepts. Output only canonical tags that are already "
+            "present in the input list and keep SCREAMING_SNAKE_CASE.",
+        ),
+        (
+            "human",
+            """\
+Given this tag list, remove semantic duplicates (synonyms, near-duplicates, wording variants).
+Return a reduced list of canonical tags.
+
+Rules:
+1. Keep only tags from the provided list (do not invent new tags)
+2. Keep broad coverage; only merge truly overlapping concepts
+3. Output format: SCREAMING_SNAKE_CASE
+
+INPUT_TAGS:
+{tags_text}
+""",
+        ),
+    ]
+)
+
 
 def build_chain() -> Runnable[dict[str, Any], Any]:
     llm = ChatBedrock(
@@ -87,6 +117,16 @@ def build_chain() -> Runnable[dict[str, Any], Any]:
         model_kwargs={"max_tokens": 2048, "temperature": 0.3},
     )
     return _prompt | llm.with_structured_output(TagList).with_retry(stop_after_attempt=3)
+
+
+def build_semantic_dedup_chain() -> Runnable[dict[str, Any], Any]:
+    llm = ChatBedrock(
+        model=MODEL_ID,
+        model_kwargs={"max_tokens": 2048, "temperature": 0.0},
+    )
+    return _semantic_dedup_prompt | llm.with_structured_output(CanonicalTagList).with_retry(
+        stop_after_attempt=3
+    )
 
 
 def normalize_tag(tag: str) -> str | None:
@@ -103,6 +143,29 @@ def deduplicate_tags(tags: list[str]) -> list[str]:
             seen.add(t)
             result.append(t)
     return result
+
+
+def semantic_deduplicate_tags(tags: list[str], chain: Runnable[dict[str, Any], Any]) -> list[str]:
+    normalized = deduplicate_tags(tags)
+    if not normalized:
+        return []
+
+    try:
+        result: CanonicalTagList = chain.invoke({"tags_text": "\n".join(normalized)})
+    except Exception:
+        return normalized
+
+    selected = deduplicate_tags(getattr(result, "tags", []))
+    if not selected:
+        return normalized
+
+    allowed = set(normalized)
+    selected_set = {tag for tag in selected if tag in allowed}
+    if not selected_set:
+        return normalized
+
+    # Preserve deterministic order based on first occurrence in normalized tags.
+    return [tag for tag in normalized if tag in selected_set]
 
 
 def create_batches(
@@ -143,6 +206,7 @@ def main() -> None:
     print(f"  Loaded {len(chunks)} chunks with content.")
 
     chain = build_chain()
+    semantic_dedup_chain = build_semantic_dedup_chain()
     batches = create_batches(chunks, args.tokens_per_batch, random.Random(args.seed))  # noqa: S311
     print(f"  Batches: {len(batches)}")
 
@@ -164,8 +228,12 @@ def main() -> None:
         except Exception as e:
             print(f"FAILED: {e}")
 
-    unique_tags = deduplicate_tags(all_tags)
-    print(f"\n  Raw: {len(all_tags)}, unique after dedup: {len(unique_tags)}")
+    unique_tags = semantic_deduplicate_tags(all_tags, semantic_dedup_chain)
+    normalized_unique_count = len(deduplicate_tags(all_tags))
+    print(
+        f"\n  Raw: {len(all_tags)}, unique after normalization: {normalized_unique_count}, "
+        f"unique after semantic dedup: {len(unique_tags)}"
+    )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

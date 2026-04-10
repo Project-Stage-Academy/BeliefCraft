@@ -84,6 +84,60 @@ def test_concept_tags_deduplicate_tags_removes_duplicates_and_invalid(
     assert deduped == ["BELIEF_UPDATE", "OK_TAG"]
 
 
+def test_concept_tags_semantic_deduplicate_tags_filters_semantic_duplicates(
+    script_modules: tuple[Any, Any],
+) -> None:
+    _, ctg = script_modules
+
+    class FakeChain:
+        def invoke(self, payload: dict[str, Any]) -> Any:
+            assert "BELIEF_UPDATE" in payload["tags_text"]
+            return ctg.CanonicalTagList(tags=["BELIEF_UPDATE", "STOCKOUT_RISK"])
+
+    raw_tags = [
+        "belief update",
+        "bayesian_belief_update",
+        "stockout risk",
+        "STOCKOUT_RISK",
+    ]
+
+    deduped = ctg.semantic_deduplicate_tags(raw_tags, FakeChain())
+
+    assert deduped == ["BELIEF_UPDATE", "STOCKOUT_RISK"]
+
+
+def test_concept_tags_semantic_deduplicate_tags_falls_back_on_chain_failure(
+    script_modules: tuple[Any, Any],
+) -> None:
+    _, ctg = script_modules
+
+    class FailingChain:
+        def invoke(self, payload: dict[str, Any]) -> Any:  # noqa: ARG002
+            raise RuntimeError("bedrock timeout")
+
+    raw_tags = ["belief update", "BELIEF_UPDATE", "ok_tag"]
+
+    deduped = ctg.semantic_deduplicate_tags(raw_tags, FailingChain())
+
+    assert deduped == ["BELIEF_UPDATE", "OK_TAG"]
+
+
+def test_concept_tags_semantic_deduplicate_tags_drops_hallucinated_tags(
+    script_modules: tuple[Any, Any],
+) -> None:
+    _, ctg = script_modules
+
+    class FakeChain:
+        def invoke(self, payload: dict[str, Any]) -> Any:  # noqa: ARG002
+            return ctg.CanonicalTagList(tags=["BELIEF_UPDATE", "INVENTED_TAG"])
+
+    raw_tags = ["belief update", "ok_tag"]
+
+    deduped = ctg.semantic_deduplicate_tags(raw_tags, FakeChain())
+
+    assert deduped == ["BELIEF_UPDATE"]
+
+
 def test_concept_mapping_load_jsonl_handles_invalid_lines(
     script_modules: tuple[Any, Any], tmp_path: Path
 ) -> None:
