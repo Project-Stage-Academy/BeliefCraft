@@ -3,7 +3,7 @@
 import os
 
 import boto3
-import botocore.exceptions  # type: ignore[import-untyped]
+import botocore.exceptions  # type: ignore
 import httpx
 import redis
 from app.config import Settings

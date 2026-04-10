@@ -55,6 +55,8 @@ class AgentState(TypedDict):
 
     # Metadata
     total_tokens: int
+    cache_read_input_tokens: int
+    cache_creation_input_tokens: int
     started_at: datetime
     completed_at: datetime | None
 
@@ -78,6 +80,8 @@ def create_initial_state(
         status="running",
         error=None,
         total_tokens=0,
+        cache_creation_input_tokens=0,
+        cache_read_input_tokens=0,
         started_at=datetime.now(UTC),
         completed_at=None,
     )

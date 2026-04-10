@@ -99,7 +99,7 @@ and decision points.
     return _BASE_WAREHOUSE_ADVISOR_PROMPT.format(skill_catalog_section=skill_section)
 
 
-REACT_LOOP_PROMPT = """You are in a ReAct (Reasoning + Acting) loop.
+REACT_LOOP_PROMPT_START = """You are in a ReAct (Reasoning + Acting) loop.
 
 User query:
 <query>
@@ -107,9 +107,9 @@ User query:
 </query>
 
 History of previous steps:
-<history>
-{history}
-</history>
+<history>"""
+
+REACT_LOOP_PROMPT_END = """</history>
 
 INSTRUCTIONS for this step:
 1. Review the <history> to see what you have already done.
@@ -339,13 +339,16 @@ def _format_action_xml(action: dict[str, Any]) -> list[str]:
     lines = [f'    <action tool="{action.get("tool")}">{action.get("arguments")}</action>']
 
     if "observation" in action:
-        lines.append(f'    <observation>{action["observation"]}</observation>')
+        lines.append(f"    <observation>{action['observation']}</observation>")
     return lines
 
 
-def format_react_prompt(state: Mapping[str, Any]) -> str:
+def format_react_prompt(state: Mapping[str, Any]) -> list[str]:
     """Format the ReAct loop prompt with current state using XML structure
     optimized for Claude.
+
+    Each iteration is a separate message so that cache checkpoints can be
+    added during subsequent prompt processing.
 
     Args:
         state: Agent state dictionary containing iteration tracking,
@@ -354,24 +357,23 @@ def format_react_prompt(state: Mapping[str, Any]) -> str:
     Returns:
         Formatted prompt string with XML-structured history.
     """
-    history: list[str] = []
+    history: list[str] = [REACT_LOOP_PROMPT_START.format(user_query=state["user_query"])]
     for iteration in build_iteration_history(state):
         iter_log = [
-            f'  <iteration index="{iteration["iteration"]}">',
-            f'    <thinking>{iteration["thought"]}</thinking>',
+            f'  <iteration instaticdex="{iteration["iteration"]}">',
+            f"    <thinking>{iteration['thought']}</thinking>",
         ]
 
         for action in iteration["actions"]:
             iter_log.extend(_format_action_xml(action))
 
         iter_log.append("  </iteration>")
-        history.extend(iter_log)
+        history.append("\n".join(iter_log))
 
-    history_str = "\n".join(history) if history else "  "
-
-    return REACT_LOOP_PROMPT.format(
-        iteration=state["iteration"],
-        max_iterations=state["max_iterations"],
-        user_query=state["user_query"],
-        history=history_str,
+    history.append(
+        REACT_LOOP_PROMPT_END.format(
+            iteration=state["iteration"],
+            max_iterations=state["max_iterations"],
+        )
     )
+    return history

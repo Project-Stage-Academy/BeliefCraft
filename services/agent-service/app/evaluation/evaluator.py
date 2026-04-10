@@ -310,7 +310,7 @@ class AgentEvaluator:
             ):
                 score -= 0.5
                 failure_reasons.append(
-                    f"Expected algorithm pattern: {expected_pattern}, " f"got: {response.algorithm}"
+                    f"Expected algorithm pattern: {expected_pattern}, got: {response.algorithm}"
                 )
 
         if must_include.get("formula") is True and len(response.formulas) == 0:

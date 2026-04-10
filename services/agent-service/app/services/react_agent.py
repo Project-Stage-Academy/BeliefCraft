@@ -82,7 +82,8 @@ class ReActAgent:
 
         try:
             messages = self._build_llm_messages(state)
-            response = await self._call_llm(messages)
+            cache = self._build_llm_cache_flags(messages, state)
+            response = await self._call_llm(messages, cache)
             return self._parse_and_update(state, response)
 
         except Exception as e:
@@ -113,25 +114,39 @@ class ReActAgent:
         Returns:
             List of messages for LLM consumption.
         """
+        messages = [{"role": "user", "content": message} for message in format_react_prompt(state)]
         return [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": format_react_prompt(state)},
+            *messages,
         ]
 
-    async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    def _build_llm_cache_flags(
+        self, messages: list[dict[str, Any]], state: AgentState
+    ) -> list[bool]:
+        """Build the cache flags for LLM input."""
+        cache = [False] * len(messages)
+        # put checkpoint before last message, because
+        # last one contains iteration number which always changes
+        cache[-2] = True
+        if state["iteration"] == state["max_iterations"] - 1:
+            # don't cache message added at last iteration, because it will never be read again
+            cache[-2] = False
+        return cache
+
+    async def _call_llm(self, messages: list[dict[str, Any]], cache: list[bool]) -> dict[str, Any]:
         """Make the LLM API call with messages and tool definitions.
 
         Args:
             messages: List of messages to send to the LLM.
+            cache: List with the same length as messages.
+                   If cache[i] is True, messages[i] is written to cache.
 
         Returns:
             LLM response dictionary containing message, tool_calls, tokens, etc.
         """
         tools = self._get_tool_definitions()
         result = await self.llm.chat_completion(
-            messages=messages,
-            tools=tools if tools else None,
-            tool_choice="auto",
+            messages=messages, tools=tools if tools else None, tool_choice="auto", cache=cache
         )
         return result
 
@@ -171,6 +186,10 @@ class ReActAgent:
             "messages": state["messages"] + [assistant_msg],
             "thoughts": state["thoughts"] + [thought],
             "total_tokens": state["total_tokens"] + response["tokens"]["total"],
+            "cache_creation_input_tokens": state["cache_creation_input_tokens"]
+            + response["tokens"]["cache_creation_input_tokens"],
+            "cache_read_input_tokens": state["cache_read_input_tokens"]
+            + response["tokens"]["cache_read_input_tokens"],
         }
 
         # Detect final answer: LLM stopped without requesting tools
@@ -499,6 +518,8 @@ class ReActAgent:
             status=final_state["status"],
             iterations=final_state["iteration"],
             tokens=final_state["total_tokens"],
+            cache_read_input_tokens=final_state["cache_read_input_tokens"],
+            cache_creation_input_tokens=final_state["cache_creation_input_tokens"],
             thought_count=len(final_state["thoughts"]),
             tool_call_count=len(final_state["tool_calls"]),
         )

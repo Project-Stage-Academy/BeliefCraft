@@ -49,7 +49,7 @@ def generate_deterministic_uuid(chunk: dict[str, Any]) -> str:
     if available, otherwise use whole chunk."""
     entity_id = chunk.get("entity_id", "")
     if entity_id:
-        return generate_uuid5(f'{entity_id}:{chunk["chunk_type"]}')
+        return generate_uuid5(f"{entity_id}:{chunk['chunk_type']}")
     return generate_uuid5(repr(chunk))
 
 

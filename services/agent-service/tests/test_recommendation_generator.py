@@ -667,9 +667,7 @@ class TestCodeSnippetEnrichment:
         self, generator: RecommendationGenerator
     ) -> None:
         state = _base_agent_state(
-            final_answer=(
-                "Use this snippet:\n" "```python\n" "import math\n" "x = math.sqrt(16)\n" "```"
-            )
+            final_answer=("Use this snippet:\n```python\nimport math\nx = math.sqrt(16)\n```")
         )
         result = await generator.generate(state)
 
@@ -709,7 +707,7 @@ class TestCodeSnippetEnrichment:
     async def test_invalid_python_is_downgraded_to_text(
         self, generator: RecommendationGenerator
     ) -> None:
-        state = _base_agent_state(final_answer=("```python\n" "def broken(:\n" "    pass\n" "```"))
+        state = _base_agent_state(final_answer=("```python\ndef broken(:\n    pass\n```"))
         result = await generator.generate(state)
 
         assert len(result.code_snippets) == 1

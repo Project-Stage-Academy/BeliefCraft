@@ -211,9 +211,7 @@ def test_extract_code_refs_locally_defined_not_counted():
 
 
 def test_extract_code_refs_multiple_method_calls():
-    text = (
-        "```python\n" "def run():\n" "    e = Engine()\n" "    e.start()\n" "    e.stop()\n" "```"
-    )
+    text = "```python\ndef run():\n    e = Engine()\n    e.start()\n    e.stop()\n```"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "mth:Engine.start" in refs["referenced_methods"]
     assert "mth:Engine.stop" in refs["referenced_methods"]
@@ -256,7 +254,7 @@ def test_extract_code_refs_with_index_matches_single_call_api():
 
 
 def test_extract_code_refs_type_hints_create_class_refs_without_constructor_calls():
-    text = "def infer(bn: Engine, query: list[str], evidence: Wheel) -> Engine:\n" "    return bn"
+    text = "def infer(bn: Engine, query: list[str], evidence: Wheel) -> Engine:\n    return bn"
     refs = extract_code_refs(text, _SAMPLE_SCHEMA)
     assert "cls:Engine" in refs["referenced_classes"]
     assert "cls:Wheel" in refs["referenced_classes"]

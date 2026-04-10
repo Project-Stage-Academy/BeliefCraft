@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 import boto3
-from botocore.config import Config  # type: ignore[import-untyped]
+from botocore.config import Config  # type: ignore
 from common.logging import get_logger
 from pipeline.code_processing.julia_code_translation.build_prompts import PromptBuilder
 from pipeline.code_processing.julia_code_translation.constants import (

@@ -146,6 +146,8 @@ class AgentRecommendationResponse(BaseModel):
 
     iterations: int = Field(..., ge=0)
     total_tokens: int = Field(..., ge=0)
+    cache_read_input_tokens: int = Field(..., ge=0)
+    cache_creation_input_tokens: int = Field(..., ge=0)
     execution_time_seconds: float = Field(..., ge=0.0)
     tools_used: list[str] = Field(default_factory=list)
 
