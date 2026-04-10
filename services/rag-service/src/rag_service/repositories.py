@@ -110,7 +110,7 @@ class AbstractVectorStoreRepository(ABC):
             return []
 
         docs = await self.get_by_ids(document_ids)
-        results: list[Document] = []
+        results = []
 
         for doc in docs:
             metadata = doc.metadata or {}
@@ -130,9 +130,7 @@ class AbstractVectorStoreRepository(ABC):
                             value=chunk_type_value,
                         ),
                         MetadataFilter(
-                            field="entity_id",
-                            operator=MetadataFilterOperator.IN,
-                            value=refs,
+                            field="entity_id", operator=MetadataFilterOperator.IN, value=refs
                         ),
                     ],
                     condition="and",
@@ -569,15 +567,7 @@ class WeaviateRepository(AbstractVectorStoreRepository):
             filters=self._convert_filters(filters),
             return_references=self._get_return_references(reference_fields),
         )
-        root_documents = [self._to_document(obj) for obj in results.objects][:k]
-
-        if not reference_fields:
-            return root_documents
-
-        expanded_documents = self._process_results(
-            results.objects, expansion_fields=reference_fields, include_root=False
-        )
-        return root_documents + expanded_documents
+        return self._process_results(results.objects, expansion_fields=reference_fields)
 
     async def get_related_code_definitions(self, document_ids: list[str]) -> Document:
         """
