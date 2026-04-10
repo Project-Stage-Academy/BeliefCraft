@@ -28,6 +28,12 @@ logger = get_logger(__name__)
 class EnvSubAgent(BaseAgent):
     """ReWOO implementation using LangGraph for AWS Bedrock/Claude."""
 
+    _UUID_PATTERN = re.compile(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        flags=re.IGNORECASE,
+    )
+    _HEX_OBJECT_ID_PATTERN = re.compile(r"[0-9a-f]{24}", flags=re.IGNORECASE)
+
     def __init__(
         self, system_prompt: str | None = None, tool_registry: ToolRegistry | None = None
     ) -> None:
@@ -313,45 +319,113 @@ class EnvSubAgent(BaseAgent):
 
     @staticmethod
     def _sanitize_observations_for_solver(payload: Any) -> Any:
-        """Remove technical identifiers from raw observations before building the solver prompt."""
+        """Replace opaque internal identifiers with stable aliases before solver prompting."""
+        alias_registry: dict[str, str] = {}
+        alias_counters: dict[str, int] = {}
+        return EnvSubAgent._sanitize_payload_node(payload, alias_registry, alias_counters)
+
+    @staticmethod
+    def _sanitize_payload_node(
+        payload: Any,
+        alias_registry: dict[str, str],
+        alias_counters: dict[str, int],
+        parent_key: str | None = None,
+    ) -> Any:
         if isinstance(payload, Mapping):
             sanitized: dict[Any, Any] = {}
             for key, value in payload.items():
-                if isinstance(key, str) and re.fullmatch(
-                    r"[a-zA-Z_]*?(?:id|uuid)", key, flags=re.IGNORECASE
-                ):
-                    sanitized[key] = "[ID]"
-                else:
-                    sanitized[key] = EnvSubAgent._sanitize_observations_for_solver(value)
+                child_key = key if isinstance(key, str) else None
+                sanitized[key] = EnvSubAgent._sanitize_payload_node(
+                    value,
+                    alias_registry,
+                    alias_counters,
+                    parent_key=child_key,
+                )
             return sanitized
 
         if isinstance(payload, list):
-            return [EnvSubAgent._sanitize_observations_for_solver(item) for item in payload]
+            return [
+                EnvSubAgent._sanitize_payload_node(
+                    item,
+                    alias_registry,
+                    alias_counters,
+                    parent_key=parent_key,
+                )
+                for item in payload
+            ]
 
-        if isinstance(payload, str):
-            if re.fullmatch(
-                r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        if isinstance(payload, str) and EnvSubAgent._should_alias_identifier(parent_key, payload):
+            return EnvSubAgent._alias_identifier(
+                parent_key or "id",
                 payload,
-                flags=re.IGNORECASE,
-            ):
-                return "[ID]"
-            if re.fullmatch(r"[0-9a-f]{24}", payload, flags=re.IGNORECASE):
-                return "[ID]"
+                alias_registry,
+                alias_counters,
+            )
+
         return payload
+
+    @staticmethod
+    def _should_alias_identifier(key: str | None, value: str) -> bool:
+        if not key:
+            return EnvSubAgent._is_internal_identifier(value)
+
+        if not re.fullmatch(r"[a-zA-Z_]*?(?:id|uuid)", key, flags=re.IGNORECASE):
+            return False
+
+        return EnvSubAgent._is_internal_identifier(value)
+
+    @staticmethod
+    def _is_internal_identifier(value: str) -> bool:
+        return bool(
+            EnvSubAgent._UUID_PATTERN.fullmatch(value)
+            or EnvSubAgent._HEX_OBJECT_ID_PATTERN.fullmatch(value)
+        )
+
+    @staticmethod
+    def _alias_identifier(
+        key: str,
+        value: str,
+        alias_registry: dict[str, str],
+        alias_counters: dict[str, int],
+    ) -> str:
+        alias_key = f"{key.lower()}::{value}"
+        existing_alias = alias_registry.get(alias_key)
+        if existing_alias:
+            return existing_alias
+
+        prefix = EnvSubAgent._alias_prefix_for_key(key)
+        alias_counters[prefix] = alias_counters.get(prefix, 0) + 1
+        alias = f"[{prefix}_{alias_counters[prefix]}]"
+        alias_registry[alias_key] = alias
+        return alias
+
+    @staticmethod
+    def _alias_prefix_for_key(key: str) -> str:
+        normalized = key.lower()
+        if "product" in normalized:
+            return "PRODUCT"
+        if "location" in normalized:
+            return "LOC"
+        if "warehouse" in normalized:
+            return "WH"
+        if "device" in normalized:
+            return "DEVICE"
+        if "move" in normalized:
+            return "MOVE"
+        return "ID"
 
     @staticmethod
     def _sanitize_summary(text: str) -> str:
         """Remove obvious technical identifiers from the solver summary."""
         text = re.sub(
-            r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+            EnvSubAgent._UUID_PATTERN,
             "[ID]",
             text,
-            flags=re.IGNORECASE,
         )
-        text = re.sub(r"\b[0-9a-f]{24}\b", "[ID]", text, flags=re.IGNORECASE)
+        text = re.sub(EnvSubAgent._HEX_OBJECT_ID_PATTERN, "[ID]", text)
         text = re.sub(
-            r"\b([a-zA-Z_]*?(?:id|uuid))\b\s*[:=]\s*[^\s,]+",
-            lambda match: f"{match.group(1)}: [ID]",
+            r"\b([a-zA-Z_]*?(?:id|uuid))\b\s*([:=])\s*([^\s,]+)",
+            lambda match: EnvSubAgent._sanitize_summary_identifier(match),
             text,
             flags=re.IGNORECASE,
         )
@@ -360,6 +434,13 @@ class EnvSubAgent(BaseAgent):
         text = re.sub(r"\s*,\s*,", ", ", text)
         text = re.sub(r"^\s*[-*]\s*,", "-", text, flags=re.MULTILINE)
         return text.strip()
+
+    @staticmethod
+    def _sanitize_summary_identifier(match: re.Match[str]) -> str:
+        key, separator, value = match.groups()
+        if EnvSubAgent._is_internal_identifier(value):
+            return f"{key}{separator} [ID]"
+        return match.group(0)
 
     @staticmethod
     def _ensure_bullets(text: str) -> str:
