@@ -6,7 +6,6 @@ from rag_service.models import (
     EntityType,
     MetadataFilter,
     MetadataFilters,
-    SearchTags,
 )
 from rag_service.repositories import FakeDataRepository
 
@@ -106,59 +105,24 @@ async def test_fake_repository_in_filter_matches_list_metadata(repo):
 
 
 @pytest.mark.asyncio
-async def test_search_with_expansion_boosts_matching_tagged_documents(repo, monkeypatch):
-    """Verify root search results use field-based similarity boosting."""
-    documents = [
-        Document(
-            id="doc-low",
-            content="low",
-            cosine_similarity=0.8,
-            metadata={"bc_concepts": [], "bc_db_tables": []},
-        ),
-        Document(
-            id="doc-mid",
-            content="mid",
-            cosine_similarity=0.8,
-            metadata={"bc_concepts": ["MULTI_AGENT_COORDINATION"], "bc_db_tables": []},
-        ),
-        Document(
-            id="doc-high",
-            content="high",
-            cosine_similarity=0.8,
-            metadata={
-                "bc_concepts": ["MULTI_AGENT_COORDINATION"],
-                "bc_db_tables": ["observations"],
-            },
-        ),
-        Document(
-            id="doc-very-low",
-            content="very-low",
-            cosine_similarity=0.8,
-            metadata={"bc_concepts": [], "bc_db_tables": ["other_table"]},
-        ),
-    ]
-
-    mocked_vector_search = AsyncMock(return_value=documents)
-    monkeypatch.setattr(repo, "vector_search", mocked_vector_search)
-
-    results = await repo.search_with_expansion(
-        query="coordination",
-        k=2,
-        search_tags=SearchTags(
-            bc_concepts=["MULTI_AGENT_COORDINATION"],
-            bc_db_tables=["observations"],
-        ),
+async def test_fake_repository_in_filter_matches_scalar_metadata(repo):
+    """Verify IN filter also matches scalar metadata against provided candidates."""
+    filters = MetadataFilters(
+        filters=[
+            MetadataFilter(field="chunk_type", operator="in", value=["text"]),
+        ],
+        condition="and",
     )
 
-    assert [doc.id for doc in results] == ["doc-high", "doc-mid"]
-    assert results[0].cosine_similarity == pytest.approx(1.0)
-    assert results[1].cosine_similarity == pytest.approx(0.9)
-    assert mocked_vector_search.await_args.args[1] == 12
+    results = await repo.vector_search(query="", k=10, filters=filters)
+
+    ids = {doc.id for doc in results}
+    assert "chunk_0001" in ids
 
 
 @pytest.mark.asyncio
 async def test_search_with_expansion_keeps_order_without_boosting(repo, monkeypatch):
-    """Verify root result order is unchanged when boosting is not provided."""
+    """Verify default repository expansion flow preserves root order and uses k as-is."""
     documents = [
         Document(id="doc-1", content="1", metadata={"bc_concepts": ["X"]}),
         Document(id="doc-2", content="2", metadata={"bc_concepts": ["Y"]}),

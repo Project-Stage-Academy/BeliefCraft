@@ -7,6 +7,7 @@ from rag_service.mcp_tools import (
 )
 from rag_service.models import (
     SUPPORTED_DB_TABLES,
+    ConceptTagCategory,
     Document,
     EntityType,
     SearchFilters,
@@ -73,8 +74,9 @@ def test_extract_search_tags_returns_none_for_empty_payload():
 
 @pytest.mark.asyncio
 async def test_search_knowledge_base_delegation(rag_tools, mock_repo):
-    """Verify search_knowledge_base tool delegates correctly to the repository."""
-    mock_repo.search_with_expansion.return_value = [MagicMock(id="doc1")]
+    """Verify search_knowledge_base performs root search with converted filters."""
+    mock_repo.vector_search.return_value = [MagicMock(id="doc1")]
+    mock_repo.expand_graph_by_ids.return_value = []
 
     await rag_tools.search_knowledge_base(
         query="test query",
@@ -83,67 +85,70 @@ async def test_search_knowledge_base_delegation(rag_tools, mock_repo):
         filters=SearchFilters(part="I"),
     )
 
-    # Check if repository was called with converted filters
-    args, kwargs = mock_repo.search_with_expansion.call_args
+    args, _ = mock_repo.vector_search.call_args
     assert args[0] == "test query"
     assert args[1] == 3
-    # Check converted filters
     filters = args[2]
     assert filters.filters[0].field == "part"
     assert filters.filters[0].value == "I"
-    assert args[3] == [EntityType.FORMULA]
-    assert args[4] is None
+    mock_repo.expand_graph_by_ids.assert_awaited_once_with(["doc1"], [EntityType.FORMULA])
 
 
 @pytest.mark.asyncio
-async def test_search_knowledge_base_passes_search_tags(rag_tools, mock_repo):
-    """Verify explicit search_tags is forwarded as boosting config."""
-    mock_repo.search_with_expansion.return_value = [MagicMock(id="doc1")]
+async def test_search_knowledge_base_boosts_matching_tagged_documents(rag_tools, mock_repo):
+    """Verify root result ranking and candidate size are controlled in MCP layer."""
+    documents = [
+        Document(
+            id="doc-low",
+            content="low",
+            cosine_similarity=0.8,
+            metadata={"bc_concepts": [], "bc_db_tables": []},
+        ),
+        Document(
+            id="doc-mid",
+            content="mid",
+            cosine_similarity=0.8,
+            metadata={"bc_concepts": ["MULTI_AGENT_COORDINATION"], "bc_db_tables": []},
+        ),
+        Document(
+            id="doc-high",
+            content="high",
+            cosine_similarity=0.8,
+            metadata={
+                "bc_concepts": ["MULTI_AGENT_COORDINATION"],
+                "bc_db_tables": ["observations"],
+            },
+        ),
+        Document(
+            id="doc-very-low",
+            content="very-low",
+            cosine_similarity=0.8,
+            metadata={"bc_concepts": [], "bc_db_tables": ["other_table"]},
+        ),
+    ]
+    mock_repo.vector_search.return_value = documents
+    mock_repo.expand_graph_by_ids.return_value = []
 
-    await rag_tools.search_knowledge_base(
-        query="test query",
+    results = await rag_tools.search_knowledge_base(
+        query="coordination",
+        k=2,
         search_tags=SearchTags(
-            bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
-            bc_db_tables=["sensor_devices", "observations"],
+            bc_concepts=["MULTI_AGENT_COORDINATION"],
+            bc_db_tables=["observations"],
         ),
     )
 
-    args, kwargs = mock_repo.search_with_expansion.call_args
-    assert args[2] is None
-    assert args[3] is None
-    assert args[4] == SearchTags(
-        bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
-        bc_db_tables=["sensor_devices", "observations"],
-    )
-
-
-@pytest.mark.asyncio
-async def test_search_knowledge_base_passes_explicit_search_tags(rag_tools, mock_repo):
-    """Verify explicit search_tags argument is forwarded to repository."""
-    mock_repo.search_with_expansion.return_value = [MagicMock(id="doc1")]
-
-    await rag_tools.search_knowledge_base(
-        query="test query",
-        filters=SearchFilters(part="I"),
-        search_tags=SearchTags(
-            bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
-            bc_db_tables=["sensor_devices", "observations"],
-        ),
-    )
-
-    args, kwargs = mock_repo.search_with_expansion.call_args
-    assert args[2] is not None
-    assert args[3] is None
-    assert args[4] == SearchTags(
-        bc_concepts=["SENSOR_FUSION_STATE_ESTIMATION"],
-        bc_db_tables=["sensor_devices", "observations"],
-    )
+    assert [doc.id for doc in results] == ["doc-high", "doc-mid"]
+    assert results[0].cosine_similarity == pytest.approx(1.0)
+    assert results[1].cosine_similarity == pytest.approx(0.9)
+    assert mock_repo.vector_search.await_args.args[1] == 12
 
 
 @pytest.mark.asyncio
 async def test_search_knowledge_base_ignores_empty_search_tags(rag_tools, mock_repo):
-    """Verify empty search_tags payload is normalized to None."""
-    mock_repo.search_with_expansion.return_value = [MagicMock(id="doc1")]
+    """Verify empty search_tags payload is normalized to None without candidate widening."""
+    mock_repo.vector_search.return_value = [Document(id="doc1", content="x")]
+    mock_repo.expand_graph_by_ids.return_value = []
 
     await rag_tools.search_knowledge_base(
         query="test query",
@@ -151,10 +156,26 @@ async def test_search_knowledge_base_ignores_empty_search_tags(rag_tools, mock_r
         search_tags=SearchTags(),
     )
 
-    args, kwargs = mock_repo.search_with_expansion.call_args
-    assert args[2] is not None
-    assert args[3] is None
-    assert args[4] is None
+    args, _ = mock_repo.vector_search.call_args
+    assert args[1] == 5
+
+
+@pytest.mark.asyncio
+async def test_search_knowledge_base_deduplicates_root_and_expanded(rag_tools, mock_repo):
+    """Verify duplicate IDs are removed while preserving root-first order."""
+    root = Document(id="doc1", content="root", metadata={})
+    duplicate_root = Document(id="doc1", content="expanded duplicate", metadata={})
+    expanded = Document(id="doc2", content="expanded", metadata={})
+
+    mock_repo.vector_search.return_value = [root]
+    mock_repo.expand_graph_by_ids.return_value = [duplicate_root, expanded]
+
+    results = await rag_tools.search_knowledge_base(
+        query="test query",
+        traverse_types=[EntityType.FORMULA],
+    )
+
+    assert [doc.id for doc in results] == ["doc1", "doc2"]
 
 
 @pytest.mark.asyncio
@@ -164,7 +185,6 @@ async def test_get_entity_by_number_delegation(rag_tools, mock_repo):
 
     await rag_tools.get_entity_by_number(entity_type=EntityType.FORMULA, number="3.1")
 
-    # Verify the precise filter construction
     args, kwargs = mock_repo.vector_search.call_args
     assert args[0] == ""
     assert kwargs["k"] == 1
@@ -244,7 +264,7 @@ async def test_get_search_tags_catalog_returns_concepts_only(rag_tools):
 @pytest.mark.asyncio
 async def test_get_search_tags_catalog_filters_concepts_by_category(rag_tools):
     """Verify category filter is applied in concepts mode."""
-    category = "PROBABILISTIC_INFERENCE"
+    category: ConceptTagCategory = "PROBABILISTIC_INFERENCE"
 
     result = await rag_tools.get_search_tags_catalog(tag_type="concepts", category=category)
 

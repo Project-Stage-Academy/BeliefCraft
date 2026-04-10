@@ -21,6 +21,7 @@ from .models import (
     SearchTagsCatalogMetadata,
 )
 from .repositories import AbstractVectorStoreRepository
+from .search_boosting import SearchResultBooster
 
 BOOK_CONTENTS = """part i probabilistic reasoning
 2 Representation 19
@@ -165,17 +166,32 @@ class RagTools:
         )
         metadata_filters = self._convert_search_filters(filters)
         resolved_boosting = self._extract_search_tags(search_tags)
-        documents = await self._repository.search_with_expansion(
+        booster = SearchResultBooster(resolved_boosting, k)
+        candidate_k = booster.candidate_limit_for_boosting()
+
+        root_documents = await self._repository.vector_search(
             query,
-            k,
+            candidate_k,
             metadata_filters,
-            traverse_types,
-            resolved_boosting,
         )
+        boosted_roots = booster.apply(root_documents)
+
+        expanded_documents: list[Document] = []
+        if traverse_types:
+            root_ids = [document.id for document in boosted_roots if document.id is not None]
+            if root_ids:
+                expanded_documents = await self._repository.expand_graph_by_ids(
+                    root_ids,
+                    traverse_types,
+                )
+
+        documents = SearchResultBooster.deduplicate_documents(boosted_roots + expanded_documents)
         logger.info(
             "rag tool result",
             tool="search_knowledge_base",
             num_documents=len(documents),
+            num_root_documents=len(boosted_roots),
+            num_expanded_documents=len(expanded_documents),
         )
         return documents
 
