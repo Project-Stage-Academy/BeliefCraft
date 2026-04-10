@@ -98,6 +98,30 @@ class TestMessageParserBuildIterationHistory:
 
         assert history[0]["actions"][0]["observation"] == {"error": "Failed"}
 
+    def test_message_history_ignores_stale_recorded_tool_calls(self) -> None:
+        messages = [
+            AIMessage(
+                content="<thinking>Use live tool history</thinking>",
+                tool_calls=[{"id": "c1", "name": "weather", "args": {"loc": "Rivne"}}],
+            ),
+            ToolMessage(tool_call_id="c1", content="", artifact={"temp": 20}),
+        ]
+        stale_tool_calls = [
+            {
+                "tool_name": "stale_tool",
+                "arguments": {"loc": "Kyiv"},
+                "result": {"temp": -5},
+            }
+        ]
+
+        history = MessageParser.build_iteration_history(
+            {"messages": messages, "tool_calls": stale_tool_calls}
+        )
+
+        assert history[0]["actions"][0]["tool"] == "weather"
+        assert history[0]["actions"][0]["arguments"] == {"loc": "Rivne"}
+        assert history[0]["actions"][0]["observation"] == {"temp": 20}
+
 
 class TestMessageParserHelpers:
     def test_find_tool_message(self) -> None:

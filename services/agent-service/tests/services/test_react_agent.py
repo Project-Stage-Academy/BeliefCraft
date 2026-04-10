@@ -72,6 +72,20 @@ class TestBuildGraph:
     def test_agent_has_llm(self, agent: ReActAgent, mock_llm_service: MagicMock) -> None:
         assert agent.llm is mock_llm_service
 
+    def test_count_tool_executions_uses_messages_not_flat_state(self, agent: ReActAgent) -> None:
+        messages = [
+            AIMessage(
+                content="",
+                tool_calls=[{"id": "tc_1", "name": "get_inventory", "args": {}}],
+            ),
+            AIMessage(
+                content="",
+                tool_calls=[{"id": "tc_2", "name": "search_knowledge_base", "args": {}}],
+            ),
+        ]
+
+        assert agent._count_tool_executions(messages) == 2
+
 
 # ---------------------------------------------------------------------------
 # Think node

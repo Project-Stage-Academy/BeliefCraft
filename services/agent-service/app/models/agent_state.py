@@ -45,6 +45,8 @@ class AgentState(TypedDict):
 
     # Reasoning trace
     thoughts: list[ThoughtStep]
+    # Legacy compatibility field for flat-state consumers.
+    # For the ReAct loop itself, `messages` is the canonical execution history.
     tool_calls: list[ToolCall]
     messages: Annotated[list[AnyMessage], add_messages]
     final_answer: str | None

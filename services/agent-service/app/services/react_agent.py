@@ -12,6 +12,7 @@ from app.prompts.system_prompts import (
     format_react_prompt,
 )
 from app.services.base_agent import BaseAgent
+from app.services.message_parser import MessageParser
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langchain_core.messages import AIMessage
@@ -74,6 +75,10 @@ class ReActAgent(BaseAgent):
         workflow.add_edge("finalize", END)
 
         return workflow.compile()
+
+    @staticmethod
+    def _count_tool_executions(messages: list[Any]) -> int:
+        return len(MessageParser.extract_tool_executions(messages))
 
     async def _think_node(self, state: AgentState) -> dict[str, Any]:
         """Reasoning step: Claude analyzes the situation and decides next action.
@@ -262,7 +267,7 @@ class ReActAgent(BaseAgent):
             iterations=final_state["iteration"],
             tokens=final_state["total_tokens"],
             thought_count=len(final_state["thoughts"]),
-            tool_call_count=len(final_state.get("tool_calls", [])),
+            tool_call_count=self._count_tool_executions(final_state.get("messages", [])),
         )
 
         return final_state

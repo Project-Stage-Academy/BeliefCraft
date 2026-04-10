@@ -256,7 +256,6 @@ class MessageParser:
         include_trace_meta: bool = False,
     ) -> list[dict[str, Any]]:
         thoughts = state.get("thoughts", [])
-        recorded_tool_calls = state.get("tool_calls", [])
         messages = state.get("messages", [])
         assistant_messages = [
             message for message in messages if MessageParser._is_assistant_message(message)
@@ -264,21 +263,16 @@ class MessageParser:
         tool_observations_by_id = MessageParser._extract_tool_observations_by_id(messages)
 
         history: list[dict[str, Any]] = []
-        tool_call_cursor = 0
 
         for index, assistant_message in enumerate(assistant_messages):
             raw_tool_calls = MessageParser._extract_message_tool_calls(assistant_message)
             actions: list[dict[str, Any]] = []
 
-            for offset, raw_tool_call in enumerate(raw_tool_calls):
-                recorded_tool_call = None
-                recorded_index = tool_call_cursor + offset
-                if recorded_index < len(recorded_tool_calls):
-                    recorded_tool_call = recorded_tool_calls[recorded_index]
+            for raw_tool_call in raw_tool_calls:
                 actions.append(
                     MessageParser._build_action_from_message_and_recorded_result(
                         raw_tool_call,
-                        recorded_tool_call,
+                        None,
                         include_trace_meta=include_trace_meta,
                     )
                 )
@@ -307,7 +301,6 @@ class MessageParser:
                     "actions": actions,
                 }
             )
-            tool_call_cursor += len(raw_tool_calls)
 
         return history
 
