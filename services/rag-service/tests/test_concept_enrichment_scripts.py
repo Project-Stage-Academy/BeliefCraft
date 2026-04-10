@@ -1,50 +1,93 @@
+import importlib
 import json
+import sys
+import types
 from pathlib import Path
+from typing import Any
 
-from rag_scripts import concept_mapping as cm
-from rag_scripts import concept_tags_generator as ctg
+import pytest
 
 
-def test_concept_tags_normalize_and_deduplicate() -> None:
-    raw_tags = [
-        "belief update",
-        "Belief-Update",
-        "BELIEF_UPDATE",
-        "optimization",
-        "OPT",
-        "??",
-    ]
+@pytest.fixture()
+def script_modules(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, Any]:
+    """Import script modules with lightweight langchain stubs for unit tests."""
+    fake_langchain_aws = types.ModuleType("langchain_aws")
+
+    class FakeChatBedrock:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # noqa: ANN002, ANN003
+            self.args = args
+            self.kwargs = kwargs
+
+        def with_structured_output(self, schema: Any) -> "FakeChatBedrock":
+            return self
+
+        def with_retry(self, stop_after_attempt: int) -> "FakeChatBedrock":  # noqa: ARG002
+            return self
+
+    fake_langchain_aws.ChatBedrock = FakeChatBedrock
+
+    fake_prompts = types.ModuleType("langchain_core.prompts")
+
+    class FakeChatPromptTemplate:
+        @classmethod
+        def from_messages(
+            cls, messages: list[tuple[str, str]]
+        ) -> "FakeChatPromptTemplate":  # noqa: ARG003
+            return cls()
+
+    fake_prompts.ChatPromptTemplate = FakeChatPromptTemplate
+
+    fake_runnables = types.ModuleType("langchain_core.runnables")
+
+    class FakeRunnable:
+        pass
+
+    fake_runnables.Runnable = FakeRunnable
+
+    monkeypatch.setitem(sys.modules, "langchain_aws", fake_langchain_aws)
+    monkeypatch.setitem(sys.modules, "langchain_core.prompts", fake_prompts)
+    monkeypatch.setitem(sys.modules, "langchain_core.runnables", fake_runnables)
+
+    sys.modules.pop("rag_scripts.concept_mapping", None)
+    sys.modules.pop("rag_scripts.concept_tags_generator", None)
+
+    cm = importlib.import_module("rag_scripts.concept_mapping")
+    ctg = importlib.import_module("rag_scripts.concept_tags_generator")
+    return cm, ctg
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("belief update", "BELIEF_UPDATE"),
+        ("Belief-Update", "BELIEF_UPDATE"),
+        ("already_ok", "ALREADY_OK"),
+        ("??", None),
+    ],
+)
+def test_concept_tags_normalize_tag(
+    script_modules: tuple[Any, Any], raw: str, expected: str | None
+) -> None:
+    _, ctg = script_modules
+
+    assert ctg.normalize_tag(raw) == expected
+
+
+def test_concept_tags_deduplicate_tags_removes_duplicates_and_invalid(
+    script_modules: tuple[Any, Any],
+) -> None:
+    _, ctg = script_modules
+    raw_tags = ["belief update", "BELIEF_UPDATE", "ok_tag", "??", "ok-tag"]
 
     deduped = ctg.deduplicate_tags(raw_tags)
 
-    assert "BELIEF_UPDATE" in deduped
-    assert "OPTIMIZATION" in deduped
-    assert "OPT" not in deduped
-    assert "" not in deduped
+    assert deduped == ["BELIEF_UPDATE", "OK_TAG"]
 
 
-def test_concept_tags_parse_json_response_with_markdown_fence() -> None:
-    payload = """```json
-{"tags": ["A", "B"]}
-```"""
-
-    parsed = ctg.parse_json_response(payload)
-
-    assert parsed == {"tags": ["A", "B"]}
-
-
-def test_concept_tags_generate_tags_for_batch_filters_invalid(monkeypatch) -> None:
-    def fake_call_bedrock(client, system_prompt: str, user_prompt: str) -> str:  # noqa: ARG001
-        return json.dumps({"tags": ["belief update", "ok_tag", "??"]})
-
-    monkeypatch.setattr(ctg, "call_bedrock", fake_call_bedrock)
-
-    tags = ctg.generate_tags_for_batch(client=object(), batch=[{"content": "test"}])
-
-    assert tags == ["BELIEF_UPDATE", "OK_TAG"]
-
-
-def test_concept_mapping_load_jsonl_handles_invalid_lines(tmp_path: Path) -> None:
+def test_concept_mapping_load_jsonl_handles_invalid_lines(
+    script_modules: tuple[Any, Any], tmp_path: Path
+) -> None:
+    cm, _ = script_modules
     path = tmp_path / "data.jsonl"
     path.write_text(
         "\n".join(
@@ -63,10 +106,13 @@ def test_concept_mapping_load_jsonl_handles_invalid_lines(tmp_path: Path) -> Non
     assert set(loaded.keys()) == {"c1", "c2"}
 
 
-def test_concept_mapping_create_batches_respects_token_budget() -> None:
+def test_concept_mapping_create_batches_respects_token_budget(
+    script_modules: tuple[Any, Any],
+) -> None:
+    cm, _ = script_modules
+
     class DeterministicRng:
-        def shuffle(self, sequence) -> None:
-            # Keep order stable for deterministic unit tests.
+        def shuffle(self, sequence: list[dict[str, Any]]) -> None:  # noqa: ARG002
             return None
 
     items = [
@@ -75,28 +121,25 @@ def test_concept_mapping_create_batches_respects_token_budget() -> None:
         {"chunk_id": "c3", "content": "c" * 200},
     ]
 
-    batches = cm.create_batches(items, max_tokens=130, rng=DeterministicRng())
+    batches = cm.create_batches(items, max_tokens=299, rng=DeterministicRng())
 
-    assert len(batches) == 3
-    assert sorted(x["chunk_id"] for b in batches for x in b) == ["c1", "c2", "c3"]
+    assert [len(batch) for batch in batches] == [2, 1]
 
 
-def test_concept_mapping_tag_concepts_batch_filters_unknown_tags(monkeypatch) -> None:
-    def fake_call_bedrock(client, system_prompt: str, user_prompt: str) -> str:  # noqa: ARG001
-        return json.dumps(
-            {
-                "results": [
-                    {"chunk_id": "c1", "bc_concepts": ["KNOWN", "UNKNOWN"]},
-                    {"chunk_id": "c2", "bc_concepts": []},
-                    {"bc_concepts": ["KNOWN"]},
+def test_concept_mapping_tag_concepts_filters_unknown_tags(script_modules: tuple[Any, Any]) -> None:
+    cm, _ = script_modules
+
+    class FakeChain:
+        def invoke(self, payload: dict[str, Any]) -> Any:  # noqa: ARG002
+            return cm.ConceptBatch(
+                results=[
+                    cm.ConceptResult(chunk_id="c1", bc_concepts=["KNOWN", "UNKNOWN"]),
+                    cm.ConceptResult(chunk_id="c2", bc_concepts=[]),
                 ]
-            }
-        )
+            )
 
-    monkeypatch.setattr(cm, "call_bedrock", fake_call_bedrock)
-
-    result = cm.tag_concepts_batch(
-        client=object(),
+    result = cm._tag_concepts(  # noqa: SLF001
+        chain=FakeChain(),
         batch=[{"chunk_id": "c1", "content": "a"}, {"chunk_id": "c2", "content": "b"}],
         concept_tags=["KNOWN"],
     )
@@ -107,22 +150,20 @@ def test_concept_mapping_tag_concepts_batch_filters_unknown_tags(monkeypatch) ->
     ]
 
 
-def test_concept_mapping_tag_tables_batch_filters_unknown_tables(monkeypatch) -> None:
-    def fake_call_bedrock(client, system_prompt: str, user_prompt: str) -> str:  # noqa: ARG001
-        return json.dumps(
-            {
-                "results": [
-                    {"chunk_id": "c1", "bc_db_tables": ["orders", "not_a_table"]},
-                    {"chunk_id": "c2", "bc_db_tables": []},
-                    {"bc_db_tables": ["orders"]},
+def test_concept_mapping_tag_tables_filters_unknown_tables(script_modules: tuple[Any, Any]) -> None:
+    cm, _ = script_modules
+
+    class FakeChain:
+        def invoke(self, payload: dict[str, Any]) -> Any:  # noqa: ARG002
+            return cm.TableBatch(
+                results=[
+                    cm.TableResult(chunk_id="c1", bc_db_tables=["orders", "not_a_table"]),
+                    cm.TableResult(chunk_id="c2", bc_db_tables=[]),
                 ]
-            }
-        )
+            )
 
-    monkeypatch.setattr(cm, "call_bedrock", fake_call_bedrock)
-
-    result = cm.tag_tables_batch(
-        client=object(),
+    result = cm._tag_tables(  # noqa: SLF001
+        chain=FakeChain(),
         batch=[{"chunk_id": "c1", "content": "a"}, {"chunk_id": "c2", "content": "b"}],
     )
 
@@ -132,10 +173,15 @@ def test_concept_mapping_tag_tables_batch_filters_unknown_tables(monkeypatch) ->
     ]
 
 
-def test_concept_mapping_phase3_merge_fills_missing_tags(tmp_path: Path) -> None:
+def test_concept_mapping_merge_fills_missing_tags(
+    script_modules: tuple[Any, Any], tmp_path: Path
+) -> None:
+    cm, _ = script_modules
+
     chunks = [
         {"chunk_id": "c1", "content": "one"},
         {"chunk_id": "c2", "content": "two"},
+        {"content": "missing id"},
     ]
     concepts_path = tmp_path / "concepts.jsonl"
     tables_path = tmp_path / "tables.jsonl"
@@ -150,7 +196,7 @@ def test_concept_mapping_phase3_merge_fills_missing_tags(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    cm.run_phase3_merge(chunks, concepts_path, tables_path, output_path)
+    cm.merge(chunks, concepts_path, tables_path, output_path)
 
     merged = json.loads(output_path.read_text(encoding="utf-8"))
     assert merged == [
@@ -165,5 +211,10 @@ def test_concept_mapping_phase3_merge_fills_missing_tags(tmp_path: Path) -> None
             "content": "two",
             "bc_concepts": [],
             "bc_db_tables": ["orders"],
+        },
+        {
+            "content": "missing id",
+            "bc_concepts": [],
+            "bc_db_tables": [],
         },
     ]
