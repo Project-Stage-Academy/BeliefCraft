@@ -17,6 +17,8 @@ def _make_llm_response(
     finish_reason: str = "stop",
     prompt_tokens: int = 10,
     completion_tokens: int = 20,
+    cache_creation_input_tokens: int = 0,
+    cache_read_input_tokens: int = 0,
 ) -> dict[str, Any]:
     """Helper to create a mock LLM response dict."""
     return {
@@ -26,6 +28,8 @@ def _make_llm_response(
         "tokens": {
             "prompt": prompt_tokens,
             "completion": completion_tokens,
+            "cache_creation_input_tokens": cache_creation_input_tokens,
+            "cache_read_input_tokens": cache_read_input_tokens,
             "total": prompt_tokens + completion_tokens,
         },
     }
@@ -263,7 +267,7 @@ class TestThinkNode:
 
         messages = agent._build_llm_messages(initial_state)
 
-        prompt = messages[1]["content"]
+        prompt = "\n".join(message["content"] for message in messages)
         assert prompt.count("<action tool=") == 2
         assert '<action tool="get_inventory_data">' in prompt
         assert '<action tool="search_knowledge_base">' in prompt

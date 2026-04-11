@@ -360,7 +360,7 @@ def format_react_prompt(state: Mapping[str, Any]) -> list[str]:
     history: list[str] = [REACT_LOOP_PROMPT_START.format(user_query=state["user_query"])]
     for iteration in build_iteration_history(state):
         iter_log = [
-            f'  <iteration instaticdex="{iteration["iteration"]}">',
+            f'  <iteration index="{iteration["iteration"]}">',
             f"    <thinking>{iteration['thought']}</thinking>",
         ]
 

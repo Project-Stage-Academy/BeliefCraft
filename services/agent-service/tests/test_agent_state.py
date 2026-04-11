@@ -133,6 +133,8 @@ class TestAgentStateTypeStructure:
             "status",
             "error",
             "total_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
             "started_at",
             "completed_at",
         }

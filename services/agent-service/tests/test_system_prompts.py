@@ -1,6 +1,7 @@
 from app.models.agent_state import ThoughtStep, ToolCall
 from app.prompts.system_prompts import (
-    REACT_LOOP_PROMPT,
+    REACT_LOOP_PROMPT_END,
+    REACT_LOOP_PROMPT_START,
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
     format_react_prompt,
     get_warehouse_advisor_prompt,
@@ -44,26 +45,27 @@ class TestWarehouseAdvisorSystemPrompt:
 
 class TestReactLoopPrompt:
     def test_contains_placeholders(self) -> None:
-        assert "{iteration}" in REACT_LOOP_PROMPT
-        assert "{max_iterations}" in REACT_LOOP_PROMPT
-        assert "{user_query}" in REACT_LOOP_PROMPT
-        assert "{history}" in REACT_LOOP_PROMPT
+        assert "{iteration}" in REACT_LOOP_PROMPT_END
+        assert "{max_iterations}" in REACT_LOOP_PROMPT_END
+        assert "{user_query}" in REACT_LOOP_PROMPT_START
 
     def test_contains_xml_tags(self) -> None:
-        assert "<query>" in REACT_LOOP_PROMPT
-        assert "</query>" in REACT_LOOP_PROMPT
-        assert "<history>" in REACT_LOOP_PROMPT
-        assert "</history>" in REACT_LOOP_PROMPT
+        assert "<query>" in REACT_LOOP_PROMPT_START
+        assert "</query>" in REACT_LOOP_PROMPT_START
+        assert "<history>" in REACT_LOOP_PROMPT_START
+        assert "</history>" in REACT_LOOP_PROMPT_END
 
     def test_contains_thinking_instruction(self) -> None:
-        assert "<thinking>...</thinking>" in REACT_LOOP_PROMPT
+        assert "<thinking>...</thinking>" in REACT_LOOP_PROMPT_END
 
     def test_contains_final_answer_instruction(self) -> None:
-        assert "FINAL ANSWER:" in REACT_LOOP_PROMPT
+        assert "FINAL ANSWER:" in REACT_LOOP_PROMPT_END
 
     def test_is_nonempty_string(self) -> None:
-        assert isinstance(REACT_LOOP_PROMPT, str)
-        assert len(REACT_LOOP_PROMPT) > 0
+        assert isinstance(REACT_LOOP_PROMPT_START, str)
+        assert len(REACT_LOOP_PROMPT_START) > 0
+        assert isinstance(REACT_LOOP_PROMPT_END, str)
+        assert len(REACT_LOOP_PROMPT_END) > 0
 
 
 class TestFormatReactPromptEmpty:
@@ -78,8 +80,9 @@ class TestFormatReactPromptEmpty:
             "tool_calls": [],
         }
         result = format_react_prompt(state)
-        assert "1/10" in result
-        assert "What is the stock level?" in result
+        result_str = "\n".join(result)
+        assert "1/10" in result_str
+        assert "What is the stock level?" in result_str
 
     def test_empty_history_has_no_iteration_tags(self) -> None:
         state = {
@@ -90,7 +93,8 @@ class TestFormatReactPromptEmpty:
             "tool_calls": [],
         }
         result = format_react_prompt(state)
-        assert "<iteration" not in result
+        result_str = "\n".join(result)
+        assert "<iteration" not in result_str
 
     def test_query_wrapped_in_xml(self) -> None:
         state = {
@@ -101,9 +105,10 @@ class TestFormatReactPromptEmpty:
             "tool_calls": [],
         }
         result = format_react_prompt(state)
-        assert "<query>" in result
-        assert "Check warehouse status" in result
-        assert "</query>" in result
+        result_str = "\n".join(result)
+        assert "<query>" in result_str
+        assert "Check warehouse status" in result_str
+        assert "</query>" in result_str
 
 
 class TestFormatReactPromptWithThoughtSteps:
@@ -128,11 +133,12 @@ class TestFormatReactPromptWithThoughtSteps:
             "tool_calls": [tool_call],
         }
         result = format_react_prompt(state)
-        assert '<iteration index="1">' in result
-        assert "<thinking>I need to check inventory</thinking>" in result
-        assert '<action tool="search_inventory">' in result
-        assert "<observation>" in result
-        assert "42" in result
+        result_str = "\n".join(result)
+        assert '<iteration index="1">' in result_str
+        assert "<thinking>I need to check inventory</thinking>" in result_str
+        assert '<action tool="search_inventory">' in result_str
+        assert "<observation>" in result_str
+        assert "42" in result_str
 
     def test_trace_meta_is_not_injected_into_prompt_history(self) -> None:
         thought = ThoughtStep(
@@ -155,10 +161,11 @@ class TestFormatReactPromptWithThoughtSteps:
         }
 
         result = format_react_prompt(state)
+        result_str = "\n".join(result)
 
-        assert "'stock': 42" in result
-        assert "'filters'" not in result
-        assert "'count': 1" not in result
+        assert "'stock': 42" in result_str
+        assert "'filters'" not in result_str
+        assert "'count': 1" not in result_str
 
     def test_multiple_iterations(self) -> None:
         thoughts = [
@@ -193,12 +200,13 @@ class TestFormatReactPromptWithThoughtSteps:
             "tool_calls": tool_calls,
         }
         result = format_react_prompt(state)
-        assert '<iteration index="1">' in result
-        assert '<iteration index="2">' in result
-        assert "Search for item A" in result
-        assert "Now check risk" in result
-        assert '<action tool="search">' in result
-        assert '<action tool="calculate_risk">' in result
+        result_str = "\n".join(result)
+        assert '<iteration index="1">' in result_str
+        assert '<iteration index="2">' in result_str
+        assert "Search for item A" in result_str
+        assert "Now check risk" in result_str
+        assert '<action tool="search">' in result_str
+        assert '<action tool="calculate_risk">' in result_str
 
     def test_tool_call_without_result(self) -> None:
         thought = ThoughtStep(
@@ -219,8 +227,9 @@ class TestFormatReactPromptWithThoughtSteps:
             "tool_calls": [tool_call],
         }
         result = format_react_prompt(state)
-        assert "<observation>" not in result
-        assert '<action tool="search">' in result
+        result_str = "\n".join(result)
+        assert "<observation>" not in result_str
+        assert '<action tool="search">' in result_str
 
     def test_single_iteration_renders_all_actions_from_same_assistant_turn(self) -> None:
         thought = ThoughtStep(
@@ -271,11 +280,12 @@ class TestFormatReactPromptWithThoughtSteps:
         }
 
         result = format_react_prompt(state)
+        result_str = "\n".join(result)
 
-        assert result.count("<action tool=") == 2
-        assert '<action tool="get_inventory_data">' in result
-        assert '<action tool="search_knowledge_base">' in result
-        assert "chunk-1" in result
+        assert result_str.count("<action tool=") == 2
+        assert '<action tool="get_inventory_data">' in result_str
+        assert '<action tool="search_knowledge_base">' in result_str
+        assert "chunk-1" in result_str
 
 
 class TestFormatReactPromptWithDicts:
@@ -300,9 +310,10 @@ class TestFormatReactPromptWithDicts:
             "tool_calls": [tool_call],
         }
         result = format_react_prompt(state)
-        assert '<action tool="get_inventory">' in result
-        assert "<observation>" in result
-        assert "50" in result
+        result_str = "\n".join(result)
+        assert '<action tool="get_inventory">' in result_str
+        assert "<observation>" in result_str
+        assert "50" in result_str
 
     def test_dict_tool_call_without_result(self) -> None:
         thought = ThoughtStep(
@@ -323,7 +334,8 @@ class TestFormatReactPromptWithDicts:
             "tool_calls": [tool_call],
         }
         result = format_react_prompt(state)
-        assert "<observation>" not in result
+        result_str = "\n".join(result)
+        assert "<observation>" not in result_str
 
     def test_dict_thought_uses_only_embedded_thought_text(self) -> None:
         state = {
@@ -363,11 +375,12 @@ class TestFormatReactPromptWithDicts:
         }
 
         result = format_react_prompt(state)
+        result_str = "\n".join(result)
 
-        assert "<thinking>Check recent moves</thinking>" in result
-        assert "Need device health next." not in result
-        assert "'next_action': 'tool_use'" not in result
-        assert "'timestamp': '2026-03-17T11:32:33.498991Z'" not in result
+        assert "<thinking>Check recent moves</thinking>" in result_str
+        assert "Need device health next." not in result_str
+        assert "'next_action': 'tool_use'" not in result_str
+        assert "'timestamp': '2026-03-17T11:32:33.498991Z'" not in result_str
 
 
 class TestFormatReactPromptUnpairedThoughts:
@@ -394,11 +407,12 @@ class TestFormatReactPromptUnpairedThoughts:
             "tool_calls": tool_calls,
         }
         result = format_react_prompt(state)
-        assert '<iteration index="1">' in result
-        assert '<iteration index="2">' in result
-        assert "Now I know the answer" in result
+        result_str = "\n".join(result)
+        assert '<iteration index="1">' in result_str
+        assert '<iteration index="2">' in result_str
+        assert "Now I know the answer" in result_str
         # The second iteration should have thinking but no action
-        assert '<action tool="search">' in result
+        assert '<action tool="search">' in result_str
 
 
 class TestFormatReactPromptIterationDisplay:
@@ -413,7 +427,8 @@ class TestFormatReactPromptIterationDisplay:
             "tool_calls": [],
         }
         result = format_react_prompt(state)
-        assert "3/7" in result
+        result_str = "\n".join(result)
+        assert "3/7" in result_str
 
     def test_first_iteration(self) -> None:
         state = {
@@ -424,7 +439,8 @@ class TestFormatReactPromptIterationDisplay:
             "tool_calls": [],
         }
         result = format_react_prompt(state)
-        assert "1/10" in result
+        result_str = "\n".join(result)
+        assert "1/10" in result_str
 
     def test_last_iteration(self) -> None:
         state = {
@@ -435,7 +451,8 @@ class TestFormatReactPromptIterationDisplay:
             "tool_calls": [],
         }
         result = format_react_prompt(state)
-        assert "10/10" in result
+        result_str = "\n".join(result)
+        assert "10/10" in result_str
 
 
 class TestGetWarehouseAdvisorPrompt:
@@ -518,12 +535,10 @@ class TestReactPromptCachingPrefixStability:
     """Tests to protect append-only prompt growth assumptions for KV caching."""
 
     @staticmethod
-    def _extract_history(prompt: str) -> str:
-        start_tag = "<history>\n"
-        end_tag = "\n</history>"
-        start = prompt.index(start_tag) + len(start_tag)
-        end = prompt.index(end_tag, start)
-        return prompt[start:end]
+    def _extract_history_from_list(prompt_list: list[str]) -> str:
+        # history is the middle elements
+        # REACT_LOOP_PROMPT_START ... iterations ... REACT_LOOP_PROMPT_END
+        return "\n".join(prompt_list[1:-1])
 
     def test_history_prefix_is_stable_when_appending_iteration(self) -> None:
         base_state = {
@@ -578,8 +593,8 @@ class TestReactPromptCachingPrefixStability:
 
         base_prompt = format_react_prompt(base_state)
         appended_prompt = format_react_prompt(appended_state)
-        base_history = self._extract_history(base_prompt)
-        appended_history = self._extract_history(appended_prompt)
+        base_history = self._extract_history_from_list(base_prompt)
+        appended_history = self._extract_history_from_list(appended_prompt)
 
         assert appended_history.startswith(base_history)
         assert '<iteration index="2">' in appended_history
@@ -639,11 +654,12 @@ class TestReactPromptCachingPrefixStability:
 
         base_prompt = format_react_prompt(base_state)
         appended_prompt = format_react_prompt(appended_state)
-        base_history = self._extract_history(base_prompt)
 
-        prefix_through_base_history = base_prompt.split(base_history, 1)[0] + base_history
+        # Check that the first two elements (start + first iteration) are the same
+        assert base_prompt[0] == appended_prompt[0]
+        assert base_prompt[1] == appended_prompt[1]
 
-        assert appended_prompt.startswith(prefix_through_base_history)
-        assert "You are in a ReAct (Reasoning + Acting) loop." in appended_prompt
-        assert "<query>" in appended_prompt
-        assert "Current iteration: 3/6" in appended_prompt
+        full_appended_str = "\n".join(appended_prompt)
+        assert "You are in a ReAct (Reasoning + Acting) loop." in full_appended_str
+        assert "<query>" in full_appended_str
+        assert "Current iteration: 3/6" in full_appended_str
