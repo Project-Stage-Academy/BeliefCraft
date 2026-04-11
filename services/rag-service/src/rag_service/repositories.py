@@ -221,11 +221,7 @@ class FakeDataRepository(AbstractVectorStoreRepository):
             case MetadataFilterOperator.EQ:
                 return val == field.value
             case MetadataFilterOperator.IN:
-                if not isinstance(field.value, list):
-                    return val == field.value
-                if isinstance(val, list):
-                    return any(item in field.value for item in val)
-                return val in field.value
+                return val in field.value if isinstance(field.value, list) else val == field.value
         return False
 
     def _matches_filters(self, doc: dict[str, Any], filters: MetadataFilters) -> bool:

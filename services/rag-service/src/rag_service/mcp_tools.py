@@ -294,13 +294,14 @@ class RagTools:
         ],
         category: Annotated[
             ConceptTagCategory | None,
-            "Optional concept category filter",
+            "Optional category filter for 'concepts' only; ignored for 'tables'.",
         ] = None,
     ) -> Document:
         """Use this tool to ground retrieval in the right domain vocabulary before searching.
 
         It is helpful to choose standardized tags that narrow search intent,
         reduce ambiguity, and improve relevance when querying the knowledge base.
+        For `tag_type='concepts'`, if `category` is not provided, all concept tags are returned.
         """
         selected_category = category if tag_type == "concepts" else None
         payload_items: list[str]
