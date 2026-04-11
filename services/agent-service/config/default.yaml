@@ -1,6 +1,43 @@
 app:
-  host: 0.0.0.0
+  name: "agent-service"
+  version: "0.1.0"
+  api_v1_prefix: "/api/v1"
+  env: "local"
+  skills_dir: "skills"
+  cors_origins:
+    - "*"
+
+server:
+  host: "0.0.0.0"
   port: 8003
+
 logging:
-  level: INFO
-features: {}
+  level: "INFO"
+
+external_services:
+  environment_api_url: "${ENVIRONMENT_API_URL:-http://localhost:8000}"
+  rag_api_url: "${RAG_API_URL:-http://localhost:8001}"
+
+bedrock:
+  region: "us-east-1"
+  temperature: 0.0
+  max_tokens: 4000
+  connect_timeout_seconds: 60
+  read_timeout_seconds: 300
+
+redis:
+  url: "${REDIS_URL:-redis://localhost:6379}"
+  cache_ttl_seconds: 3600
+
+execution:
+  max_iterations: 10
+  tool_timeout_seconds: 30
+
+langsmith:
+  tracing_v2: false
+
+react_agent:
+  model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+
+env_sub_agent:
+  model_id: "anthropic.claude-haiku-4-5-20251001-v1:0"

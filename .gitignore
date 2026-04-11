@@ -4,6 +4,7 @@
 
 # rag parser data
 data_source/
+ULTIMATE_BOOK_DATA*.json
 
 # JetBrains
 .idea/
@@ -63,6 +64,10 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+
+# RAG retrieval evaluation test artifacts
+services/rag-service/tests/retrieval/evaluation_results.json
+services/rag-service/tests/retrieval/manual_review.py
 
 # Translations
 *.mo
@@ -242,3 +247,6 @@ docker-compose.override.yml
 
 # MacOS
 .DS_Store
+
+# Evaluation results (generated, not versioned)
+evaluation_results*.json

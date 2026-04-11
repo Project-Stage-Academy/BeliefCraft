@@ -12,7 +12,6 @@ dependencies = [
     "beliefcraft-environment-api",
     "beliefcraft-rag-service",
     "beliefcraft-agent-service",
-    "respx>=0.22.0",
 ]
 
 [tool.uv.sources]
@@ -133,7 +132,9 @@ module = [
     "langchain_aws.*",
     "langchain_core.*",
     "langgraph.*",
-    "alembic.*"
+    "alembic.*",
+    "testcontainers.*",
+    "openai.*"
 ]
 ignore_missing_imports = true
 

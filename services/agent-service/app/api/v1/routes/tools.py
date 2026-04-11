@@ -2,9 +2,8 @@
 
 from typing import Any
 
-from app.tools.registry import tool_registry
 from common.logging import get_logger
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 logger = get_logger(__name__)
@@ -13,44 +12,45 @@ router = APIRouter()
 
 
 class ToolInfo(BaseModel):
-    """Information about a single tool."""
-
     name: str = Field(..., description="Tool name")
     description: str = Field(..., description="Tool description")
-    category: str = Field(..., description="Tool category (environment/rag/planning/utility)")
+    category: str = Field(..., description="Tool category (environment/rag/planning/utility/skill)")
     parameters: dict[str, Any] = Field(..., description="Tool parameter schema")
 
 
 class ToolListResponse(BaseModel):
-    """Response model for tools listing."""
-
     tools: list[ToolInfo] = Field(..., description="List of available tools")
     total_count: int = Field(..., description="Total number of tools returned")
 
 
 @router.get("/tools", response_model=ToolListResponse)
 async def list_tools(
+    request: Request,
     category: str | None = Query(
         None,
-        description="Filter by category (environment, rag, planning, utility)",
-        pattern="^(environment|rag|planning|utility)$",
+        description="Filter by category (environment, rag, planning, utility, skill)",
+        pattern="^(environment|rag|planning|utility|skill|mcp)$",
     ),
 ) -> ToolListResponse:
-    """
-    List all available tools for the agent.
-
-    This endpoint returns metadata about all registered tools,
-    optionally filtered by category. The schema format is compatible
-    with OpenAI function calling and AWS Bedrock Claude function calling.
-
-    Query parameters:
-    - category: Optional filter by tool category (environment, rag, planning, utility)
-
-    Returns:
-    - List of tools with their metadata and parameter schemas
-    """
     try:
-        tools = tool_registry.list_tools(category=category)
+        react_registry = getattr(request.app.state, "react_agent_registry", None)
+        env_registry = getattr(request.app.state, "env_sub_agent_registry", None)
+
+        if not react_registry and not env_registry:
+            raise ValueError("No tool registries initialized in app state")
+
+        all_tools = {}
+
+        if react_registry:
+            for tool in react_registry.list_tools(category=category):
+                all_tools[tool.metadata.name] = tool
+
+        if env_registry:
+            for tool in env_registry.list_tools(category=category):
+                all_tools[tool.metadata.name] = tool
+
+        tools = list(all_tools.values())
+
     except Exception as e:
         logger.error("tool_registry_list_failed", category=category, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to retrieve tools from registry") from e

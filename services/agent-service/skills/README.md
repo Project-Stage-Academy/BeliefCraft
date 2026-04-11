@@ -22,6 +22,7 @@ The skills system uses a **three-tier information retrieval** strategy to keep t
 
 ### Tier 2: Activation
 - Agent calls `load_skill(skill_name)` to retrieve the full SKILL.md body
+- `skill_name` is the YAML frontmatter `name`, not the directory name
 - Returns primary instructions and a list of any supporting files
 - Cached in Redis (24-hour TTL)
 
@@ -149,6 +150,10 @@ tags: [category, domain, keywords]
 dependencies: [SKILL-XX-NN]   # upstream skills whose outputs this skill consumes
 ---
 ```
+
+`name` is the canonical identifier exposed through `load_skill(...)` and
+`read_skill_files(...)`. Directory names are storage-only and may include
+ordering prefixes such as `ds01_...`.
 
 ### Markdown Body Structure
 

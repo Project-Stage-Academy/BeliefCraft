@@ -3,11 +3,12 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 import redis
 import structlog
 from app.api.v1.routes import agent, health, tools
-from app.config import get_settings
+from app.config_load import settings
 from app.core.constants import HEALTH_CHECK_TIMEOUT
 from app.core.exceptions import AgentServiceError
 from app.core.logging import configure_logging
@@ -16,50 +17,47 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Configure logging
 logger = configure_logging()
 
-# Initialize FastAPI
-settings = get_settings()
+
+async def _close_resource_safely(resource: Any, *, event: str, message: str) -> None:
+    """Attempt async resource cleanup without interrupting service shutdown/startup fallback."""
+    try:
+        await resource.close()
+    except Exception as e:
+        logger.warning(
+            event,
+            error=str(e),
+            error_type=type(e).__name__,
+            message=message,
+        )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """
-    Application lifespan manager.
-
-    Manages application startup and shutdown:
-    - Creates persistent HTTP clients and MCP connections
-    - Loads tools from MCP servers
-    - Ensures proper cleanup on shutdown
-
-    The MCP client remains connected throughout the application lifecycle,
-    allowing tools to reuse the connection instead of creating new clients
-    for each request.
-    """
     from app.clients.rag_mcp_client import RAGMCPClient
-    from app.tools import register_mcp_rag_tools, register_skill_tools
+    from app.tools import ToolRegistryFactory
+    from app.tools.registration import (
+        register_mcp_rag_tools,
+        register_skill_tools,
+    )
 
     # Startup
-    logger.info("agent_service_starting", version=settings.SERVICE_VERSION)
+    logger.info("agent_service_starting", version=settings.app.version)
 
     # Configure LangSmith tracing
-    # Env vars must be set in os.environ before the first LangChain call.
-    # Pydantic-settings reads .env into the Settings object but does NOT write
-    # back to os.environ, so we propagate the values explicitly here.
-    if settings.LANGCHAIN_TRACING_V2 and settings.LANGCHAIN_API_KEY:
+    if settings.langsmith.tracing_v2 and settings.langsmith.api_key:
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
-        if settings.LANGCHAIN_PROJECT:
-            os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
+        os.environ["LANGCHAIN_API_KEY"] = settings.langsmith.api_key
+        if settings.langsmith.project:
+            os.environ["LANGCHAIN_PROJECT"] = settings.langsmith.project
         logger.info(
             "langsmith_tracing_enabled",
-            project=settings.LANGCHAIN_PROJECT,
+            project=settings.langsmith.project,
         )
     else:
         logger.info("langsmith_tracing_disabled")
 
-    # Verify AWS credentials early (fail-fast in production)
     from app.services.health_checker import verify_aws_credentials_at_startup
 
     verify_aws_credentials_at_startup(settings)
@@ -70,82 +68,118 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.http_client = http_client
 
     # Create Redis connection pool
-    app.state.redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
+    app.state.redis_pool = redis.ConnectionPool.from_url(settings.redis.url, decode_responses=True)
     app.state.redis_client = redis.Redis(connection_pool=app.state.redis_pool)
 
-    # Create persistent MCP client for RAG service (optional)
-    # Service will work without RAG tools if connection fails (graceful degradation)
-    mcp_client = RAGMCPClient(base_url=settings.RAG_API_URL)
+    # Build EnvSubAgent registry (environment tools only)
+    logger.info("building_env_sub_agent_registry")
+    env_sub_registry = ToolRegistryFactory.create_env_sub_agent_registry()
+    app.state.env_sub_agent_registry = env_sub_registry
+    logger.info(
+        "env_sub_agent_registry_built",
+        tools_count=len(env_sub_registry.tools),
+    )
+
+    # Create persistent MCP client
+    mcp_client = RAGMCPClient(base_url=settings.external_services.rag_api_url)
+    mcp_rag_tools = []
     try:
         await mcp_client.connect()
         app.state.rag_mcp_client = mcp_client
 
         logger.info(
             "loading_mcp_rag_tools",
-            rag_mcp_url=f"{settings.RAG_API_URL}/mcp",
+            rag_mcp_url=f"{settings.external_services.rag_api_url}/mcp",
         )
 
-        # Register RAG tools from MCP server
-        await register_mcp_rag_tools(mcp_client)
+        # Create temporary registry for MCP tool discovery
+        temp_registry = ToolRegistryFactory.create_react_agent_registry()
+        await register_mcp_rag_tools(mcp_client, registry=temp_registry)
 
-        logger.info("mcp_rag_tools_loaded_successfully")
+        # Extract loaded MCP tools for reuse
+        mcp_rag_tools = [
+            t for t in temp_registry.tools.values() if t.get_metadata().category == "rag"
+        ]
+
+        logger.info("mcp_rag_tools_loaded_successfully", count=len(mcp_rag_tools))
 
     except Exception as e:
         logger.warning(
             "failed_to_load_mcp_tools_continuing_without_rag",
             error=str(e),
             error_type=type(e).__name__,
-            message="Service will continue with environment tools only",
+            message="Service will continue with skill tools only",
         )
-        # Close MCP client on failure
-        await mcp_client.close()
-        # Continue startup without RAG tools (graceful degradation)
+        await _close_resource_safely(
+            mcp_client,
+            event="failed_to_cleanup_mcp_client_after_startup_error",
+            message="MCP cleanup failed after startup error, continuing without RAG tools",
+        )
 
-    # Register skill tools (local file system - no external dependencies)
-    logger.info("loading_skill_tools", skills_dir=settings.SKILLS_DIR)
+    # Register skill tools and get store
+    skill_tools = []
+    logger.info("loading_skill_tools", skills_dir=settings.app.skills_dir)
     try:
-        register_skill_tools(settings.SKILLS_DIR)
-        logger.info("skill_tools_loaded_successfully")
+        temp_registry = ToolRegistryFactory.create_react_agent_registry()
+        register_skill_tools(settings.app.skills_dir, registry=temp_registry)
+        skill_tools = [
+            t for t in temp_registry.tools.values() if t.get_metadata().category == "skill"
+        ]
+        logger.info("skill_tools_loaded_successfully", count=len(skill_tools))
     except Exception as e:
         logger.warning(
             "failed_to_load_skill_tools_continuing_without_skills",
             error=str(e),
             error_type=type(e).__name__,
-            skills_dir=settings.SKILLS_DIR,
-            message="Service will continue with environment and RAG tools only",
+            skills_dir=settings.app.skills_dir,
+            message="Service will continue with RAG tools only",
         )
+
+    # Build ReActAgent registry (RAG + skill tools + sub-agent orchestrator)
+    logger.info("building_react_agent_registry")
+    react_registry = ToolRegistryFactory.create_react_agent_registry(
+        mcp_rag_tools=mcp_rag_tools,
+        skill_tools=skill_tools,
+        env_sub_registry=env_sub_registry,
+    )
+    app.state.react_agent_registry = react_registry
+    logger.info(
+        "react_agent_registry_built",
+        tools_count=len(react_registry.tools),
+        rag_tools=len(mcp_rag_tools),
+        skill_tools=len(skill_tools),
+    )
 
     try:
         yield
     finally:
-        # Shutdown - cleanup in reverse order
         logger.info("agent_service_stopping")
 
-        # Close MCP client
         if hasattr(app.state, "rag_mcp_client"):
-            await app.state.rag_mcp_client.close()
+            await _close_resource_safely(
+                app.state.rag_mcp_client,
+                event="failed_to_close_rag_mcp_client_on_shutdown",
+                message="RAG MCP client cleanup failed during shutdown",
+            )
 
-        # Close Redis
         app.state.redis_client.close()
         app.state.redis_pool.disconnect()
-
-        # Close HTTP client
         await http_client.__aexit__(None, None, None)
 
 
 app = FastAPI(
     title="BeliefCraft Agent Service",
     description="ReAct agent for warehouse decision support",
-    version=settings.SERVICE_VERSION,
-    docs_url=f"{settings.API_V1_PREFIX}/docs",
-    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
+    version=settings.app.version,
+    docs_url=f"{settings.app.api_v1_prefix}/docs",
+    openapi_url=f"{settings.app.api_v1_prefix}/openapi.json",
     lifespan=lifespan,
 )
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.app.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -153,17 +187,14 @@ app.add_middleware(
 
 
 def _generate_request_id() -> str:
-    """Generate unique request ID"""
     return str(uuid.uuid4())
 
 
 def _calculate_duration_ms(start_time: float) -> float:
-    """Calculate request duration in milliseconds"""
     return round((time.time() - start_time) * 1000, 2)
 
 
 def _log_request_completion(method: str, path: str, status_code: int, duration_ms: float) -> None:
-    """Log request completion with details"""
     logger.info(
         "request_completed",
         method=method,
@@ -173,25 +204,22 @@ def _log_request_completion(method: str, path: str, status_code: int, duration_m
     )
 
 
-# Request ID middleware
 @app.middleware("http")
 async def add_request_id(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    """Add request ID and timing to all requests"""
     request_id = _generate_request_id()
     request.state.request_id = request_id
 
     structlog.contextvars.bind_contextvars(request_id=request_id)
-
     start_time = time.time()
+
     try:
         response = await call_next(request)
     finally:
         structlog.contextvars.unbind_contextvars("request_id")
 
     duration_ms = _calculate_duration_ms(start_time)
-
     _log_request_completion(
         method=request.method,
         path=request.url.path,
@@ -203,10 +231,8 @@ async def add_request_id(
     return response
 
 
-# Exception handler
 @app.exception_handler(AgentServiceError)
 async def agent_exception_handler(request: Request, exc: AgentServiceError) -> JSONResponse:
-    """Handle custom agent service exceptions"""
     logger.error(
         "agent_error",
         error_type=type(exc).__name__,
@@ -224,45 +250,27 @@ async def agent_exception_handler(request: Request, exc: AgentServiceError) -> J
     )
 
 
-# Root endpoint
 @app.get("/", tags=["root"])
 async def root() -> dict[str, str]:
-    """Root endpoint with service information"""
     return {
-        "service": settings.SERVICE_NAME,
-        "version": settings.SERVICE_VERSION,
+        "service": settings.app.name,
+        "version": settings.app.version,
         "status": "running",
-        "docs": f"{settings.API_V1_PREFIX}/docs",
-        "health": f"{settings.API_V1_PREFIX}/health",
+        "docs": f"{settings.app.api_v1_prefix}/docs",
+        "health": f"{settings.app.api_v1_prefix}/health",
     }
 
 
-# Include routers
-app.include_router(
-    health.router,
-    prefix=settings.API_V1_PREFIX,
-    tags=["health"],
-)
-
-app.include_router(
-    agent.router,
-    prefix=settings.API_V1_PREFIX,
-    tags=["agent"],
-)
-
-app.include_router(
-    tools.router,
-    prefix=settings.API_V1_PREFIX,
-    tags=["tools"],
-)
-
+app.include_router(health.router, prefix=settings.app.api_v1_prefix, tags=["health"])
+app.include_router(agent.router, prefix=settings.app.api_v1_prefix, tags=["agent"])
+app.include_router(tools.router, prefix=settings.app.api_v1_prefix, tags=["tools"])
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
         "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
+        host=settings.server.host,
+        port=settings.server.port,
         reload=True,
     )

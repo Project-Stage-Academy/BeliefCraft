@@ -8,6 +8,8 @@ from typing import Any
 from uuid import uuid4
 
 import yaml
+from app.clients.rag_mcp_client import RAGMCPClient
+from app.config_load import settings
 from app.evaluation.models import (
     CategoryStats,
     EvaluationReport,
@@ -18,12 +20,14 @@ from app.models.responses import AgentRecommendationResponse, Citation
 from app.prompts.system_prompts import get_warehouse_advisor_prompt
 from app.services.react_agent import ReActAgent
 from app.services.recommendation_generator import RecommendationGenerator
-from app.tools import get_skill_store
+from app.tools.registration import get_skill_store, register_mcp_rag_tools
 from common.logging import get_logger
 
 logger = get_logger(__name__)
 
-_rag_tools_registered: bool = False
+_mcp_rag_tools = []
+_rag_tools_registered = False
+
 
 # Maps the top-level title segment (lowercase) to book section number.
 # Derived from entity_number prefixes present in RAG knowledge base chunks.
@@ -137,27 +141,32 @@ class AgentEvaluator:
         return report
 
     async def _ensure_rag_tools_registered(self) -> None:
-        """Register RAG tools from MCP server if not already done.
-
-        Mirrors the startup logic from main.py lifespan() so that the
-        evaluator works correctly when invoked from the CLI without a
-        running FastAPI application.
-        """
-        global _rag_tools_registered
+        """Register RAG tools from MCP server if not already done."""
+        global _rag_tools_registered, _mcp_rag_tools
         if _rag_tools_registered:
             return
 
-        from app.clients.rag_mcp_client import RAGMCPClient
-        from app.config import get_settings
-        from app.tools import register_mcp_rag_tools
+        from app.tools.factory import ToolRegistryFactory
 
-        settings = get_settings()
-        mcp_client = RAGMCPClient(base_url=settings.RAG_API_URL)
+        mcp_client = RAGMCPClient(base_url=settings.external_services.rag_api_url)
         try:
             await mcp_client.connect()
-            await register_mcp_rag_tools(mcp_client)
+
+            # 1. Create a temporary registry
+            temp_registry = ToolRegistryFactory.create_react_agent_registry()
+
+            # 2. Pass the registry to the registration function
+            await register_mcp_rag_tools(mcp_client, registry=temp_registry)
+
+            # 3. Extract and store the tools for agent instantiation later
+            _mcp_rag_tools = [
+                t for t in temp_registry.tools.values() if t.get_metadata().category == "rag"
+            ]
+
             _rag_tools_registered = True
-            logger.info("evaluator_rag_tools_registered", rag_url=settings.RAG_API_URL)
+            logger.info(
+                "evaluator_rag_tools_registered", rag_url=settings.external_services.rag_api_url
+            )
         except Exception as e:
             logger.warning(
                 "evaluator_rag_tools_registration_failed",
@@ -501,15 +510,15 @@ class AgentEvaluator:
         failed = total - passed
         pass_rate = passed / total if total > 0 else 0.0
 
-        avg_retrieval = sum(r.retrieval_accuracy for r in results) / total
-        avg_citation = sum(r.citation_quality for r in results) / total
-        avg_code = sum(r.code_validity for r in results) / total
-        avg_reasoning = sum(r.reasoning_quality for r in results) / total
-        avg_actionability = sum(r.actionability for r in results) / total
-        avg_overall = sum(r.overall_score for r in results) / total
+        avg_retrieval = sum(r.retrieval_accuracy for r in results) / total if total > 0 else 0.0
+        avg_citation = sum(r.citation_quality for r in results) / total if total > 0 else 0.0
+        avg_code = sum(r.code_validity for r in results) / total if total > 0 else 0.0
+        avg_reasoning = sum(r.reasoning_quality for r in results) / total if total > 0 else 0.0
+        avg_actionability = sum(r.actionability for r in results) / total if total > 0 else 0.0
+        avg_overall = sum(r.overall_score for r in results) / total if total > 0 else 0.0
 
-        avg_execution = sum(r.execution_time_seconds for r in results) / total
-        avg_iterations = sum(r.iterations for r in results) / total
+        avg_execution = sum(r.execution_time_seconds for r in results) / total if total > 0 else 0.0
+        avg_iterations = sum(r.iterations for r in results) / total if total > 0 else 0.0
 
         by_category: dict[str, list[EvaluationResult]] = {}
         for result in results:

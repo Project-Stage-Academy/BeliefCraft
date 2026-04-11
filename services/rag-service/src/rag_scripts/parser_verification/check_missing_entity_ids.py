@@ -2,7 +2,7 @@
 import argparse
 import json
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -24,16 +24,22 @@ def parse_entity_id(entity_id: str) -> tuple[str, ...] | None:
 def collect_ids_by_type(
     chunks: list[dict[str, Any]],
 ) -> tuple[dict[str, list[tuple[str, ...]]], list[dict[str, Any]]]:
-    ids_by_type: dict[str, list[tuple[str, ...]]] = defaultdict(list)
+    ids_by_type: dict[str, list[tuple[str, ...]]] = {}
     invalid_rows: list[dict[str, Any]] = []
 
     for chunk in chunks:
         chunk_type = chunk.get("chunk_type")
-        if not chunk_type or chunk_type == "text":
+        if not chunk_type:
             continue
+
+        if chunk_type not in ids_by_type:
+            ids_by_type[chunk_type] = []
 
         entity_id = chunk.get("entity_id")
         if not entity_id:
+            if chunk_type == "text":
+                continue
+
             invalid_rows.append(
                 {
                     "chunk_id": chunk.get("chunk_id"),
@@ -46,6 +52,9 @@ def collect_ids_by_type(
 
         parsed = parse_entity_id(str(entity_id))
         if parsed is None:
+            if chunk_type == "text":
+                continue
+
             invalid_rows.append(
                 {
                     "chunk_id": chunk.get("chunk_id"),
@@ -114,7 +123,7 @@ def analyze(chunks: list[dict[str, Any]]) -> dict[str, Any]:
 
     report: dict[str, Any] = {"chunk_types": {}, "invalid_rows": invalid_rows}
     for chunk_type in sorted(ids_by_type):
-        unique_sorted_ids = sorted(set(ids_by_type[chunk_type]), key=_sort_key)
+        unique_sorted_ids = sorted(ids_by_type[chunk_type], key=_sort_key)
         gaps = detect_gaps(unique_sorted_ids)
 
         report["chunk_types"][chunk_type] = {
@@ -129,19 +138,25 @@ def analyze(chunks: list[dict[str, Any]]) -> dict[str, Any]:
 def print_report(report: dict[str, Any]) -> None:
     chunk_types = report["chunk_types"]
     if not chunk_types:
-        print("No non-text chunk entity IDs found.")
+        print("No chunk entity IDs found.")
         return
 
     for chunk_type, info in chunk_types.items():
         print(f"\n[{chunk_type}] count={info['count']}")
         print("IDs:", ", ".join(info["ids"]) if info["ids"] else "-")
+
+        counts = Counter(info["ids"])
+        duplicates = [item for item, cnt in counts.items() if cnt > 1]
+
+        print("Duplicate IDs:", ", ".join(duplicates) if duplicates else "-")
+
         if info["gaps"]:
             print("Missing IDs:")
             for gap in info["gaps"]:
                 print(
                     f"  - between {gap['after']} and {gap['before']}: {', '.join(gap['missing'])}"
                 )
-        else:
+        elif chunk_type != "text":
             print("Missing IDs: none")
 
     invalid_rows = report.get("invalid_rows", [])
@@ -157,7 +172,7 @@ def print_report(report: dict[str, Any]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Group non-text chunks by chunk_type, sort entity_id values "
+            "Group chunks by chunk_type, sort entity_id values "
             "(x.x or x.x.x), and report missing IDs."
         )
     )

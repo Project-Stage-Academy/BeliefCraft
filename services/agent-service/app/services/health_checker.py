@@ -1,12 +1,13 @@
 """Health check service for external dependencies"""
 
 import os
+from typing import Any
 
 import boto3
-import botocore.exceptions  # type: ignore
+import botocore.exceptions
 import httpx
 import redis
-from app.config import Settings
+from app.config_schema import Settings
 from app.core.constants import ERROR_PREFIX, HTTP_OK_STATUS, HealthStatus
 from common.http_client import TracedHttpClient
 from common.logging import get_logger
@@ -71,14 +72,15 @@ class HealthChecker:
         the configured credentials can actually authenticate with AWS.
         Falls back to config-only checks if STS is unreachable.
         """
-        if not (self.settings.BEDROCK_MODEL_ID and self.settings.BEDROCK_MODEL_ID.strip()):
+        if not (self.settings.react_agent.model_id and self.settings.react_agent.model_id.strip()):
             return HealthStatus.MISSING_CONFIG
 
-        if not (self.settings.AWS_DEFAULT_REGION and self.settings.AWS_DEFAULT_REGION.strip()):
+        if not (self.settings.bedrock.region and self.settings.bedrock.region.strip()):
             return HealthStatus.MISSING_CONFIG
 
-        if os.getenv("ENV") == "production" and (
-            not self.settings.AWS_ACCESS_KEY_ID or not self.settings.AWS_SECRET_ACCESS_KEY
+        if os.getenv("ENV") == "prod" and (
+            not self.settings.bedrock.aws_access_key_id
+            or not self.settings.bedrock.aws_secret_access_key
         ):
             return HealthStatus.MISSING_KEY
 
@@ -104,20 +106,25 @@ class HealthChecker:
             logger.warning("aws_credential_check_failed", error=str(e))
             return f"{ERROR_PREFIX}{e}"
 
-    def _build_sts_client(self) -> boto3.client:
+    def _build_sts_client(self) -> Any:
         """Build a boto3 STS client using the same auth strategy as LLMService."""
-        region = self.settings.AWS_DEFAULT_REGION
+        region = self.settings.bedrock.region
 
-        if getattr(self.settings, "AWS_PROFILE", None):
-            session = boto3.Session(profile_name=self.settings.AWS_PROFILE, region_name=region)
+        if self.settings.bedrock.aws_profile:
+            session = boto3.Session(
+                profile_name=self.settings.bedrock.aws_profile, region_name=region
+            )
             return session.client("sts")
 
-        kwargs: dict[str, str] = {"service_name": "sts", "region_name": region}
-        if self.settings.AWS_ACCESS_KEY_ID and self.settings.AWS_SECRET_ACCESS_KEY:
-            kwargs["aws_access_key_id"] = self.settings.AWS_ACCESS_KEY_ID
-            kwargs["aws_secret_access_key"] = self.settings.AWS_SECRET_ACCESS_KEY
+        if self.settings.bedrock.aws_access_key_id and self.settings.bedrock.aws_secret_access_key:
+            return boto3.client(
+                service_name="sts",
+                region_name=region,
+                aws_access_key_id=self.settings.bedrock.aws_access_key_id,
+                aws_secret_access_key=self.settings.bedrock.aws_secret_access_key,
+            )
 
-        return boto3.client(**kwargs)
+        return boto3.client(service_name="sts", region_name=region)
 
     async def check_all_dependencies(self) -> dict[str, str]:
         """
@@ -129,9 +136,11 @@ class HealthChecker:
 
         return {
             DependencyName.ENVIRONMENT_API: await self.check_http_endpoint(
-                self.settings.ENVIRONMENT_API_URL
+                self.settings.external_services.environment_api_url
             ),
-            DependencyName.RAG_API: await self.check_http_endpoint(self.settings.RAG_API_URL),
+            DependencyName.RAG_API: await self.check_http_endpoint(
+                self.settings.external_services.rag_api_url
+            ),
             DependencyName.REDIS: self.check_redis(),
             DependencyName.AWS_BEDROCK: self.check_bedrock_config(),
         }
@@ -168,7 +177,7 @@ def verify_aws_credentials_at_startup(settings: Settings) -> None:
         return
 
     message = f"AWS credential check returned: {status}"
-    if os.getenv("ENV") == "production":
+    if os.getenv("ENV") == "prod":
         raise ConfigurationError(message)
 
     logger.warning("aws_credentials_not_verified", status=status, message=message)

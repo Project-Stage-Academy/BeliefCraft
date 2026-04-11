@@ -93,13 +93,16 @@ class RAGMCPClient:
         Establish connection to MCP server.
 
         Creates HTTP client and FastMCP client instances.
+        If FastMCP fails during session startup, any partially initialized
+        resources are cleaned up before the original error is re-raised.
         """
         # Create traced HTTP client for observability
-        self.http_client = TracedHttpClient(
+        http_client = TracedHttpClient(
             base_url=self.base_url,
             timeout=self.timeout,
         )
-        await self.http_client.__aenter__()
+        await http_client.__aenter__()
+        self.http_client = http_client
 
         # FastMCP passes args/kwargs to the factory, but we intentionally ignore them
         # because our httpx.AsyncClient is pre-configured in __aenter__() with all
@@ -107,12 +110,18 @@ class RAGMCPClient:
         # the existing client rather than creating a new one.
         transport = StreamableHttpTransport(
             self.mcp_url,
-            httpx_client_factory=lambda *args, **kwargs: self.http_client.get_httpx_client(),
+            httpx_client_factory=lambda *args, **kwargs: http_client.get_httpx_client(),
         )
 
         # Create FastMCP client
-        self.mcp_client = Client(transport)
-        await self.mcp_client.__aenter__()  # type: ignore[no-untyped-call]
+        mcp_client = Client(transport)
+        self.mcp_client = mcp_client
+
+        try:
+            await mcp_client.__aenter__()  # type: ignore[no-untyped-call]
+        except Exception:
+            await self.close()
+            raise
 
         logger.info(
             "rag_mcp_client_connected",
@@ -120,14 +129,34 @@ class RAGMCPClient:
         )
 
     async def close(self) -> None:
-        """Close connection to MCP server."""
-        if self.mcp_client:
-            await self.mcp_client.__aexit__(None, None, None)  # type: ignore[no-untyped-call]
-            self.mcp_client = None
+        """Close connection to MCP server using best-effort cleanup."""
+        mcp_client = self.mcp_client
+        http_client = self.http_client
 
-        if self.http_client:
-            await self.http_client.__aexit__(None, None, None)
-            self.http_client = None
+        self.mcp_client = None
+        self.http_client = None
+
+        if mcp_client:
+            try:
+                await mcp_client.__aexit__(None, None, None)  # type: ignore[no-untyped-call]
+            except Exception as e:
+                logger.warning(
+                    "rag_mcp_client_disconnect_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    mcp_url=self.mcp_url,
+                )
+
+        if http_client:
+            try:
+                await http_client.__aexit__(None, None, None)
+            except Exception as e:
+                logger.warning(
+                    "rag_mcp_http_client_disconnect_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    base_url=self.base_url,
+                )
 
         logger.debug("rag_mcp_client_closed")
 

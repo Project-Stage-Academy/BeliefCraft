@@ -66,16 +66,16 @@ def load_paddle_dir(directory: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def extract_paddle_boxes(pages: list[dict[str, Any]]) -> list[tuple[int, list[float]]]:
+def extract_paddle_boxes(pages: list[dict[str, Any]]) -> list[tuple[int, list[float], int]]:
     """Extracts bounding boxes from PaddleOCR JSON output pages.
 
     Args:
         pages: A list of page data dictionaries.
 
     Returns:
-        A list of tuples containing (page_index, bounding_box).
+        A list of tuples containing (page_index, bounding_box, block_id).
     """
-    result: list[tuple[int, list[float]]] = []
+    result: list[tuple[int, list[float], int]] = []
 
     for i, page in enumerate(pages):
         page_num = page.get("page_num", i + 1)
@@ -89,7 +89,7 @@ def extract_paddle_boxes(pages: list[dict[str, Any]]) -> list[tuple[int, list[fl
             if not isinstance(bbox, list) or len(bbox) != 4:
                 continue
 
-            result.append((page_num - 1, [float(x) for x in bbox]))
+            result.append((page_num - 1, [float(x) for x in bbox], block["block_id"]))
 
     return result
 
@@ -136,7 +136,9 @@ def rect_paddle(
     return [x1, y1, x2, y2]
 
 
-def draw_rect(page: fitz.Page, bbox: list[float], color: tuple[float, float, float]) -> None:
+def draw_rect(
+    page: fitz.Page, bbox: list[float], color: tuple[float, float, float], label: str | None = None
+) -> None:
     """Draws a rectangle on a fitz.Page.
 
     Args:
@@ -150,7 +152,49 @@ def draw_rect(page: fitz.Page, bbox: list[float], color: tuple[float, float, flo
         max(bbox[0], bbox[2]),
         max(bbox[1], bbox[3]),
     )
+
     page.draw_rect(rect, color=color, width=1.2)
+
+    if label:
+        text_position = fitz.Point(rect.x0, rect.y0 - 1)
+
+        page.insert_text(
+            text_position,
+            label,
+            fontsize=8,
+            color=color,
+        )
+
+
+def load_chunks(path: Path) -> list[dict[str, Any]]:
+    """Loads the chunks JSON.
+
+    Args:
+        path: Path to the JSON file.
+
+    Returns:
+        A list of chunk dictionaries.
+    """
+    if not path.exists():
+        return []
+
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if isinstance(data, list):
+        return data
+    return []
+
+
+def get_chunk_id_by_block_id(chunks: list[dict[str, Any]], block_id: str) -> str | None:
+    """Return the chunk_id that contains the given pdf block_id"""
+    for chunk in chunks:
+        pdf_block_ids = chunk.get("pdf_block_ids")
+        if not isinstance(pdf_block_ids, list):
+            continue
+        if block_id in pdf_block_ids:
+            return str(chunk["chunk_id"])
+    return None
 
 
 def main() -> None:
@@ -161,6 +205,7 @@ def main() -> None:
     parser.add_argument("blocks_json", type=Path)
     parser.add_argument("images_json", type=Path)
     parser.add_argument("paddle_dir", type=Path)
+    parser.add_argument("--chunks_json", type=Path)
 
     parser.add_argument("-o", "--output", type=Path, default=Path("out.pdf"))
     parser.add_argument("--dpi", type=float, default=200.0)
@@ -176,6 +221,12 @@ def main() -> None:
     images = load_rows(args.images_json)
     paddle_pages = load_paddle_dir(args.paddle_dir)
     paddle_boxes = extract_paddle_boxes(paddle_pages)
+
+    if args.chunks_json:
+        chunks = load_chunks(args.chunks_json)
+        print("Loaded", len(chunks), "chunks from", args.chunks_json)
+    else:
+        chunks = None
 
     # blocks (already in PDF points)
     for row in blocks:
@@ -205,7 +256,7 @@ def main() -> None:
         draw_rect(page, b, (0, 1, 0))
 
     # paddle
-    for page_num, bbox in paddle_boxes:
+    for page_num, bbox, page_block_id in paddle_boxes:
         if page_num < 0 or page_num >= len(doc):
             continue
 
@@ -216,7 +267,12 @@ def main() -> None:
             args.paddle_width,
             args.paddle_height,
         )
-        draw_rect(page, b, (0, 0, 1))
+        if chunks:
+            chunk_id = get_chunk_id_by_block_id(chunks, f"{page_num + 1}:{page_block_id}")
+            label = f"{page_block_id}  {chunk_id if chunk_id else ''}"
+        else:
+            label = str(page_block_id)
+        draw_rect(page, b, (0, 0, 1), label=label)
 
     doc.save(str(args.output))
     doc.close()

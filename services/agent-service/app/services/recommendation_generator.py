@@ -21,6 +21,7 @@ from app.services.extractors.tool_result_utils import (
     tool_call_field,
 )
 from app.services.llm_service import LLMService
+from app.services.message_parser import MessageParser
 from app.services.reasoning_trace_formatter import ReasoningTraceFormatter
 from common.logging import get_logger
 
@@ -30,19 +31,13 @@ _ResponseStatus = Literal["completed", "partial", "failed", "max_iterations"]
 
 
 def _coerce_status(status: str) -> _ResponseStatus:
-    """Map AgentState status to the narrower AgentRecommendationResponse status."""
     if status in {"completed", "partial", "failed", "max_iterations"}:
         return status  # type: ignore[return-value]
     return "partial"
 
 
 class RecommendationGenerator:
-    """
-    Generate structured recommendations from agent state.
-
-    Orchestrates formula/code/citation extraction, LLM-based answer parsing,
-    reasoning trace assembly, and warning detection.
-    """
+    """Generate structured recommendations from agent state."""
 
     def __init__(
         self,
@@ -61,8 +56,7 @@ class RecommendationGenerator:
         self.reasoning_trace_formatter = reasoning_trace_formatter or ReasoningTraceFormatter()
 
     async def generate(self, agent_state: AgentState) -> AgentRecommendationResponse:
-        """Generate structured recommendation from agent's final state."""
-        logger.info("generating_recommendation", request_id=agent_state["request_id"])
+        logger.info("generating_recommendation", request_id=agent_state.get("request_id"))
 
         final_answer = agent_state.get("final_answer") or ""
 
@@ -76,26 +70,25 @@ class RecommendationGenerator:
         recommendations = structured.get("recommendations") or []
         confidence = structured.get("confidence")
 
-        formulas = self._extract_formulas(agent_state, final_answer)
-        code_snippets = self._extract_code_snippets(agent_state, final_answer)
-        citations = self._extract_citations(agent_state)
+        tool_executions = MessageParser.extract_tool_executions(agent_state.get("messages", []))
 
-        tools_used = [
-            tool_call_field(tc, "tool_name")
-            for tc in agent_state["tool_calls"]
-            if tool_call_field(tc, "tool_name")
-        ]
+        formulas = self._extract_formulas(tool_executions, final_answer)
+        code_snippets = self._extract_code_snippets(tool_executions, final_answer)
+        citations = self._extract_citations(tool_executions)
+
+        tools_used = [tc["tool_name"] for tc in tool_executions if tc.get("tool_name")]
 
         reasoning_trace = self.reasoning_trace_formatter.format(agent_state)
         iterations = self._count_iterations(agent_state, reasoning_trace)
         warnings = self._detect_warnings(
             agent_state,
+            tool_calls=tool_executions,
             algorithm=algorithm,
             confidence=confidence,
         )
 
         # Aggregate tokens including final answer parsing overhead
-        total_tokens = agent_state["total_tokens"] + parsing_tokens.get("total", 0)
+        total_tokens = agent_state.get("total_tokens", 0) + parsing_tokens.get("total", 0)
         cache_read = agent_state["cache_read_input_tokens"] + parsing_tokens.get(
             "cache_read_input_tokens", 0
         )
@@ -106,8 +99,8 @@ class RecommendationGenerator:
         execution_time = self._calc_execution_time(agent_state)
 
         response = AgentRecommendationResponse(
-            request_id=agent_state["request_id"],
-            query=agent_state["user_query"],
+            request_id=agent_state.get("request_id", ""),
+            query=agent_state.get("user_query", ""),
             final_answer=final_answer,
             task=task,
             analysis=analysis,
@@ -116,7 +109,7 @@ class RecommendationGenerator:
             code_snippets=code_snippets,
             recommendations=recommendations,
             citations=citations,
-            status=_coerce_status(agent_state["status"]),
+            status=_coerce_status(agent_state.get("status", "completed")),
             confidence=confidence,
             reasoning_trace=reasoning_trace,
             iterations=iterations,
@@ -130,20 +123,20 @@ class RecommendationGenerator:
 
         logger.info(
             "recommendation_generated",
-            request_id=agent_state["request_id"],
+            request_id=agent_state.get("request_id"),
             formulas_count=len(formulas),
             code_snippets_count=len(code_snippets),
             citations_count=len(citations),
         )
         return response
 
-    def _extract_formulas(self, agent_state: AgentState, final_answer: str) -> list[Formula]:
-        """Extract formulas from final answer text and RAG tool results."""
+    def _extract_formulas(
+        self, tool_calls: list[dict[str, Any]], final_answer: str
+    ) -> list[Formula]:
         formulas: list[Formula] = []
-
         formulas.extend(self.formula_extractor.extract_from_text(final_answer))
 
-        for tool_call in agent_state["tool_calls"]:
+        for tool_call in tool_calls:
             if not is_rag_tool_call(tool_call):
                 continue
             result = tool_call_field(tool_call, "result")
@@ -153,13 +146,12 @@ class RecommendationGenerator:
 
         return formulas
 
-    def _extract_citations(self, agent_state: AgentState) -> list[Citation]:
-        """Extract citations from agent tool call history."""
-        return self.citation_extractor.extract_from_tool_calls(agent_state["tool_calls"])
+    def _extract_citations(self, tool_calls: list[dict[str, Any]]) -> list[Citation]:
+        return self.citation_extractor.extract_from_tool_calls(tool_calls)
 
     def _extract_code_snippets(
         self,
-        agent_state: AgentState,
+        tool_calls: list[dict[str, Any]],
         final_answer: str,
     ) -> list[CodeSnippet]:
         """
@@ -167,20 +159,21 @@ class RecommendationGenerator:
         """
         return self.code_extractor.extract_from_answer_and_tool_calls(
             final_answer=final_answer,
-            tool_calls=agent_state["tool_calls"],
+            tool_calls=tool_calls,
         )
 
     def _detect_warnings(
         self,
         agent_state: AgentState,
         *,
+        tool_calls: list[dict[str, Any]],
         algorithm: str | None,
         confidence: Literal["high", "medium", "low"] | None,
     ) -> list[str]:
         """Detect potential issues and limitations."""
         warnings: list[str] = []
 
-        if agent_state["status"] == "max_iterations":
+        if agent_state.get("status") == "max_iterations":
             warnings.append(
                 "Analysis incomplete: reached maximum iteration limit. "
                 "Results may be partial. Consider refining your query."
@@ -192,14 +185,10 @@ class RecommendationGenerator:
                 "Response is based on general analysis."
             )
 
-        failed_tools = [
-            tool_call_field(tc, "tool_name")
-            for tc in agent_state["tool_calls"]
-            if tool_call_field(tc, "error")
-        ]
+        failed_tools = [tc["tool_name"] for tc in tool_calls if tc.get("error")]
         if failed_tools:
             warnings.append(
-                f"Some tools failed during execution: {', '.join(t for t in failed_tools if t)}. "
+                f"Some tools failed during execution: {', '.join(failed_tools)}. "
                 "Results may be incomplete."
             )
 
@@ -217,8 +206,8 @@ class RecommendationGenerator:
         iterations = self._count_iterations(agent_state, reasoning_trace)
 
         return AgentRecommendationResponse(
-            request_id=agent_state["request_id"],
-            query=agent_state["user_query"],
+            request_id=agent_state.get("request_id", ""),
+            query=agent_state.get("user_query", ""),
             final_answer=agent_state.get("final_answer"),
             task="Analysis Failed",
             analysis=f"Unable to complete analysis. Error: {error_message}",
@@ -232,7 +221,7 @@ class RecommendationGenerator:
             status="failed",
             reasoning_trace=reasoning_trace,
             iterations=iterations,
-            total_tokens=agent_state["total_tokens"],
+            total_tokens=agent_state.get("total_tokens", 0),
             cache_read_input_tokens=agent_state["cache_read_input_tokens"],
             cache_creation_input_tokens=agent_state["cache_creation_input_tokens"],
             execution_time_seconds=0.0,
@@ -245,7 +234,7 @@ class RecommendationGenerator:
         """Report iterations using the public reasoning trace when available."""
         if reasoning_trace:
             return len(reasoning_trace)
-        return agent_state["iteration"]
+        return agent_state.get("iteration", 1)
 
     @staticmethod
     def _calc_execution_time(agent_state: AgentState) -> float:

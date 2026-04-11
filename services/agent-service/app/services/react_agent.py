@@ -4,42 +4,59 @@ import json
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
+from app.config_load import settings
 from app.core.exceptions import AgentExecutionError
-from app.models.agent_state import AgentState, ThoughtStep, ToolCall, create_initial_state
+from app.models.agent_state import AgentState, ThoughtStep, create_initial_state
 from app.prompts.system_prompts import (
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
     format_react_prompt,
 )
-from app.services.llm_service import LLMService
-from app.tools.registry import tool_registry
+from app.services.base_agent import BaseAgent
+from app.tools.registry import ToolRegistry
 from common.logging import get_logger
+from langchain_core.messages import AIMessage
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.prebuilt import ToolNode
 
 logger = get_logger(__name__)
 
 
-class ReActAgent:
+class ReActAgent(BaseAgent):
     """ReAct loop implementation using LangGraph for AWS Bedrock/Claude."""
 
-    def __init__(self, system_prompt: str | None = None) -> None:
-        """
-        Initialize ReAct agent with optional custom system prompt.
+    def __init__(
+        self,
+        system_prompt: str | None = None,
+        tool_registry: ToolRegistry | None = None,
+    ) -> None:
+        """Initialize ReAct agent with optional custom system prompt and registry.
 
         Args:
             system_prompt: Custom system prompt. If None, uses default
                           WAREHOUSE_ADVISOR_SYSTEM_PROMPT.
+            tool_registry: Pre-configured registry with RAG+skill tools.
+                          If None, creates empty registry (for testing).
         """
-        self.llm: LLMService = LLMService()
-        self.system_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        self.graph = self._build_graph()
+        if tool_registry is None:
+            raise ValueError("A configured ToolRegistry must be explicitly injected.")
+
+        resolved_prompt = system_prompt or WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        super().__init__(
+            model_id=settings.react_agent.model_id,
+            system_prompt=resolved_prompt,
+            tool_registry=tool_registry,
+        )
 
     def _build_graph(self) -> CompiledStateGraph[Any, Any, Any, Any]:
         """Build the ReAct state machine with think/act/finalize nodes."""
         workflow = StateGraph(AgentState)
 
+        # Use native ToolNode instead of manual _act_node
+        tool_node = ToolNode(self.lc_tools)
+
         workflow.add_node("think", self._think_node)
-        workflow.add_node("act", self._act_node)
+        workflow.add_node("act", tool_node)
         workflow.add_node("finalize", self._finalize_node)
 
         workflow.set_entry_point("think")
@@ -52,6 +69,7 @@ class ReActAgent:
                 "max_iterations": "finalize",
             },
         )
+
         workflow.add_edge("act", "think")
         workflow.add_edge("finalize", END)
 
@@ -84,7 +102,63 @@ class ReActAgent:
             messages = self._build_llm_messages(state)
             cache = self._build_llm_cache_flags(messages, state)
             response = await self._call_llm(messages, cache)
-            return self._parse_and_update(state, response)
+
+            message_content = response["message"]["content"]
+            tool_calls = response.get("tool_calls", [])
+
+            # Format tool calls natively for LangChain compatibility
+            ai_message = AIMessage(
+                content=message_content,
+                tool_calls=(
+                    [
+                        {
+                            "name": tc["function"]["name"],
+                            "args": json.loads(tc["function"]["arguments"]),
+                            "id": tc["id"],
+                        }
+                        for tc in tool_calls
+                    ]
+                    if tool_calls
+                    else []
+                ),
+            )
+
+            next_action = "tool_use" if tool_calls else "answer"
+            thought = ThoughtStep(
+                thought=message_content,
+                next_action=next_action,
+            )
+
+            updates: dict[str, Any] = {
+                "messages": [ai_message],
+                "thoughts": state["thoughts"] + [thought],
+                "total_tokens": state["total_tokens"] + response["tokens"]["total"],
+                "iteration": state["iteration"] + 1,
+                "cache_creation_input_tokens": state["cache_creation_input_tokens"]
+                + response["tokens"]["cache_creation_input_tokens"],
+                "cache_read_input_tokens": state["cache_read_input_tokens"]
+                + response["tokens"]["cache_read_input_tokens"],
+            }
+
+            # Detect final answer: LLM stopped without requesting tools
+            if response["finish_reason"] == "stop" and not tool_calls:
+                if "FINAL ANSWER:" in message_content:
+                    updates["final_answer"] = message_content.split("FINAL ANSWER:", 1)[1].strip()
+                else:
+                    # Bare stop without tools treated as implicit final answer
+                    updates["final_answer"] = message_content
+                updates["status"] = "completed"
+
+            logger.info(
+                "react_think_complete",
+                request_id=state["request_id"],
+                iteration=state["iteration"],
+                has_tool_calls=bool(tool_calls),
+                has_final_answer="final_answer" in updates,
+                tokens_used=response["tokens"]["total"],
+            )
+
+            return updates
 
         except Exception as e:
             logger.error(
@@ -133,262 +207,6 @@ class ReActAgent:
             cache[-2] = False
         return cache
 
-    async def _call_llm(self, messages: list[dict[str, Any]], cache: list[bool]) -> dict[str, Any]:
-        """Make the LLM API call with messages and tool definitions.
-
-        Args:
-            messages: List of messages to send to the LLM.
-            cache: List with the same length as messages.
-                   If cache[i] is True, messages[i] is written to cache.
-
-        Returns:
-            LLM response dictionary containing message, tool_calls, tokens, etc.
-        """
-        tools = self._get_tool_definitions()
-        result = await self.llm.chat_completion(
-            messages=messages, tools=tools if tools else None, tool_choice="auto", cache=cache
-        )
-        return result
-
-    def _parse_and_update(self, state: AgentState, response: dict[str, Any]) -> dict[str, Any]:
-        """Parse LLM response and build state updates.
-
-        Extracts the assistant message, creates a thought step, and prepares
-        state updates. Detects final answers when the LLM stops without
-        requesting tools.
-
-        Args:
-            state: Current agent state.
-            response: LLM response from chat_completion.
-
-        Returns:
-            Dictionary of state updates to merge into current state.
-        """
-        message_content = response["message"]["content"]
-
-        # Store tool_calls on the assistant message so the act node
-        # (and LLMService._convert_messages_to_langchain) can reconstruct
-        # the full AIMessage with tool invocations.
-        assistant_msg: dict[str, Any] = {
-            "role": "assistant",
-            "content": message_content,
-        }
-        if response["tool_calls"]:
-            assistant_msg["tool_calls"] = response["tool_calls"]
-
-        next_action = "tool_use" if response["tool_calls"] else "answer"
-        thought = ThoughtStep(
-            thought=message_content,
-            next_action=next_action,
-        )
-
-        updates: dict[str, Any] = {
-            "messages": state["messages"] + [assistant_msg],
-            "thoughts": state["thoughts"] + [thought],
-            "total_tokens": state["total_tokens"] + response["tokens"]["total"],
-            "cache_creation_input_tokens": state["cache_creation_input_tokens"]
-            + response["tokens"]["cache_creation_input_tokens"],
-            "cache_read_input_tokens": state["cache_read_input_tokens"]
-            + response["tokens"]["cache_read_input_tokens"],
-        }
-
-        # Detect final answer: LLM stopped without requesting tools
-        if response["finish_reason"] == "stop" and not response["tool_calls"]:
-            if "FINAL ANSWER:" in message_content:
-                updates["final_answer"] = message_content.split("FINAL ANSWER:", 1)[1].strip()
-            else:
-                # Bare stop without tools treated as implicit final answer
-                updates["final_answer"] = message_content
-            updates["status"] = "completed"
-
-        logger.info(
-            "react_think_complete",
-            request_id=state["request_id"],
-            iteration=state["iteration"],
-            has_tool_calls=bool(response["tool_calls"]),
-            has_final_answer="final_answer" in updates,
-            tokens_used=response["tokens"]["total"],
-        )
-
-        return updates
-
-    async def _act_node(self, state: AgentState) -> dict[str, Any]:
-        """Action step: execute tool calls from the last assistant message.
-
-        Orchestrates tool execution by extracting pending calls, executing them,
-        and building the updated state.
-        """
-        logger.info(
-            "react_act",
-            request_id=state["request_id"],
-            iteration=state["iteration"],
-        )
-
-        pending_calls = self._extract_pending_tool_calls(state)
-        results = await self._execute_all_tools(pending_calls, state["request_id"])
-        return self._build_act_result(state, results)
-
-    def _extract_pending_tool_calls(self, state: AgentState) -> list[dict[str, Any]]:
-        """Extract tool calls from the last assistant message.
-
-        Returns:
-            List of tool call dictionaries with id, function name, and arguments.
-        """
-        last_message = state["messages"][-1] if state["messages"] else {}
-        return cast(list[dict[str, Any]], last_message.get("tool_calls", []))
-
-    async def _execute_all_tools(
-        self, pending_calls: list[dict[str, Any]], request_id: str
-    ) -> tuple[list[dict[str, Any]], list[ToolCall]]:
-        """Execute all pending tool calls and collect results.
-
-        Args:
-            pending_calls: List of tool call dictionaries from the assistant message.
-            request_id: Request ID for logging.
-
-        Returns:
-            Tuple of (new_messages, new_tool_calls) containing tool response messages
-            and ToolCall objects.
-        """
-        new_messages: list[dict[str, Any]] = []
-        new_tool_calls: list[ToolCall] = []
-
-        for tool_call in pending_calls:
-            func_name = tool_call["function"]["name"]
-            tool_call_id = tool_call["id"]
-            func_args = self._parse_tool_arguments(tool_call["function"]["arguments"])
-            tool_category = self._get_tool_category(func_name)
-
-            logger.info(
-                "executing_tool",
-                request_id=request_id,
-                tool=func_name,
-                tool_call_id=tool_call_id,
-            )
-
-            result = await self._execute_tool(func_name, func_args)
-
-            if result.get("status") == "error":
-                error_msg = result.get("error", "Unknown tool error")
-                logger.error(
-                    "tool_execution_error",
-                    request_id=request_id,
-                    tool=func_name,
-                    tool_call_id=tool_call_id,
-                    error=error_msg,
-                )
-                new_tool_calls.append(
-                    ToolCall(
-                        tool_name=func_name,
-                        category=tool_category,
-                        arguments=func_args,
-                        error=error_msg,
-                    )
-                )
-                # Report error back to LLM so it can reason about it
-                new_messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call_id,
-                        "name": func_name,
-                        "content": json.dumps({"error": error_msg}),
-                    }
-                )
-            else:
-                tool_data = result.get("data", {})
-                tool_meta = result.get("meta", {})
-                tool_data, tool_meta = self._normalize_tool_success_payload(
-                    tool_category, tool_data, tool_meta
-                )
-                logger.info(
-                    "tool_execution_success",
-                    request_id=request_id,
-                    tool=func_name,
-                    tool_call_id=tool_call_id,
-                )
-                new_tool_calls.append(
-                    ToolCall(
-                        tool_name=func_name,
-                        category=tool_category,
-                        arguments=func_args,
-                        result=tool_data,
-                        trace_meta=tool_meta,
-                    )
-                )
-                new_messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call_id,
-                        "name": func_name,
-                        "content": json.dumps(tool_data),
-                    }
-                )
-
-        return new_messages, new_tool_calls
-
-    @staticmethod
-    def _normalize_tool_success_payload(
-        tool_category: str | None,
-        tool_data: Any,
-        tool_meta: Any,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Normalize tool payloads before storing them in agent state."""
-        if (
-            tool_category == "environment"
-            and isinstance(tool_data, dict)
-            and "data" in tool_data
-            and isinstance(tool_data.get("meta"), dict)
-        ):
-            tool_meta = tool_data["meta"]
-            tool_data = tool_data["data"]
-
-        if not isinstance(tool_meta, dict):
-            tool_meta = {}
-
-        if not isinstance(tool_data, dict):
-            tool_data = {"result": tool_data}
-
-        return tool_data, tool_meta
-
-    def _build_act_result(
-        self,
-        state: AgentState,
-        results: tuple[list[dict[str, Any]], list[ToolCall]],
-    ) -> dict[str, Any]:
-        """Build the state update from tool execution results.
-
-        Args:
-            state: Current agent state.
-            results: Tuple of (new_messages, new_tool_calls) from tool execution.
-
-        Returns:
-            State update dictionary with merged messages, tool calls, and incremented iteration.
-        """
-        new_messages, new_tool_calls = results
-        return {
-            "messages": state["messages"] + new_messages,
-            "tool_calls": state["tool_calls"] + new_tool_calls,
-            "iteration": state["iteration"] + 1,
-        }
-
-    @staticmethod
-    def _get_tool_category(tool_name: str) -> str | None:
-        """Resolve category from the registered tool metadata when available."""
-        try:
-            return tool_registry.get_tool(tool_name).get_metadata().category
-        except Exception:  # noqa: BLE001
-            return None
-
-    @staticmethod
-    def _parse_tool_arguments(raw_args: str | dict[str, Any]) -> dict[str, Any]:
-        """Parse tool arguments from string or dict with fallback."""
-        if isinstance(raw_args, dict):
-            return raw_args
-        try:
-            return json.loads(raw_args)  # type: ignore[no-any-return]
-        except (json.JSONDecodeError, TypeError):
-            return {"query": raw_args}
-
     def _should_continue(
         self, state: AgentState
     ) -> Literal["continue", "finalize", "max_iterations"]:
@@ -427,46 +245,6 @@ class ReActAgent:
             updates["status"] = "completed"
 
         return updates
-
-    async def _execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Execute a tool call using the registry.
-
-        Always returns a uniform dict with a ``status`` key so callers can
-        branch on success/error without inspecting arbitrary key presence.
-
-        Args:
-            tool_name: Name of the tool to invoke.
-            arguments: Parsed arguments to pass to the tool.
-
-        Returns:
-            ``{"status": "success", "data": ...}`` on success, or
-            ``{"status": "error", "error": ..., "message": ...}`` on failure.
-            Never raises — all exceptions are captured and returned as error dicts.
-        """
-        try:
-            result = await tool_registry.execute_tool(tool_name, arguments)
-
-            if result.success:
-                return {"status": "success", "data": cast(dict[str, Any], result.data)}
-
-            error_msg = result.error or "Tool reported failure without a message"
-            logger.warning("tool_execution_failed", tool=tool_name, error=error_msg)
-            return {
-                "status": "error",
-                "error": error_msg,
-                "message": f"Tool execution failed: {error_msg}",
-            }
-        except Exception as e:
-            logger.error("tool_execution_unexpected_error", tool=tool_name, error=str(e))
-            return {
-                "status": "error",
-                "error": str(e),
-                "message": f"Unexpected tool error: {str(e)}",
-            }
-
-    def _get_tool_definitions(self) -> list[dict[str, Any]]:
-        """Get OpenAI function calling schemas for all tools."""
-        return tool_registry.get_openai_functions()
 
     async def run(
         self,
@@ -521,7 +299,7 @@ class ReActAgent:
             cache_read_input_tokens=final_state["cache_read_input_tokens"],
             cache_creation_input_tokens=final_state["cache_creation_input_tokens"],
             thought_count=len(final_state["thoughts"]),
-            tool_call_count=len(final_state["tool_calls"]),
+            tool_call_count=len(final_state.get("tool_calls", [])),
         )
 
         return final_state
