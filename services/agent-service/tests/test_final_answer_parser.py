@@ -37,8 +37,11 @@ class TestFinalAnswerParser:
 
         parser = FinalAnswerParser(llm)
 
-        await parser.parse("## Inventory Management\n\nObserved with low confidence sensors.")
+        result, tokens = await parser.parse(
+            "## Inventory Management\n\nObserved with low confidence sensors."
+        )
 
+        assert tokens["total"] == 20
         messages = llm.chat_completion.await_args.kwargs["messages"]
         prompt = messages[1]["content"]
         assert "## Agent Response" in prompt
@@ -65,18 +68,21 @@ class TestFinalAnswerParser:
                 schema: Any,
             ) -> dict[str, Any]:
                 return {
-                    "task": "Inventory Management",
-                    "analysis": "Structured analysis",
-                    "algorithm": "Algorithm 2.2",
-                    "recommendations": [
-                        {
-                            "action": "Apply policy",
-                            "priority": "high",
-                            "rationale": "Deterministic extraction",
-                            "expected_outcome": "Lower risk",
-                        }
-                    ],
-                    "confidence": "high",
+                    "parsed": {
+                        "task": "Inventory Management",
+                        "analysis": "Structured analysis",
+                        "algorithm": "Algorithm 2.2",
+                        "recommendations": [
+                            {
+                                "action": "Apply policy",
+                                "priority": "high",
+                                "rationale": "Deterministic extraction",
+                                "expected_outcome": "Lower risk",
+                            }
+                        ],
+                        "confidence": "high",
+                    },
+                    "tokens": {"total": 150},
                 }
 
             async def chat_completion(  # type: ignore[override]
@@ -89,8 +95,11 @@ class TestFinalAnswerParser:
 
         parser = FinalAnswerParser(_StructuredOnlyLLM())
 
-        result = await parser.parse("## Inventory Management\n\n### Analysis\nStructured analysis")
+        result, tokens = await parser.parse(
+            "## Inventory Management\n\n### Analysis\nStructured analysis"
+        )
 
+        assert tokens["total"] == 150
         assert result["analysis"] == "Structured analysis"
         assert result["confidence"] == "high"
         assert result["recommendations"][0].action == "Apply policy"
@@ -117,8 +126,9 @@ class TestFinalAnswerParser:
         )
 
         parser = FinalAnswerParser(llm)
-        result = await parser.parse("## Inventory Management")
+        result, tokens = await parser.parse("## Inventory Management")
 
+        assert tokens["total"] == 20
         assert result["task"] == "Inventory Management"
         assert result["analysis"] == "All good."
 
@@ -135,8 +145,9 @@ class TestFinalAnswerParser:
         )
 
         parser = FinalAnswerParser(llm)
-        result = await parser.parse("Raw final answer")
+        result, tokens = await parser.parse("Raw final answer")
 
+        assert tokens["total"] == 0  # Fallback doesn't use tokens
         assert result == {
             "task": "Analysis",
             "analysis": "Raw final answer",

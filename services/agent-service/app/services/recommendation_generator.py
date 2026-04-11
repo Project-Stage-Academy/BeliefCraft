@@ -1,5 +1,6 @@
 """Main recommendation generator – assembles structured agent responses from raw AgentState."""
 
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from app.models.agent_state import AgentState
@@ -68,7 +69,7 @@ class RecommendationGenerator:
         if not final_answer:
             return self._generate_fallback_response(agent_state)
 
-        structured = await self.final_answer_parser.parse(final_answer)
+        structured, parsing_tokens = await self.final_answer_parser.parse(final_answer)
         task = structured.get("task") or "Analysis"
         analysis = structured.get("analysis") or final_answer
         algorithm = structured.get("algorithm")
@@ -92,6 +93,16 @@ class RecommendationGenerator:
             algorithm=algorithm,
             confidence=confidence,
         )
+
+        # Aggregate tokens including final answer parsing overhead
+        total_tokens = agent_state["total_tokens"] + parsing_tokens.get("total", 0)
+        cache_read = agent_state["cache_read_input_tokens"] + parsing_tokens.get(
+            "cache_read_input_tokens", 0
+        )
+        cache_creation = agent_state["cache_creation_input_tokens"] + parsing_tokens.get(
+            "cache_creation_input_tokens", 0
+        )
+
         execution_time = self._calc_execution_time(agent_state)
 
         response = AgentRecommendationResponse(
@@ -109,9 +120,9 @@ class RecommendationGenerator:
             confidence=confidence,
             reasoning_trace=reasoning_trace,
             iterations=iterations,
-            total_tokens=agent_state["total_tokens"],
-            cache_read_input_tokens=agent_state["cache_read_input_tokens"],
-            cache_creation_input_tokens=agent_state["cache_creation_input_tokens"],
+            total_tokens=total_tokens,
+            cache_read_input_tokens=cache_read,
+            cache_creation_input_tokens=cache_creation,
             execution_time_seconds=execution_time,
             tools_used=list(set(tools_used)),
             warnings=warnings,
@@ -238,9 +249,11 @@ class RecommendationGenerator:
 
     @staticmethod
     def _calc_execution_time(agent_state: AgentState) -> float:
-        """Calculate execution duration in seconds."""
-        completed_at = agent_state.get("completed_at")
+        """
+        Calculate execution duration in seconds.
+        Includes the agent loop and the recommendation generation overhead.
+        """
         started_at = agent_state.get("started_at")
-        if completed_at is not None and started_at is not None:
-            return (completed_at - started_at).total_seconds()
+        if started_at is not None:
+            return (datetime.now(UTC) - started_at).total_seconds()
         return 0.0

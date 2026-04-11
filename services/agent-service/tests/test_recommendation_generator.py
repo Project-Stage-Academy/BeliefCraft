@@ -68,7 +68,7 @@ def _make_thought(text: str = "Thinking…", as_dict: bool = False) -> Any:
 
 
 def _base_agent_state(**overrides: Any) -> AgentState:
-    started = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    started = datetime.now(UTC)
     state: AgentState = {
         "request_id": "req-test-001",
         "user_query": "How should we handle stockout risk?",
@@ -92,6 +92,8 @@ def _base_agent_state(**overrides: Any) -> AgentState:
         "status": "completed",
         "error": None,
         "total_tokens": 500,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
         "started_at": started,
         "completed_at": started + timedelta(seconds=4.5),
     }
@@ -204,13 +206,15 @@ class TestGenerate:
         assert result.status == "completed"
         assert result.confidence == "high"
         assert result.iterations == 3
-        assert result.total_tokens == 500
+        # 500 (base) + 150 (parsing)
+        assert result.total_tokens == 650
 
     @pytest.mark.asyncio
     async def test_execution_time_calculated(self, generator: RecommendationGenerator) -> None:
         state = _base_agent_state()
+        state["started_at"] -= timedelta(seconds=4.5)
         result = await generator.generate(state)
-        assert result.execution_time_seconds == pytest.approx(4.5)
+        assert result.execution_time_seconds > 4.5
 
     @pytest.mark.asyncio
     async def test_formulas_from_extractor(self, generator: RecommendationGenerator) -> None:
@@ -434,18 +438,21 @@ class TestParseFinalAnswer:
                 schema: Any,
             ) -> dict[str, Any]:
                 return {
-                    "task": "Structured Task",
-                    "analysis": "Structured analysis",
-                    "algorithm": "Algorithm 2.2",
-                    "recommendations": [
-                        {
-                            "action": "Apply policy",
-                            "priority": "high",
-                            "rationale": "Deterministic extraction",
-                            "expected_outcome": "Lower risk",
-                        }
-                    ],
-                    "confidence": "high",
+                    "parsed": {
+                        "task": "Structured Task",
+                        "analysis": "Structured analysis",
+                        "algorithm": "Algorithm 2.2",
+                        "recommendations": [
+                            {
+                                "action": "Apply policy",
+                                "priority": "high",
+                                "rationale": "Deterministic extraction",
+                                "expected_outcome": "Lower risk",
+                            }
+                        ],
+                        "confidence": "high",
+                    },
+                    "tokens": {"total": 150},
                 }
 
             async def chat_completion(  # type: ignore[override]
@@ -471,6 +478,8 @@ class TestParseFinalAnswer:
         assert result.confidence == "high"
         assert len(result.recommendations) == 1
         assert result.recommendations[0].action == "Apply policy"
+        # 500 (base) + 150 (parsing)
+        assert result.total_tokens == 650
 
     @pytest.mark.asyncio
     async def test_strips_markdown_json_fences(
@@ -984,14 +993,6 @@ class TestWarningDetection:
 
 class TestExecutionTime:
     @pytest.mark.asyncio
-    async def test_execution_time_zero_when_no_completed_at(
-        self, generator: RecommendationGenerator
-    ) -> None:
-        state = _base_agent_state(completed_at=None)
-        result = await generator.generate(state)
-        assert result.execution_time_seconds == 0.0
-
-    @pytest.mark.asyncio
     async def test_execution_time_zero_when_no_started_at(
         self, generator: RecommendationGenerator
     ) -> None:
@@ -1003,10 +1004,9 @@ class TestExecutionTime:
 
     @pytest.mark.asyncio
     async def test_execution_time_accurate(self, generator: RecommendationGenerator) -> None:
-        started = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        started = datetime.now(UTC) - timedelta(seconds=12.34)
         state = _base_agent_state(
             started_at=started,
-            completed_at=started + timedelta(seconds=12.34),
         )
         result = await generator.generate(state)
-        assert result.execution_time_seconds == pytest.approx(12.34)
+        assert result.execution_time_seconds > 12.34

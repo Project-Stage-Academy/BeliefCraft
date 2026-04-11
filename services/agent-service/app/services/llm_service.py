@@ -285,7 +285,7 @@ class LLMService:
         self,
         messages: list[dict[str, Any]],
         schema: Any,
-    ) -> Any:
+    ) -> dict[str, Any]:
         """
         Invoke model with native structured output enforcement.
 
@@ -294,7 +294,7 @@ class LLMService:
             schema: Pydantic model class or JSON schema dict for structured output.
 
         Returns:
-            Parsed structured result produced by LangChain.
+            Dictionary with 'parsed' result and 'tokens' metadata.
         """
         try:
             logger.info(
@@ -304,11 +304,36 @@ class LLMService:
             )
 
             lc_messages = self._convert_messages_to_langchain(messages)
-            chain = self.llm.with_structured_output(schema)
+            chain = self.llm.with_structured_output(schema, include_raw=True)
             result = await chain.ainvoke(lc_messages)
 
-            logger.info("llm_structured_response")
-            return result
+            raw_response = result["raw"]  # type: ignore
+            usage_metadata = raw_response.usage_metadata or {}
+            prompt_tokens = usage_metadata.get("input_tokens", 0)
+            completion_tokens = usage_metadata.get("output_tokens", 0)
+            cache_read_input_tokens = usage_metadata.get("input_token_details", {}).get(
+                "cache_read", 0
+            )
+            cache_creation_input_tokens = usage_metadata.get("input_token_details", {}).get(
+                "cache_creation", 0
+            )
+
+            tokens = {
+                "prompt": prompt_tokens,
+                "completion": completion_tokens,
+                "total": prompt_tokens + completion_tokens,
+                "cache_read_input_tokens": cache_read_input_tokens,
+                "cache_creation_input_tokens": cache_creation_input_tokens,
+            }
+
+            logger.info(
+                "llm_structured_response",
+                tokens=tokens["total"],
+            )
+            return {
+                "parsed": result["parsed"],  # type: ignore
+                "tokens": tokens,
+            }
 
         except LLMServiceError:
             raise

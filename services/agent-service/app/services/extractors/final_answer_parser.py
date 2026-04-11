@@ -85,19 +85,23 @@ class FinalAnswerParser:
     def __init__(self, llm: LLMService) -> None:
         self.llm = llm
 
-    async def parse(self, final_answer: str) -> dict[str, Any]:
-        """Parse the raw final answer into a structured dictionary."""
+    async def parse(self, final_answer: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Parse the raw final answer into a structured dictionary.
+
+        Returns:
+            Tuple of (parsed_data, tokens).
+        """
         messages = self._build_messages(final_answer)
 
-        structured = await self._try_structured_parse(messages)
-        if structured is not None:
-            return structured
+        structured_data, tokens = await self._try_structured_parse(messages)
+        if structured_data is not None:
+            return structured_data, tokens
 
-        parsed = await self._try_json_parse(messages)
-        if parsed is not None:
-            return parsed
+        json_data, tokens = await self._try_json_parse(messages)
+        if json_data is not None:
+            return json_data, tokens
 
-        return self._fallback_parse(final_answer)
+        return self._fallback_parse(final_answer), self._empty_tokens()
 
     @staticmethod
     def _build_messages(final_answer: str) -> list[dict[str, Any]]:
@@ -112,31 +116,46 @@ class FinalAnswerParser:
     async def _try_structured_parse(
         self,
         messages: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
+    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
         if not isinstance(self.llm, LLMService):
-            return None
+            return None, self._empty_tokens()
 
         try:
-            structured_result = await self.llm.structured_completion(
+            result = await self.llm.structured_completion(
                 messages=messages,
                 schema=ParsedFinalAnswer,
             )
+            structured_result = result["parsed"]
+            tokens = result["tokens"]
         except Exception as exc:  # noqa: BLE001
             logger.warning("final_answer_structured_parsing_failed", error=str(exc))
-            return None
+            return None, self._empty_tokens()
 
-        return self._normalize_structured_result(structured_result)
+        return self._normalize_structured_result(structured_result), tokens
 
-    async def _try_json_parse(self, messages: list[dict[str, Any]]) -> dict[str, Any] | None:
+    async def _try_json_parse(
+        self, messages: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
         try:
             response = await self.llm.chat_completion(messages=messages, tools=None)
             content = self._strip_json_fences(response["message"]["content"])
             parsed_content: dict[str, Any] = json.loads(content)
+            tokens = response["tokens"]
         except Exception as exc:  # noqa: BLE001
             logger.warning("final_answer_parsing_failed", error=str(exc))
-            return None
+            return None, self._empty_tokens()
 
-        return self._normalize_recommendations(parsed_content)
+        return self._normalize_recommendations(parsed_content), tokens
+
+    @staticmethod
+    def _empty_tokens() -> dict[str, Any]:
+        return {
+            "prompt": 0,
+            "completion": 0,
+            "total": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        }
 
     @staticmethod
     def _normalize_structured_result(structured_result: Any) -> dict[str, Any]:
