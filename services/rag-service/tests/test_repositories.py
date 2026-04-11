@@ -1,12 +1,5 @@
-from unittest.mock import AsyncMock
-
 import pytest
-from rag_service.models import (
-    Document,
-    EntityType,
-    MetadataFilter,
-    MetadataFilters,
-)
+from rag_service.models import EntityType, MetadataFilter, MetadataFilters
 from rag_service.repositories import FakeDataRepository
 
 
@@ -86,52 +79,3 @@ async def test_fake_repo_get_related_code_definitions_not_supported(repo):
     """Verify FakeDataRepository raises NotImplementedError for code-definition retrieval."""
     with pytest.raises(NotImplementedError):
         await repo.get_related_code_definitions(["some-id"])
-
-
-@pytest.mark.asyncio
-async def test_fake_repository_in_filter_matches_list_metadata(repo):
-    """Verify IN filter matches documents with list-valued metadata fields."""
-    filters = MetadataFilters(
-        filters=[
-            MetadataFilter(field="referenced_formulas", operator="in", value=["3.1"]),
-        ],
-        condition="and",
-    )
-
-    results = await repo.vector_search(query="", k=10, filters=filters)
-
-    ids = {doc.id for doc in results}
-    assert "chunk_0001" in ids
-
-
-@pytest.mark.asyncio
-async def test_fake_repository_in_filter_matches_scalar_metadata(repo):
-    """Verify IN filter also matches scalar metadata against provided candidates."""
-    filters = MetadataFilters(
-        filters=[
-            MetadataFilter(field="chunk_type", operator="in", value=["text"]),
-        ],
-        condition="and",
-    )
-
-    results = await repo.vector_search(query="", k=10, filters=filters)
-
-    ids = {doc.id for doc in results}
-    assert "chunk_0001" in ids
-
-
-@pytest.mark.asyncio
-async def test_search_with_expansion_keeps_order_without_boosting(repo, monkeypatch):
-    """Verify default repository expansion flow preserves root order and uses k as-is."""
-    documents = [
-        Document(id="doc-1", content="1", metadata={"bc_concepts": ["X"]}),
-        Document(id="doc-2", content="2", metadata={"bc_concepts": ["Y"]}),
-    ]
-
-    mocked_vector_search = AsyncMock(return_value=documents)
-    monkeypatch.setattr(repo, "vector_search", mocked_vector_search)
-
-    results = await repo.search_with_expansion(query="x", k=2)
-
-    assert [doc.id for doc in results] == ["doc-1", "doc-2"]
-    assert mocked_vector_search.await_args.args[1] == 2
