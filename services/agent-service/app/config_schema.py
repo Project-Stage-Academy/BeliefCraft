@@ -81,6 +81,7 @@ class LangSmithConfig(BaseModel):
     api_key: str | None = Field(default=None)
     project: str | None = Field(default=None)
 
+
 class SandboxConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     image: str = Field(default="agent-sandbox-data-science")
@@ -88,6 +89,7 @@ class SandboxConfig(BaseModel):
     memory_limit: str = Field(default="256m")
     cpus: float = Field(default=0.5)
     network_disabled: bool = Field(default=True)
+
 
 class Settings(BaseSettings):
     app: AppConfig = Field(default_factory=AppConfig)
