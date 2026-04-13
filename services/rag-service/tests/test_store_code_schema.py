@@ -1,5 +1,5 @@
 """
-Unit tests for services/rag-service/src/scripts/store_code_schema.py
+Unit tests for services/rag-service/src/rag_scripts/store_code_schema.py
 """
 
 import json
