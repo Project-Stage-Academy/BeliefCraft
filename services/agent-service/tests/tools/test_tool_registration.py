@@ -309,9 +309,9 @@ Content here.
 
         result = await registry.execute_tool("load_skill", {"skill_name": "test-skill"})
 
-        assert result.success is True
-        assert "skill_name" in result.data
-        assert result.data["skill_name"] == "test-skill"
+        assert result["success"] is True
+        assert "skill_name" in result["data"]
+        assert result["data"]["skill_name"] == "test-skill"
 
     @pytest.mark.asyncio
     async def test_execute_read_skill_files_tool_error(
@@ -324,5 +324,5 @@ Content here.
             "read_skill_files", {"skill_name": "test-skill", "filenames": ["NONEXISTENT.md"]}
         )
 
-        assert result.success is True
-        assert "errors" in result.data
+        assert result["success"] is True
+        assert "errors" in result["data"]

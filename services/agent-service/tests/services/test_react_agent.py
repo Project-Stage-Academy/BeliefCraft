@@ -16,6 +16,7 @@ def _make_llm_response(
     content: str = "test response",
     tool_calls: list[dict[str, Any]] | None = None,
     finish_reason: str = "stop",
+    model_id: str = "test-model",
     prompt_tokens: int = 10,
     completion_tokens: int = 20,
     cache_creation_input_tokens: int = 0,
@@ -24,6 +25,7 @@ def _make_llm_response(
     """Helper to create a mock LLM response dict."""
     return {
         "message": {"role": "assistant", "content": content},
+        "model_id": model_id,
         "tool_calls": tool_calls or [],
         "finish_reason": finish_reason,
         "tokens": {
@@ -112,8 +114,8 @@ class TestThinkNode:
         assert len(result["thoughts"]) == 1
         assert result["thoughts"][0].next_action == "tool_use"
 
-        # Tokens accumulated
-        assert result["total_tokens"] == 30
+        # Tokens accumulated (returns delta)
+        assert result["token_usage"]["test-model"]["total"] == 30
 
         # No final answer when tool calls are pending
         assert "final_answer" not in result
@@ -175,7 +177,6 @@ class TestThinkNode:
     async def test_think_accumulates_tokens(
         self, agent: ReActAgent, mock_llm_service: MagicMock, initial_state: AgentState
     ) -> None:
-        initial_state["total_tokens"] = 50
         mock_llm_service.chat_completion.return_value = _make_llm_response(
             content="OK",
             prompt_tokens=20,
@@ -184,7 +185,7 @@ class TestThinkNode:
 
         result = await agent._think_node(initial_state)
 
-        assert result["total_tokens"] == 100  # 50 + 50
+        assert result["token_usage"]["test-model"]["total"] == 50  # returns delta
 
     @pytest.mark.asyncio()
     async def test_think_extends_existing_messages(

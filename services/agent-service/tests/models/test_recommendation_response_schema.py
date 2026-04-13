@@ -22,9 +22,13 @@ def _base_payload() -> dict:
         ],
         "status": "completed",
         "iterations": 3,
-        "total_tokens": 1200,
-        "cache_read_input_tokens": 0,
-        "cache_creation_input_tokens": 0,
+        "token_usage": {
+            "claude-3-5-sonnet": {
+                "prompt": 1000,
+                "completion": 200,
+                "total": 1200,
+            }
+        },
         "execution_time_seconds": 2.41,
     }
 

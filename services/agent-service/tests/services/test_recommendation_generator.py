@@ -93,9 +93,7 @@ def _base_agent_state(**overrides: Any) -> AgentState:
         ),
         "status": "completed",
         "error": None,
-        "total_tokens": 500,
-        "cache_read_input_tokens": 0,
-        "cache_creation_input_tokens": 0,
+        "token_usage": {"claude-3-haiku": {"total": 500}},
         "started_at": started,
         "completed_at": started + timedelta(seconds=4.5),
     }
@@ -208,6 +206,7 @@ def _structured_llm_response(
         },
         "tool_calls": [],
         "finish_reason": "stop",
+        "model_id": "claude-3-sonnet",
         "tokens": {"prompt": 100, "completion": 50, "total": 150},
     }
 
@@ -285,8 +284,9 @@ class TestGenerate:
         assert result.status == "completed"
         assert result.confidence == "high"
         assert result.iterations == 3
-        # 500 (base) + 150 (parsing)
-        assert result.total_tokens == 650
+        # 500 (haiku base) + 150 (sonnet parsing)
+        assert result.token_usage["claude-3-haiku"].total == 500
+        assert result.token_usage["claude-3-sonnet"].total == 150
 
     @pytest.mark.asyncio
     async def test_execution_time_calculated(self, generator: RecommendationGenerator) -> None:
@@ -346,6 +346,7 @@ class TestGenerate:
                 },
                 "tool_calls": [],
                 "finish_reason": "stop",
+                "model_id": "claude-3-sonnet",
                 "tokens": {"prompt": 20, "completion": 20, "total": 40},
             }
         )
@@ -531,6 +532,7 @@ class TestParseFinalAnswer:
                         ],
                         "confidence": "high",
                     },
+                    "model_id": "claude-3-sonnet",
                     "tokens": {"total": 150},
                 }
 
@@ -557,8 +559,9 @@ class TestParseFinalAnswer:
         assert result.confidence == "high"
         assert len(result.recommendations) == 1
         assert result.recommendations[0].action == "Apply policy"
-        # 500 (base) + 150 (parsing)
-        assert result.total_tokens == 650
+        # 500 (haiku base) + 150 (sonnet parsing)
+        assert result.token_usage["claude-3-haiku"].total == 500
+        assert result.token_usage["claude-3-sonnet"].total == 150
 
     @pytest.mark.asyncio
     async def test_strips_markdown_json_fences(
@@ -583,6 +586,7 @@ class TestParseFinalAnswer:
                 "message": {"role": "assistant", "content": f"```json\n{payload}\n```"},
                 "tool_calls": [],
                 "finish_reason": "stop",
+                "model_id": "claude-3-sonnet",
                 "tokens": {"prompt": 10, "completion": 10, "total": 20},
             }
         )

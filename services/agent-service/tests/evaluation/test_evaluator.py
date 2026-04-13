@@ -88,9 +88,7 @@ class TestAgentEvaluator:
             ],
             status="completed",
             iterations=2,
-            total_tokens=100,
-            cache_read_input_tokens=0,
-            cache_creation_input_tokens=0,
+            token_usage={"test-model": {"total": 100}},
             execution_time_seconds=1.5,
         )
 
@@ -137,9 +135,7 @@ class TestAgentEvaluator:
             ],
             status="completed",
             iterations=2,
-            total_tokens=100,
-            cache_read_input_tokens=0,
-            cache_creation_input_tokens=0,
+            token_usage={"test-model": {"total": 100}},
             execution_time_seconds=1.5,
         )
 
@@ -193,9 +189,7 @@ class TestAgentEvaluator:
             ],
             status="completed",
             iterations=1,
-            total_tokens=50,
-            cache_read_input_tokens=0,
-            cache_creation_input_tokens=0,
+            token_usage={"test-model": {"total": 50}},
             execution_time_seconds=1.0,
         )
         failure_reasons: list[str] = []
@@ -237,9 +231,7 @@ class TestAgentEvaluator:
             ],
             status="completed",
             iterations=1,
-            total_tokens=50,
-            cache_read_input_tokens=0,
-            cache_creation_input_tokens=0,
+            token_usage={"test-model": {"total": 50}},
             execution_time_seconds=1.0,
         )
         failure_reasons: list[str] = []
@@ -278,9 +270,7 @@ class TestAgentEvaluator:
             ],
             status="completed",
             iterations=1,
-            total_tokens=50,
-            cache_read_input_tokens=0,
-            cache_creation_input_tokens=0,
+            token_usage={"test-model": {"total": 50}},
             execution_time_seconds=1.0,
         )
         failure_reasons: list[str] = []

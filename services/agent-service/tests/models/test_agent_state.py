@@ -5,7 +5,34 @@ from app.models.agent_state import (
     ThoughtStep,
     ToolCall,
     create_initial_state,
+    merge_token_usage,
 )
+
+
+class TestMergeTokenUsage:
+    def test_merge_empty_dicts(self) -> None:
+        assert merge_token_usage({}, {}) == {}
+        assert merge_token_usage(None, {}) == {}
+        assert merge_token_usage({}, None) == {}
+
+    def test_merge_disjoint_models(self) -> None:
+        left = {"model-a": {"total": 100}}
+        right = {"model-b": {"total": 200}}
+        expected = {"model-a": {"total": 100}, "model-b": {"total": 200}}
+        assert merge_token_usage(left, right) == expected
+
+    def test_merge_overlapping_models(self) -> None:
+        left = {"model-a": {"total": 100, "prompt": 40}}
+        right = {"model-a": {"total": 50, "completion": 10}}
+        expected = {"model-a": {"total": 150, "prompt": 40, "completion": 10}}
+        assert merge_token_usage(left, right) == expected
+
+    def test_merge_deep_copy(self) -> None:
+        left = {"model-a": {"total": 100}}
+        right = {"model-b": {"total": 200}}
+        result = merge_token_usage(left, right)
+        result["model-a"]["total"] = 999
+        assert left["model-a"]["total"] == 100
 
 
 class TestToolCall:
@@ -78,7 +105,7 @@ class TestCreateInitialState:
         assert state["final_answer"] is None
         assert state["status"] == "running"
         assert state["error"] is None
-        assert state["total_tokens"] == 0
+        assert state["token_usage"] == {}
         assert state["completed_at"] is None
 
     def test_state_with_context(self) -> None:
@@ -132,9 +159,7 @@ class TestAgentStateTypeStructure:
             "final_answer",
             "status",
             "error",
-            "total_tokens",
-            "cache_creation_input_tokens",
-            "cache_read_input_tokens",
+            "token_usage",
             "started_at",
             "completed_at",
         }

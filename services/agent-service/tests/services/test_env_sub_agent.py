@@ -81,12 +81,19 @@ class TestPlanNode:
             ]
         )
 
-        agent.llm.structured_completion = AsyncMock(return_value=mock_plan)
+        agent.llm.structured_completion = AsyncMock(
+            return_value={
+                "parsed": mock_plan,
+                "model_id": "test-model",
+                "tokens": {"total": 10},
+            }
+        )
 
         result = await agent._plan_node(initial_state)
 
         assert result["status"] == "executing"
         assert result["plan"] is mock_plan
+        assert result["token_usage"]["test-model"]["total"] == 10
         agent.llm.structured_completion.assert_called_once()
 
     @pytest.mark.asyncio
@@ -100,13 +107,20 @@ class TestPlanNode:
             ]
         }
 
-        agent.llm.structured_completion = AsyncMock(return_value=raw_dict_plan)
+        agent.llm.structured_completion = AsyncMock(
+            return_value={
+                "parsed": raw_dict_plan,
+                "model_id": "test-model-2",
+                "tokens": {"total": 20},
+            }
+        )
 
         result = await agent._plan_node(initial_state)
 
         assert result["status"] == "executing"
         assert isinstance(result["plan"], WarehousePlan)
         assert result["plan"].tool_calls[0].tool_name == "get_devices"
+        assert result["token_usage"]["test-model-2"]["total"] == 20
 
     @pytest.mark.asyncio
     async def test_plan_node_handles_llm_exception(
@@ -225,8 +239,8 @@ class TestExecuteNode:
 
 
 def test_solve_node_stub(agent: EnvSubAgent, initial_state: ReWOOState) -> None:
-    """Currently just a stub returning state unchanged."""
-    assert agent._solve_node(initial_state) == initial_state
+    """Currently just a stub returning empty dict."""
+    assert agent._solve_node(initial_state) == {}
 
 
 # ---------------------------------------------------------------------------
