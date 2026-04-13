@@ -24,7 +24,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 COPY --from=builder /app/.venv /app/.venv
 COPY packages/common /app/packages/common
-COPY services/rag-service/src /app/src
+COPY services/rag-service/src/rag_service /app/src/rag_service
 COPY services/rag-service/config /app/config
 
 EXPOSE 8001

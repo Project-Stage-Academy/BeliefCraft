@@ -32,6 +32,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY packages/common /app/packages/common
 COPY services/agent-service/app /app/services/agent-service/app
 COPY services/agent-service/config /app/services/agent-service/config
+COPY services/agent-service/skills /app/skills
 
 # Create non-root user
 RUN useradd -m -u 1000 agent && chown -R agent:agent /app

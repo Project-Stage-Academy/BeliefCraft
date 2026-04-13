@@ -58,6 +58,7 @@ services:
     command: ["/app/.venv/bin/uvicorn", "environment_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - ./services/environment-api/src:/app/services/environment-api/src
+      - ./services/environment-api/config:/app/services/environment-api/config
       - ./packages/common:/app/packages/common
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)"]
@@ -76,6 +77,7 @@ services:
     command: ["/app/.venv/bin/uvicorn", "rag_service.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
     volumes:
       - ./services/rag-service/src:/app/src
+      - ./services/rag-service/config:/app/config
       - ./packages/common:/app/packages/common
     depends_on:
       weaviate:
@@ -106,6 +108,7 @@ services:
     volumes:
       - ./services/agent-service/app:/app/services/agent-service/app
       - ./services/agent-service/skills:/app/skills
+      - ./services/agent-service/config:/app/services/agent-service/config
       - ./packages/common:/app/packages/common
     depends_on:
       redis:
