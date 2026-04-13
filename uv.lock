@@ -427,7 +427,6 @@ dev = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "boto3", specifier = ">=1.42.49" },
     { name = "jinja2", specifier = ">=3.1" },
-    { name = "pillow", specifier = ">=10.2.0" },
     { name = "pillow", specifier = ">=12.1.1" },
     { name = "pymupdf", specifier = ">=1.26.7" },
     { name = "pytest", specifier = ">=8.0" },
