@@ -5,7 +5,6 @@ description = "RAG service for BeliefCraft."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.110",
-  "pymupdf>=1.26.7",
   "uvicorn[standard]>=0.27",
   "pydantic",
   "pyyaml",
@@ -13,7 +12,6 @@ dependencies = [
   "weaviate-client",
   "beliefcraft-common",
   "fastmcp>=3",
-  "pillow>=12.1.1",
 ]
 
 [tool.uv.sources]
@@ -24,6 +22,8 @@ dev = [
   "pytest>=8.0",
   "reportlab>=4.1.0",
   "Pillow>=10.2.0",
+  "pymupdf>=1.26.7",
+  "pillow>=12.1.1",
   "testcontainers[weaviate]",
   "beautifulsoup4>=4.14.3",
   "types-beautifulsoup4>=4.12.0.20250516",
