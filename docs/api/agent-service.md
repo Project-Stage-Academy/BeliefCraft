@@ -81,18 +81,66 @@ Request body (`AgentQueryRequest`):
 Validation rules:
 - `query`: required, `min_length=10`, `max_length=1000`
 - `max_iterations`: `1..20`
-
-Example response (`AgentQueryResponse`):
+Example response (`AgentRecommendationResponse`):
 ```json
 {
   "request_id": "...",
   "query": "What orders are at risk in the next 48 hours?",
   "status": "completed",
-  "answer": "...",
+  "final_answer": "...",
+  "task": "...",
+  "analysis": "...",
   "iterations": 3,
-  "total_tokens": 812,
+  "token_usage": {
+    "us.anthropic.claude-3-5-sonnet-20240620-v1:0": {
+      "prompt": 812,
+      "completion": 150,
+      "total": 962,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_percentage": 0.0,
+      "cache_write_percentage": 0.0
+    }
+  },
   "reasoning_trace": [
     {
+      "iteration": 1,
+      "thought": "...",
+      "actions": [
+        {
+          "tool": "get_order_backlog",
+          "arguments": {
+            "status": "pending"
+          },
+          "observation": {
+            "data": []
+          }
+        },
+        {
+          "tool": "search_knowledge_base",
+          "arguments": {
+            "query": "late-order risk heuristic"
+          },
+          "observation": "Received 2 documents"
+        }
+      ]
+    }
+  ],
+  "duration_seconds": 2.34
+}
+```
+
+### ModelTokenUsage Schema
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `prompt` | int | Input tokens not associated with cache |
+| `completion` | int | Output tokens generated |
+| `total` | int | Combined input and output tokens |
+| `cache_read_input_tokens` | int | Input tokens retrieved from LLM cache |
+| `cache_creation_input_tokens` | int | Input tokens that resulted in cache creation |
+| `cache_read_percentage` | float | percentage of input tokens read from cache |
+| `cache_write_percentage` | float | percentage of input tokens that created cache |
+
       "iteration": 1,
       "thought": "...",
       "actions": [
