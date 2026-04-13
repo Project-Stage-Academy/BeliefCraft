@@ -28,6 +28,9 @@ snippets, and recommendations unless the user explicitly requests them.
 or implementation details, or when that information is necessary and does not conflict \
 with the user's constraints.
 5. If data is conflicting, acknowledge uncertainty.
+6. If you call tools at last iteration, you will not see their results and won't be able \
+to write any answer to user. So it is better to just answer a question based on info you \
+already have, unless it is very critical to call a tool.
 
 Available tool categories:
 - Warehouse observation tools: Query inventory, orders, devices, locations.
@@ -171,7 +174,7 @@ def format_react_prompt(state: Mapping[str, Any]) -> list[str]:
 
     history.append(
         REACT_LOOP_PROMPT_END.format(
-            iteration=state.get("iteration", 1),
+            iteration=state.get("iteration", 1) + 1,  # start from 1
             max_iterations=state.get("max_iterations", 1),
         )
     )

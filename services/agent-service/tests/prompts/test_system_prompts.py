@@ -1,3 +1,4 @@
+from app.models import create_initial_state
 from app.prompts.system_prompts import (
     REACT_LOOP_PROMPT_END,
     REACT_LOOP_PROMPT_START,
@@ -80,7 +81,7 @@ class TestFormatReactPromptEmpty:
         }
         result = format_react_prompt(state)
         result_str = "\n".join(result)
-        assert "1/10" in result_str
+        assert "2/10" in result_str
         assert "What is the stock level?" in result_str
 
     def test_empty_history_has_no_iteration_tags(self) -> None:
@@ -355,9 +356,9 @@ class TestFormatReactPromptIterationDisplay:
         }
         result = format_react_prompt(state)
         result_str = "\n".join(result)
-        assert "3/7" in result_str
+        assert "4/7" in result_str
 
-    def test_first_iteration(self) -> None:
+    def test_second_iteration(self) -> None:
         state = {
             "iteration": 1,
             "max_iterations": 10,
@@ -366,11 +367,11 @@ class TestFormatReactPromptIterationDisplay:
         }
         result = format_react_prompt(state)
         result_str = "\n".join(result)
-        assert "1/10" in result_str
+        assert "2/10" in result_str
 
     def test_last_iteration(self) -> None:
         state = {
-            "iteration": 10,
+            "iteration": 9,
             "max_iterations": 10,
             "user_query": "test",
             "messages": [],
@@ -467,7 +468,7 @@ class TestReactPromptCachingPrefixStability:
 
     def test_history_prefix_is_stable_when_appending_iteration(self) -> None:
         base_state = {
-            "iteration": 2,
+            "iteration": 1,
             "max_iterations": 6,
             "user_query": "Analyze discrepancy risk",
             "messages": [
@@ -491,7 +492,7 @@ class TestReactPromptCachingPrefixStability:
         }
 
         appended_state = {
-            "iteration": 3,
+            "iteration": 2,
             "max_iterations": 6,
             "user_query": "Analyze discrepancy risk",
             "messages": [
@@ -542,7 +543,7 @@ class TestReactPromptCachingPrefixStability:
 
     def test_overall_prompt_prefix_is_stable_when_appending_iteration(self) -> None:
         base_state = {
-            "iteration": 2,
+            "iteration": 1,
             "max_iterations": 6,
             "user_query": "Assess stockout exposure",
             "messages": [
@@ -566,7 +567,7 @@ class TestReactPromptCachingPrefixStability:
         }
 
         appended_state = {
-            "iteration": 3,
+            "iteration": 2,
             "max_iterations": 6,
             "user_query": "Assess stockout exposure",
             "messages": [
@@ -616,3 +617,20 @@ class TestReactPromptCachingPrefixStability:
         assert "You are in a ReAct (Reasoning + Acting) loop." in full_appended_str
         assert "<query>" in full_appended_str
         assert "Current iteration: 3/6" in full_appended_str
+
+
+class TestIterationsAreCountedFromOne:
+    def test_iterations_are_counted_from_one_in_history(self):
+        base_state = create_initial_state("test query")
+        for i in range(1, 5):
+            base_state["messages"].append(AIMessage(content="message"))
+            for j in range(1, i + 1):
+                assert f'<iteration index="{j}">' in format_react_prompt(base_state)[j]
+            base_state["iteration"] += 1
+
+    def test_iterations_are_counted_from_one_in_current_iteration_counter(self):
+        base_state = create_initial_state("test query")
+        for i in range(1, 5):
+            base_state["messages"].append(AIMessage(content="message"))
+            assert f"Current iteration: {i}/10" in format_react_prompt(base_state)[-1]
+            base_state["iteration"] += 1
