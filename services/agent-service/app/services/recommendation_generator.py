@@ -3,12 +3,13 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from app.models.agent_state import AgentState
+from app.models.agent_state import AgentState, merge_token_usage
 from app.models.responses import (
     AgentRecommendationResponse,
     Citation,
     CodeSnippet,
     Formula,
+    ModelTokenUsage,
     Recommendation,
 )
 from app.services.extractors.citation_extractor import CitationExtractor
@@ -63,7 +64,7 @@ class RecommendationGenerator:
         if not final_answer:
             return self._generate_fallback_response(agent_state)
 
-        structured, parsing_tokens = await self.final_answer_parser.parse(final_answer)
+        structured, parsing_token_usage = await self.final_answer_parser.parse(final_answer)
         task = structured.get("task") or "Analysis"
         analysis = structured.get("analysis") or final_answer
         algorithm = structured.get("algorithm")
@@ -88,13 +89,7 @@ class RecommendationGenerator:
         )
 
         # Aggregate tokens including final answer parsing overhead
-        total_tokens = agent_state.get("total_tokens", 0) + parsing_tokens.get("total", 0)
-        cache_read = agent_state["cache_read_input_tokens"] + parsing_tokens.get(
-            "cache_read_input_tokens", 0
-        )
-        cache_creation = agent_state["cache_creation_input_tokens"] + parsing_tokens.get(
-            "cache_creation_input_tokens", 0
-        )
+        token_usage = merge_token_usage(agent_state.get("token_usage", {}), parsing_token_usage)
 
         execution_time = self._calc_execution_time(agent_state)
 
@@ -113,9 +108,7 @@ class RecommendationGenerator:
             confidence=confidence,
             reasoning_trace=reasoning_trace,
             iterations=iterations,
-            total_tokens=total_tokens,
-            cache_read_input_tokens=cache_read,
-            cache_creation_input_tokens=cache_creation,
+            token_usage={k: ModelTokenUsage(**v) for k, v in token_usage.items()},
             execution_time_seconds=execution_time,
             tools_used=list(set(tools_used)),
             warnings=warnings,
@@ -221,9 +214,9 @@ class RecommendationGenerator:
             status="failed",
             reasoning_trace=reasoning_trace,
             iterations=iterations,
-            total_tokens=agent_state.get("total_tokens", 0),
-            cache_read_input_tokens=agent_state["cache_read_input_tokens"],
-            cache_creation_input_tokens=agent_state["cache_creation_input_tokens"],
+            token_usage={
+                k: ModelTokenUsage(**v) for k, v in agent_state.get("token_usage", {}).items()
+            },
             execution_time_seconds=0.0,
             tools_used=[],
             warnings=[error_message],

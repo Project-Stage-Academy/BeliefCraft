@@ -76,13 +76,14 @@ class EnvSubAgent(BaseAgent):
 
         try:
             # 2. Call LLM using structured output with the Pydantic schema
-            plan_data = await self.llm.structured_completion(
-                messages=messages, schema=WarehousePlan
-            )
+            response = await self.llm.structured_completion(messages=messages, schema=WarehousePlan)
+            plan_data = response["parsed"]
+            model_id = response["model_id"]
+            tokens = response["tokens"]
 
             # Ensure we have a valid WarehousePlan object
             if isinstance(plan_data, dict):
-                plan_data = WarehousePlan(**plan_data)  # type: ignore[assignment]
+                plan_data = WarehousePlan(**plan_data)
 
             logger.info(
                 "env_sub_agent_plan_success",
@@ -90,7 +91,11 @@ class EnvSubAgent(BaseAgent):
                 planned_tools_count=len(cast(WarehousePlan, plan_data).tool_calls),
             )
 
-            return {"plan": plan_data, "status": "executing"}
+            return {
+                "plan": plan_data,
+                "status": "executing",
+                "token_usage": {model_id: tokens},
+            }
 
         except Exception as e:
             logger.error(
@@ -168,9 +173,9 @@ class EnvSubAgent(BaseAgent):
 
         return {"observations": observations, "status": "solving"}
 
-    def _solve_node(self, state: ReWOOState) -> ReWOOState:
+    def _solve_node(self, state: ReWOOState) -> dict[str, Any]:
         """Solver node: Solve a problem based on agent observations."""
-        return state
+        return {}
 
     async def run(self, agent_query: str, **kwargs: Any) -> ReWOOState:
         """Run the ReWOO loop for an agent query.
@@ -200,10 +205,13 @@ class EnvSubAgent(BaseAgent):
             )
             raise AgentExecutionError(f"EnvSubAgent execution failed: {e}") from e
 
+        total_tokens = sum(
+            counts.get("total", 0) for counts in final_state.get("token_usage", {}).values()
+        )
         logger.info(
             "env_sub_agent_run_complete",
             request_id=final_state["request_id"],
             status=final_state["status"],
-            tokens=final_state["total_tokens"],
+            tokens=total_tokens,
         )
         return final_state

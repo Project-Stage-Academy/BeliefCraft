@@ -7,6 +7,31 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 
+def merge_token_usage(
+    left: dict[str, dict[str, int]] | None, right: dict[str, dict[str, int]] | None
+) -> dict[str, dict[str, int]]:
+    """Reducer to merge token usage dictionaries by model_id.
+
+    This allows nodes using different models to contribute to the overall
+    token budget independently.
+    """
+    if left is None:
+        left = {}
+    if right is None:
+        right = {}
+
+    result = {model_id: counts.copy() for model_id, counts in left.items()}
+
+    for model_id, counts in right.items():
+        if model_id not in result:
+            result[model_id] = counts.copy()
+        else:
+            for k, v in counts.items():
+                result[model_id][k] = result[model_id].get(k, 0) + v
+
+    return result
+
+
 class ToolCall(BaseModel):
     """Represents a single tool invocation"""
 
@@ -52,9 +77,7 @@ class AgentState(TypedDict):
     error: str | None
 
     # Metadata
-    total_tokens: int
-    cache_read_input_tokens: int
-    cache_creation_input_tokens: int
+    token_usage: Annotated[dict[str, dict[str, int]], merge_token_usage]
     started_at: datetime
     completed_at: datetime | None
 
@@ -77,9 +100,7 @@ def create_initial_state(
         final_answer=None,
         status="running",
         error=None,
-        total_tokens=0,
-        cache_creation_input_tokens=0,
-        cache_read_input_tokens=0,
+        token_usage={},
         started_at=datetime.now(UTC),
         completed_at=None,
     )

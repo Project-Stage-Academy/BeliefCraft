@@ -37,7 +37,7 @@ langsmith:
   tracing_v2: false
 
 react_agent:
-  model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  model_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 env_sub_agent:
-  model_id: "anthropic.claude-haiku-4-5-20251001-v1:0"
+  model_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"

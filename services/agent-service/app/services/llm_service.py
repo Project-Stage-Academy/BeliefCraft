@@ -224,12 +224,16 @@ class LLMService:
                     "role": "assistant",
                     "content": message_content,
                 },
+                "model_id": self.model_id,
                 "tool_calls": [],
                 "finish_reason": finish_reason,
                 "tokens": {
                     "prompt": prompt_tokens,
                     "completion": completion_tokens,
-                    "total": prompt_tokens + completion_tokens,
+                    "total": prompt_tokens
+                    + completion_tokens
+                    + cache_read_input_tokens
+                    + cache_creation_input_tokens,
                     "cache_read_input_tokens": cache_read_input_tokens,
                     "cache_creation_input_tokens": cache_creation_input_tokens,
                 },
@@ -323,7 +327,10 @@ class LLMService:
             tokens = {
                 "prompt": prompt_tokens,
                 "completion": completion_tokens,
-                "total": prompt_tokens + completion_tokens,
+                "total": prompt_tokens
+                + completion_tokens
+                + cache_read_input_tokens
+                + cache_creation_input_tokens,
                 "cache_read_input_tokens": cache_read_input_tokens,
                 "cache_creation_input_tokens": cache_creation_input_tokens,
             }
@@ -334,6 +341,7 @@ class LLMService:
             )
             return {
                 "parsed": result["parsed"],  # type: ignore
+                "model_id": self.model_id,
                 "tokens": tokens,
             }
 

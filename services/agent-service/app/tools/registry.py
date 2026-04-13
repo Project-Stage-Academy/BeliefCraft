@@ -29,7 +29,7 @@ Example:
 from typing import Any
 
 from app.core.exceptions import ToolExecutionError
-from app.tools.base import BaseTool, ToolResult
+from app.tools.base import BaseTool
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -189,7 +189,7 @@ class ToolRegistry:
 
         return [tool.to_openai_function() for tool in tools]
 
-    async def execute_tool(self, name: str, arguments: dict[str, Any]) -> ToolResult:
+    async def execute_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """
         Execute a tool by name with given arguments.
 
@@ -201,7 +201,7 @@ class ToolRegistry:
             arguments: Dictionary of arguments matching tool's parameter schema
 
         Returns:
-            ToolResult with success status and data/error
+            Dictionary with success status and data/error
 
         Example:
             ```python
