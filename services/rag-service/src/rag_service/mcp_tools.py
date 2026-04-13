@@ -1,5 +1,7 @@
+import json
 from collections.abc import AsyncGenerator
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Literal, get_args
 
 from common.logging import get_logger
 from fastmcp import FastMCP
@@ -7,14 +9,19 @@ from fastmcp.server.lifespan import lifespan
 
 from .constants import ENTITY_TYPE_TO_CHUNK_TYPE
 from .models import (
+    SUPPORTED_DB_TABLES,
+    ConceptTagCategory,
     Document,
     EntityType,
     MetadataFilter,
     MetadataFilterOperator,
     MetadataFilters,
     SearchFilters,
+    SearchTags,
+    SearchTagsCatalogMetadata,
 )
 from .repositories import AbstractVectorStoreRepository
+from .search_boosting import SearchResultBooster
 
 BOOK_CONTENTS = """part i probabilistic reasoning
 2 Representation 19
@@ -65,6 +72,24 @@ SEARCH_FILTER_FIELD_TO_METADATA_FIELD = {
     "page_number": "page",
 }
 
+CONCEPT_TAGS_PATH = Path(__file__).with_name("concept_tags.json")
+
+
+def _load_concept_tags_by_category() -> dict[str, list[str]]:
+    """Load concept tags grouped by category from bundled JSON file."""
+    with CONCEPT_TAGS_PATH.open(encoding="utf-8") as concept_tags_file:
+        payload = json.load(concept_tags_file)
+    tags = payload.get("tags", {})
+    return {
+        str(category): [str(tag) for tag in category_tags]
+        for category, category_tags in tags.items()
+        if isinstance(category_tags, list)
+    }
+
+
+CONCEPT_TAGS_BY_CATEGORY = _load_concept_tags_by_category()
+ALLOWED_CONCEPT_CATEGORIES = set(get_args(ConceptTagCategory))
+
 
 class RagTools:
     tools = [
@@ -72,6 +97,7 @@ class RagTools:
         "expand_graph_by_ids",
         "get_entity_by_number",
         "get_related_code_definitions",
+        "get_search_tags_catalog",
     ]
 
     def __init__(self, repository: AbstractVectorStoreRepository) -> None:
@@ -99,6 +125,15 @@ class RagTools:
 
         return MetadataFilters(filters=metadata_filters, condition="and")
 
+    @staticmethod
+    def _extract_search_tags(search_tags: SearchTags | None) -> SearchTags | None:
+        """Normalize optional explicit search tags config."""
+        if search_tags is None:
+            return None
+        if search_tags.bc_concepts or search_tags.bc_db_tables:
+            return search_tags
+        return None
+
     async def search_knowledge_base(
         self,
         query: Annotated[str, "Text query for semantic search."],
@@ -110,6 +145,10 @@ class RagTools:
         filters: Annotated[
             SearchFilters | None,
             "Metadata filters to restrict search scope .",
+        ] = None,
+        search_tags: Annotated[
+            SearchTags | None,
+            "Optional concept/table tags used for similarity boosting.",
         ] = None,
     ) -> list[Document]:
         """Universal knowledge base search.
@@ -123,15 +162,36 @@ class RagTools:
             k=k,
             traverse_types=[t.value for t in traverse_types] if traverse_types else [],
             filters=filters.model_dump() if filters else None,
+            search_tags=search_tags.model_dump() if search_tags else None,
         )
         metadata_filters = self._convert_search_filters(filters)
-        documents = await self._repository.search_with_expansion(
-            query, k, metadata_filters, traverse_types
+        resolved_boosting = self._extract_search_tags(search_tags)
+        booster = SearchResultBooster(resolved_boosting, k)
+        candidate_k = booster.candidate_limit_for_boosting()
+
+        root_documents = await self._repository.vector_search(
+            query,
+            candidate_k,
+            metadata_filters,
         )
+        boosted_roots = booster.apply(root_documents)
+
+        expanded_documents: list[Document] = []
+        if traverse_types:
+            root_ids = [document.id for document in boosted_roots if document.id is not None]
+            if root_ids:
+                expanded_documents = await self._repository.expand_graph_by_ids(
+                    root_ids,
+                    traverse_types,
+                )
+
+        documents = SearchResultBooster.deduplicate_documents(boosted_roots + expanded_documents)
         logger.info(
             "rag tool result",
             tool="search_knowledge_base",
             num_documents=len(documents),
+            num_root_documents=len(boosted_roots),
+            num_expanded_documents=len(expanded_documents),
         )
         return documents
 
@@ -224,6 +284,55 @@ class RagTools:
             content_len=len(document.content),
         )
         return document
+
+    async def get_search_tags_catalog(
+        self,
+        tag_type: Annotated[
+            Literal["concepts", "tables"],
+            "Which tag list to return for search_tags: 'concepts' (bc_concepts) or "
+            "'tables' (bc_db_tables).",
+        ],
+        category: Annotated[
+            ConceptTagCategory | None,
+            "Optional category filter for 'concepts' only; ignored for 'tables'.",
+        ] = None,
+    ) -> Document:
+        """Use this tool to ground retrieval in the right domain vocabulary before searching.
+
+        It is helpful to choose standardized tags that narrow search intent,
+        reduce ambiguity, and improve relevance when querying the knowledge base.
+        For `tag_type='concepts'`, if `category` is not provided, all concept tags are returned.
+        """
+        selected_category = category if tag_type == "concepts" else None
+        payload_items: list[str]
+
+        if tag_type == "concepts":
+            if selected_category:
+                payload_items = CONCEPT_TAGS_BY_CATEGORY[selected_category]
+            else:
+                payload_items = [
+                    tag
+                    for category_tags in CONCEPT_TAGS_BY_CATEGORY.values()
+                    for tag in category_tags
+                ]
+        else:
+            payload_items = SUPPORTED_DB_TABLES
+
+        logger.info(
+            "rag tool result",
+            tool="get_search_tags_catalog",
+            tag_type=tag_type,
+            selected_category=selected_category,
+            item_count=len(payload_items),
+        )
+        return Document(
+            content=f"Available search_tags {tag_type}",
+            metadata=SearchTagsCatalogMetadata(
+                tag_type=tag_type,
+                selected_category=selected_category,
+                items=payload_items,
+            ).model_dump(),
+        )
 
 
 def create_mcp_server(repository: AbstractVectorStoreRepository) -> FastMCP:
