@@ -42,6 +42,14 @@ paths:
           - type: string
           - type: 'null'
           title: Product Id
+      - name: sku
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sku
       - name: move_type
         in: query
         required: false
@@ -185,6 +193,14 @@ paths:
           - type: string
           - type: 'null'
           title: Product Id
+      - name: sku
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sku
       - name: from_ts
         in: query
         required: false

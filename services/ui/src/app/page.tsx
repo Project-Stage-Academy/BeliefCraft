@@ -394,7 +394,7 @@ const parseRecommendationBlocks = (markdown: string): RecBlock[] => {
     const block = blocks[i];
     const lines = block.split('\n');
     const title = lines[0].trim();
-    
+
     let type: RecBlock['type'] = 'neutral';
     const typeMatch = block.match(/\*\*Type\*\*:\s*(executive|risk-averse|caution|lean|neutral)/i);
     if (typeMatch) {
