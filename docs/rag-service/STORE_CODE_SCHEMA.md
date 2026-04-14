@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`services/rag-service/src/scripts/store_code_schema.py` parses translated Python algorithm and example JSON files, extracts a structured code schema (classes, methods, and top-level functions), and stores it into three dedicated Weaviate collections. It also enriches existing algorithm and example chunks in the unified collection with cross-references pointing to the code entities they use.
+`services/rag-service/src/rag_scripts/store_code_schema.py` parses translated Python algorithm and example JSON files, extracts a structured code schema (classes, methods, and top-level functions), and stores it into three dedicated Weaviate collections. It also enriches existing algorithm and example chunks in the unified collection with cross-references pointing to the code entities they use.
 
 ---
 

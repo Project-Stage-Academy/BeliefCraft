@@ -180,7 +180,7 @@ Important:
 3. Run restore script:
    ```bash
    PYTHONPATH=services/rag-service/src \
-   uv run services/rag-service/src/scripts/restore_weaviate_backup.py
+   uv run services/rag-service/src/rag_scripts/restore_weaviate_backup.py
    ```
 
 ## 8. Smoke Test Agent Analyze Endpoint
