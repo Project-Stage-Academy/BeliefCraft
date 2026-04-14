@@ -126,17 +126,32 @@ services:
       timeout: 10s
       retries: 3
 
-  sandbox-runner:
+  sandbox-image-builder:
+    image: agent-sandbox-data-science
     build:
       context: .
       dockerfile: services/agent-service/Dockerfile.sandbox
+    command: [ "true" ]
+
+  sandbox-runner:
+    build:
+      context: .
+      dockerfile: services/sandbox-runner/Dockerfile
+    user: root
+    environment:
+      SANDBOX_IMAGE: agent-sandbox-data-science
+      SANDBOX_MEMORY_LIMIT: 256m
+      SANDBOX_CPUS: "0.5"
+      SANDBOX_NETWORK_DISABLED: "true"
+      SANDBOX_TIMEOUT_SECONDS: "10"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./services/sandbox-runner/app:/app/app
     expose:
       - "8080"
-    read_only: true
-    tmpfs:
-      - /tmp
+    depends_on:
+      sandbox-image-builder:
+        condition: service_completed_successfully
 
   ui:
     build:

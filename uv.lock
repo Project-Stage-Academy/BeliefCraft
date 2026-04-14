@@ -234,7 +234,6 @@ dependencies = [
     { name = "langchain-core" },
     { name = "langgraph" },
     { name = "langsmith" },
-    { name = "llm-sandbox", extra = ["docker"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
@@ -265,7 +264,6 @@ requires-dist = [
     { name = "langchain-core", specifier = ">=0.1" },
     { name = "langgraph", specifier = ">=0.1" },
     { name = "langsmith", specifier = ">=0.1" },
-    { name = "llm-sandbox", extras = ["docker"], specifier = ">=0.3.37" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
@@ -1737,23 +1735,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/eb/7697f60fbe7042ab4e88f4ee6af496b7f222fffb0a4e3593ef1f29f81652/librt-0.8.1-cp314-cp314t-win32.whl", hash = "sha256:738f08021b3142c2918c03692608baed43bc51144c29e35807682f8070ee2a3a", size = 51328, upload-time = "2026-02-17T16:12:45.148Z" },
     { url = "https://files.pythonhosted.org/packages/7c/72/34bf2eb7a15414a23e5e70ecb9440c1d3179f393d9349338a91e2781c0fb/librt-0.8.1-cp314-cp314t-win_amd64.whl", hash = "sha256:89815a22daf9c51884fb5dbe4f1ef65ee6a146e0b6a8df05f753e2e4a9359bf4", size = 58722, upload-time = "2026-02-17T16:12:46.85Z" },
     { url = "https://files.pythonhosted.org/packages/b2/c8/d148e041732d631fc76036f8b30fae4e77b027a1e95b7a84bb522481a940/librt-0.8.1-cp314-cp314t-win_arm64.whl", hash = "sha256:bf512a71a23504ed08103a13c941f763db13fb11177beb3d9244c98c29fb4a61", size = 48755, upload-time = "2026-02-17T16:12:47.943Z" },
-]
-
-[[package]]
-name = "llm-sandbox"
-version = "0.3.37"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ff/96/fa676c1551ed96a6d4814c1a5ad8561d723be7344e03bc293d9ee53b3db7/llm_sandbox-0.3.37.tar.gz", hash = "sha256:bec2d2d2b6eb5311fd70e4aa6a21e60c3c7e8dee36f89aac47a1fd072485adc6", size = 605861, upload-time = "2026-03-02T06:45:28.168Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/d0/63e594b6ae23ed4b63d57d5e442308f9c70f61f16002da4c41a4436939a6/llm_sandbox-0.3.37-py3-none-any.whl", hash = "sha256:8c0a01a79e8db45bcf709a349aee2983cc3ed22d56f3110ec9fbcdeef43c78f3", size = 106853, upload-time = "2026-03-02T06:45:26.766Z" },
-]
-
-[package.optional-dependencies]
-docker = [
-    { name = "docker" },
 ]
 
 [[package]]

@@ -1,18 +1,24 @@
-# file: services/agent-service/Dockerfile.sandbox
+# (This is the blueprint for the isolated execution environment)
+
 FROM python:3.11-slim
 
-RUN useradd -m -u 1000 sandboxuser
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install and clean up in the exact same layer
-RUN pip install --no-cache-dir \
-    casadi \
-    cvxpy \
-    networkx \
+WORKDIR /sandbox
+
+# Define the exact libraries the LLM is allowed to use
+# We use uv to install them blazingly fast
+RUN uv pip install --system --no-cache \
     numpy \
+    pandas \
+    networkx \
     scipy \
-    && find /usr/local/lib/python3.11/site-packages -type d -name "tests" -exec rm -rf {} + \
-    && find /usr/local/lib/python3.11/site-packages -type d -name "__pycache__" -exec rm -rf {} + \
-    && rm -rf /tmp/* /var/tmp/*
+    pydantic
 
+# Create a non-root user to run the untrusted code
+RUN useradd -m -u 1000 sandboxuser
 USER sandboxuser
-WORKDIR /home/sandboxuser
+
+# The llm-sandbox library expects python to be available on the path
+CMD ["python3"]
