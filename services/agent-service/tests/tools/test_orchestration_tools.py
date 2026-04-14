@@ -86,6 +86,9 @@ async def test_execute_failure_with_error(mock_sub_agent_class, mock_validate, t
     )
 
     result = await tool.execute(agent_query="Get history.")
+    del result[
+        "token_usage"
+    ]  # Remove token usage for assertion since it's not relevant to this test
 
     assert result == {
         "status": "failed",
@@ -102,6 +105,9 @@ async def test_execute_failure_fallback_error(mock_sub_agent_class, mock_validat
     mock_instance.run = AsyncMock(return_value={"status": "failed"})
 
     result = await tool.execute(agent_query="Get history.")
+    del result[
+        "token_usage"
+    ]  # Remove token usage for assertion since it's not relevant to this test
 
     assert result == {
         "status": "failed",
