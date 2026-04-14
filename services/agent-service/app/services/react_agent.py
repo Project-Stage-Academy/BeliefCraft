@@ -17,7 +17,6 @@ from app.prompts.system_prompts import (
     format_react_prompt,
 )
 from app.services.base_agent import BaseAgent
-from app.services.message_parser import MessageParser
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langchain_core.messages import AIMessage

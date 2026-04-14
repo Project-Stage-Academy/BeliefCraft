@@ -1,7 +1,9 @@
 <<<<<<< #168-environment-information-solver-summarizer
 from app.models.agent_state import ThoughtStep
+
 =======
 from app.models import create_initial_state
+
 >>>>>>> main
 from app.prompts.system_prompts import (
     REACT_LOOP_PROMPT_END,
