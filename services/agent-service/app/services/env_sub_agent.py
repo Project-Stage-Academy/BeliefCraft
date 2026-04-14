@@ -163,6 +163,27 @@ class EnvSubAgent(BaseAgent):
             # Let exceptions bubble up to asyncio.gather so it can format unhandled exceptions
             result = await tool.ainvoke(call.arguments)
 
+            if isinstance(result, dict):
+                if "success" in result:
+                    if result.get("success"):
+                        return {"status": "success", "data": result.get("data")}
+                    error = result.get("error") or "Unknown error"
+                    return {
+                        "status": "error",
+                        "error": error,
+                        "message": f"Tool execution failed: {error}",
+                    }
+                if "status" in result:
+                    if result.get("status") == "success":
+                        return {"status": "success", "data": result.get("data")}
+                    error = result.get("error") or result.get("message") or "Unknown error"
+                    return {
+                        "status": "error",
+                        "error": error,
+                        "message": f"Tool execution failed: {error}",
+                    }
+                return {"status": "success", "data": result}
+
             if result.success:
                 return {"status": "success", "data": result.data}
 
