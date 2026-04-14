@@ -115,7 +115,7 @@ def test_local_annotation_tracked():
 
 
 def test_self_assignment_tracks_class_type():
-    code = "class Owner:\n" "    def __init__(self):\n" "        self.helper = Helper()"
+    code = "class Owner:\n    def __init__(self):\n        self.helper = Helper()"
     analyzer = _analyze(code)
     assert analyzer._self_attr_types["Owner"].get("helper") == "Helper"
 
@@ -191,9 +191,7 @@ def test_build_graph_class_init_edge():
 
 
 def test_build_graph_method_to_method_edge():
-    code = (
-        "class A:\n" "    def first(self): pass\n" "    def second(self):\n" "        self.first()"
-    )
+    code = "class A:\n    def first(self): pass\n    def second(self):\n        self.first()"
     analyzer = _analyze(code)
     graph = build_graph(analyzer)
     assert graph.get("A.second", {}).get("A.first") == KIND_METHOD

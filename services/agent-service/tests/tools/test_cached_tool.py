@@ -296,8 +296,8 @@ class TestRunMethod:
 
         result = await cached_tool.run(input="test")
 
-        assert result.success is True
-        assert result.cached is True
+        assert result["success"] is True
+        assert result["cached"] is True
         assert tool.execute_count == 0  # Tool not executed (cache hit)
 
     @pytest.mark.asyncio
@@ -311,8 +311,8 @@ class TestRunMethod:
 
         result = await cached_tool.run(input="test")
 
-        assert result.success is True
-        assert result.cached is False
+        assert result["success"] is True
+        assert result["cached"] is False
         assert tool.execute_count == 1  # Tool executed (cache miss)
 
     @pytest.mark.asyncio
@@ -326,8 +326,8 @@ class TestRunMethod:
 
         result = await cached_tool.run(input="test")
 
-        assert result.success is True
-        assert result.cached is False  # Corrupted cache = fresh execution
+        assert result["success"] is True
+        assert result["cached"] is False  # Corrupted cache = fresh execution
         assert tool.execute_count == 1  # Tool executed
         mock_redis.delete.assert_called_once()  # Corrupted key deleted
 

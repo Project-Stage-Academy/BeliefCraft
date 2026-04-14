@@ -28,6 +28,9 @@ snippets, and recommendations unless the user explicitly requests them.
 or implementation details, or when that information is necessary and does not conflict \
 with the user's constraints.
 5. If data is conflicting, acknowledge uncertainty.
+6. If you call tools at last iteration, you will not see their results and won't be able \
+to write any answer to user. So it is better to just answer a question based on info you \
+already have, unless it is very critical to call a tool.
 
 Available tool categories:
 - Warehouse observation tools: Query inventory, orders, devices, locations.
@@ -98,9 +101,7 @@ and decision points.
     return _BASE_WAREHOUSE_ADVISOR_PROMPT.format(skill_catalog_section=skill_section)
 
 
-REACT_LOOP_PROMPT = """You are in a ReAct (Reasoning + Acting) loop.
-
-Current iteration: {iteration}/{max_iterations}
+REACT_LOOP_PROMPT_START = """You are in a ReAct (Reasoning + Acting) loop.
 
 User query:
 <query>
@@ -108,9 +109,9 @@ User query:
 </query>
 
 History of previous steps:
-<history>
-{history}
-</history>
+<history>"""
+
+REACT_LOOP_PROMPT_END = """</history>
 
 INSTRUCTIONS for this step:
 1. Review the <history> to see what you have already done.
@@ -121,6 +122,8 @@ INSTRUCTIONS for this step:
 4. If you have sufficient information, provide the FINAL ANSWER.
 
 If you are ready to answer, start your response with "FINAL ANSWER:".
+
+Current iteration: {iteration}/{max_iterations}
 """
 
 
@@ -136,39 +139,43 @@ def _format_action_xml(action: dict[str, Any]) -> list[str]:
     """Render a single action plus observation as XML lines."""
     lines = [f'    <action tool="{action.get("tool")}">{action.get("arguments")}</action>']
     if "observation" in action:
-        lines.append(f'    <observation>{action["observation"]}</observation>')
+        lines.append(f"    <observation>{action['observation']}</observation>")
     return lines
 
 
-def format_react_prompt(state: Mapping[str, Any]) -> str:
+def format_react_prompt(state: Mapping[str, Any]) -> list[str]:
     """Format the ReAct loop prompt with current state using XML structure
     optimized for Claude.
+
+    Each iteration is a separate message so that cache checkpoints can be
+    added during subsequent prompt processing.
 
     Args:
         state: Agent state dictionary containing iteration tracking,
                thoughts, tool_calls, and the user query.
 
     Returns:
-        Formatted prompt string with XML-structured history.
+        List of formatted prompt strings with XML-structured history.
     """
     from app.services.message_parser import MessageParser
 
-    history: list[str] = []
+    history: list[str] = [REACT_LOOP_PROMPT_START.format(user_query=state.get("user_query", ""))]
     for iteration in MessageParser.build_iteration_history(state):
-        iter_log = [f'  <iteration index="{iteration["iteration"]}">']
-        iter_log.append(f'    <thinking>{iteration["thought"]}</thinking>')
+        iter_log = [
+            f'  <iteration index="{iteration["iteration"]}">',
+            f"    <thinking>{iteration['thought']}</thinking>",
+        ]
 
         for action in iteration["actions"]:
             iter_log.extend(_format_action_xml(action))
 
         iter_log.append("  </iteration>")
-        history.extend(iter_log)
+        history.append("\n".join(iter_log))
 
-    history_str = "\n".join(history) if history else "  "
-
-    return REACT_LOOP_PROMPT.format(
-        iteration=state.get("iteration", 1),
-        max_iterations=state.get("max_iterations", 1),
-        user_query=state.get("user_query", ""),
-        history=history_str,
+    history.append(
+        REACT_LOOP_PROMPT_END.format(
+            iteration=state.get("iteration", 1) + 1,  # start from 1
+            max_iterations=state.get("max_iterations", 1),
+        )
     )
+    return history

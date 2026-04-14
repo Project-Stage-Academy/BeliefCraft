@@ -1,5 +1,7 @@
+from app.models import create_initial_state
 from app.prompts.system_prompts import (
-    REACT_LOOP_PROMPT,
+    REACT_LOOP_PROMPT_END,
+    REACT_LOOP_PROMPT_START,
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
     format_react_prompt,
     get_warehouse_advisor_prompt,
@@ -44,26 +46,27 @@ class TestWarehouseAdvisorSystemPrompt:
 
 class TestReactLoopPrompt:
     def test_contains_placeholders(self) -> None:
-        assert "{iteration}" in REACT_LOOP_PROMPT
-        assert "{max_iterations}" in REACT_LOOP_PROMPT
-        assert "{user_query}" in REACT_LOOP_PROMPT
-        assert "{history}" in REACT_LOOP_PROMPT
+        assert "{iteration}" in REACT_LOOP_PROMPT_END
+        assert "{max_iterations}" in REACT_LOOP_PROMPT_END
+        assert "{user_query}" in REACT_LOOP_PROMPT_START
 
     def test_contains_xml_tags(self) -> None:
-        assert "<query>" in REACT_LOOP_PROMPT
-        assert "</query>" in REACT_LOOP_PROMPT
-        assert "<history>" in REACT_LOOP_PROMPT
-        assert "</history>" in REACT_LOOP_PROMPT
+        assert "<query>" in REACT_LOOP_PROMPT_START
+        assert "</query>" in REACT_LOOP_PROMPT_START
+        assert "<history>" in REACT_LOOP_PROMPT_START
+        assert "</history>" in REACT_LOOP_PROMPT_END
 
     def test_contains_thinking_instruction(self) -> None:
-        assert "<thinking>...</thinking>" in REACT_LOOP_PROMPT
+        assert "<thinking>...</thinking>" in REACT_LOOP_PROMPT_END
 
     def test_contains_final_answer_instruction(self) -> None:
-        assert "FINAL ANSWER:" in REACT_LOOP_PROMPT
+        assert "FINAL ANSWER:" in REACT_LOOP_PROMPT_END
 
     def test_is_nonempty_string(self) -> None:
-        assert isinstance(REACT_LOOP_PROMPT, str)
-        assert len(REACT_LOOP_PROMPT) > 0
+        assert isinstance(REACT_LOOP_PROMPT_START, str)
+        assert len(REACT_LOOP_PROMPT_START) > 0
+        assert isinstance(REACT_LOOP_PROMPT_END, str)
+        assert len(REACT_LOOP_PROMPT_END) > 0
 
 
 class TestFormatReactPromptEmpty:
@@ -77,8 +80,9 @@ class TestFormatReactPromptEmpty:
             "messages": [],
         }
         result = format_react_prompt(state)
-        assert "1/10" in result
-        assert "What is the stock level?" in result
+        result_str = "\n".join(result)
+        assert "2/10" in result_str
+        assert "What is the stock level?" in result_str
 
     def test_empty_history_has_no_iteration_tags(self) -> None:
         state = {
@@ -88,7 +92,8 @@ class TestFormatReactPromptEmpty:
             "messages": [],
         }
         result = format_react_prompt(state)
-        assert "<iteration" not in result
+        result_str = "\n".join(result)
+        assert "<iteration" not in result_str
 
     def test_query_wrapped_in_xml(self) -> None:
         state = {
@@ -98,9 +103,10 @@ class TestFormatReactPromptEmpty:
             "messages": [],
         }
         result = format_react_prompt(state)
-        assert "<query>" in result
-        assert "Check warehouse status" in result
-        assert "</query>" in result
+        result_str = "\n".join(result)
+        assert "<query>" in result_str
+        assert "Check warehouse status" in result_str
+        assert "</query>" in result_str
 
 
 class TestFormatReactPromptWithThoughtSteps:
@@ -128,11 +134,12 @@ class TestFormatReactPromptWithThoughtSteps:
             ],
         }
         result = format_react_prompt(state)
-        assert '<iteration index="1">' in result
-        assert "<thinking>I need to check inventory</thinking>" in result
-        assert '<action tool="search_inventory">' in result
-        assert "<observation>" in result
-        assert "42" in result
+        result_str = "\n".join(result)
+        assert '<iteration index="1">' in result_str
+        assert "<thinking>I need to check inventory</thinking>" in result_str
+        assert '<action tool="search_inventory">' in result_str
+        assert "<observation>" in result_str
+        assert "42" in result_str
 
     def test_trace_meta_is_not_injected_into_prompt_history(self) -> None:
         state = {
@@ -163,10 +170,11 @@ class TestFormatReactPromptWithThoughtSteps:
         }
 
         result = format_react_prompt(state)
+        result_str = "\n".join(result)
 
-        assert "'stock': 42" in result
-        assert "'filters'" not in result
-        assert "'count': 1" not in result
+        assert "'stock': 42" in result_str
+        assert "'filters'" not in result_str
+        assert "'count': 1" not in result_str
 
     def test_multiple_iterations(self) -> None:
         state = {
@@ -191,12 +199,13 @@ class TestFormatReactPromptWithThoughtSteps:
             ],
         }
         result = format_react_prompt(state)
-        assert '<iteration index="1">' in result
-        assert '<iteration index="2">' in result
-        assert "Search for item A" in result
-        assert "Now check risk" in result
-        assert '<action tool="search">' in result
-        assert '<action tool="calculate_risk">' in result
+        result_str = "\n".join(result)
+        assert '<iteration index="1">' in result_str
+        assert '<iteration index="2">' in result_str
+        assert "Search for item A" in result_str
+        assert "Now check risk" in result_str
+        assert '<action tool="search">' in result_str
+        assert '<action tool="calculate_risk">' in result_str
 
     def test_tool_call_without_result(self) -> None:
         state = {
@@ -211,8 +220,9 @@ class TestFormatReactPromptWithThoughtSteps:
             ],
         }
         result = format_react_prompt(state)
-        assert "<observation>" not in result
-        assert '<action tool="search">' in result
+        result_str = "\n".join(result)
+        assert "<observation>" not in result_str
+        assert '<action tool="search">' in result_str
 
     def test_single_iteration_renders_all_actions_from_same_assistant_turn(self) -> None:
         state = {
@@ -251,11 +261,12 @@ class TestFormatReactPromptWithThoughtSteps:
         }
 
         result = format_react_prompt(state)
+        result_str = "\n".join(result)
 
-        assert result.count("<action tool=") == 2
-        assert '<action tool="get_inventory_data">' in result
-        assert '<action tool="search_knowledge_base">' in result
-        assert "chunk-1" in result
+        assert result_str.count("<action tool=") == 2
+        assert '<action tool="get_inventory_data">' in result_str
+        assert '<action tool="search_knowledge_base">' in result_str
+        assert "chunk-1" in result_str
 
 
 class TestFormatReactPromptMessageEdgeCases:
@@ -280,8 +291,9 @@ class TestFormatReactPromptMessageEdgeCases:
             ],
         }
         result = format_react_prompt(state)
-        assert '<action tool="search">' in result
-        assert "<observation>{'error': 'API rate limit exceeded'}</observation>" in result
+        result_str = "\n".join(result)
+        assert '<action tool="search">' in result_str
+        assert "<observation>{'error': 'API rate limit exceeded'}</observation>" in result_str
 
     def test_tool_message_without_artifact_falls_back_to_content(self) -> None:
         state = {
@@ -301,7 +313,8 @@ class TestFormatReactPromptMessageEdgeCases:
             ],
         }
         result = format_react_prompt(state)
-        assert "<observation>Plain text result</observation>" in result
+        result_str = "\n".join(result)
+        assert "<observation>Plain text result</observation>" in result_str
 
 
 class TestFormatReactPromptUnpairedThoughts:
@@ -323,11 +336,12 @@ class TestFormatReactPromptUnpairedThoughts:
             ],
         }
         result = format_react_prompt(state)
-        assert '<iteration index="1">' in result
-        assert '<iteration index="2">' in result
-        assert "Now I know the answer" in result
+        result_str = "\n".join(result)
+        assert '<iteration index="1">' in result_str
+        assert '<iteration index="2">' in result_str
+        assert "Now I know the answer" in result_str
         # The first iteration should have thinking and action
-        assert '<action tool="search">' in result
+        assert '<action tool="search">' in result_str
 
 
 class TestFormatReactPromptIterationDisplay:
@@ -341,9 +355,10 @@ class TestFormatReactPromptIterationDisplay:
             "messages": [],
         }
         result = format_react_prompt(state)
-        assert "3/7" in result
+        result_str = "\n".join(result)
+        assert "4/7" in result_str
 
-    def test_first_iteration(self) -> None:
+    def test_second_iteration(self) -> None:
         state = {
             "iteration": 1,
             "max_iterations": 10,
@@ -351,17 +366,19 @@ class TestFormatReactPromptIterationDisplay:
             "messages": [],
         }
         result = format_react_prompt(state)
-        assert "1/10" in result
+        result_str = "\n".join(result)
+        assert "2/10" in result_str
 
     def test_last_iteration(self) -> None:
         state = {
-            "iteration": 10,
+            "iteration": 9,
             "max_iterations": 10,
             "user_query": "test",
             "messages": [],
         }
         result = format_react_prompt(state)
-        assert "10/10" in result
+        result_str = "\n".join(result)
+        assert "10/10" in result_str
 
 
 class TestGetWarehouseAdvisorPrompt:
@@ -438,3 +455,182 @@ class TestGetWarehouseAdvisorPrompt:
         else:
             # Catalog should still be present
             assert catalog_pos != -1
+
+
+class TestReactPromptCachingPrefixStability:
+    """Tests to protect append-only prompt growth assumptions for KV caching."""
+
+    @staticmethod
+    def _extract_history_from_list(prompt_list: list[str]) -> str:
+        # history is the middle elements
+        # REACT_LOOP_PROMPT_START ... iterations ... REACT_LOOP_PROMPT_END
+        return "\n".join(prompt_list[1:-1])
+
+    def test_history_prefix_is_stable_when_appending_iteration(self) -> None:
+        base_state = {
+            "iteration": 1,
+            "max_iterations": 6,
+            "user_query": "Analyze discrepancy risk",
+            "messages": [
+                AIMessage(
+                    content="<thinking>Gather inventory deltas</thinking>",
+                    tool_calls=[
+                        {
+                            "id": "tc_1",
+                            "name": "list_inventory_moves",
+                            "args": {"window": "24h"},
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="list_inventory_moves",
+                    content="",
+                    artifact={"count": 4},
+                ),
+            ],
+        }
+
+        appended_state = {
+            "iteration": 2,
+            "max_iterations": 6,
+            "user_query": "Analyze discrepancy risk",
+            "messages": [
+                AIMessage(
+                    content="<thinking>Gather inventory deltas</thinking>",
+                    tool_calls=[
+                        {
+                            "id": "tc_1",
+                            "name": "list_inventory_moves",
+                            "args": {"window": "24h"},
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="list_inventory_moves",
+                    content="",
+                    artifact={"count": 4},
+                ),
+                AIMessage(
+                    content="<thinking>Check device anomalies</thinking>",
+                    tool_calls=[
+                        {
+                            "id": "tc_2",
+                            "name": "list_device_alerts",
+                            "args": {"severity": "high"},
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    tool_call_id="tc_2",
+                    name="list_device_alerts",
+                    content="",
+                    artifact={"alerts": 1},
+                ),
+            ],
+        }
+
+        base_prompt = format_react_prompt(base_state)
+        appended_prompt = format_react_prompt(appended_state)
+        base_history = self._extract_history_from_list(base_prompt)
+        appended_history = self._extract_history_from_list(appended_prompt)
+
+        assert appended_history.startswith(base_history)
+        assert '<iteration index="2">' in appended_history
+        assert "Check device anomalies" in appended_history
+        assert '<action tool="list_device_alerts">' in appended_history
+
+    def test_overall_prompt_prefix_is_stable_when_appending_iteration(self) -> None:
+        base_state = {
+            "iteration": 1,
+            "max_iterations": 6,
+            "user_query": "Assess stockout exposure",
+            "messages": [
+                AIMessage(
+                    content="<thinking>Query current stock</thinking>",
+                    tool_calls=[
+                        {
+                            "id": "tc_1",
+                            "name": "get_inventory_data",
+                            "args": {"sku": "ABC-123"},
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="get_inventory_data",
+                    content="",
+                    artifact={"on_hand": 12},
+                ),
+            ],
+        }
+
+        appended_state = {
+            "iteration": 2,
+            "max_iterations": 6,
+            "user_query": "Assess stockout exposure",
+            "messages": [
+                AIMessage(
+                    content="<thinking>Query current stock</thinking>",
+                    tool_calls=[
+                        {
+                            "id": "tc_1",
+                            "name": "get_inventory_data",
+                            "args": {"sku": "ABC-123"},
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="get_inventory_data",
+                    content="",
+                    artifact={"on_hand": 12},
+                ),
+                AIMessage(
+                    content="<thinking>Estimate lead-time risk</thinking>",
+                    tool_calls=[
+                        {
+                            "id": "tc_2",
+                            "name": "get_supplier_lead_time",
+                            "args": {"supplier": "S-9"},
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    tool_call_id="tc_2",
+                    name="get_supplier_lead_time",
+                    content="",
+                    artifact={"days": 5},
+                ),
+            ],
+        }
+
+        base_prompt = format_react_prompt(base_state)
+        appended_prompt = format_react_prompt(appended_state)
+
+        # Check that the first two elements (start + first iteration) are the same
+        assert base_prompt[0] == appended_prompt[0]
+        assert base_prompt[1] == appended_prompt[1]
+
+        full_appended_str = "\n".join(appended_prompt)
+        assert "You are in a ReAct (Reasoning + Acting) loop." in full_appended_str
+        assert "<query>" in full_appended_str
+        assert "Current iteration: 3/6" in full_appended_str
+
+
+class TestIterationsAreCountedFromOne:
+    def test_iterations_are_counted_from_one_in_history(self):
+        base_state = create_initial_state("test query")
+        for i in range(1, 5):
+            base_state["messages"].append(AIMessage(content="message"))
+            for j in range(1, i + 1):
+                assert f'<iteration index="{j}">' in format_react_prompt(base_state)[j]
+            base_state["iteration"] += 1
+
+    def test_iterations_are_counted_from_one_in_current_iteration_counter(self):
+        base_state = create_initial_state("test query")
+        for i in range(1, 5):
+            base_state["messages"].append(AIMessage(content="message"))
+            assert f"Current iteration: {i}/10" in format_react_prompt(base_state)[-1]
+            base_state["iteration"] += 1

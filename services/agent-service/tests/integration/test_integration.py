@@ -209,8 +209,8 @@ class TestEndToEndIntegration:
         skip_if_api_unavailable(search_result)
 
         # Verify both tools executed
-        assert inventory_result.execution_time_ms > 0
-        assert search_result.execution_time_ms > 0
+        assert inventory_result["execution_time_ms"] > 0
+        assert search_result["execution_time_ms"] > 0
 
     @pytest.mark.integration
     @pytest.mark.slow
@@ -232,8 +232,8 @@ class TestEndToEndIntegration:
         skip_if_api_unavailable(result2)
 
         # Both calls should show not cached (skip_cache=True)
-        assert result1.cached is False
-        assert result2.cached is False
+        assert result1["cached"] is False
+        assert result2["cached"] is False
 
         # Cached tool (after TTL) should cache results
         cached_tool = ListPurchaseOrdersTool()
@@ -243,8 +243,8 @@ class TestEndToEndIntegration:
         skip_if_api_unavailable(result4)
 
         # First call not cached, second might be (depends on TTL and Redis)
-        assert result3.execution_time_ms > 0
-        assert result4.execution_time_ms > 0
+        assert result3["execution_time_ms"] > 0
+        assert result4["execution_time_ms"] > 0
 
 
 # ============================================================================
@@ -274,10 +274,10 @@ class TestErrorHandlingIntegration:
         skip_if_api_unavailable(result)
 
         # Should fail gracefully
-        assert result.execution_time_ms > 0
+        assert result["execution_time_ms"] > 0
         # Either success=False or appropriate error handling
-        if not result.success:
-            assert result.error is not None
+        if not result["success"]:
+            assert result["error"] is not None
 
     @pytest.mark.integration
     @pytest.mark.slow
@@ -298,5 +298,5 @@ class TestErrorHandlingIntegration:
         skip_if_api_unavailable(result)
 
         # Should complete without raising exception
-        assert result.execution_time_ms >= 0
-        assert isinstance(result.success, bool)
+        assert result["execution_time_ms"] >= 0
+        assert isinstance(result["success"], bool)

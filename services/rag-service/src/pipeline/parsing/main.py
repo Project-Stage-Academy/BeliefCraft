@@ -363,7 +363,7 @@ class DocumentAssembler:
                     and img_chunk.get("chunk_type", "").lower() == ctype.lower()
                 ):
                     chunk["image_links"].append(
-                        f"{FIGURES_BUCKET_URL}figures/figure_{img_chunk['image_index']-1}.png"
+                        f"{FIGURES_BUCKET_URL}figures/figure_{img_chunk['image_index'] - 1}.png"
                     )
                     self._not_captioned_images.remove(img_chunk)
 
@@ -393,7 +393,7 @@ class DocumentAssembler:
                         break
                 if target_block:
                     target_block.setdefault("image_links", []).append(
-                        f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
+                        f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index'] - 1}.png"
                     )
 
             clean_content = v_obj.get("caption", v_obj.get("content", "")).strip()
@@ -419,7 +419,7 @@ class DocumentAssembler:
             )
 
             if "image_index" in v_obj:
-                img_link = f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index']-1}.png"
+                img_link = f"{FIGURES_BUCKET_URL}figures/figure_{v_obj['image_index'] - 1}.png"
                 chunk["image_links"] = [img_link]
 
                 if eid and v_obj.get("chunk_type", "").lower() == "exercise":
@@ -717,7 +717,7 @@ class DocumentAssembler:
                     and img_chunk.get("chunk_type", "").lower() == "exercise"
                 ):
                     chunk["image_links"].append(
-                        f"{FIGURES_BUCKET_URL}figures/figure_{img_chunk['image_index']-1}.png"
+                        f"{FIGURES_BUCKET_URL}figures/figure_{img_chunk['image_index'] - 1}.png"
                     )
                     self._not_captioned_images.remove(img_chunk)
 

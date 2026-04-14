@@ -321,10 +321,10 @@ class TestToolIntegration:
         with patch("app.tools.rag_tools.RAGAPIClient", return_value=mock_rag_client):
             result = await tool.run(query="test query")
 
-            assert result.success is True
-            assert result.data == mock_response
-            assert result.execution_time_ms > 0
-            assert result.error is None
+            assert result["success"] is True
+            assert result["data"] == mock_response
+            assert result["execution_time_ms"] > 0
+            assert result["error"] is None
 
     @pytest.mark.asyncio
     async def test_tool_run_wrapper_error(self) -> None:
@@ -340,11 +340,11 @@ class TestToolIntegration:
         with patch("app.tools.rag_tools.RAGAPIClient", return_value=mock_client):
             result = await tool.run(query="test")
 
-            assert result.success is False
-            assert result.data is None
-            assert result.error is not None
-            assert "RAG API Error" in result.error
-            assert result.execution_time_ms > 0
+            assert result["success"] is False
+            assert result["data"] is None
+            assert result["error"] is not None
+            assert "RAG API Error" in result["error"]
+            assert result["execution_time_ms"] > 0
 
     @pytest.mark.asyncio
     async def test_search_and_expand_workflow(self, mock_rag_client: AsyncMock) -> None:

@@ -31,7 +31,7 @@ def _structured_response() -> AgentRecommendationResponse:
         confidence="high",
         reasoning_trace=[],
         iterations=2,
-        total_tokens=200,
+        token_usage={"test-model": {"total": 200}},
         execution_time_seconds=1.25,
         tools_used=["search_knowledge_base"],
         warnings=[],

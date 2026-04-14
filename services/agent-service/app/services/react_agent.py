@@ -6,7 +6,12 @@ from typing import Any, Literal, cast
 
 from app.config_load import settings
 from app.core.exceptions import AgentExecutionError
-from app.models.agent_state import AgentState, ThoughtStep, create_initial_state
+from app.models.agent_state import (
+    AgentState,
+    ThoughtStep,
+    create_initial_state,
+    merge_token_usage,
+)
 from app.prompts.system_prompts import (
     WAREHOUSE_ADVISOR_SYSTEM_PROMPT,
     format_react_prompt,
@@ -52,11 +57,8 @@ class ReActAgent(BaseAgent):
         """Build the ReAct state machine with think/act/finalize nodes."""
         workflow = StateGraph(AgentState)
 
-        # Use native ToolNode instead of manual _act_node
-        tool_node = ToolNode(self.lc_tools)
-
         workflow.add_node("think", self._think_node)
-        workflow.add_node("act", tool_node)
+        workflow.add_node("act", self._act_node_wrapper)
         workflow.add_node("finalize", self._finalize_node)
 
         workflow.set_entry_point("think")
@@ -74,6 +76,31 @@ class ReActAgent(BaseAgent):
         workflow.add_edge("finalize", END)
 
         return workflow.compile()
+
+    async def _act_node_wrapper(self, state: AgentState) -> dict[str, Any]:
+        """Wrapper for native ToolNode to extract token usage from tools."""
+        tool_node = ToolNode(self.lc_tools)
+        result: dict[str, Any] = await tool_node.ainvoke(state)
+
+        # Extract token_usage from ToolMessage content (e.g. from sub-agent calls)
+        token_usage_deltas: dict[str, dict[str, int]] = {}
+        for message in result.get("messages", []):
+            if message.type == "tool":
+                try:
+                    data = json.loads(message.content)
+                    if isinstance(data["data"], dict) and "token_usage" in data["data"]:
+                        token_usage_deltas = merge_token_usage(
+                            token_usage_deltas, data["data"]["token_usage"]
+                        )
+                        # Remove token_usage from the content so LLM doesn't see it
+                        del data["data"]["token_usage"]
+                        message.content = json.dumps(data)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+        if token_usage_deltas:
+            result["token_usage"] = token_usage_deltas
+        return result
 
     async def _think_node(self, state: AgentState) -> dict[str, Any]:
         """Reasoning step: Claude analyzes the situation and decides next action.
@@ -99,11 +126,9 @@ class ReActAgent(BaseAgent):
             return {"status": "max_iterations"}
 
         try:
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": format_react_prompt(state)},
-            ]
-            response = await self._call_llm(messages)
+            messages = self._build_llm_messages(state)
+            cache = self._build_llm_cache_flags(messages, state)
+            response = await self._call_llm(messages, cache)
 
             message_content = response["message"]["content"]
             tool_calls = response.get("tool_calls", [])
@@ -134,7 +159,7 @@ class ReActAgent(BaseAgent):
             updates: dict[str, Any] = {
                 "messages": [ai_message],
                 "thoughts": state["thoughts"] + [thought],
-                "total_tokens": state["total_tokens"] + response["tokens"]["total"],
+                "token_usage": {response["model_id"]: response["tokens"]},
                 "iteration": state["iteration"] + 1,
             }
 
@@ -171,6 +196,39 @@ class ReActAgent(BaseAgent):
                 "status": "failed",
                 "error": str(e),
             }
+
+    def _build_llm_messages(self, state: AgentState) -> list[dict[str, Any]]:
+        """Build the message list for LLM input.
+
+        The formatted ReAct prompt encodes iteration info, user query, and
+        XML history reconstructed from the stored assistant/tool messages.
+        Raw conversation messages are NOT appended separately because the
+        formatter already preserves exact assistant-turn boundaries there.
+
+        Args:
+            state: Current agent state.
+
+        Returns:
+            List of messages for LLM consumption.
+        """
+        messages = [{"role": "user", "content": message} for message in format_react_prompt(state)]
+        return [
+            {"role": "system", "content": self.system_prompt},
+            *messages,
+        ]
+
+    def _build_llm_cache_flags(
+        self, messages: list[dict[str, Any]], state: AgentState
+    ) -> list[bool]:
+        """Build the cache flags for LLM input."""
+        cache = [False] * len(messages)
+        # put checkpoint before last message, because
+        # last one contains iteration number which always changes
+        cache[-2] = True
+        if state["iteration"] == state["max_iterations"] - 1:
+            # don't cache message added at last iteration, because it will never be read again
+            cache[-2] = False
+        return cache
 
     def _should_continue(
         self, state: AgentState
@@ -255,12 +313,26 @@ class ReActAgent(BaseAgent):
             )
             raise AgentExecutionError(f"ReAct agent execution failed: {e}") from e
 
+        total_tokens = sum(
+            counts.get("total", 0) for counts in final_state.get("token_usage", {}).values()
+        )
+        cache_read_tokens = sum(
+            counts.get("cache_read_input_tokens", 0)
+            for counts in final_state.get("token_usage", {}).values()
+        )
+        cache_creation_tokens = sum(
+            counts.get("cache_creation_input_tokens", 0)
+            for counts in final_state.get("token_usage", {}).values()
+        )
+
         logger.info(
             "react_agent_complete",
             request_id=final_state["request_id"],
             status=final_state["status"],
             iterations=final_state["iteration"],
-            tokens=final_state["total_tokens"],
+            tokens=total_tokens,
+            cache_read_input_tokens=cache_read_tokens,
+            cache_creation_input_tokens=cache_creation_tokens,
             thought_count=len(final_state["thoughts"]),
             tool_call_count=len(final_state.get("tool_calls", [])),
         )

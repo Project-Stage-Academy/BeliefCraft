@@ -39,4 +39,4 @@ Orchestrates the belief update and decision-making loop using ReAct agents and v
     - **RAG Tools**: Dynamically discovered and loaded via the **Model Context Protocol (MCP)**.
     - **Environment Tools**: Integrated via **hardcoded REST API** calls to the `environment-api`.
 - **Service Clients**: All downstream service interactions are abstracted through dedicated clients in `app/clients/` to handle retries, tracing, and logging.
-- **Agent State**: `AgentState` models maintain the history and current belief of the agent during a session.
+- **Agent State**: `AgentState` and `ReWOOState` models maintain history and current belief. Token usage is tracked **per model** using an `Annotated` reducer (`merge_token_usage`). Nodes must yield token deltas in the `token_usage` dictionary keyed by `model_id` to ensure accurate aggregation across multi-model loops.

@@ -97,12 +97,28 @@ class LLMService:
             },
         )
 
-    def _convert_messages_to_langchain(self, messages: list[dict[str, Any]]) -> list[BaseMessage]:
-        """Convert dictionary messages to LangChain Message objects."""
+    def _convert_messages_to_langchain(
+        self, messages: list[dict[str, Any]], cache: list[bool] | None = None
+    ) -> list[BaseMessage]:
+        """Convert dictionary messages to LangChain Message objects.
+
+        Args:
+            messages: Messages to convert.
+            cache: List with the same length as messages.
+                   If cache[i] is True, messages[i] is written to cache.
+        """
+        if cache is None:
+            cache = [False] * len(messages)
+        if len(messages) != len(cache):
+            raise ValueError("Length of cache list must match length of messages list")
         lc_messages: list[BaseMessage] = []
-        for msg in messages:
+        for should_cache, msg in zip(cache, messages, strict=True):
             role = msg.get("role")
             content = msg.get("content") or ""
+            if should_cache:
+                content = [
+                    {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+                ]
 
             if role == "system":
                 lc_messages.append(SystemMessage(content=content))
@@ -155,6 +171,7 @@ class LLMService:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] = "auto",
+        cache: list[bool] | None = None,
     ) -> dict[str, Any]:
         """Call AWS Bedrock Claude model.
 
@@ -162,6 +179,8 @@ class LLMService:
             messages: Chat history as list of dicts.
             tools: Available tools in OpenAI-compatible JSON schema.
             tool_choice: Tool selection strategy.
+            cache: List with the same length as messages.
+                   If cache[i] is True, messages[i] is written to cache.
 
         Returns:
             Unified dictionary with message, tool_calls, finish_reason, and tokens.
@@ -174,7 +193,7 @@ class LLMService:
                 has_tools=tools is not None,
             )
 
-            lc_messages = self._convert_messages_to_langchain(messages)
+            lc_messages = self._convert_messages_to_langchain(messages, cache)
 
             chain = self.llm
             if tools:
@@ -185,6 +204,12 @@ class LLMService:
             usage_metadata = response.usage_metadata or {}
             prompt_tokens = usage_metadata.get("input_tokens", 0)
             completion_tokens = usage_metadata.get("output_tokens", 0)
+            cache_read_input_tokens = usage_metadata.get("input_token_details", {}).get(
+                "cache_read", 0
+            )
+            cache_creation_input_tokens = usage_metadata.get("input_token_details", {}).get(
+                "cache_creation", 0
+            )
 
             stop_reason = response.response_metadata.get("stop_reason")
             finish_reason = "tool_calls" if stop_reason == "tool_use" else "stop"
@@ -199,12 +224,18 @@ class LLMService:
                     "role": "assistant",
                     "content": message_content,
                 },
+                "model_id": self.model_id,
                 "tool_calls": [],
                 "finish_reason": finish_reason,
                 "tokens": {
                     "prompt": prompt_tokens,
                     "completion": completion_tokens,
-                    "total": prompt_tokens + completion_tokens,
+                    "total": prompt_tokens
+                    + completion_tokens
+                    + cache_read_input_tokens
+                    + cache_creation_input_tokens,
+                    "cache_read_input_tokens": cache_read_input_tokens,
+                    "cache_creation_input_tokens": cache_creation_input_tokens,
                 },
             }
 
@@ -260,7 +291,7 @@ class LLMService:
         self,
         messages: list[dict[str, Any]],
         schema: Any,
-    ) -> Any:
+    ) -> dict[str, Any]:
         """
         Invoke model with native structured output enforcement.
 
@@ -269,7 +300,7 @@ class LLMService:
             schema: Pydantic model class or JSON schema dict for structured output.
 
         Returns:
-            Parsed structured result produced by LangChain.
+            Dictionary with 'parsed' result and 'tokens' metadata.
         """
         try:
             logger.info(
@@ -279,11 +310,40 @@ class LLMService:
             )
 
             lc_messages = self._convert_messages_to_langchain(messages)
-            chain = self.llm.with_structured_output(schema)
+            chain = self.llm.with_structured_output(schema, include_raw=True)
             result = await chain.ainvoke(lc_messages)
 
-            logger.info("llm_structured_response")
-            return result
+            raw_response = result["raw"]  # type: ignore
+            usage_metadata = raw_response.usage_metadata or {}
+            prompt_tokens = usage_metadata.get("input_tokens", 0)
+            completion_tokens = usage_metadata.get("output_tokens", 0)
+            cache_read_input_tokens = usage_metadata.get("input_token_details", {}).get(
+                "cache_read", 0
+            )
+            cache_creation_input_tokens = usage_metadata.get("input_token_details", {}).get(
+                "cache_creation", 0
+            )
+
+            tokens = {
+                "prompt": prompt_tokens,
+                "completion": completion_tokens,
+                "total": prompt_tokens
+                + completion_tokens
+                + cache_read_input_tokens
+                + cache_creation_input_tokens,
+                "cache_read_input_tokens": cache_read_input_tokens,
+                "cache_creation_input_tokens": cache_creation_input_tokens,
+            }
+
+            logger.info(
+                "llm_structured_response",
+                tokens=tokens["total"],
+            )
+            return {
+                "parsed": result["parsed"],  # type: ignore
+                "model_id": self.model_id,
+                "tokens": tokens,
+            }
 
         except LLMServiceError:
             raise

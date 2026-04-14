@@ -38,10 +38,7 @@ def test_extract_from_text_extracts_python_and_detects_dependencies() -> None:
 def test_extract_from_text_infers_python_without_language_hint() -> None:
     extractor = CodeExtractor()
     text = (
-        "```\n"
-        "def reorder_point(daily_demand, lead_time):\n"
-        "    return daily_demand * lead_time\n"
-        "```"
+        "```\ndef reorder_point(daily_demand, lead_time):\n    return daily_demand * lead_time\n```"
     )
 
     snippets = extractor.extract_from_text(text)
