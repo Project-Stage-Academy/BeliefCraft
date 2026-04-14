@@ -8,7 +8,7 @@ from app.tools.code_tools import PythonSandboxTool
 def mock_settings():
     with patch("app.tools.code_tools.settings") as mock:
         mock.sandbox.runner_url = "http://sandbox-runner:8080"
-        mock.sandbox.request_timeout_seconds = 15
+        mock.sandbox.timeout_seconds = 15
         yield mock
 
 
