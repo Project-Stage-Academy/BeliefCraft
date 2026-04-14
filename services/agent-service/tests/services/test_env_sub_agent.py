@@ -282,100 +282,6 @@ class TestExecuteNode:
 
 
 class TestSolveNode:
-    def test_sanitize_observations_for_solver_masks_nested_id_fields(
-        self, agent: EnvSubAgent
-    ) -> None:
-        raw_observations = {
-            "inventory_moves_0": {
-                "tool": "list_inventory_moves",
-                "arguments": {
-                    "product_id": "04fc58b7-f457-4661-a916-3c3d0ac93cdf",
-                    "sku": "PHA-22602565",
-                },
-                "response": {
-                    "status": "success",
-                    "data": {
-                        "moves": [
-                            {
-                                "id": "123e4567-e89b-12d3-a456-426614174000",
-                                "from_location_id": "6901725d-1dbd-4146-a02e-2d7bc1111111",
-                                "device_id": "sensor-abc-123",
-                            }
-                        ]
-                    },
-                },
-            }
-        }
-
-        sanitized = agent._sanitize_observations_for_solver(raw_observations)
-        serialized = str(sanitized)
-
-        assert "04fc58b7-f457-4661-a916-3c3d0ac93cdf" not in serialized
-        assert "123e4567-e89b-12d3-a456-426614174000" not in serialized
-        assert "6901725d-1dbd-4146-a02e-2d7bc1111111" not in serialized
-        assert "sensor-abc-123" in serialized
-        assert sanitized["inventory_moves_0"]["arguments"]["product_id"] == "[PRODUCT_1]"
-        assert sanitized["inventory_moves_0"]["arguments"]["sku"] == "PHA-22602565"
-        assert sanitized["inventory_moves_0"]["response"]["data"]["moves"][0]["id"] == "[ID_1]"
-        assert (
-            sanitized["inventory_moves_0"]["response"]["data"]["moves"][0]["from_location_id"]
-            == "[LOC_1]"
-        )
-        assert (
-            sanitized["inventory_moves_0"]["response"]["data"]["moves"][0]["device_id"]
-            == "sensor-abc-123"
-        )
-
-    def test_sanitize_observations_for_solver_preserves_uuid_relationship_aliases(
-        self, agent: EnvSubAgent
-    ) -> None:
-        shared_location_id = "6901725d-1dbd-4146-a02e-2d7bc1111111"
-        raw_observations = {
-            "inventory_moves_0": {
-                "tool": "list_inventory_moves",
-                "response": {
-                    "status": "success",
-                    "data": {
-                        "moves": [
-                            {
-                                "from_location_id": shared_location_id,
-                                "to_location_id": "7901725d-1dbd-4146-a02e-2d7bc2222222",
-                            },
-                            {
-                                "from_location_id": shared_location_id,
-                            },
-                        ]
-                    },
-                },
-            }
-        }
-
-        sanitized = agent._sanitize_observations_for_solver(raw_observations)
-        moves = sanitized["inventory_moves_0"]["response"]["data"]["moves"]
-
-        assert moves[0]["from_location_id"] == "[LOC_1]"
-        assert moves[1]["from_location_id"] == "[LOC_1]"
-        assert moves[0]["to_location_id"] == "[LOC_2]"
-
-    def test_sanitize_summary_masks_generic_id_fields(self, agent: EnvSubAgent) -> None:
-        raw_summary = (
-            "id: 123e4567-e89b-12d3-a456-426614174000, "
-            "product_id=04fc58b7-f457-4661-a916-3c3d0ac93cdf, "
-            "from_location_id=6901725d-1dbd-4146-a02e-2d7bc1111111, "
-            "device_id=sensor-abc-123"
-        )
-
-        sanitized = agent._sanitize_summary(raw_summary)
-
-        assert "123e4567-e89b-12d3-a456-426614174000" not in sanitized
-        assert "04fc58b7-f457-4661-a916-3c3d0ac93cdf" not in sanitized
-        assert "6901725d-1dbd-4146-a02e-2d7bc1111111" not in sanitized
-        assert "sensor-abc-123" in sanitized
-        assert "id: [ID]" in sanitized
-        assert "product_id=[ID]" in sanitized
-        assert "from_location_id=[ID]" in sanitized
-        assert "device_id=sensor-abc-123" in sanitized
-
     @pytest.mark.asyncio
     async def test_solve_node_returns_bulleted_fallback_without_observations(
         self, agent: EnvSubAgent, initial_state: ReWOOState
@@ -418,7 +324,7 @@ class TestSolveNode:
         assert "inventory_moves_0" in solver_prompt
 
     @pytest.mark.asyncio
-    async def test_solve_node_sanitizes_observations_before_solver_prompt(
+    async def test_solve_node_passes_raw_observations_to_solver_prompt(
         self, agent: EnvSubAgent, initial_state: ReWOOState
     ) -> None:
         initial_state["observations"] = {
@@ -453,12 +359,12 @@ class TestSolveNode:
         solver_messages = agent.solver_llm.chat_completion.call_args.kwargs["messages"]
         solver_prompt = solver_messages[1]["content"]
 
-        assert "04fc58b7-f457-4661-a916-3c3d0ac93cdf" not in solver_prompt
-        assert "123e4567-e89b-12d3-a456-426614174000" not in solver_prompt
-        assert "6901725d-1dbd-4146-a02e-2d7bc1111111" not in solver_prompt
-        assert '"product_id": "[PRODUCT_1]"' in solver_prompt
-        assert '"id": "[ID_1]"' in solver_prompt
-        assert '"to_location_id": "[LOC_1]"' in solver_prompt
+        assert "04fc58b7-f457-4661-a916-3c3d0ac93cdf" in solver_prompt
+        assert "123e4567-e89b-12d3-a456-426614174000" in solver_prompt
+        assert "6901725d-1dbd-4146-a02e-2d7bc1111111" in solver_prompt
+        assert '"product_id": "04fc58b7-f457-4661-a916-3c3d0ac93cdf"' in solver_prompt
+        assert '"id": "123e4567-e89b-12d3-a456-426614174000"' in solver_prompt
+        assert '"to_location_id": "6901725d-1dbd-4146-a02e-2d7bc1111111"' in solver_prompt
 
     @pytest.mark.asyncio
     async def test_solve_node_surfaces_error_field_on_failure(

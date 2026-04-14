@@ -1,7 +1,6 @@
 import asyncio
 import json
 import re
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
@@ -27,12 +26,6 @@ logger = get_logger(__name__)
 
 class EnvSubAgent(BaseAgent):
     """ReWOO implementation using LangGraph for AWS Bedrock/Claude."""
-
-    _UUID_PATTERN = re.compile(
-        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
-        flags=re.IGNORECASE,
-    )
-    _HEX_OBJECT_ID_PATTERN = re.compile(r"[0-9a-f]{24}", flags=re.IGNORECASE)
 
     def __init__(
         self, system_prompt: str | None = None, tool_registry: ToolRegistry | None = None
@@ -232,8 +225,7 @@ class EnvSubAgent(BaseAgent):
             }
 
         try:
-            observations = self._sanitize_observations_for_solver(state["observations"])
-            observations_str = json.dumps(observations, indent=2, ensure_ascii=False)
+            observations_str = json.dumps(state["observations"], indent=2, ensure_ascii=False)
 
             plan_obj = state.get("plan")
             if plan_obj and hasattr(plan_obj, "tool_calls"):
@@ -244,7 +236,7 @@ class EnvSubAgent(BaseAgent):
             else:
                 plan_str = "No plan available"
 
-            user_prompt = SOLVER_SYSTEM_PROMPT.format(
+            solver_prompt = SOLVER_SYSTEM_PROMPT.format(
                 agent_query=state.get("agent_query", ""),
                 plan=plan_str,
                 observations=observations_str,
@@ -252,7 +244,7 @@ class EnvSubAgent(BaseAgent):
 
             messages = [
                 {"role": "system", "content": ENV_SUB_AGENT_SOLVER_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
+                {"role": "user", "content": solver_prompt},
             ]
 
             logger.debug(
@@ -271,8 +263,6 @@ class EnvSubAgent(BaseAgent):
                 summary = "\n".join(
                     line for line in lines if not line.strip().startswith("```")
                 ).strip()
-
-            summary = self._sanitize_summary(summary)
 
             if not summary or len(summary) < 10:
                 logger.warning("solver_empty_response", request_id=request_id)
@@ -316,132 +306,6 @@ class EnvSubAgent(BaseAgent):
                 "total_tokens": state.get("total_tokens", 0),
                 "error": str(e),
             }
-
-    @staticmethod
-    def _sanitize_observations_for_solver(payload: Any) -> Any:
-        """Replace opaque internal identifiers with stable aliases before solver prompting."""
-        alias_registry: dict[str, str] = {}
-        alias_counters: dict[str, int] = {}
-        return EnvSubAgent._sanitize_payload_node(payload, alias_registry, alias_counters)
-
-    @staticmethod
-    def _sanitize_payload_node(
-        payload: Any,
-        alias_registry: dict[str, str],
-        alias_counters: dict[str, int],
-        parent_key: str | None = None,
-    ) -> Any:
-        if isinstance(payload, Mapping):
-            sanitized: dict[Any, Any] = {}
-            for key, value in payload.items():
-                child_key = key if isinstance(key, str) else None
-                sanitized[key] = EnvSubAgent._sanitize_payload_node(
-                    value,
-                    alias_registry,
-                    alias_counters,
-                    parent_key=child_key,
-                )
-            return sanitized
-
-        if isinstance(payload, list):
-            return [
-                EnvSubAgent._sanitize_payload_node(
-                    item,
-                    alias_registry,
-                    alias_counters,
-                    parent_key=parent_key,
-                )
-                for item in payload
-            ]
-
-        if isinstance(payload, str) and EnvSubAgent._should_alias_identifier(parent_key, payload):
-            return EnvSubAgent._alias_identifier(
-                parent_key or "id",
-                payload,
-                alias_registry,
-                alias_counters,
-            )
-
-        return payload
-
-    @staticmethod
-    def _should_alias_identifier(key: str | None, value: str) -> bool:
-        if not key:
-            return EnvSubAgent._is_internal_identifier(value)
-
-        if not re.fullmatch(r"[a-zA-Z_]*?(?:id|uuid)", key, flags=re.IGNORECASE):
-            return False
-
-        return EnvSubAgent._is_internal_identifier(value)
-
-    @staticmethod
-    def _is_internal_identifier(value: str) -> bool:
-        return bool(
-            EnvSubAgent._UUID_PATTERN.fullmatch(value)
-            or EnvSubAgent._HEX_OBJECT_ID_PATTERN.fullmatch(value)
-        )
-
-    @staticmethod
-    def _alias_identifier(
-        key: str,
-        value: str,
-        alias_registry: dict[str, str],
-        alias_counters: dict[str, int],
-    ) -> str:
-        alias_key = f"{key.lower()}::{value}"
-        existing_alias = alias_registry.get(alias_key)
-        if existing_alias:
-            return existing_alias
-
-        prefix = EnvSubAgent._alias_prefix_for_key(key)
-        alias_counters[prefix] = alias_counters.get(prefix, 0) + 1
-        alias = f"[{prefix}_{alias_counters[prefix]}]"
-        alias_registry[alias_key] = alias
-        return alias
-
-    @staticmethod
-    def _alias_prefix_for_key(key: str) -> str:
-        normalized = key.lower()
-        if "product" in normalized:
-            return "PRODUCT"
-        if "location" in normalized:
-            return "LOC"
-        if "warehouse" in normalized:
-            return "WH"
-        if "device" in normalized:
-            return "DEVICE"
-        if "move" in normalized:
-            return "MOVE"
-        return "ID"
-
-    @staticmethod
-    def _sanitize_summary(text: str) -> str:
-        """Remove obvious technical identifiers from the solver summary."""
-        text = re.sub(
-            EnvSubAgent._UUID_PATTERN,
-            "[ID]",
-            text,
-        )
-        text = re.sub(EnvSubAgent._HEX_OBJECT_ID_PATTERN, "[ID]", text)
-        text = re.sub(
-            r"\b([a-zA-Z_]*?(?:id|uuid))\b\s*([:=])\s*([^\s,]+)",
-            lambda match: EnvSubAgent._sanitize_summary_identifier(match),
-            text,
-            flags=re.IGNORECASE,
-        )
-        text = re.sub(r"[ \t]+", " ", text)
-        text = re.sub(r"\n\s*\n", "\n", text)
-        text = re.sub(r"\s*,\s*,", ", ", text)
-        text = re.sub(r"^\s*[-*]\s*,", "-", text, flags=re.MULTILINE)
-        return text.strip()
-
-    @staticmethod
-    def _sanitize_summary_identifier(match: re.Match[str]) -> str:
-        key, separator, value = match.groups()
-        if EnvSubAgent._is_internal_identifier(value):
-            return f"{key}{separator} [ID]"
-        return match.group(0)
-
     @staticmethod
     def _ensure_bullets(text: str) -> str:
         """Convert free-form text into one-fact-per-line bullet points."""
