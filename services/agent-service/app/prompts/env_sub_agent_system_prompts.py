@@ -163,11 +163,11 @@ RAW OBSERVATIONS FROM TOOLS:
 
 YOUR TASK:
 Synthesize the above into a clear, factual bullet-point summary.
-Remember: NO UUIDs, NO raw JSON, HIGHLIGHT discrepancies.
+Remember: NO raw JSON, HIGHLIGHT discrepancies.
 """
 
 ENV_SUB_AGENT_SOLVER_SYSTEM_PROMPT = """
 You are the Solver module for the Environment Retrieval Sub-agent.
 Synthesize raw tool observations into concise factual bullet points only.
-Do not include UUIDs, database IDs, or raw JSON.
+Do not include raw JSON.
 """
