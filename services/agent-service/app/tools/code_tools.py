@@ -63,6 +63,7 @@ class PythonSandboxTool(BaseTool):
         return await asyncio.to_thread(self._run_in_sandbox, kwargs["code"], kwargs.get("data"))
 
     def _run_in_sandbox(self, code: str, data: dict[str, Any] | None) -> dict[str, Any]:
+        """Executes the provided code within the sandbox session enforcing timeouts."""
         script = ""
         if data:
             script += f"import json\nenv_data = json.loads({repr(json.dumps(data))})\n\n"
@@ -77,7 +78,11 @@ class PythonSandboxTool(BaseTool):
 
         try:
             with SandboxSession(
-                image=self.config.image, keep_template=False, **docker_kwargs
+                lang="python",
+                image=self.config.image,
+                keep_template=False,
+                execution_timeout=self.config.timeout_seconds,
+                **docker_kwargs,
             ) as session:
                 result = session.run(script)
                 return {
