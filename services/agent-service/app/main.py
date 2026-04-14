@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import uuid
@@ -12,10 +13,12 @@ from app.config_load import settings
 from app.core.constants import HEALTH_CHECK_TIMEOUT
 from app.core.exceptions import AgentServiceError
 from app.core.logging import configure_logging
+from app.models.requests import RunRequest, RunResponse
 from common.http_client import TracedHttpClient
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from llm_sandbox import SandboxSession  # type: ignore[import-untyped]
 
 logger = configure_logging()
 
@@ -184,6 +187,46 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _build_script(code: str, data: dict[str, Any]) -> str:
+    prefix = f"import json\nenv_data = json.loads({repr(json.dumps(data))})\n\n"
+    return prefix + code
+
+
+@app.post("/run", response_model=RunResponse)
+def run_python(request: RunRequest) -> RunResponse:
+    """Executes the provided code within the sandbox session enforcing timeouts."""
+    script = _build_script(request.code, request.data)
+
+    docker_kwargs = {
+        "mem_limit": settings.sandbox.memory_limit,
+        "nano_cpus": int(settings.sandbox.cpus * 1e9),
+        "network_disabled": settings.sandbox.network_disabled,
+        "user": "1000:1000",
+    }
+
+    try:
+        with SandboxSession(
+            lang="python",
+            image=settings.sandbox.image,
+            keep_template=False,
+            execution_timeout=settings.sandbox.timeout_seconds,
+            **docker_kwargs,
+        ) as session:
+            result = session.run(script)
+            return RunResponse(
+                stdout=result.stdout,
+                stderr=getattr(result, "error", ""),
+                exit_code=getattr(result, "exit_code", 0),
+            )
+    except Exception as e:
+        logger.error("sandbox_execution_failed", error=str(e), exc_info=True)
+        return RunResponse(
+            stdout=result.stdout,
+            stderr=f"Sandbox Error: {str(e)}",
+            exit_code=1,
+        )
 
 
 def _generate_request_id() -> str:

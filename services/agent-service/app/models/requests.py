@@ -20,3 +20,14 @@ class ToolExecutionRequest(BaseModel):
 
     tool_name: str = Field(..., description="Name of the tool to execute")
     parameters: dict[str, Any] = Field(..., description="Tool parameters")
+
+
+class RunRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=50_000)
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunResponse(BaseModel):
+    stdout: str
+    stderr: str
+    exit_code: int

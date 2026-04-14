@@ -86,6 +86,7 @@ class SandboxConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     image: str = Field(default="agent-sandbox-data-science")
     timeout_seconds: int = Field(default=10, ge=1, le=60)
+    runner_url: str = Field(default="http://sandbox-runner:8080")
     memory_limit: str = Field(
         default="256m",
         pattern=r"^[1-9]\d*[bBkKmMgG]$",
