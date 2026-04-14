@@ -56,6 +56,17 @@ RAG_TOOL_NAMES = {
     "get_search_tags_catalog",
 }
 
+VERBOSE_STEPS = os.getenv("EVAL_VERBOSE", "1") not in {"0", "false", "False"}
+
+
+def _step(message: str, **details: Any) -> None:
+    """Print/log a single evaluation step with compact key results."""
+    payload = ", ".join(f"{key}={value}" for key, value in details.items())
+    line = f"[STEP] {message}" + (f" | {payload}" if payload else "")
+    logger.info("eval_step", message=message, **details)
+    if VERBOSE_STEPS:
+        print(line)
+
 
 def _get_agent_params() -> dict[str, Any]:
     """Get evaluation runtime params from environment."""
@@ -160,6 +171,12 @@ def _extract_usage_from_response(
     per_tool: list[dict[str, Any]] = []
     all_chunk_ids: list[str] = []
 
+    _step(
+        "extract_usage_start",
+        has_tool_executions=isinstance(tool_executions, list),
+        tool_execution_count=len(tool_executions) if isinstance(tool_executions, list) else 0,
+    )
+
     if isinstance(tool_executions, list):
         for tool_execution in tool_executions:
             if not isinstance(tool_execution, dict):
@@ -169,35 +186,44 @@ def _extract_usage_from_response(
             if not isinstance(tool_name, str) or tool_name not in RAG_TOOL_NAMES:
                 continue
 
-            raw = tool_execution.get("result")
-            # Витягуємо словник з рядка через ast.literal_eval
-            # Знаходимо частину після 'data='
-            match = re.search(r"data=(\{.*\})\s+error=", raw, re.DOTALL)
-            if match:
-                data_str = match.group(1)
-                data = ast.literal_eval(data_str)
-                results = data["result"]
-                # for item in results:
-                #     print("ID:", item["id"])
-                #     print("Content:", item["content"][:100], "...")
-                #     print("Similarity:", item["cosine_similarity"])
-                #     print("Section:", item["metadata"].get("section_title"))
-                #     print("Subsection:", item["metadata"].get("subsection_title"))
-                #     print("---")
+            raw_result = tool_execution.get("result")
+            parsed_result: Any = raw_result
 
-            # documents = _collect_documents(tool_execution.get("result"))
-            documents = _collect_documents(results)
+            if isinstance(raw_result, str):
+                match = re.search(r"data=(\{.*\})\s+error=", raw_result, re.DOTALL)
+                if match:
+                    try:
+                        parsed_result = ast.literal_eval(match.group(1)).get("result")
+                        _step("tool_result_parsed_from_string", tool_name=tool_name, parsed=True)
+                    except (SyntaxError, ValueError, AttributeError) as parse_error:
+                        _step(
+                            "tool_result_parse_failed",
+                            tool_name=tool_name,
+                            error=str(parse_error),
+                        )
+                else:
+                    _step("tool_result_parse_skipped", tool_name=tool_name, reason="regex_no_match")
+
+            documents = _collect_documents(parsed_result)
             resolved_ids: list[str] = []
             unresolved_ids: list[str] = []
 
             for document in documents:
-                resolved_chunk_id, _ = resolve_document_chunk_id(document, chunk_index)
+                resolved_chunk_id, resolution_strategy = resolve_document_chunk_id(
+                    document, chunk_index
+                )
                 if resolved_chunk_id is None:
                     raw_id = document.get("id")
                     if isinstance(raw_id, str) and raw_id.strip():
                         unresolved_ids.append(raw_id.strip())
                     continue
                 resolved_ids.append(resolved_chunk_id)
+                _step(
+                    "document_resolved",
+                    tool_name=tool_name,
+                    chunk_id=resolved_chunk_id,
+                    strategy=resolution_strategy,
+                )
 
             deduped_resolved = _dedupe_preserve_order(resolved_ids)
             all_chunk_ids.extend(deduped_resolved)
@@ -210,6 +236,13 @@ def _extract_usage_from_response(
                     "error": tool_execution.get("error"),
                 }
             )
+            _step(
+                "tool_processed",
+                tool_name=tool_name,
+                documents=len(documents),
+                resolved=len(deduped_resolved),
+                unresolved=len(unresolved_ids),
+            )
 
     if not all_chunk_ids:
         citations = response_payload.get("citations")
@@ -220,6 +253,7 @@ def _extract_usage_from_response(
                 chunk_id = citation.get("chunk_id")
                 if isinstance(chunk_id, str) and chunk_id.strip():
                     all_chunk_ids.append(chunk_id.strip())
+            _step("usage_fallback_to_citations", citation_count=len(citations))
 
     used_rag_tools = [
         tool_info["tool_name"]
@@ -227,8 +261,15 @@ def _extract_usage_from_response(
         if isinstance(tool_info.get("tool_name"), str)
     ]
 
+    deduped_ids = _dedupe_preserve_order(all_chunk_ids)
+    _step(
+        "extract_usage_done",
+        retrieved_ids=len(deduped_ids),
+        used_tools=len(used_rag_tools),
+    )
+
     return {
-        "retrieved_ids": _dedupe_preserve_order(all_chunk_ids),
+        "retrieved_ids": deduped_ids,
         "per_tool": per_tool,
         "used_rag_tools": _dedupe_preserve_order(used_rag_tools),
     }
@@ -246,15 +287,26 @@ async def _run_agent_query(
         "max_iterations": max_iterations,
     }
 
+    _step("agent_request_start", query=query, max_iterations=max_iterations)
     start_time = time.perf_counter()
     response = await client.post(analyze_path, json=payload)
     latency_ms = (time.perf_counter() - start_time) * 1000
 
+    _step(
+        "agent_request_done",
+        status_code=response.status_code,
+        latency_ms=round(latency_ms, 2),
+    )
     response.raise_for_status()
     response_payload = response.json()
     if not isinstance(response_payload, dict):
         raise ValueError("Agent analyze response is not a JSON object")
 
+    _step(
+        "agent_response_parsed",
+        status=response_payload.get("status"),
+        tools_used=len(response_payload.get("tools_used", [])),
+    )
     return response_payload, latency_ms
 
 
@@ -426,6 +478,7 @@ async def run_evaluation() -> int:
     Returns:
         Exit code: 0 if all tests pass, 1 if any test fails.
     """
+    _step("evaluation_start")
     configure_logging(service_name="retrieval_evaluation")
 
     k = int(os.getenv("RETRIEVAL_K", "10"))
@@ -438,14 +491,25 @@ async def run_evaluation() -> int:
     agent_params = _get_agent_params()
     analyze_path = _normalize_path(str(agent_params["analyze_path"]))
 
-    golden_set_path = Path(__file__).parent / "golden_set_converted4.json"
+    golden_set_path = Path(__file__).parent / "golden_set_converted3.json"
     enriched_path = Path(__file__).parent / "ULTIMATE_BOOK_DATA_enriched.json"
     content_map = _load_content_map(enriched_path)
     chunk_index = load_chunk_resolution_index(enriched_path)
 
+    _step(
+        "runtime_config_loaded",
+        k=k,
+        threshold=threshold,
+        managed_services=agent_params["managed_services"],
+        agent_url=agent_params["base_url"],
+        rag_url=agent_params["rag_base_url"],
+        chunk_map_size=len(chunk_index.uuid_to_chunk_id),
+    )
+
     logger.info("loading_golden_set", path=str(golden_set_path))
     test_cases = load_golden_set(golden_set_path)
     logger.info("golden_set_loaded", count=len(test_cases))
+    _step("golden_set_ready", test_cases=len(test_cases))
 
     evaluation_results: list[dict[str, Any]] = []
     all_metrics: list[RetrievalMetrics] = []
@@ -456,12 +520,14 @@ async def run_evaluation() -> int:
     print("=" * 60)
 
     project_root = Path(__file__).resolve().parents[4]
+    _step("managed_service_stack_start")
     with ManagedServiceStack(
         project_root=project_root,
         start_services=bool(agent_params["managed_services"]),
         rag_base_url=str(agent_params["rag_base_url"]),
         agent_base_url=str(agent_params["base_url"]),
     ):
+        _step("managed_service_stack_ready")
         async with httpx.AsyncClient(
             base_url=str(agent_params["base_url"]), timeout=300.0
         ) as client:
@@ -469,9 +535,16 @@ async def run_evaluation() -> int:
                 queries_to_test = [case.base_query] + case.paraphrases
                 case_results: list[dict[str, Any]] = []
                 expected_chunk_ids = [chunk.chunk_id for chunk in case.expected_chunks]
+                _step(
+                    "case_start",
+                    case_id=case.id,
+                    queries=len(queries_to_test),
+                    expected_chunks=len(expected_chunk_ids),
+                )
 
                 for query in queries_to_test:
                     query_type = "base_query" if query == case.base_query else "paraphrase"
+                    _step("query_start", case_id=case.id, query_type=query_type)
 
                     try:
                         agent_response, latency_ms = await _run_agent_query(
@@ -491,6 +564,9 @@ async def run_evaluation() -> int:
                             query_type=query_type,
                             error=str(exc),
                         )
+                        _step(
+                            "query_failed", case_id=case.id, query_type=query_type, error=str(exc)
+                        )
                         metrics = _build_metrics([], expected_chunk_ids, k, latency_ms=0.0)
                         usage = {
                             "retrieved_ids": [],
@@ -502,6 +578,15 @@ async def run_evaluation() -> int:
 
                     all_metrics.append(metrics)
                     _print_metrics(case.id, query, metrics, threshold)
+                    _step(
+                        "query_done",
+                        case_id=case.id,
+                        query_type=query_type,
+                        retrieved=len(usage["retrieved_ids"]),
+                        recall=round(metrics.recall_at_k, 4),
+                        precision=round(metrics.precision_at_k, 4),
+                        passed=metrics.recall_at_k >= threshold,
+                    )
 
                     case_results.append(
                         {
@@ -523,6 +608,7 @@ async def run_evaluation() -> int:
                     / len(case_results),
                     4,
                 )
+                _step("case_done", case_id=case.id, avg_recall=avg_recall)
 
                 evaluation_results.append(
                     {
@@ -545,6 +631,12 @@ async def run_evaluation() -> int:
     summary_stats["pass_rate"] = round(
         summary_stats["passed_queries"] / len(all_metrics) if all_metrics else 0.0,
         4,
+    )
+    _step(
+        "summary_ready",
+        total_queries=summary_stats["total_queries"],
+        passed_queries=summary_stats["passed_queries"],
+        pass_rate=summary_stats["pass_rate"],
     )
 
     config = {
@@ -572,6 +664,7 @@ async def run_evaluation() -> int:
     print(f"Error report saved to: {error_report_file}")
 
     failed_count = sum(1 for metric in all_metrics if metric.recall_at_k < threshold)
+    _step("evaluation_done", failed_queries=failed_count)
     return 1 if failed_count > 0 else 0
 
 
