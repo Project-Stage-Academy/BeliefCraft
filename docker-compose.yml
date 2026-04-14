@@ -146,7 +146,8 @@ services:
       SANDBOX_TIMEOUT_SECONDS: "10"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./services/sandbox-runner/app:/app/app
+      - ./services/sandbox-runner/app:/app/services/sandbox-runner/app
+      - ./packages/common:/app/packages/common
     expose:
       - "8080"
     depends_on:
