@@ -6,6 +6,7 @@ from typing import Any, Literal, cast
 
 from app.config_load import settings
 from app.core.exceptions import AgentExecutionError
+from app.models.agent_state import merge_token_usage
 from app.models.env_sub_agent_plans import PlannedToolCall, WarehousePlan
 from app.models.env_sub_agent_state import ReWOOState, create_initial_state
 from app.prompts.env_sub_agent_system_prompts import (
@@ -93,26 +94,11 @@ class EnvSubAgent(BaseAgent):
         ]
 
         try:
-<<<<<<< #168-environment-information-solver-summarizer
-            plan_response = await self.llm.structured_completion(
-                messages=messages,
-                schema=WarehousePlan,
-                include_usage=True,
-            )
-            if isinstance(plan_response, dict) and "result" in plan_response:
-                plan_data = plan_response["result"]
-                planner_tokens = plan_response.get("tokens", {}).get("total", 0)
-            else:
-                plan_data = plan_response
-                planner_tokens = 0
-            current_tokens = state.get("total_tokens", 0)
-=======
             # 2. Call LLM using structured output with the Pydantic schema
             response = await self.llm.structured_completion(messages=messages, schema=WarehousePlan)
             plan_data = response["parsed"]
             model_id = response["model_id"]
             tokens = response["tokens"]
->>>>>>> main
 
             if isinstance(plan_data, dict):
                 plan_data = WarehousePlan(**plan_data)
@@ -123,14 +109,15 @@ class EnvSubAgent(BaseAgent):
                 planned_tools_count=len(cast(WarehousePlan, plan_data).tool_calls),
             )
 
+            token_usage = merge_token_usage(
+                state.get("token_usage", {}),
+                {model_id: tokens},
+            )
+
             return {
                 "plan": plan_data,
                 "status": "executing",
-<<<<<<< #168-environment-information-solver-summarizer
-                "total_tokens": current_tokens + planner_tokens,
-=======
-                "token_usage": {model_id: tokens},
->>>>>>> main
+                "token_usage": token_usage,
             }
 
         except Exception as e:
@@ -217,7 +204,6 @@ class EnvSubAgent(BaseAgent):
 
         return {"observations": observations, "status": "solving"}
 
-<<<<<<< #168-environment-information-solver-summarizer
     async def _solve_node(self, state: ReWOOState) -> dict[str, Any]:
         """Distill raw executor observations into a clean factual summary."""
         request_id = state.get("request_id", "unknown")
@@ -269,7 +255,10 @@ class EnvSubAgent(BaseAgent):
             response = await self.solver_llm.chat_completion(messages=messages)
             summary = response["message"]["content"].strip()
             tokens_used = response["tokens"]["total"]
-            current_tokens = state.get("total_tokens", 0)
+            token_usage = merge_token_usage(
+                state.get("token_usage", {}),
+                {response["model_id"]: response["tokens"]},
+            )
 
             if summary.startswith("```"):
                 lines = summary.split("\n")
@@ -300,7 +289,7 @@ class EnvSubAgent(BaseAgent):
                 "state_summary": summary,
                 "status": "completed",
                 "completed_at": datetime.now(UTC),
-                "total_tokens": current_tokens + tokens_used,
+                "token_usage": token_usage,
             }
 
         except Exception as e:
@@ -316,9 +305,10 @@ class EnvSubAgent(BaseAgent):
                 "state_summary": f"- Solver processing failed: {type(e).__name__}",
                 "status": "failed",
                 "completed_at": datetime.now(UTC),
-                "total_tokens": state.get("total_tokens", 0),
+                "token_usage": state.get("token_usage", {}),
                 "error": str(e),
             }
+
     @staticmethod
     def _ensure_bullets(text: str) -> str:
         """Convert free-form text into one-fact-per-line bullet points."""
@@ -334,11 +324,6 @@ class EnvSubAgent(BaseAgent):
             return f"- {text.strip()}"
 
         return "\n".join(bullets)
-=======
-    def _solve_node(self, state: ReWOOState) -> dict[str, Any]:
-        """Solver node: Solve a problem based on agent observations."""
-        return {}
->>>>>>> main
 
     async def run(self, agent_query: str, **kwargs: Any) -> ReWOOState:
         """Run the ReWOO loop for an agent query.

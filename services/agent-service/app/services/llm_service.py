@@ -291,13 +291,7 @@ class LLMService:
         self,
         messages: list[dict[str, Any]],
         schema: Any,
-<<<<<<< #168-environment-information-solver-summarizer
-        *,
-        include_usage: bool = False,
-    ) -> Any:
-=======
     ) -> dict[str, Any]:
->>>>>>> main
         """
         Invoke model with native structured output enforcement.
 
@@ -319,23 +313,6 @@ class LLMService:
             chain = self.llm.with_structured_output(schema, include_raw=True)
             result = await chain.ainvoke(lc_messages)
 
-<<<<<<< #168-environment-information-solver-summarizer
-            parsed_result = result.get("parsed") if isinstance(result, dict) else result
-            raw_message = result.get("raw") if isinstance(result, dict) else None
-            usage_metadata = getattr(raw_message, "usage_metadata", {}) or {}
-            prompt_tokens = usage_metadata.get("input_tokens", 0)
-            completion_tokens = usage_metadata.get("output_tokens", 0)
-            tokens = {
-                "prompt": prompt_tokens,
-                "completion": completion_tokens,
-                "total": prompt_tokens + completion_tokens,
-            }
-
-            logger.info("llm_structured_response", tokens=tokens["total"])
-            if include_usage:
-                return {"result": parsed_result, "tokens": tokens}
-            return parsed_result
-=======
             raw_response = result["raw"]  # type: ignore
             usage_metadata = raw_response.usage_metadata or {}
             prompt_tokens = usage_metadata.get("input_tokens", 0)
@@ -367,7 +344,6 @@ class LLMService:
                 "model_id": self.model_id,
                 "tokens": tokens,
             }
->>>>>>> main
 
         except LLMServiceError:
             raise

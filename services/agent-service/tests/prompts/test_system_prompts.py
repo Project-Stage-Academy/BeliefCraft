@@ -1,10 +1,5 @@
-<<<<<<< #168-environment-information-solver-summarizer
-from app.models.agent_state import ThoughtStep
-
-=======
 from app.models import create_initial_state
-
->>>>>>> main
+from app.models.agent_state import ThoughtStep
 from app.prompts.system_prompts import (
     REACT_LOOP_PROMPT_END,
     REACT_LOOP_PROMPT_START,
@@ -307,9 +302,10 @@ class TestFormatReactPromptWithThoughtSteps:
 
         result = format_react_prompt(state)
 
-        assert '<action tool="call_env_sub_agent">' in result
-        assert "<observation>" in result
-        assert "Found 2 recent outbound moves" in result
+        result_str = "\n".join(result)
+        assert '<action tool="call_env_sub_agent">' in result_str
+        assert "<observation>" in result_str
+        assert "Found 2 recent outbound moves" in result_str
 
 
 class TestFormatReactPromptMessageEdgeCases:

@@ -50,20 +50,24 @@ def _make_lc_tool(name: str, result: object) -> MagicMock:
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_distills_inventory_discrepancy(agent: EnvSubAgent) -> None:
     agent.llm.structured_completion = AsyncMock(
-        return_value=WarehousePlan(
-            tool_calls=[
-                PlannedToolCall(
-                    rationale="Need system movement history",
-                    tool_name="list_inventory_moves",
-                    arguments={"product_id": "SKU-1"},
-                ),
-                PlannedToolCall(
-                    rationale="Need physical observation snapshot",
-                    tool_name="get_observed_inventory_snapshot",
-                    arguments={"quality_status_in": ["good"]},
-                ),
-            ]
-        )
+        return_value={
+            "parsed": WarehousePlan(
+                tool_calls=[
+                    PlannedToolCall(
+                        rationale="Need system movement history",
+                        tool_name="list_inventory_moves",
+                        arguments={"product_id": "SKU-1"},
+                    ),
+                    PlannedToolCall(
+                        rationale="Need physical observation snapshot",
+                        tool_name="get_observed_inventory_snapshot",
+                        arguments={"quality_status_in": ["good"]},
+                    ),
+                ]
+            ),
+            "model_id": "planner-model",
+            "tokens": {"prompt": 10, "completion": 5, "total": 15},
+        }
     )
 
     inventory_result = MagicMock()
@@ -114,6 +118,7 @@ async def test_env_sub_agent_run_distills_inventory_discrepancy(agent: EnvSubAge
             },
             "tool_calls": [],
             "finish_reason": "stop",
+            "model_id": "solver-model",
             "tokens": {"prompt": 20, "completion": 12, "total": 32},
         }
     )
@@ -130,7 +135,7 @@ async def test_env_sub_agent_run_distills_inventory_discrepancy(agent: EnvSubAge
     assert "123e4567-e89b-12d3-a456-426614174000" not in final_state["state_summary"]
     assert "raw JSON" not in final_state["state_summary"]
     assert final_state["completed_at"] is not None
-    assert final_state["total_tokens"] == 32
+    assert final_state["token_usage"]["solver-model"]["total"] == 32
 
 
 # ===================================================================================#
@@ -139,20 +144,24 @@ async def test_env_sub_agent_run_distills_inventory_discrepancy(agent: EnvSubAge
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_distills_device_health_findings(agent: EnvSubAgent) -> None:
     agent.llm.structured_completion = AsyncMock(
-        return_value=WarehousePlan(
-            tool_calls=[
-                PlannedToolCall(
-                    rationale="Need device health information",
-                    tool_name="get_device_health_summary",
-                    arguments={"warehouse_id": "WH-1"},
-                ),
-                PlannedToolCall(
-                    rationale="Need anomaly detection results",
-                    tool_name="get_device_anomalies",
-                    arguments={"warehouse_id": "WH-1", "window": 24},
-                ),
-            ]
-        )
+        return_value={
+            "parsed": WarehousePlan(
+                tool_calls=[
+                    PlannedToolCall(
+                        rationale="Need device health information",
+                        tool_name="get_device_health_summary",
+                        arguments={"warehouse_id": "WH-1"},
+                    ),
+                    PlannedToolCall(
+                        rationale="Need anomaly detection results",
+                        tool_name="get_device_anomalies",
+                        arguments={"warehouse_id": "WH-1", "window": 24},
+                    ),
+                ]
+            ),
+            "model_id": "planner-model",
+            "tokens": {"prompt": 10, "completion": 5, "total": 15},
+        }
     )
 
     health_result = MagicMock()
@@ -211,6 +220,7 @@ async def test_env_sub_agent_run_distills_device_health_findings(agent: EnvSubAg
             },
             "tool_calls": [],
             "finish_reason": "stop",
+            "model_id": "solver-model",
             "tokens": {"prompt": 18, "completion": 14, "total": 32},
         }
     )
@@ -227,7 +237,7 @@ async def test_env_sub_agent_run_distills_device_health_findings(agent: EnvSubAg
     assert "anomaly" in final_state["state_summary"].lower()
     assert "sensor-abc-123" not in final_state["state_summary"]
     assert final_state["completed_at"] is not None
-    assert final_state["total_tokens"] == 32
+    assert final_state["token_usage"]["solver-model"]["total"] == 32
 
 
 # ==============================================================================#
@@ -236,15 +246,19 @@ async def test_env_sub_agent_run_distills_device_health_findings(agent: EnvSubAg
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_handles_solver_failure(agent: EnvSubAgent) -> None:
     agent.llm.structured_completion = AsyncMock(
-        return_value=WarehousePlan(
-            tool_calls=[
-                PlannedToolCall(
-                    rationale="Need inventory movement history",
-                    tool_name="list_inventory_moves",
-                    arguments={"product_id": "SKU-1"},
-                )
-            ]
-        )
+        return_value={
+            "parsed": WarehousePlan(
+                tool_calls=[
+                    PlannedToolCall(
+                        rationale="Need inventory movement history",
+                        tool_name="list_inventory_moves",
+                        arguments={"product_id": "SKU-1"},
+                    )
+                ]
+            ),
+            "model_id": "planner-model",
+            "tokens": {"prompt": 10, "completion": 5, "total": 15},
+        }
     )
 
     inventory_result = MagicMock()
@@ -280,7 +294,13 @@ async def test_env_sub_agent_run_handles_solver_failure(agent: EnvSubAgent) -> N
 
 @pytest.mark.asyncio
 async def test_env_sub_agent_run_handles_empty_plan(agent: EnvSubAgent) -> None:
-    agent.llm.structured_completion = AsyncMock(return_value=WarehousePlan(tool_calls=[]))
+    agent.llm.structured_completion = AsyncMock(
+        return_value={
+            "parsed": WarehousePlan(tool_calls=[]),
+            "model_id": "planner-model",
+            "tokens": {"prompt": 10, "completion": 5, "total": 15},
+        }
+    )
 
     final_state = await agent.run("Check inventory discrepancy for SKU-1")
 

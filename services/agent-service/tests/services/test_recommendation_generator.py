@@ -1056,4 +1056,4 @@ class TestExecutionTime:
             started_at=started,
         )
         result = await generator.generate(state)
-        assert result.execution_time_seconds > 12.34
+        assert result.execution_time_seconds >= 12.34

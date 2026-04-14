@@ -17,6 +17,7 @@ from app.prompts.system_prompts import (
     format_react_prompt,
 )
 from app.services.base_agent import BaseAgent
+from app.services.message_parser import MessageParser
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 from langchain_core.messages import AIMessage
@@ -101,6 +102,10 @@ class ReActAgent(BaseAgent):
         if token_usage_deltas:
             result["token_usage"] = token_usage_deltas
         return result
+
+    @staticmethod
+    def _count_tool_executions(messages: list[Any]) -> int:
+        return len(MessageParser.extract_tool_executions(messages))
 
     async def _think_node(self, state: AgentState) -> dict[str, Any]:
         """Reasoning step: Claude analyzes the situation and decides next action.

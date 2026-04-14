@@ -154,10 +154,10 @@ class TestPlanNode:
         assert result["completed_at"] is not None
 
     @pytest.mark.asyncio
-    async def test_plan_node_accumulates_existing_total_tokens(
+    async def test_plan_node_accumulates_existing_token_usage(
         self, agent: EnvSubAgent, initial_state: ReWOOState
     ) -> None:
-        initial_state["total_tokens"] = 10
+        initial_state["token_usage"] = {"prev-model": {"total": 10}}
         mock_plan = WarehousePlan(
             tool_calls=[
                 PlannedToolCall(
@@ -167,7 +167,8 @@ class TestPlanNode:
         )
         agent.llm.structured_completion = AsyncMock(
             return_value={
-                "result": mock_plan,
+                "parsed": mock_plan,
+                "model_id": "planner-model",
                 "tokens": {"prompt": 6, "completion": 3, "total": 9},
             }
         )
@@ -175,7 +176,8 @@ class TestPlanNode:
         result = await agent._plan_node(initial_state)
 
         assert result["status"] == "executing"
-        assert result["total_tokens"] == 19
+        assert result["token_usage"]["prev-model"]["total"] == 10
+        assert result["token_usage"]["planner-model"]["total"] == 9
 
 
 # ---------------------------------------------------------------------------
@@ -305,13 +307,12 @@ class TestSolveNode:
                 "response": {"status": "success", "data": {"moves": [{"quantity": 10}]}},
             }
         }
-        initial_state["total_tokens"] = 12
-
         agent.solver_llm.chat_completion = AsyncMock(
             return_value={
                 "message": {"role": "assistant", "content": "- 10 units moved for SKU-1"},
                 "tool_calls": [],
                 "finish_reason": "stop",
+                "model_id": "solver-model",
                 "tokens": {"prompt": 8, "completion": 6, "total": 14},
             }
         )
@@ -320,7 +321,7 @@ class TestSolveNode:
 
         assert result["status"] == "completed"
         assert result["state_summary"] == "- 10 units moved for SKU-1"
-        assert result["total_tokens"] == 26
+        assert result["token_usage"]["solver-model"]["total"] == 14
         solver_messages = agent.solver_llm.chat_completion.call_args.kwargs["messages"]
         solver_prompt = solver_messages[1]["content"]
         assert "inventory_moves_0" in solver_prompt
@@ -352,6 +353,7 @@ class TestSolveNode:
                 "message": {"role": "assistant", "content": "- Sanitized summary"},
                 "tool_calls": [],
                 "finish_reason": "stop",
+                "model_id": "solver-model",
                 "tokens": {"prompt": 8, "completion": 6, "total": 14},
             }
         )

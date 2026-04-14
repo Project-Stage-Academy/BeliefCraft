@@ -317,16 +317,22 @@ class TestStructuredCompletion:
             schema={"type": "object"},
         )
 
-        assert result == {"field": "value"}
+        assert result["parsed"] == {"field": "value"}
+        assert result["model_id"] == llm_service.model_id
+        assert result["tokens"] == {
+            "prompt": 0,
+            "completion": 0,
+            "total": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        }
         llm_service.llm.with_structured_output.assert_called_once_with(
             {"type": "object"},
             include_raw=True,
         )
 
     @pytest.mark.asyncio()
-    async def test_returns_parsed_result_with_token_usage_when_requested(
-        self, llm_service: LLMService
-    ) -> None:
+    async def test_returns_parsed_result_with_token_usage(self, llm_service: LLMService) -> None:
         raw_message = AIMessage(
             content="",
             usage_metadata={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
@@ -340,11 +346,17 @@ class TestStructuredCompletion:
         result = await llm_service.structured_completion(
             messages=[{"role": "user", "content": "Plan"}],
             schema={"type": "object"},
-            include_usage=True,
         )
 
-        assert result["result"] == {"field": "value"}
-        assert result["tokens"] == {"prompt": 11, "completion": 7, "total": 18}
+        assert result["parsed"] == {"field": "value"}
+        assert result["model_id"] == llm_service.model_id
+        assert result["tokens"] == {
+            "prompt": 11,
+            "completion": 7,
+            "total": 18,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        }
 
 
 class TestLLMServiceInit:
