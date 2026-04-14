@@ -116,7 +116,7 @@ services:
   sandbox-runner:
     build:
       context: .
-      dockerfile: services/sandbox-runner/Dockerfile
+      dockerfile: services/agent-service/Dockerfile.sandbox
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:

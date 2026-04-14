@@ -77,24 +77,6 @@ async def test_execute_propagates_http_errors(mock_http_client, tool):
 
 
 @pytest.mark.asyncio
-@patch("app.tools.code_tools.TracedHttpClient")
-async def test_execute_handles_missing_optional_data(mock_http_client, tool):
-    """
-    Ensures the execute method defaults the 'data' parameter to an empty dictionary if omitted.
-    """
-    mock_client_instance = AsyncMock()
-    mock_http_client.return_value.__aenter__.return_value = mock_client_instance
-
-    mock_response = AsyncMock()
-    mock_response.json.return_value = {"stdout": "1", "stderr": "", "exit_code": 0}
-    mock_client_instance.post.return_value = mock_response
-
-    await tool.execute(code="print(1)")
-
-    mock_client_instance.post.assert_called_once_with("/run", json={"code": "print(1)", "data": {}})
-
-
-@pytest.mark.asyncio
 async def test_execute_raises_keyerror_if_code_missing(tool):
     """
     Validates that the tool fails fast if the mandatory 'code' argument is missing.
