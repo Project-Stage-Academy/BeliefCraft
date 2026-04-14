@@ -168,8 +168,8 @@ class CallRAGSubAgentTool(BaseTool):
             result_docs = [all_docs[doc_id] for doc_id in final_ids if doc_id in all_docs]
         else:
             # subagent failed to specify relevant documents
-            # Fallback to return all unique documents found
-            result_docs = list(all_docs.values())
+            # Return nothing
+            result_docs = []
 
         return {
             "documents": result_docs,
