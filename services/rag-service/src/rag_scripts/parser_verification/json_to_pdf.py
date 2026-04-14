@@ -156,10 +156,7 @@ class PDFRenderer:
             chunk_type = chunk.chunk_type or "unknown"
             if chunk_type != "text":
                 chunk_type += f":{chunk.entity_id}"
-            meta = (
-                f"ID: {chunk.chunk_id} | Type: {chunk_type} | "
-                f"Hierarchy: {' > '.join(hierarchy)}"
-            )
+            meta = f"ID: {chunk.chunk_id} | Type: {chunk_type} | Hierarchy: {' > '.join(hierarchy)}"
             story.append(Paragraph(meta, self.meta_style))
 
             html_content = self.parse_content_to_html(chunk.content)

@@ -23,7 +23,13 @@ from .constants import (
     TRAVERSE_TYPE_TO_REFERENCE_FIELD,
     CodeEntityRef,
 )
-from .models import Document, EntityType, MetadataFilter, MetadataFilterOperator, MetadataFilters
+from .models import (
+    Document,
+    EntityType,
+    MetadataFilter,
+    MetadataFilterOperator,
+    MetadataFilters,
+)
 
 if TYPE_CHECKING:
     from .config import Settings

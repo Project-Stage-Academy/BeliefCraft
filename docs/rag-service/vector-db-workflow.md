@@ -43,7 +43,7 @@ docker compose up weaviate -d
 Use the `embed_chunks.py` script to process a JSON file containing document chunks and store them in Weaviate.
 
 ```bash
-PYTHONPATH=services/rag-service/src uv run services/rag-service/src/scripts/embed_chunks.py path/to/your/chunks.json
+PYTHONPATH=services/rag-service/src uv run services/rag-service/src/rag_scripts/embed_chunks.py path/to/your/chunks.json
 ```
 
 **Options:**
@@ -60,7 +60,7 @@ To share your local data with other developers, create a filesystem backup.
 Run the following script to generate a backup named `backup_for_sharing`:
 
 ```bash
-PYTHONPATH=services/rag-service/src uv run services/rag-service/src/scripts/create_weaviate_backup.py
+PYTHONPATH=services/rag-service/src uv run services/rag-service/src/rag_scripts/create_weaviate_backup.py
 ```
 
 The backup will be stored in the `./.weaviate_backups/backup_for_sharing` directory.
@@ -80,5 +80,5 @@ If you received a backup from another developer:
 3. Run the restore script:
 
 ```bash
-PYTHONPATH=services/rag-service/src uv run services/rag-service/src/scripts/restore_weaviate_backup.py
+PYTHONPATH=services/rag-service/src uv run services/rag-service/src/rag_scripts/restore_weaviate_backup.py
 ```

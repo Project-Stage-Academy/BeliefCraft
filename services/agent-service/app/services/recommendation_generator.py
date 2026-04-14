@@ -1,13 +1,15 @@
 """Main recommendation generator – assembles structured agent responses from raw AgentState."""
 
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from app.models.agent_state import AgentState
+from app.models.agent_state import AgentState, merge_token_usage
 from app.models.responses import (
     AgentRecommendationResponse,
     Citation,
     CodeSnippet,
     Formula,
+    ModelTokenUsage,
     Recommendation,
 )
 from app.services.extractors.citation_extractor import CitationExtractor
@@ -62,7 +64,7 @@ class RecommendationGenerator:
         if not final_answer:
             return self._generate_fallback_response(agent_state)
 
-        structured = await self.final_answer_parser.parse(final_answer)
+        structured, parsing_token_usage = await self.final_answer_parser.parse(final_answer)
         task = structured.get("task") or "Analysis"
         analysis = structured.get("analysis") or final_answer
         algorithm = structured.get("algorithm")
@@ -85,6 +87,10 @@ class RecommendationGenerator:
             algorithm=algorithm,
             confidence=confidence,
         )
+
+        # Aggregate tokens including final answer parsing overhead
+        token_usage = merge_token_usage(agent_state.get("token_usage", {}), parsing_token_usage)
+
         execution_time = self._calc_execution_time(agent_state)
 
         response = AgentRecommendationResponse(
@@ -102,7 +108,7 @@ class RecommendationGenerator:
             confidence=confidence,
             reasoning_trace=reasoning_trace,
             iterations=iterations,
-            total_tokens=agent_state.get("total_tokens", 0),
+            token_usage={k: ModelTokenUsage(**v) for k, v in token_usage.items()},
             execution_time_seconds=execution_time,
             tools_used=list(set(tools_used)),
             warnings=warnings,
@@ -208,7 +214,9 @@ class RecommendationGenerator:
             status="failed",
             reasoning_trace=reasoning_trace,
             iterations=iterations,
-            total_tokens=agent_state.get("total_tokens", 0),
+            token_usage={
+                k: ModelTokenUsage(**v) for k, v in agent_state.get("token_usage", {}).items()
+            },
             execution_time_seconds=0.0,
             tools_used=[],
             warnings=[error_message],
@@ -223,9 +231,11 @@ class RecommendationGenerator:
 
     @staticmethod
     def _calc_execution_time(agent_state: AgentState) -> float:
-        """Calculate execution duration in seconds."""
-        completed_at = agent_state.get("completed_at")
+        """
+        Calculate execution duration in seconds.
+        Includes the agent loop and the recommendation generation overhead.
+        """
         started_at = agent_state.get("started_at")
-        if completed_at is not None and started_at is not None:
-            return (completed_at - started_at).total_seconds()
+        if started_at is not None:
+            return (datetime.now(UTC) - started_at).total_seconds()
         return 0.0

@@ -222,7 +222,7 @@ def print_report(report: dict[str, Any]) -> None:
         if data["gaps"]:
             print("Missing:")
             for g in data["gaps"]:
-                print(f"  - between {g['after']} and {g['before']}: " f"{', '.join(g['missing'])}")
+                print(f"  - between {g['after']} and {g['before']}: {', '.join(g['missing'])}")
         else:
             print("Missing: none")
 
@@ -233,7 +233,7 @@ def print_report(report: dict[str, Any]) -> None:
     if report["missing_titles"]:
         print(f"\n[MISSING TITLES] count={len(report['missing_titles'])}")
         for row in report["missing_titles"]:
-            print(f"  - chunk_id={row['chunk_id']} " f"{row['level']} number={row['number']}")
+            print(f"  - chunk_id={row['chunk_id']} {row['level']} number={row['number']}")
     else:
         print("\n[MISSING TITLES] none")
 

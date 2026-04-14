@@ -47,6 +47,7 @@ The service exposes the following tools via MCP:
 - `expand_graph_by_ids`: Retrieve linked entities for a set of document IDs.
 - `get_entity_by_number`: Precise lookup of entities (formulas, algorithms, etc.) by their unique number.
 - `get_related_code_definitions`: Follow code-definition references from document IDs (algorithms or examples) and return the related Python source code as an ordered string.
+- `get_search_tags_catalog`: Retrieve standardized concept and DB-table tags used to focus `search_knowledge_base` via `search_tags`.
 
 ## Observability
 

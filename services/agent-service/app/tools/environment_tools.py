@@ -147,7 +147,7 @@ class ListPurchaseOrdersTool(APIClientTool):
         return ToolMetadata(
             name="list_purchase_orders",
             description=(
-                "Get purchase orders with filters. " "Core entry point for inbound supply tracking."
+                "Get purchase orders with filters. Core entry point for inbound supply tracking."
             ),
             parameters={
                 "type": "object",
@@ -1012,7 +1012,7 @@ class GetObservedInventorySnapshotTool(APIClientTool):
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
-                            "Optional: Filter by quality status list " "(e.g., ['good', 'damaged'])"
+                            "Optional: Filter by quality status list (e.g., ['good', 'damaged'])"
                         ),
                     },
                 },

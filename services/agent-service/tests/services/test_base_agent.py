@@ -97,4 +97,4 @@ class TestBaseAgentLLMCommunication:
         result = await agent._call_llm(messages)
 
         assert result == {"message": "ok"}
-        agent.llm.chat_completion.assert_called_once_with(messages=messages)
+        agent.llm.chat_completion.assert_called_once_with(messages=messages, cache=None)

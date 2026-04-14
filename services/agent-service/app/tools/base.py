@@ -149,7 +149,7 @@ class BaseTool(ABC):
         """
         pass
 
-    async def run(self, **kwargs: Any) -> ToolResult:
+    async def run(self, **kwargs: Any) -> dict[str, Any]:
         """
         Wrapper that handles execution, timing, and error catching.
 
@@ -158,13 +158,13 @@ class BaseTool(ABC):
         - High-precision timing with perf_counter
         - Automatic error handling
         - Structured logging
-        - Consistent ToolResult format
+        - Consistent dictionary format (from ToolResult)
 
         Args:
             **kwargs: Parameters to pass to execute()
 
         Returns:
-            ToolResult with success status, data, and metadata
+            Dictionary with success status, data, and metadata
         """
         start_time = time.perf_counter()
 
@@ -188,7 +188,7 @@ class BaseTool(ABC):
 
             return ToolResult(
                 success=True, data=result, execution_time_ms=round(execution_time_ms, 2)
-            )
+            ).model_dump(mode="json")
 
         except Exception as e:
             execution_time_ms = (time.perf_counter() - start_time) * 1000
@@ -207,7 +207,7 @@ class BaseTool(ABC):
                 success=False,
                 error=f"{type(e).__name__}: {str(e)}",
                 execution_time_ms=round(execution_time_ms, 2),
-            )
+            ).model_dump(mode="json")
 
     def to_openai_function(self) -> dict[str, Any]:
         """
