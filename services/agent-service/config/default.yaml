@@ -40,4 +40,5 @@ react_agent:
   model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 env_sub_agent:
-  model_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  planner_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  solver_model_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"

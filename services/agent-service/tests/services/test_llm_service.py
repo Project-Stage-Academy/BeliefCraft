@@ -303,6 +303,62 @@ class TestExtractThought:
         assert result == "I should search the inventory database."
 
 
+class TestStructuredCompletion:
+    @pytest.mark.asyncio()
+    async def test_returns_parsed_result_by_default(self, llm_service: LLMService) -> None:
+        mock_chain = MagicMock()
+        mock_chain.ainvoke = AsyncMock(
+            return_value={"parsed": {"field": "value"}, "raw": AIMessage(content="")}
+        )
+        llm_service.llm.with_structured_output = MagicMock(return_value=mock_chain)
+
+        result = await llm_service.structured_completion(
+            messages=[{"role": "user", "content": "Plan"}],
+            schema={"type": "object"},
+        )
+
+        assert result["parsed"] == {"field": "value"}
+        assert result["model_id"] == llm_service.model_id
+        assert result["tokens"] == {
+            "prompt": 0,
+            "completion": 0,
+            "total": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        }
+        llm_service.llm.with_structured_output.assert_called_once_with(
+            {"type": "object"},
+            include_raw=True,
+        )
+
+    @pytest.mark.asyncio()
+    async def test_returns_parsed_result_with_token_usage(self, llm_service: LLMService) -> None:
+        raw_message = AIMessage(
+            content="",
+            usage_metadata={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+        )
+        mock_chain = MagicMock()
+        mock_chain.ainvoke = AsyncMock(
+            return_value={"parsed": {"field": "value"}, "raw": raw_message}
+        )
+        llm_service.llm.with_structured_output = MagicMock(return_value=mock_chain)
+
+        result = await llm_service.structured_completion(
+            messages=[{"role": "user", "content": "Plan"}],
+            schema={"type": "object"},
+        )
+
+        assert result["parsed"] == {"field": "value"}
+        assert result["model_id"] == llm_service.model_id
+        assert result["tokens"] == {
+            "prompt": 11,
+            "completion": 7,
+            "total": 18,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        }
+
+
 class TestLLMServiceInit:
     def test_uses_settings_values(self, mock_settings: MagicMock) -> None:
         # Patch settings directly
@@ -328,6 +384,27 @@ class TestLLMServiceInit:
 
             mock_chat_bedrock.assert_called_once_with(
                 client=mock_boto3.client.return_value,
+                model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                model_kwargs={
+                    "temperature": 0.0,
+                    "max_tokens": 4000,
+                },
+            )
+
+    def test_uses_explicit_model_id_as_is(self, mock_settings: MagicMock) -> None:
+        with (
+            patch("app.services.llm_service.settings", mock_settings),
+            patch("app.services.llm_service.boto3") as mock_boto3,
+            patch("app.services.llm_service.ChatBedrock") as mock_chat_bedrock,
+        ):
+            runtime_client = MagicMock()
+            mock_boto3.client.return_value = runtime_client
+            mock_chat_bedrock.return_value = MagicMock()
+
+            LLMService(model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0")
+
+            mock_chat_bedrock.assert_called_once_with(
+                client=runtime_client,
                 model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
                 model_kwargs={
                     "temperature": 0.0,

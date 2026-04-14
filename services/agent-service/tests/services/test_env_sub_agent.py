@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from app.config_load import settings
 from app.core.exceptions import AgentExecutionError
 from app.models.env_sub_agent_plans import PlannedToolCall, WarehousePlan
 from app.models.env_sub_agent_state import ReWOOState, create_initial_state
@@ -36,7 +37,10 @@ def mock_registry() -> MagicMock:
 
 @pytest.fixture
 def agent(mock_registry: MagicMock) -> EnvSubAgent:
-    with patch("app.services.base_agent.LLMService"):
+    with (
+        patch("app.services.base_agent.LLMService"),
+        patch("app.services.env_sub_agent.LLMService"),
+    ):
         return EnvSubAgent(tool_registry=mock_registry)
 
 
@@ -58,6 +62,20 @@ def test_initialization_requires_registry() -> None:
 def test_initialization_builds_graph(agent: EnvSubAgent) -> None:
     assert agent.graph is not None
     assert agent.system_prompt is not None
+
+
+def test_initialization_uses_separate_planner_and_solver_models(
+    mock_registry: MagicMock,
+) -> None:
+    with (
+        patch("app.services.base_agent.LLMService") as planner_llm_cls,
+        patch("app.services.env_sub_agent.LLMService") as solver_llm_cls,
+    ):
+        agent = EnvSubAgent(tool_registry=mock_registry)
+
+    planner_llm_cls.assert_called_once_with(model_id=settings.env_sub_agent.planner_model_id)
+    solver_llm_cls.assert_called_once_with(model_id=settings.env_sub_agent.solver_model_id)
+    assert agent.solver_llm is solver_llm_cls.return_value
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +151,33 @@ class TestPlanNode:
 
         assert result["status"] == "failed"
         assert "API Timeout" in result["error"]
+        assert result["completed_at"] is not None
+
+    @pytest.mark.asyncio
+    async def test_plan_node_accumulates_existing_token_usage(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        initial_state["token_usage"] = {"prev-model": {"total": 10}}
+        mock_plan = WarehousePlan(
+            tool_calls=[
+                PlannedToolCall(
+                    rationale="Need stock", tool_name="get_inventory", arguments={"wh": "A"}
+                )
+            ]
+        )
+        agent.llm.structured_completion = AsyncMock(
+            return_value={
+                "parsed": mock_plan,
+                "model_id": "planner-model",
+                "tokens": {"prompt": 6, "completion": 3, "total": 9},
+            }
+        )
+
+        result = await agent._plan_node(initial_state)
+
+        assert result["status"] == "executing"
+        assert result["token_usage"]["prev-model"]["total"] == 10
+        assert result["token_usage"]["planner-model"]["total"] == 9
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +196,7 @@ class TestExecuteNode:
 
         assert result["status"] == "failed"
         assert "No tools planned" in result["error"]
+        assert result["completed_at"] is not None
 
     @pytest.mark.asyncio
     async def test_execute_node_fails_on_empty_tool_calls(
@@ -161,6 +207,7 @@ class TestExecuteNode:
 
         assert result["status"] == "failed"
         assert "No tools planned" in result["error"]
+        assert result["completed_at"] is not None
 
     @pytest.mark.asyncio
     async def test_execute_node_concurrent_success(
@@ -238,9 +285,105 @@ class TestExecuteNode:
 # ---------------------------------------------------------------------------
 
 
-def test_solve_node_stub(agent: EnvSubAgent, initial_state: ReWOOState) -> None:
-    """Currently just a stub returning empty dict."""
-    assert agent._solve_node(initial_state) == {}
+class TestSolveNode:
+    @pytest.mark.asyncio
+    async def test_solve_node_returns_bulleted_fallback_without_observations(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        result = await agent._solve_node(initial_state)
+
+        assert result["status"] == "completed"
+        assert result["state_summary"].startswith("- ")
+        assert "Insufficient data" in result["state_summary"]
+
+    @pytest.mark.asyncio
+    async def test_solve_node_uses_chat_completion_and_tracks_tokens(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        initial_state["observations"] = {
+            "inventory_moves_0": {
+                "tool": "list_inventory_moves",
+                "arguments": {"sku": "SKU-1"},
+                "response": {"status": "success", "data": {"moves": [{"quantity": 10}]}},
+            }
+        }
+        agent.solver_llm.chat_completion = AsyncMock(
+            return_value={
+                "message": {"role": "assistant", "content": "- 10 units moved for SKU-1"},
+                "tool_calls": [],
+                "finish_reason": "stop",
+                "model_id": "solver-model",
+                "tokens": {"prompt": 8, "completion": 6, "total": 14},
+            }
+        )
+
+        result = await agent._solve_node(initial_state)
+
+        assert result["status"] == "completed"
+        assert result["state_summary"] == "- 10 units moved for SKU-1"
+        assert result["token_usage"]["solver-model"]["total"] == 14
+        solver_messages = agent.solver_llm.chat_completion.call_args.kwargs["messages"]
+        solver_prompt = solver_messages[1]["content"]
+        assert "inventory_moves_0" in solver_prompt
+
+    @pytest.mark.asyncio
+    async def test_solve_node_passes_raw_observations_to_solver_prompt(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        initial_state["observations"] = {
+            "inventory_moves_0": {
+                "tool": "list_inventory_moves",
+                "arguments": {"product_id": "04fc58b7-f457-4661-a916-3c3d0ac93cdf"},
+                "response": {
+                    "status": "success",
+                    "data": {
+                        "moves": [
+                            {
+                                "id": "123e4567-e89b-12d3-a456-426614174000",
+                                "to_location_id": "6901725d-1dbd-4146-a02e-2d7bc1111111",
+                            }
+                        ]
+                    },
+                },
+            }
+        }
+
+        agent.solver_llm.chat_completion = AsyncMock(
+            return_value={
+                "message": {"role": "assistant", "content": "- Sanitized summary"},
+                "tool_calls": [],
+                "finish_reason": "stop",
+                "model_id": "solver-model",
+                "tokens": {"prompt": 8, "completion": 6, "total": 14},
+            }
+        )
+
+        await agent._solve_node(initial_state)
+
+        solver_messages = agent.solver_llm.chat_completion.call_args.kwargs["messages"]
+        solver_prompt = solver_messages[1]["content"]
+
+        assert "04fc58b7-f457-4661-a916-3c3d0ac93cdf" in solver_prompt
+        assert "123e4567-e89b-12d3-a456-426614174000" in solver_prompt
+        assert "6901725d-1dbd-4146-a02e-2d7bc1111111" in solver_prompt
+        assert '"product_id": "04fc58b7-f457-4661-a916-3c3d0ac93cdf"' in solver_prompt
+        assert '"id": "123e4567-e89b-12d3-a456-426614174000"' in solver_prompt
+        assert '"to_location_id": "6901725d-1dbd-4146-a02e-2d7bc1111111"' in solver_prompt
+
+    @pytest.mark.asyncio
+    async def test_solve_node_surfaces_error_field_on_failure(
+        self, agent: EnvSubAgent, initial_state: ReWOOState
+    ) -> None:
+        initial_state["observations"] = {
+            "tool_0": {"tool": "get_inventory", "arguments": {}, "response": {"status": "success"}}
+        }
+        agent.solver_llm.chat_completion = AsyncMock(side_effect=RuntimeError("solver boom"))
+
+        result = await agent._solve_node(initial_state)
+
+        assert result["status"] == "failed"
+        assert result["error"] == "solver boom"
+        assert result["state_summary"].startswith("- Solver processing failed:")
 
 
 # ---------------------------------------------------------------------------

@@ -69,6 +69,12 @@ class AgentModelConfig(BaseModel):
     model_id: str
 
 
+class EnvSubAgentModelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    planner_model_id: str
+    solver_model_id: str
+
+
 class LangSmithConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tracing_v2: bool = Field(default=False)
@@ -88,4 +94,4 @@ class Settings(BaseSettings):
     langsmith: LangSmithConfig
 
     react_agent: AgentModelConfig
-    env_sub_agent: AgentModelConfig
+    env_sub_agent: EnvSubAgentModelConfig

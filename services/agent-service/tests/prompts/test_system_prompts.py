@@ -1,4 +1,5 @@
 from app.models import create_initial_state
+from app.models.agent_state import ThoughtStep
 from app.prompts.system_prompts import (
     REACT_LOOP_PROMPT_END,
     REACT_LOOP_PROMPT_START,
@@ -267,6 +268,44 @@ class TestFormatReactPromptWithThoughtSteps:
         assert '<action tool="get_inventory_data">' in result_str
         assert '<action tool="search_knowledge_base">' in result_str
         assert "chunk-1" in result_str
+
+    def test_langchain_message_history_includes_tool_observation(self) -> None:
+        thought = ThoughtStep(
+            thought="Need warehouse facts",
+            reasoning="Need environment evidence",
+            next_action="tool_use",
+        )
+        state = {
+            "iteration": 2,
+            "max_iterations": 10,
+            "user_query": "Summarize inventory moves for PHA-22602565",
+            "thoughts": [thought],
+            "tool_calls": [],
+            "messages": [
+                AIMessage(
+                    content="<thinking>Need warehouse facts</thinking>",
+                    tool_calls=[
+                        {
+                            "name": "call_env_sub_agent",
+                            "args": {"agent_query": "Summarize recent inventory moves"},
+                            "id": "tc_1",
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    tool_call_id="tc_1",
+                    name="call_env_sub_agent",
+                    content='{"summary": "- Found 2 recent outbound moves"}',
+                ),
+            ],
+        }
+
+        result = format_react_prompt(state)
+
+        result_str = "\n".join(result)
+        assert '<action tool="call_env_sub_agent">' in result_str
+        assert "<observation>" in result_str
+        assert "Found 2 recent outbound moves" in result_str
 
 
 class TestFormatReactPromptMessageEdgeCases:

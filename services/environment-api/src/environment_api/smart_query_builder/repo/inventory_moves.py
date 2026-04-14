@@ -63,6 +63,7 @@ def fetch_inventory_move_rows(
 ) -> Sequence[RowMapping]:
     tables = load_tables(session, _INVENTORY_MOVES_TABLES)
     moves = tables["inventory_moves"]
+    products = tables["products"]
     locations = tables["locations"]
 
     from_clause, conditions = _build_warehouse_filter_clause(
@@ -70,6 +71,7 @@ def fetch_inventory_move_rows(
         locations,
         moves,
     )
+    from_clause = from_clause.join(products, products.c.id == moves.c.product_id)
 
     stmt = (
         select(
@@ -91,7 +93,9 @@ def fetch_inventory_move_rows(
     )
 
     if request.product_id:
-        conditions.append(moves.c.product_id == request.product_id)
+        conditions.append(products.c.id == request.product_id)
+    if request.sku:
+        conditions.append(products.c.sku == request.sku)
     if request.move_type:
         conditions.append(moves.c.move_type == request.move_type)
     if request.from_ts:
@@ -173,9 +177,13 @@ def fetch_inventory_adjustments_summary(
 ) -> tuple[RowMapping, Sequence[RowMapping]]:
     tables = load_tables(session, _INVENTORY_MOVES_TABLES)
     moves = tables["inventory_moves"]
+    products = tables["products"]
     locations = tables["locations"]
 
     from_clause = moves.join(
+        products,
+        products.c.id == moves.c.product_id,
+    ).join(
         locations,
         or_(
             locations.c.id == moves.c.from_location_id,
@@ -188,7 +196,9 @@ def fetch_inventory_adjustments_summary(
     if request.warehouse_id:
         conditions.append(locations.c.warehouse_id == request.warehouse_id)
     if request.product_id:
-        conditions.append(moves.c.product_id == request.product_id)
+        conditions.append(products.c.id == request.product_id)
+    if request.sku:
+        conditions.append(products.c.sku == request.sku)
     if request.from_ts:
         conditions.append(moves.c.occurred_at >= request.from_ts)
     if request.to_ts:

@@ -1,6 +1,5 @@
 """System prompts and formatting utilities for the warehouse advisor ReAct agent."""
 
-import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -125,14 +124,6 @@ If you are ready to answer, start your response with "FINAL ANSWER:".
 
 Current iteration: {iteration}/{max_iterations}
 """
-
-
-def _format_thought_content(content: Any) -> str:
-    content_str = str(content)
-    match = re.search(r"<thinking>(.*?)</thinking>", content_str, flags=re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return content_str
 
 
 def _format_action_xml(action: dict[str, Any]) -> list[str]:
