@@ -82,10 +82,9 @@ See next section for clean start.
 
 Run only infrastructure in Docker and Python services natively. This allows `AWS_PROFILE` usage, faster iteration, and direct debugger access.
 
-**Build the sandbox blueprint and start infrastructure:**
+**Start infrastructure only:**
 
 ```bash
-docker build -t agent-sandbox-data-science -f services/agent-service/Dockerfile.sandbox .
 docker compose up -d weaviate redis
 ```
 
@@ -107,19 +106,15 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8003 --reload
 
 ## 5. Clean Start — Docker (Recommended)
 
-Because the Python Sandbox uses a custom image, you must build its blueprint before starting the main services.
-
 ```bash
 docker compose down -v --remove-orphans
-docker build -t agent-sandbox-data-science -f services/agent-service/Dockerfile.sandbox .
 docker compose up --build --remove-orphans
 ```
 
 What this does:
 
 - Removes old containers, network, and volumes (`down -v`)
-- Builds the `agent-sandbox-data-science` image locally for the code execution tool
-- Rebuilds main images and starts the infrastructure (`--build`)
+- Rebuilds images (`--build`)
 - Removes stale/orphan containers (`--remove-orphans`)
 
 ### Data persistence: Weaviate
@@ -131,14 +126,13 @@ Weaviate uses a **bind mount** (`./.weaviate_data:/var/lib/weaviate`).
 | `docker compose down`       | Kept          |
 | `docker compose down -v`    | Kept          |
 | `docker compose up --build` | Intact        |
-| `rm -rf .weaviate_data`     | **Deleted** |
+| `rm -rf .weaviate_data`     | **Deleted**   |
 
 `docker compose down -v` only removes **named volumes** — it does not touch host directory bind mounts. Your `.weaviate_data/` and ingested chunks survive any Docker restart.
 
 **Restarting after code changes**:
 
 ```bash
-docker build -t agent-sandbox-data-science -f services/agent-service/Dockerfile.sandbox .
 docker compose up --build --remove-orphans
 ```
 

@@ -118,6 +118,8 @@ services:
         condition: service_healthy
       rag-service:
         condition: service_healthy
+      sandbox-image-builder:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/api/v1/health').status == 200 else 1)"]
       interval: 30s
@@ -148,3 +150,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  sandbox-image-builder:
+    image: agent-sandbox-data-science
+    build:
+      context: .
+      dockerfile: services/agent-service/Dockerfile.sandbox
+    command: [ "true" ]

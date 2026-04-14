@@ -1,14 +1,18 @@
+# file: services/agent-service/Dockerfile.sandbox
 FROM python:3.11-slim
 
 RUN useradd -m -u 1000 sandboxuser
 
+# Install and clean up in the exact same layer
 RUN pip install --no-cache-dir \
+    casadi \
+    cvxpy \
+    networkx \
     numpy \
-    pandas \
     scipy \
-    scikit-learn \
-    matplotlib \
-    seaborn
+    && find /usr/local/lib/python3.11/site-packages -type d -name "tests" -exec rm -rf {} + \
+    && find /usr/local/lib/python3.11/site-packages -type d -name "__pycache__" -exec rm -rf {} + \
+    && rm -rf /tmp/* /var/tmp/*
 
 USER sandboxuser
 WORKDIR /home/sandboxuser
