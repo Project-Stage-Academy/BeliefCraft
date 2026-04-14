@@ -126,7 +126,7 @@ Example response (`AgentRecommendationResponse`):
       ]
     }
   ],
-  "duration_seconds": 2.34
+  "execution_time_seconds": 2.34
 }
 ```
 
