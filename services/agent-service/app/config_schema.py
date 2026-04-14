@@ -86,8 +86,12 @@ class SandboxConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     image: str = Field(default="agent-sandbox-data-science")
     timeout_seconds: int = Field(default=10, ge=1, le=60)
-    memory_limit: str = Field(default="256m")
-    cpus: float = Field(default=0.5)
+    memory_limit: str = Field(
+        default="256m",
+        pattern=r"^[1-9]\d*[bBkKmMgG]$",
+        description="Docker memory string (e.g., 512m, 1g)",
+    )
+    cpus: float = Field(default=0.5, gt=0.0, le=8.0)
     network_disabled: bool = Field(default=True)
 
 
