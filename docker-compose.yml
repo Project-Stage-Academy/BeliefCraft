@@ -92,10 +92,18 @@ services:
     build:
       context: .
       dockerfile: services/agent-service/Dockerfile
+    ports:
+      - "8003:8003"
+    env_file:
+      - ./services/agent-service/.env
     environment:
       ENVIRONMENT_API_URL: http://environment-api:8000
       RAG_API_URL: http://rag-service:8001
       REDIS_URL: redis://redis:6379
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       SANDBOX_RUNNER_URL: http://sandbox-runner:8080
     command: ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
     volumes:
@@ -112,6 +120,11 @@ services:
         condition: service_healthy
       sandbox-runner:
         condition: service_started
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/api/v1/health').status == 200 else 1)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   sandbox-runner:
     build:
