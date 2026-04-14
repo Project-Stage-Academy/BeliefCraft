@@ -42,3 +42,6 @@ react_agent:
 env_sub_agent:
   planner_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
   solver_model_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+rag_sub_agent:
+  model_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"

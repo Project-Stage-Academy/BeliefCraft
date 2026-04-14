@@ -187,14 +187,39 @@ class AgentEvaluator:
         Returns:
             EvaluationResult with computed metrics.
         """
+        from app.tools.factory import ToolRegistryFactory
+        from app.tools.registration import register_skill_tools
+
         skill_store = get_skill_store()
+        skill_tools = []
         if skill_store:
             skill_catalog = skill_store.get_skill_catalog()
             system_prompt = get_warehouse_advisor_prompt(skill_catalog=skill_catalog)
+
+            # Load skill tools for the registry
+            temp_registry = ToolRegistryFactory.create_react_agent_registry()
+            register_skill_tools(settings.app.skills_dir, registry=temp_registry)
+            skill_tools = [
+                t for t in temp_registry.tools.values() if t.get_metadata().category == "skill"
+            ]
         else:
             system_prompt = get_warehouse_advisor_prompt()
 
-        agent = ReActAgent(system_prompt=system_prompt)
+        # Build registries for the evaluation agent
+        env_sub_registry = ToolRegistryFactory.create_env_sub_agent_registry()
+        rag_sub_registry = ToolRegistryFactory.create_rag_sub_agent_registry(
+            mcp_rag_tools=_mcp_rag_tools
+        )
+        react_registry = ToolRegistryFactory.create_react_agent_registry(
+            skill_tools=skill_tools,
+            env_sub_registry=env_sub_registry,
+            rag_sub_registry=rag_sub_registry,
+        )
+
+        agent = ReActAgent(
+            system_prompt=system_prompt,
+            tool_registry=react_registry,
+        )
 
         started_at = datetime.now(UTC)
 

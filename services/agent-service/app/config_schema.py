@@ -95,3 +95,4 @@ class Settings(BaseSettings):
 
     react_agent: AgentModelConfig
     env_sub_agent: EnvSubAgentModelConfig
+    rag_sub_agent: AgentModelConfig
