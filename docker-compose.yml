@@ -119,7 +119,7 @@ services:
       rag-service:
         condition: service_healthy
       sandbox-runner:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/api/v1/health').status == 200 else 1)" ]
       interval: 30s
@@ -153,6 +153,12 @@ services:
     depends_on:
       sandbox-image-builder:
         condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health').status == 200 else 1)" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   ui:
     build:
