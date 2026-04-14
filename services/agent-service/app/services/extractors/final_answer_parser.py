@@ -150,16 +150,6 @@ class FinalAnswerParser:
         return self._normalize_recommendations(parsed_content), {model_id: tokens}
 
     @staticmethod
-    def _empty_tokens() -> dict[str, Any]:
-        return {
-            "prompt": 0,
-            "completion": 0,
-            "total": 0,
-            "cache_read_input_tokens": 0,
-            "cache_creation_input_tokens": 0,
-        }
-
-    @staticmethod
     def _normalize_structured_result(structured_result: Any) -> dict[str, Any]:
         if isinstance(structured_result, ParsedFinalAnswer):
             structured = structured_result.model_dump()

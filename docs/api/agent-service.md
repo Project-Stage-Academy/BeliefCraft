@@ -140,33 +140,6 @@ Example response (`AgentRecommendationResponse`):
 | `cache_creation_input_tokens` | int | Input tokens that resulted in cache creation |
 | `cache_read_percentage` | float | percentage of input tokens read from cache |
 | `cache_write_percentage` | float | percentage of input tokens that created cache |
-
-      "iteration": 1,
-      "thought": "...",
-      "actions": [
-        {
-          "tool": "get_order_backlog",
-          "arguments": {
-            "status": "pending"
-          },
-          "observation": {
-            "data": []
-          }
-        },
-        {
-          "tool": "search_knowledge_base",
-          "arguments": {
-            "query": "late-order risk heuristic"
-          },
-          "observation": "Received 2 documents"
-        }
-      ]
-    }
-  ],
-  "duration_seconds": 2.34
-}
-```
-
 Trace shape note:
 - single-tool iteration: `reasoning_trace[i].action`
 - multi-tool iteration: `reasoning_trace[i].actions`

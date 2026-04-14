@@ -155,7 +155,7 @@ def format_react_prompt(state: Mapping[str, Any]) -> list[str]:
                thoughts, tool_calls, and the user query.
 
     Returns:
-        Formatted prompt string with XML-structured history.
+        List of formatted prompt strings with XML-structured history.
     """
     from app.services.message_parser import MessageParser
 

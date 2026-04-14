@@ -210,10 +210,10 @@ class ToolRegistry:
                 {"product_id": "P123", "location_id": "WH1"}
             )
 
-            if result.success:
-                print(f"Data: {result.data}")
+            if result['success']:
+                print(f"Data: {result['data']}")
             else:
-                print(f"Error: {result.error}")
+                print(f"Error: {result['error']}")
             ```
         """
         logger.debug("tool_execution_requested", tool=name, arguments=arguments)
