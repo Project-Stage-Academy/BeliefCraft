@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class AgentStep(BaseModel):
@@ -14,17 +14,32 @@ class AgentStep(BaseModel):
     observation: str
 
 
-class AgentQueryResponse(BaseModel):
-    """Response model for agent query"""
+class ModelTokenUsage(BaseModel):
+    """Token usage statistics for a specific LLM model."""
 
-    request_id: str
-    query: str
-    status: str
-    answer: str | None
-    iterations: int
-    total_tokens: int
-    reasoning_trace: list[dict[str, Any]]
-    duration_seconds: float
+    prompt: int = Field(default=0, ge=0)  # input tokens not associated with cache
+    completion: int = Field(default=0, ge=0)
+    total: int = Field(default=0, ge=0)  # all input and output tokens
+    cache_read_input_tokens: int = Field(default=0, ge=0)
+    cache_creation_input_tokens: int = Field(default=0, ge=0)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cache_read_percentage(self) -> float:
+        """Percentage of input tokens that were read from cache"""
+        total_input = self.prompt + self.cache_read_input_tokens + self.cache_creation_input_tokens
+        if total_input == 0:
+            return 0.0
+        return (self.cache_read_input_tokens / total_input) * 100.0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cache_write_percentage(self) -> float:
+        """Percentage of input tokens that resulted in cache creation"""
+        total_input = self.prompt + self.cache_read_input_tokens + self.cache_creation_input_tokens
+        if total_input == 0:
+            return 0.0
+        return (self.cache_creation_input_tokens / total_input) * 100.0
 
 
 class ToolExecutionResponse(BaseModel):
@@ -145,7 +160,7 @@ class AgentRecommendationResponse(BaseModel):
     reasoning_trace: list[dict[str, Any]] = Field(default_factory=list)
 
     iterations: int = Field(..., ge=0)
-    total_tokens: int = Field(..., ge=0)
+    token_usage: dict[str, ModelTokenUsage] = Field(default_factory=dict)
     execution_time_seconds: float = Field(..., ge=0.0)
     tools_used: list[str] = Field(default_factory=list)
 

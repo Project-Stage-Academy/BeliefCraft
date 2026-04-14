@@ -9,9 +9,9 @@ from rag_service.main import app
 # reason of PytestUnraisableExceptionWarning
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 @pytest.mark.asyncio
-async def test_mcp_connection_lists_four_tools():
+async def test_mcp_connection_lists_five_tools():
     """
-    Test that we can connect to the MCP endpoint and list exactly 4 tools.
+    Test that we can connect to the MCP endpoint and list exactly 5 tools.
     This uses ASGITransport to avoid needing a running server.
     """
     # Use ASGITransport to route requests directly to the FastAPI app
@@ -28,7 +28,7 @@ async def test_mcp_connection_lists_four_tools():
 
         async with Client(transport) as client:
             tools = await client.list_tools()
-            assert len(tools) == 4
+            assert len(tools) == 5
 
     # without this, some tests that run next may also raise PytestUnraisableExceptionWarning
     import gc

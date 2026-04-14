@@ -51,7 +51,10 @@ async def test_execute_success_with_summary(mock_sub_agent_class, mock_validate,
     mock_sub_agent_class.assert_called_once_with(tool_registry=tool.env_registry)
     mock_instance.run.assert_awaited_once_with(agent_query="Where are the palettes?")
 
-    assert result == {"summary": "All palettes are in sector 4G."}
+    assert result == {
+        "summary": "All palettes are in sector 4G.",
+        "token_usage": {},
+    }
 
 
 @pytest.mark.asyncio
@@ -63,7 +66,10 @@ async def test_execute_success_no_summary(mock_sub_agent_class, mock_validate, t
 
     result = await tool.execute(agent_query="Check anomalies.")
 
-    assert result == {"summary": "Sub-agent completed but generated no summary."}
+    assert result == {
+        "summary": "Sub-agent completed but generated no summary.",
+        "token_usage": {},
+    }
 
 
 @pytest.mark.asyncio

@@ -68,9 +68,7 @@ def run(scenarios: tuple[str, ...], output: str, scenarios_file: str | None) -> 
     click.echo("=" * 70)
     click.echo(f"\nReport ID: {report.report_id}")
     click.echo(f"Total Scenarios: {report.total_scenarios}")
-    click.echo(
-        f"Passed: {report.passed} ({report.pass_rate*100:.1f}%) | " f"Failed: {report.failed}"
-    )
+    click.echo(f"Passed: {report.passed} ({report.pass_rate * 100:.1f}%) | Failed: {report.failed}")
 
     click.echo("\nAverage Scores:")
     click.echo(f"  Retrieval Accuracy:  {report.avg_retrieval_accuracy:.2f}")
@@ -87,16 +85,14 @@ def run(scenarios: tuple[str, ...], output: str, scenarios_file: str | None) -> 
     click.echo("\nResults by Category:")
     for category, stats in report.results_by_category.items():
         click.echo(
-            f"  {category:30s} | "
-            f"Pass: {stats.pass_rate*100:5.1f}% | "
-            f"Score: {stats.avg_score:.2f}"
+            f"  {category:30s} | Pass: {stats.pass_rate * 100:5.1f}% | Score: {stats.avg_score:.2f}"
         )
 
     click.echo("\nResults by Difficulty:")
     for difficulty, stats in report.results_by_difficulty.items():
         click.echo(
             f"  {difficulty:10s} | "
-            f"Pass: {stats.pass_rate*100:5.1f}% | "
+            f"Pass: {stats.pass_rate * 100:5.1f}% | "
             f"Score: {stats.avg_score:.2f}"
         )
 

@@ -101,8 +101,9 @@ class TestPlanNode:
 
         agent.llm.structured_completion = AsyncMock(
             return_value={
-                "result": mock_plan,
-                "tokens": {"prompt": 9, "completion": 4, "total": 13},
+                "parsed": mock_plan,
+                "model_id": "test-model",
+                "tokens": {"total": 10},
             }
         )
 
@@ -110,7 +111,7 @@ class TestPlanNode:
 
         assert result["status"] == "executing"
         assert result["plan"] is mock_plan
-        assert result["total_tokens"] == 13
+        assert result["token_usage"]["test-model"]["total"] == 10
         agent.llm.structured_completion.assert_called_once()
 
     @pytest.mark.asyncio
@@ -126,8 +127,9 @@ class TestPlanNode:
 
         agent.llm.structured_completion = AsyncMock(
             return_value={
-                "result": raw_dict_plan,
-                "tokens": {"prompt": 7, "completion": 5, "total": 12},
+                "parsed": raw_dict_plan,
+                "model_id": "test-model-2",
+                "tokens": {"total": 20},
             }
         )
 
@@ -136,7 +138,7 @@ class TestPlanNode:
         assert result["status"] == "executing"
         assert isinstance(result["plan"], WarehousePlan)
         assert result["plan"].tool_calls[0].tool_name == "get_devices"
-        assert result["total_tokens"] == 12
+        assert result["token_usage"]["test-model-2"]["total"] == 20
 
     @pytest.mark.asyncio
     async def test_plan_node_handles_llm_exception(

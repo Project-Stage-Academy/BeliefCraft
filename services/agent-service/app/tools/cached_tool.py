@@ -32,7 +32,7 @@ from typing import Any
 import redis.asyncio as redis
 from app.config_load import settings
 from app.core.constants import REDIS_MAX_CONNECTIONS, REDIS_SOCKET_CONNECT_TIMEOUT
-from app.tools.base import BaseTool, ToolMetadata, ToolResult
+from app.tools.base import BaseTool, ToolMetadata
 from common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -225,25 +225,25 @@ class CachedTool(BaseTool):
 
         return result
 
-    async def run(self, **kwargs: Any) -> ToolResult:
+    async def run(self, **kwargs: Any) -> dict[str, Any]:
         """
         Override run to mark if result was cached.
 
         This method wraps the parent run() method to add cache hit
-        information to the ToolResult. The cached flag is set during
+        information to the result. The cached flag is set during
         execute() to avoid race conditions.
 
         Args:
             **kwargs: Tool execution parameters
 
         Returns:
-            ToolResult with cached=True if result came from cache
+            Dictionary with cached=True if result came from cache
         """
         # Execute tool (sets _last_was_cached flag internally)
         result = await super().run(**kwargs)
 
         # Set cached flag from internal state (no extra Redis call)
-        result.cached = self._last_was_cached
+        result["cached"] = self._last_was_cached
 
         return result
 

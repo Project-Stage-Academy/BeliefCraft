@@ -66,4 +66,5 @@ class CallEnvSubAgentTool(BaseTool):
         return {
             "summary": final_state.get("state_summary")
             or "Sub-agent completed but generated no summary.",
+            "token_usage": final_state.get("token_usage", {}),
         }

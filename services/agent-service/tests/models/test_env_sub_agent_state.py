@@ -15,7 +15,7 @@ def test_create_initial_state_populates_defaults() -> None:
     assert state["state_summary"] is None
     assert state["status"] == "planning"
     assert state["error"] is None
-    assert state["total_tokens"] == 0
+    assert state["token_usage"] == {}
     assert before <= state["started_at"] <= after
     assert state["completed_at"] is None
 
@@ -43,7 +43,7 @@ def test_rewoo_state_expected_keys() -> None:
         "state_summary",
         "status",
         "error",
-        "total_tokens",
+        "token_usage",
         "started_at",
         "completed_at",
     }

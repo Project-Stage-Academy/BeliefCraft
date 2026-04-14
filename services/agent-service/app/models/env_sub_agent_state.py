@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, TypedDict
 from uuid import uuid4
 
+from app.models.agent_state import merge_token_usage
 from app.models.env_sub_agent_plans import WarehousePlan
 
 
@@ -29,7 +30,7 @@ class ReWOOState(TypedDict):
     error: str | None
 
     # Metadata
-    total_tokens: Annotated[int, operator.add]
+    token_usage: Annotated[dict[str, dict[str, int]], merge_token_usage]
     started_at: datetime
     completed_at: datetime | None
 
@@ -46,7 +47,7 @@ def create_initial_state(
         state_summary=None,
         status="planning",
         error=None,
-        total_tokens=0,
+        token_usage={},
         started_at=datetime.now(UTC),
         completed_at=None,
     )

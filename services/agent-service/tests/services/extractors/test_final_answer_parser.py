@@ -31,14 +31,18 @@ class TestFinalAnswerParser:
                 },
                 "tool_calls": [],
                 "finish_reason": "stop",
+                "model_id": "test-model",
                 "tokens": {"prompt": 10, "completion": 10, "total": 20},
             }
         )
 
         parser = FinalAnswerParser(llm)
 
-        await parser.parse("## Inventory Management\n\nObserved with low confidence sensors.")
+        result, token_usage = await parser.parse(
+            "## Inventory Management\n\nObserved with low confidence sensors."
+        )
 
+        assert token_usage["test-model"]["total"] == 20
         messages = llm.chat_completion.await_args.kwargs["messages"]
         prompt = messages[1]["content"]
         assert "## Agent Response" in prompt
@@ -65,18 +69,22 @@ class TestFinalAnswerParser:
                 schema: Any,
             ) -> dict[str, Any]:
                 return {
-                    "task": "Inventory Management",
-                    "analysis": "Structured analysis",
-                    "algorithm": "Algorithm 2.2",
-                    "recommendations": [
-                        {
-                            "action": "Apply policy",
-                            "priority": "high",
-                            "rationale": "Deterministic extraction",
-                            "expected_outcome": "Lower risk",
-                        }
-                    ],
-                    "confidence": "high",
+                    "parsed": {
+                        "task": "Inventory Management",
+                        "analysis": "Structured analysis",
+                        "algorithm": "Algorithm 2.2",
+                        "recommendations": [
+                            {
+                                "action": "Apply policy",
+                                "priority": "high",
+                                "rationale": "Deterministic extraction",
+                                "expected_outcome": "Lower risk",
+                            }
+                        ],
+                        "confidence": "high",
+                    },
+                    "model_id": "sonnet",
+                    "tokens": {"total": 150},
                 }
 
             async def chat_completion(  # type: ignore[override]
@@ -89,8 +97,11 @@ class TestFinalAnswerParser:
 
         parser = FinalAnswerParser(_StructuredOnlyLLM())
 
-        result = await parser.parse("## Inventory Management\n\n### Analysis\nStructured analysis")
+        result, token_usage = await parser.parse(
+            "## Inventory Management\n\n### Analysis\nStructured analysis"
+        )
 
+        assert token_usage["sonnet"]["total"] == 150
         assert result["analysis"] == "Structured analysis"
         assert result["confidence"] == "high"
         assert result["recommendations"][0].action == "Apply policy"
@@ -112,13 +123,15 @@ class TestFinalAnswerParser:
                 "message": {"role": "assistant", "content": f"```json\n{payload}\n```"},
                 "tool_calls": [],
                 "finish_reason": "stop",
+                "model_id": "test-model",
                 "tokens": {"prompt": 10, "completion": 10, "total": 20},
             }
         )
 
         parser = FinalAnswerParser(llm)
-        result = await parser.parse("## Inventory Management")
+        result, token_usage = await parser.parse("## Inventory Management")
 
+        assert token_usage["test-model"]["total"] == 20
         assert result["task"] == "Inventory Management"
         assert result["analysis"] == "All good."
 
@@ -130,13 +143,15 @@ class TestFinalAnswerParser:
                 "message": {"role": "assistant", "content": "not valid json {{"},
                 "tool_calls": [],
                 "finish_reason": "stop",
+                "model_id": "test-model",
                 "tokens": {"prompt": 5, "completion": 5, "total": 10},
             }
         )
 
         parser = FinalAnswerParser(llm)
-        result = await parser.parse("Raw final answer")
+        result, token_usage = await parser.parse("Raw final answer")
 
+        assert token_usage == {}  # Fallback doesn't return tokens
         assert result == {
             "task": "Analysis",
             "analysis": "Raw final answer",

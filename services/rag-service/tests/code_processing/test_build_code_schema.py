@@ -124,21 +124,21 @@ def test_class_with_bases_in_code():
 
 
 def test_class_with_init_code_contains_init():
-    code = "class MyClass:\n" "    def __init__(self, x):\n" "        self.x = x"
+    code = "class MyClass:\n    def __init__(self, x):\n        self.x = x"
     schema = build_code_schema([code])
     class_code = schema["classes"][0]["code"]
     assert "__init__" in class_code
 
 
 def test_init_method_excluded_from_methods():
-    code = "class A:\n" "    def __init__(self): pass\n" "    def method(self): pass"
+    code = "class A:\n    def __init__(self): pass\n    def method(self): pass"
     schema = build_code_schema([code])
     method_names = [m["name"] for m in schema["methods"]]
     assert "__init__" not in method_names
 
 
 def test_class_docstring_included_in_code():
-    code = "class Documented:\n" '    """A docstring."""\n' "    def __init__(self): pass"
+    code = 'class Documented:\n    """A docstring."""\n    def __init__(self): pass'
     schema = build_code_schema([code])
     assert "A docstring." in schema["classes"][0]["code"]
 
@@ -167,9 +167,7 @@ def test_method_class_ref():
 
 
 def test_method_used_methods_cross_reference():
-    code = (
-        "class A:\n" "    def first(self): pass\n" "    def second(self):\n" "        self.first()"
-    )
+    code = "class A:\n    def first(self): pass\n    def second(self):\n        self.first()"
     schema = build_code_schema([code])
     second = next(m for m in schema["methods"] if m["name"] == "second")
     assert "mth:A.first" in second["referenced_methods"]

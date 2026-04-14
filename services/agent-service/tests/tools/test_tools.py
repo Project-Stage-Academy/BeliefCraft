@@ -87,10 +87,10 @@ class TestBaseTool:
         tool = MockSuccessTool()
         result = await tool.run(value="test")
 
-        assert result.success is True
-        assert result.data == {"result": "processed_test"}
-        assert result.execution_time_ms > 0
-        assert result.error is None
+        assert result["success"] is True
+        assert result["data"] == {"result": "processed_test"}
+        assert result["execution_time_ms"] > 0
+        assert result["error"] is None
 
     @pytest.mark.asyncio
     async def test_tool_run_error(self) -> None:
@@ -98,10 +98,10 @@ class TestBaseTool:
         tool = MockErrorTool()
         result = await tool.run()
 
-        assert result.success is False
-        assert result.data is None
-        assert "ValueError" in result.error if result.error else False
-        assert result.execution_time_ms > 0
+        assert result["success"] is False
+        assert result["data"] is None
+        assert "ValueError: Mock error" in result["error"]
+        assert result["execution_time_ms"] > 0
 
     def test_to_openai_function(self) -> None:
         """Test conversion to OpenAI function schema."""
@@ -152,8 +152,8 @@ class TestToolRegistry:
 
         result = await registry.execute_tool("mock_success", {"value": "test"})
 
-        assert result.success is True
-        assert result.data == {"result": "processed_test"}
+        assert result["success"] is True
+        assert result["data"] == {"result": "processed_test"}
 
     @pytest.mark.asyncio
     async def test_execute_tool_error(self) -> None:
@@ -163,9 +163,8 @@ class TestToolRegistry:
 
         result = await registry.execute_tool("mock_error", {})
 
-        assert result.success is False
-        assert result.error is not None
-        assert "ValueError" in result.error
+        assert result["success"] is False
+        assert "ValueError: Mock error" in result["error"]
 
     @pytest.mark.asyncio
     async def test_execute_nonexistent_tool(self) -> None:

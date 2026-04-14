@@ -98,13 +98,17 @@ class BaseAgent(ABC):
 
     # ========== LLM Communication ==========
 
-    async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    async def _call_llm(
+        self, messages: list[dict[str, Any]], cache: list[bool] | None = None
+    ) -> dict[str, Any]:
         """Make the LLM API call with messages and tool definitions.
 
         Args:
             messages: List of messages to send to the LLM.
+            cache: List with the same length as messages.
+                   If cache[i] is True, messages[i] is written to cache.
 
         Returns:
             LLM response dictionary containing message, tool_calls, tokens, etc.
         """
-        return await self.llm.chat_completion(messages=messages)
+        return await self.llm.chat_completion(messages=messages, cache=cache)

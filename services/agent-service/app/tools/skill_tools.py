@@ -61,7 +61,7 @@ class LoadSkillTool(BaseTool):
                     "skill_name": {
                         "type": "string",
                         "description": (
-                            f"Exact name of the skill to load. " f"Must be one of: {available}"
+                            f"Exact name of the skill to load. Must be one of: {available}"
                         ),
                     },
                 },
@@ -176,8 +176,7 @@ class ReadSkillFilesTool(BaseTool):
                     "skill_name": {
                         "type": "string",
                         "description": (
-                            f"Name of the skill that owns the files. "
-                            f"Must be one of: {available}"
+                            f"Name of the skill that owns the files. Must be one of: {available}"
                         ),
                     },
                     "filenames": {

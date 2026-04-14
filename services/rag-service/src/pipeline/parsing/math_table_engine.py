@@ -30,7 +30,6 @@ def clean_html_attributes(html_text: str) -> str:
     soup = BeautifulSoup(html_text, "html.parser")
 
     for tag in soup.find_all(True):
-
         if tag.name in TABLE_TAGS:
             tag.attrs = {k: v for k, v in tag.attrs.items() if k.lower() in TABLE_ATTRS_TO_KEEP}
 

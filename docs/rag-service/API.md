@@ -40,6 +40,7 @@ with TracedHttpClient is provided below after the tool descriptions.
 
 - **Semantic Search**: Uses embeddings to find the most relevant chunks of text based on the `query`.
 - **Metadata Filtering**: Can restrict search to specific parts, sections, or pages using the `filters` argument.
+- **Tag-Based Boosting**: Use `search_tags` to boost chunks by matching `bc_concepts` and `bc_db_tables` tags.
 - **Graph Expansion**: If `traverse_types` are provided, it automatically fetches linked entities (like formulas or algorithms mentioned in the text) and includes them in the results.
 
 **Arguments:**
@@ -47,6 +48,7 @@ with TracedHttpClient is provided below after the tool descriptions.
 - `k` (integer, optional, default: 5): Number of initial relevant documents to retrieve.
 - `traverse_types` (array of `EntityType`, optional): Types of objects for search results expansion via links (e.g., `["formula", "algorithm"]`).
 - `filters` (`SearchFilters`, optional): Metadata filters to restrict search scope.
+- `search_tags` (`SearchTags`, optional): Tag-based similarity boosting using `bc_concepts` and `bc_db_tables`.
 
 #### `expand_graph_by_ids`
 **Retrieve linked objects for specific document IDs.**
@@ -77,6 +79,17 @@ Follows `referenced_classes`, `referenced_methods`, and `referenced_functions` l
 **Returns:** A single `Document` where:
 - `content` contains the reconstructed ordered Python source fragment.
 - `id`, `metadata`, and `cosine_similarity` may be `null`.
+
+#### `get_search_tags_catalog`
+**Get standardized tag values for focused retrieval.**
+
+This tool provides curated tag values used by the RAG boosting layer. It is intended to be called before `search_knowledge_base` to select valid concept or database-table tags and then pass them into `search_tags`.
+
+**Arguments:**
+- `tag_type` (string, required): Choose which catalog to retrieve. Allowed values: `"concepts"`, `"tables"`.
+- `category` (`ConceptTagCategory`, optional): Restricts concept tags to one category. Used only when `tag_type="concepts"`.
+
+**Returns:** A single `Document` containing catalog items in metadata.
 
 ---
 
@@ -155,6 +168,18 @@ if __name__ == "__main__":
 - `subsection`: Subsection number (e.g., "2.3").
 - `subsubsection`: Subsubsection number (e.g., "2.3.1").
 - `page_number`: Integer page number.
+
+### `SearchTags`
+- `bc_concepts`: Optional array of concept tags used for similarity boosting (e.g., `"SENSOR_FUSION_STATE_ESTIMATION"`).
+- `bc_db_tables`: Optional array of environment DB table tags used for similarity boosting (e.g., `"observations"`).
+
+### `ConceptTagCategory`
+- `POMDP_AND_BELIEF`
+- `REINFORCEMENT_LEARNING`
+- `PLANNING_AND_SEARCH`
+- `PROBABILISTIC_INFERENCE`
+- `RISK_AND_ROBUSTNESS`
+- `MULTI_AGENT_AND_SUPPLY_CHAIN`
 
 ### `Document`
 The response object for search and retrieval tools.

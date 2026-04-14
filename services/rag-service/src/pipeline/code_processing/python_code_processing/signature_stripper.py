@@ -15,7 +15,6 @@ class ClassMethodStripper(ast.NodeTransformer):
 
         for item in node.body:
             if isinstance(item, ast.FunctionDef):
-
                 func_kwargs: dict[str, Any] = {
                     "name": item.name,
                     "args": item.args,
