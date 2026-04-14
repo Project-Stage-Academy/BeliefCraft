@@ -1,5 +1,6 @@
 import json
 import os
+import textwrap
 from typing import Any
 
 from fastapi import FastAPI
@@ -37,9 +38,27 @@ def health_check() -> dict[str, str]:
 
 
 def _build_script(code: str, data: dict[str, Any]) -> str:
-    """Construct the executable script by injecting environment data variables."""
-    prefix = f"import json\nenv_data = json.loads({repr(json.dumps(data))})\n\n"
-    return prefix + code
+    """Construct the executable script with a foolproof error catcher."""
+
+    env_json = repr(json.dumps(data))
+    indented_code = textwrap.indent(code, "    ")
+
+    return f"""import json
+import sys
+import traceback
+
+env_data = json.loads({env_json})
+
+try:
+{indented_code}
+except Exception as e:
+    # Force the traceback into stdout so the agent ALWAYS sees it
+    print("\\n" + "="*40)
+    print("PYTHON EXECUTION ERROR:")
+    print("="*40)
+    traceback.print_exc(file=sys.stdout)
+    sys.exit(1)
+"""
 
 
 @app.post("/run", response_model=RunResponse)

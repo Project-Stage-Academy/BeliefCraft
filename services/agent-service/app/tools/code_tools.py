@@ -65,7 +65,7 @@ class PythonSandboxTool(BaseTool):
 
         async with TracedHttpClient(
             settings.sandbox.runner_url,
-            timeout=settings.sandbox.request_timeout_seconds,
+            timeout=settings.sandbox.timeout_seconds,
         ) as client:
             response = await client.post("/run", json=payload)
             response.raise_for_status()

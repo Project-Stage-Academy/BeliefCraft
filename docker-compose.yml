@@ -143,7 +143,7 @@ services:
       SANDBOX_MEMORY_LIMIT: 256m
       SANDBOX_CPUS: "0.5"
       SANDBOX_NETWORK_DISABLED: "true"
-      SANDBOX_TIMEOUT_SECONDS: "10"
+      SANDBOX_TIMEOUT_SECONDS: "50"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./services/sandbox-runner/app:/app/services/sandbox-runner/app

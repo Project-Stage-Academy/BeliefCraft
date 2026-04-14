@@ -45,7 +45,7 @@ env_sub_agent:
 
 sandbox:
   image: "agent-sandbox-data-science"
-  timeout_seconds: 10
+  timeout_seconds: 50
   memory_limit: "256m"
   cpus: 0.5
   network_disabled: true

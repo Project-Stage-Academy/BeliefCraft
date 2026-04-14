@@ -1,3 +1,4 @@
+# file: services/sandbox-runner/Dockerfile
 FROM python:3.11-slim
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -9,6 +10,7 @@ COPY pyproject.toml uv.lock ./
 COPY packages/common/ packages/common/
 
 # 2. Copy the pyproject.toml of ALL Python workspace members so the lockfile validates
+COPY packages/database/pyproject.toml packages/database/
 COPY services/agent-service/pyproject.toml services/agent-service/
 COPY services/environment-api/pyproject.toml services/environment-api/
 COPY services/rag-service/pyproject.toml services/rag-service/
