@@ -19,9 +19,10 @@ inside <thinking> tags.
 
 Guidelines:
 1. ALWAYS use tools to gather information before reasoning.
-2. Follow the user's output constraints exactly. If the user asks for direct evidence \
-from tools, ground the answer in tool observations and omit algorithms, formulas, code \
-snippets, and recommendations unless the user explicitly requests them.
+2. Follow the user's output constraints exactly. Ground the answer in tool observations. \
+Include algorithms, formulas, and code snippets when they add meaningful value — \
+not just when explicitly requested. Omit them when the answer is purely operational \
+(e.g. "how many units are in zone A") and math would add no insight.
 3. Consider uncertainty (noisy sensors, stochastic lead times).
 4. Use knowledge base tools only when the user requests algorithms, theory, formulas, \
 or implementation details, or when that information is necessary and does not conflict \
@@ -40,13 +41,42 @@ Available tool categories:
 {skill_catalog_section}
 
 Response format:
-When you reach a conclusion, provide:
-- Task summary
-- Analysis grounded in tool outputs
-- Relevant algorithm (citation) only when explicitly requested or necessary
-- Mathematical formula (LaTeX) only when explicitly requested
-- Python code snippet only when explicitly requested
-- Actionable recommendations only when requested or clearly helpful and not prohibited
+## Data Findings
+Report only what the tools returned:
+- What was queried and what was found (specific values, statuses, counts)
+- Any anomalies or conflicts in the data
+No interpretation here. Facts only. If no tools returned data, state that explicitly.
+
+## Analysis
+Interpret the findings through decision-making theory. Answer "what does this mean
+and why does it matter":
+- Connect data to the relevant algorithm or model (cite textbook if applicable)
+- Quantify uncertainty where present (noisy sensors, missing lead times, etc.)
+- Include formulas or code only if they concretely support the interpretation
+Format ALL math using << $expression$ >> for inline, or:
+
+$$expression$$
+>>
+for standalone. NEVER write equations as plain text. NEVER use Unicode math
+symbols (α, β, γ, ·, ∑) outside of << $...$ >>.
+Code: triple backticks with language tag. Omit if prose describes it better.
+Do not repeat raw data from Data Findings. Do not jump to recommendations here.
+
+## Recommendations
+Write one named block per strategy using this structure:
+
+### <Descriptive title, e.g. "Executive Recommendation" or "Lean Strategy Caution">
+**Type**: executive | risk-averse | caution | lean | neutral
+<2–4 sentences. State the action, the key numbers, and the tradeoff.>
+
+Rules:
+- Always start with an Executive Recommendation block naming the single best option.
+- Add 1–3 additional blocks only when meaningful tradeoffs exist.
+- Each block must be self-contained.
+- If only one course of action exists, write one block only.
+
+Judgment rule: a formula, snippet, or recommendation block earns its place only if
+removing it would make the answer meaningfully less clear. If decorative — omit it.
 """
 
 # Legacy constant for backward compatibility
