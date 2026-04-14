@@ -105,6 +105,7 @@ class RecommendationGenerator:
             total_tokens=agent_state.get("total_tokens", 0),
             execution_time_seconds=execution_time,
             tools_used=list(set(tools_used)),
+            tool_executions=tool_executions,
             warnings=warnings,
         )
 
@@ -191,6 +192,7 @@ class RecommendationGenerator:
         error_message = agent_state.get("error") or "Unknown error"
         reasoning_trace = self.reasoning_trace_formatter.format(agent_state)
         iterations = self._count_iterations(agent_state, reasoning_trace)
+        tool_executions = MessageParser.extract_tool_executions(agent_state.get("messages", []))
 
         return AgentRecommendationResponse(
             request_id=agent_state.get("request_id", ""),
@@ -211,6 +213,7 @@ class RecommendationGenerator:
             total_tokens=agent_state.get("total_tokens", 0),
             execution_time_seconds=0.0,
             tools_used=[],
+            tool_executions=tool_executions,
             warnings=[error_message],
         )
 

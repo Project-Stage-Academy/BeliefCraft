@@ -25,6 +25,7 @@ class RetrievalMetrics(BaseModel):
         k: Number of top results requested.
         num_retrieved: Actual number of documents retrieved.
         num_expected: Number of ground-truth chunk IDs.
+        retrieved_ids: IDs of documents returned by the retrieval system.
     """
 
     recall_at_k: float
@@ -34,6 +35,7 @@ class RetrievalMetrics(BaseModel):
     k: int
     num_retrieved: int
     num_expected: int
+    retrieved_ids: list[str] = []
 
 
 def compute_metrics(retrieved_ids: list[str], expected_ids: list[str], k: int) -> RetrievalMetrics:
@@ -68,6 +70,7 @@ def compute_metrics(retrieved_ids: list[str], expected_ids: list[str], k: int) -
         k=k,
         num_retrieved=len(retrieved_ids),
         num_expected=len(expected_ids),
+        retrieved_ids=list(retrieved_ids),
     )
 
 
@@ -89,7 +92,7 @@ async def evaluate_retrieval(
         k: Number of top results to return.
 
     Returns:
-        RetrievalMetrics with recall@k, precision@k, MRR@k, and latency.
+        RetrievalMetrics with recall@k, precision@k, MRR@k, latency, and retrieved_ids.
     """
     logger.debug("evaluate_retrieval", query=query, expected_count=len(expected_chunk_ids), k=k)
 
@@ -118,4 +121,5 @@ async def evaluate_retrieval(
         k=k,
         num_retrieved=len(retrieved_ids),
         num_expected=len(expected_chunk_ids),
+        retrieved_ids=retrieved_ids,
     )
