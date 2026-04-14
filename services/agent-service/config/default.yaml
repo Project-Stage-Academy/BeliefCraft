@@ -42,3 +42,10 @@ react_agent:
 env_sub_agent:
   planner_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
   solver_model_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+sandbox:
+  image: "agent-sandbox-data-science"
+  timeout_seconds: 50
+  memory_limit: "256m"
+  cpus: 0.5
+  network_disabled: true

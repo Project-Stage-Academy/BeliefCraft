@@ -22,6 +22,13 @@ MOCK_SETTINGS = {
         "aws_secret_access_key": "wJalrXUtnFEMI/EXAMPLE",
         "aws_profile": None,
     },
+    "sandbox": {
+        "image": "agent-sandbox-data-science",
+        "timeout_seconds": 10,
+        "memory_limit": "256m",
+        "cpus": 0.5,
+        "network_disabled": True,
+    },
     "react_agent": {"model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0"},
     "execution": {},
     "langsmith": {},

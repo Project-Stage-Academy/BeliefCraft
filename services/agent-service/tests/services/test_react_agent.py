@@ -388,7 +388,7 @@ class TestRun:
         )
         agent = ReActAgent(tool_registry=tool_registry)
 
-        assert sorted(agent.tool_registry.tools) == ["call_env_sub_agent"]
+        assert sorted(agent.tool_registry.tools) == ["call_env_sub_agent", "python_sandbox"]
         assert "list_inventory_moves" not in agent.tool_registry.tools
 
         mock_llm_service.chat_completion.side_effect = [

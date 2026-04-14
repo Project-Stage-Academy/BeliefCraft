@@ -104,6 +104,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      SANDBOX_RUNNER_URL: http://sandbox-runner:8080
     command: ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
     volumes:
       - ./services/agent-service/app:/app/services/agent-service/app
@@ -117,11 +118,47 @@ services:
         condition: service_healthy
       rag-service:
         condition: service_healthy
+      sandbox-runner:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/api/v1/health').status == 200 else 1)"]
+      test: [ "CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/api/v1/health').status == 200 else 1)" ]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  sandbox-image-builder:
+    image: agent-sandbox-data-science
+    build:
+      context: .
+      dockerfile: services/agent-service/Dockerfile.sandbox
+    command: [ "true" ]
+
+  sandbox-runner:
+    build:
+      context: .
+      dockerfile: services/sandbox-runner/Dockerfile
+    user: root
+    environment:
+      SANDBOX_IMAGE: agent-sandbox-data-science
+      SANDBOX_MEMORY_LIMIT: 256m
+      SANDBOX_CPUS: "0.5"
+      SANDBOX_NETWORK_DISABLED: "true"
+      SANDBOX_TIMEOUT_SECONDS: "50"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./services/sandbox-runner/app:/app/services/sandbox-runner/app
+      - ./packages/common:/app/packages/common
+    expose:
+      - "8080"
+    depends_on:
+      sandbox-image-builder:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health').status == 200 else 1)" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   ui:
     build:

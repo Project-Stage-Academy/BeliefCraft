@@ -1,0 +1,24 @@
+# (This is the blueprint for the isolated execution environment)
+
+FROM python:3.11-slim
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /sandbox
+
+# Define the exact libraries the LLM is allowed to use
+# We use uv to install them blazingly fast
+RUN uv pip install --system --no-cache \
+    numpy \
+    pandas \
+    networkx \
+    scipy \
+    pydantic
+
+# Create a non-root user to run the untrusted code
+RUN useradd -m -u 1000 sandboxuser
+USER sandboxuser
+
+# The llm-sandbox library expects python to be available on the path
+CMD ["python3"]

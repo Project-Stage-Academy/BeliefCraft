@@ -2,7 +2,7 @@
 
 from app.tools.base import BaseTool
 from app.tools.orchestration_tools import CallEnvSubAgentTool
-from app.tools.registration import register_environment_tools
+from app.tools.registration import register_code_tools, register_environment_tools
 from app.tools.registry import ToolRegistry
 from common.logging import get_logger
 
@@ -18,6 +18,9 @@ class ToolRegistryFactory:
         env_sub_registry: ToolRegistry | None = None,
     ) -> ToolRegistry:
         registry = ToolRegistry()
+
+        register_code_tools(registry)
+        logger.info("react_registry_loaded_sandbox_tool")
 
         if mcp_rag_tools:
             for tool in mcp_rag_tools:
