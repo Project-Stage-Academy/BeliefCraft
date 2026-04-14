@@ -64,9 +64,8 @@ class PythonSandboxTool(BaseTool):
 
     def _run_in_sandbox(self, code: str, data: dict[str, Any] | None) -> dict[str, Any]:
         """Executes the provided code within the sandbox session enforcing timeouts."""
-        script = ""
-        if data:
-            script += f"import json\nenv_data = json.loads({repr(json.dumps(data))})\n\n"
+        safe_data = data or {}
+        script = f"import json\nenv_data = json.loads({repr(json.dumps(safe_data))})\n\n"
         script += code
 
         docker_kwargs = {
