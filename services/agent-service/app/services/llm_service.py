@@ -224,7 +224,7 @@ class LLMService:
 
             chain = self.llm
             if tools:
-                chain = self.llm.bind_tools(tools)
+                chain = self.llm.bind_tools(tools, tool_choice=tool_choice)
 
             response = await chain.ainvoke(lc_messages)
 

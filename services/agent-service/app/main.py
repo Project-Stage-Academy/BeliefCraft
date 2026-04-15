@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
         # Create temporary registry for MCP tool discovery
-        temp_registry = ToolRegistryFactory.create_react_agent_registry()
+        temp_registry = ToolRegistryFactory.create_rag_sub_agent_registry()
         await register_mcp_rag_tools(mcp_client, registry=temp_registry)
 
         # Extract loaded MCP tools for reuse
@@ -135,19 +135,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             message="Service will continue with RAG tools only",
         )
 
-    # Build ReActAgent registry (RAG + skill tools + sub-agent orchestrator)
+    # Build RAG sub-agent registry
+    logger.info("building_rag_sub_agent_registry")
+    rag_sub_registry = ToolRegistryFactory.create_rag_sub_agent_registry(
+        mcp_rag_tools=mcp_rag_tools
+    )
+    app.state.rag_sub_agent_registry = rag_sub_registry
+    logger.info(
+        "rag_sub_agent_registry_built",
+        tools_count=len(rag_sub_registry.tools),
+    )
+
+    # Build ReActAgent registry (skill tools + sub-agent orchestrators)
     logger.info("building_react_agent_registry")
     react_registry = ToolRegistryFactory.create_react_agent_registry(
-        mcp_rag_tools=mcp_rag_tools,
         skill_tools=skill_tools,
         env_sub_registry=env_sub_registry,
+        rag_sub_registry=rag_sub_registry,
     )
     app.state.react_agent_registry = react_registry
     logger.info(
         "react_agent_registry_built",
         tools_count=len(react_registry.tools),
-        rag_tools=len(mcp_rag_tools),
         skill_tools=len(skill_tools),
+        has_env_orchestrator=bool(env_sub_registry),
+        has_rag_orchestrator=bool(rag_sub_registry),
     )
 
     try:
