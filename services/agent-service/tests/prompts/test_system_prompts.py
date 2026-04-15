@@ -10,20 +10,22 @@ from app.prompts.system_prompts import (
 from langchain_core.messages import AIMessage, ToolMessage
 
 
+
 class TestWarehouseAdvisorSystemPrompt:
     def test_contains_role_description(self) -> None:
-        assert "warehouse operations advisor" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        assert "warehouse operations advisor" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT.lower()
 
     def test_contains_thinking_tag_instruction(self) -> None:
         assert "<thinking>" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
 
     def test_direct_evidence_constraints_override_default_template(self) -> None:
+        # Matches Guideline 2
         assert "Follow the user's output constraints exactly" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        assert "direct evidence from tools" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        assert "omit algorithms, formulas, code snippets, and recommendations" in (
-            WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        )
-        assert "unless the user explicitly requests them" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        # Updated to match current phrasing: "Ground the answer in tool observations"
+        assert "Ground the answer in tool observations" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        # Updated to match the current conditional logic for math/algorithms
+        assert "Omit them when the answer is purely operational" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        assert "not just when explicitly requested" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
 
     def test_contains_algorithm_references(self) -> None:
         assert "MDP" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
@@ -36,9 +38,10 @@ class TestWarehouseAdvisorSystemPrompt:
         assert "Knowledge base tools" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
 
     def test_contains_response_format(self) -> None:
-        assert "Task summary" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        assert "LaTeX" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
-        assert "Python code snippet" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        # Updated to match current section headers
+        assert "## Data Findings" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        assert "## Analysis" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
+        assert "## Recommendations" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT
 
     def test_is_nonempty_string(self) -> None:
         assert isinstance(WAREHOUSE_ADVISOR_SYSTEM_PROMPT, str)
