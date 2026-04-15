@@ -528,6 +528,10 @@ export default function Home() {
   };
 
   const submitAnalysis = async () => {
+      if (!problemDefinitionDisplay.trim()) {
+      setError('Problem Definition is required.');
+      return;
+    }
     const nextContext: QueryContext = {
       origin: origin.trim(),
       destination: destination.trim(),
@@ -940,7 +944,7 @@ export default function Home() {
               </div>
 
               <div className="button-group">
-                <button className="btn-primary" onClick={submitAnalysis} disabled={problemDefinitionDisplay.length > 1000}>
+                <button className="btn-primary" onClick={submitAnalysis} disabled={!problemDefinitionDisplay.trim() ||problemDefinitionDisplay.length > 1000}>
                   {isLoading ? 'Analyzing…' : 'Analyze Scenarios'}
                 </button>
                 <button className="btn-secondary" onClick={clearForm}>
