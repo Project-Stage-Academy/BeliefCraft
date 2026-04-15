@@ -35,6 +35,7 @@ MOCK_SETTINGS = {
     "env_sub_agent": {
         "planner_model_id": "test-planner-model",
         "solver_model_id": "test-solver-model",
+        "max_iterations": 10,
     },
 }
 
