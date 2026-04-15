@@ -79,6 +79,30 @@ class TestMessageConversion:
         assert result[0].tool_calls[0]["name"] == "search"
         assert result[0].tool_calls[0]["args"] == {"query": "test"}
 
+    def test_assistant_message_normalizes_openai_style_tool_calls(
+        self, llm_service: LLMService
+    ) -> None:
+        tool_calls = [
+            {
+                "id": "tc_1",
+                "type": "function",
+                "function": {
+                    "name": "search",
+                    "arguments": '{"query":"test"}',
+                },
+            }
+        ]
+        messages = [{"role": "assistant", "content": "", "tool_calls": tool_calls}]
+
+        result = llm_service._convert_messages_to_langchain(messages)
+
+        assert len(result) == 1
+        assert isinstance(result[0], AIMessage)
+        assert len(result[0].tool_calls) == 1
+        assert result[0].tool_calls[0]["id"] == "tc_1"
+        assert result[0].tool_calls[0]["name"] == "search"
+        assert result[0].tool_calls[0]["args"] == {"query": "test"}
+
     def test_tool_message(self, llm_service: LLMService) -> None:
         messages = [
             {
