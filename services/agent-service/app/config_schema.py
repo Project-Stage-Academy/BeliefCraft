@@ -73,6 +73,7 @@ class EnvSubAgentModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     planner_model_id: str
     solver_model_id: str
+    max_iterations: int
 
 
 class LangSmithConfig(BaseModel):

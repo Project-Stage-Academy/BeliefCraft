@@ -125,7 +125,7 @@ class LLMService:
             elif role == "user":
                 lc_messages.append(HumanMessage(content=content))
             elif role == "assistant":
-                tool_calls = msg.get("tool_calls") or []
+                tool_calls = self._normalize_tool_calls(msg.get("tool_calls") or [])
                 lc_messages.append(AIMessage(content=content, tool_calls=tool_calls))
             elif role == "tool":
                 lc_messages.append(
@@ -136,6 +136,33 @@ class LLMService:
                     )
                 )
         return lc_messages
+
+    def _normalize_tool_calls(self, tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized_tool_calls: list[dict[str, Any]] = []
+
+        for tool_call in tool_calls:
+            function_payload = tool_call.get("function")
+            if isinstance(function_payload, dict):
+                raw_arguments = function_payload.get("arguments", {})
+                arguments = raw_arguments
+                if isinstance(raw_arguments, str):
+                    try:
+                        arguments = json.loads(raw_arguments)
+                    except json.JSONDecodeError:
+                        arguments = raw_arguments
+
+                normalized_tool_calls.append(
+                    {
+                        "id": tool_call.get("id"),
+                        "name": function_payload.get("name"),
+                        "args": arguments,
+                    }
+                )
+                continue
+
+            normalized_tool_calls.append(tool_call)
+
+        return normalized_tool_calls
 
     def _extract_text_from_blocks(self, blocks: list[Any]) -> str:
         """Extract text content from list of content blocks."""

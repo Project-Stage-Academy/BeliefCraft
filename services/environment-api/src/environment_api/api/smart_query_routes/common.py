@@ -22,27 +22,34 @@ def execute_tool(tool_call: Callable[[], ToolResult[Any]]) -> dict[str, Any]:
     try:
         result = tool_call()
         return result.model_dump(mode="json")
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
     except ValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=exc.errors(),
         ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except HTTPException:
+        raise
     except RuntimeError as exc:
-        if isinstance(exc.__cause__, ValueError):
+        cause = exc.__cause__
+
+        if isinstance(cause, HTTPException):
+            raise cause from exc
+        if isinstance(cause, ValidationError):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=str(exc.__cause__),
+                detail=cause.errors(),
             ) from exc
-        if isinstance(exc.__cause__, ValidationError):
+        if isinstance(cause, ValueError):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=exc.__cause__.errors(),
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(cause),
             ) from exc
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Unable to process smart query request.",
