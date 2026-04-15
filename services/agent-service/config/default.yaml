@@ -45,3 +45,10 @@ env_sub_agent:
 
 rag_sub_agent:
   model_id: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+sandbox:
+  image: "agent-sandbox-data-science"
+  timeout_seconds: 50
+  memory_limit: "256m"
+  cpus: 0.5
+  network_disabled: true

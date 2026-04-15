@@ -10,6 +10,7 @@ members = [
     "beliefcraft-database",
     "beliefcraft-environment-api",
     "beliefcraft-rag-service",
+    "beliefcraft-sandbox-runner",
 ]
 
 [[package]]
@@ -159,6 +160,7 @@ dependencies = [
     { name = "beliefcraft-database" },
     { name = "beliefcraft-environment-api" },
     { name = "beliefcraft-rag-service" },
+    { name = "beliefcraft-sandbox-runner" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
 ]
@@ -192,6 +194,7 @@ requires-dist = [
     { name = "beliefcraft-database", editable = "packages/database" },
     { name = "beliefcraft-environment-api", editable = "services/environment-api" },
     { name = "beliefcraft-rag-service", editable = "services/rag-service" },
+    { name = "beliefcraft-sandbox-runner", editable = "services/sandbox-runner" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.0" },
 ]
@@ -434,6 +437,45 @@ dev = [
     { name = "testcontainers", extras = ["weaviate"] },
     { name = "tqdm", specifier = ">=4.67.3" },
     { name = "types-beautifulsoup4", specifier = ">=4.12.0.20250516" },
+]
+
+[[package]]
+name = "beliefcraft-sandbox-runner"
+version = "0.1.0"
+source = { editable = "services/sandbox-runner" }
+dependencies = [
+    { name = "beliefcraft-common" },
+    { name = "fastapi" },
+    { name = "llm-sandbox", extra = ["docker"] },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "beliefcraft-common", editable = "packages/common" },
+    { name = "fastapi", specifier = ">=0.110" },
+    { name = "llm-sandbox", extras = ["docker"], specifier = ">=0.3.37" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pre-commit", specifier = ">=3.0" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
 ]
 
 [[package]]
@@ -1735,6 +1777,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/eb/7697f60fbe7042ab4e88f4ee6af496b7f222fffb0a4e3593ef1f29f81652/librt-0.8.1-cp314-cp314t-win32.whl", hash = "sha256:738f08021b3142c2918c03692608baed43bc51144c29e35807682f8070ee2a3a", size = 51328, upload-time = "2026-02-17T16:12:45.148Z" },
     { url = "https://files.pythonhosted.org/packages/7c/72/34bf2eb7a15414a23e5e70ecb9440c1d3179f393d9349338a91e2781c0fb/librt-0.8.1-cp314-cp314t-win_amd64.whl", hash = "sha256:89815a22daf9c51884fb5dbe4f1ef65ee6a146e0b6a8df05f753e2e4a9359bf4", size = 58722, upload-time = "2026-02-17T16:12:46.85Z" },
     { url = "https://files.pythonhosted.org/packages/b2/c8/d148e041732d631fc76036f8b30fae4e77b027a1e95b7a84bb522481a940/librt-0.8.1-cp314-cp314t-win_arm64.whl", hash = "sha256:bf512a71a23504ed08103a13c941f763db13fb11177beb3d9244c98c29fb4a61", size = 48755, upload-time = "2026-02-17T16:12:47.943Z" },
+]
+
+[[package]]
+name = "llm-sandbox"
+version = "0.3.38"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bb/26/adc3796a2391e26536342187944439ec8f7a9b725f584e4fa828c2f0fd09/llm_sandbox-0.3.38.tar.gz", hash = "sha256:bcd97a780b1499ceb00d5515dbe3cae2a67b738f3ad159681c480e8edb819108", size = 611025, upload-time = "2026-04-12T14:47:47.956Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/b7/a224cfc67be87d1967a946789e53ee62bceb709bda9c0510178edcf2220f/llm_sandbox-0.3.38-py3-none-any.whl", hash = "sha256:4abcf457cd1acefef31bd5959e8c17c7b5e9a28a4334918e2211c793cc91a252", size = 108856, upload-time = "2026-04-12T14:47:46.546Z" },
+]
+
+[package.optional-dependencies]
+docker = [
+    { name = "docker" },
 ]
 
 [[package]]

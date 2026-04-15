@@ -82,6 +82,20 @@ class LangSmithConfig(BaseModel):
     project: str | None = Field(default=None)
 
 
+class SandboxConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    image: str = Field(default="agent-sandbox-data-science")
+    timeout_seconds: int = Field(default=10, ge=1, le=60)
+    runner_url: str = Field(default="http://sandbox-runner:8080")
+    memory_limit: str = Field(
+        default="256m",
+        pattern=r"^[1-9]\d*[bBkKmMgG]$",
+        description="Docker memory string (e.g., 512m, 1g)",
+    )
+    cpus: float = Field(default=0.5, gt=0.0, le=8.0)
+    network_disabled: bool = Field(default=True)
+
+
 class Settings(BaseSettings):
     app: AppConfig = Field(default_factory=AppConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
@@ -92,6 +106,7 @@ class Settings(BaseSettings):
     redis: RedisConfig
     execution: AgentExecutionConfig
     langsmith: LangSmithConfig
+    sandbox: SandboxConfig
 
     react_agent: AgentModelConfig
     env_sub_agent: EnvSubAgentModelConfig

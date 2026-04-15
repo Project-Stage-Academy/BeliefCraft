@@ -8,6 +8,7 @@ Separated from __init__.py to prevent side effects and memory bloat on import.
 from typing import TYPE_CHECKING
 
 from app.tools.cached_tool import CachedTool
+from app.tools.code_tools import PythonSandboxTool
 from app.tools.environment_tools import ENVIRONMENT_TOOL_CLASSES
 from app.tools.mcp_loader import MCPToolLoader
 from app.tools.mcp_tool import MCPClientProtocol
@@ -25,6 +26,15 @@ _global_skill_store: "SkillStore | None" = None
 
 def get_skill_store() -> "SkillStore | None":
     return _global_skill_store
+
+
+def register_code_tools(registry: ToolRegistry) -> None:
+    """Register code execution and sandbox tools."""
+    logger.info("registering_code_tools_started")
+
+    registry.register(PythonSandboxTool())
+
+    logger.info("code_tools_registered", total_tools=len(registry.tools))
 
 
 def register_environment_tools(registry: ToolRegistry) -> None:

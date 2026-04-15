@@ -12,6 +12,7 @@ dependencies = [
     "beliefcraft-environment-api",
     "beliefcraft-rag-service",
     "beliefcraft-agent-service",
+    "beliefcraft-sandbox-runner"
 ]
 
 [tool.uv.sources]
@@ -20,6 +21,7 @@ beliefcraft-database = { workspace = true }
 beliefcraft-environment-api = { workspace = true }
 beliefcraft-rag-service = { workspace = true }
 beliefcraft-agent-service = { workspace = true }
+beliefcraft-sandbox-runner = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -50,6 +52,7 @@ members = [
     "services/environment-api",
     "services/rag-service",
     "services/agent-service",
+    "services/sandbox-runner"
 ]
 
 [tool.black]
@@ -134,7 +137,8 @@ module = [
     "langgraph.*",
     "alembic.*",
     "testcontainers.*",
-    "openai.*"
+    "openai.*",
+    "llm_sandbox.*"
 ]
 ignore_missing_imports = true
 
