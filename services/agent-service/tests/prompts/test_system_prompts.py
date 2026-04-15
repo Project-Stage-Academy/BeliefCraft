@@ -10,7 +10,6 @@ from app.prompts.system_prompts import (
 from langchain_core.messages import AIMessage, ToolMessage
 
 
-
 class TestWarehouseAdvisorSystemPrompt:
     def test_contains_role_description(self) -> None:
         assert "warehouse operations advisor" in WAREHOUSE_ADVISOR_SYSTEM_PROMPT.lower()
