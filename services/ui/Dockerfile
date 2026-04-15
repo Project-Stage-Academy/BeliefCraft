@@ -2,8 +2,8 @@ FROM node:20-alpine AS deps
 
 WORKDIR /app/services/ui
 
-COPY services/ui/package.json ./package.json
-RUN npm install
+COPY services/ui/package.json services/ui/package-lock.json ./
+RUN npm ci
 
 
 FROM node:20-alpine AS runtime
