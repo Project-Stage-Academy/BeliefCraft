@@ -74,6 +74,11 @@ Rules:
 - Add 1–3 additional blocks only when meaningful tradeoffs exist.
 - Each block must be self-contained.
 - If only one course of action exists, write one block only.
+CRITICAL math formatting rules:
+- NEVER mix $...$ and $$...$$ in the same expression
+- Every $$ must be closed with $$ on its own line
+- NEVER open a new $ inside an already open $$ block
+- Each formula must be a self-contained block
 
 Judgment rule: a formula, snippet, or recommendation block earns its place only if
 removing it would make the answer meaningfully less clear. If decorative — omit it.

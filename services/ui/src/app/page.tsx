@@ -401,7 +401,7 @@ const parseRecommendationBlocks = (markdown: string): RecBlock[] => {
       type = typeMatch[1].toLowerCase() as RecBlock['type'];
     }
 
-    const bodyStr = block.slice(title.length).replace(/\*\*Type\*\*:\s*.*(?:\n|$)/i, '').trim();
+    const bodyStr = lines.slice(1).join('\n').replace(/\*\*Type\*\*:\s*.*(?:\n|$)/i, '').trim();
 
     parsed.push({
       id: `rec-block-${i}`,
@@ -962,6 +962,7 @@ export default function Home() {
 function ResponsePanel({ response }: { response: AgentResponse }) {
   const analysisMarkdown = getAnalysisMarkdown(response);
   const recommendations = normalizeRecommendations(response.recommendations);
+  const [isCodeOpen, setIsCodeOpen] = useState(true);
   const warnings = normalizeText(response.warnings);
   const citations = normalizeCitations(response.citations);
   const codeSnippets = normalizeCodeSnippets(response.code_snippets);
@@ -1129,7 +1130,9 @@ function ResponsePanel({ response }: { response: AgentResponse }) {
 
           {recBlocks.length > 0 && (
             <div className="answer-rec-section">
-              <div className="answer-section-label">Recommendations</div>
+              <div className="answer-section-label">
+                <span className="answer-section-label-text">Recommendations</span>
+              </div>
               {recBlocks.map((block) => (
                 <div key={block.id} className={`answer-rec-block answer-rec-${block.type}`}>
                   <div className="answer-rec-header">
@@ -1137,7 +1140,12 @@ function ResponsePanel({ response }: { response: AgentResponse }) {
                     <span className="answer-rec-title">{block.title}</span>
                   </div>
                   <div className="answer-rec-body">
-                    <ReactMarkdown>{block.body}</ReactMarkdown>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {block.body}
+                    </ReactMarkdown>
                   </div>
                 </div>
               ))}
@@ -1155,11 +1163,13 @@ function ResponsePanel({ response }: { response: AgentResponse }) {
           )}
         </div>
 
-
-
         {codeSnippets.length > 0 && (
           <div className="card-section">
-            <div className="section-head">
+            <button
+              type="button"
+              className={`section-head section-head-toggle ${isCodeOpen ? 'open' : ''}`}
+              onClick={() => setIsCodeOpen((prev) => !prev)}
+            >
               <div className="section-icon si-tech">
                 <svg viewBox="0 0 24 24">
                   <polyline points="16 18 22 12 16 6" />
@@ -1167,22 +1177,36 @@ function ResponsePanel({ response }: { response: AgentResponse }) {
                 </svg>
               </div>
               <span className="section-title">Technical Blocks</span>
-            </div>
-            <div className="code-snippets-body">
-              {codeSnippets.map((snippet) => (
-                <div key={snippet.id} className="code-snippet-card">
-                  <div className="code-snippet-title">{snippet.title}</div>
-                  <SyntaxHighlighter
-                    style={oneLight}
-                    language={snippet.language}
-                    PreTag="div"
-                    customStyle={{ margin: 0, padding: '14px 16px', borderRadius: '8px' }}
-                  >
-                    {snippet.code}
-                  </SyntaxHighlighter>
-                </div>
-              ))}
-            </div>
+              <div className="toggle-chevron" style={{ marginLeft: 'auto' }}>
+                <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" /></svg>
+              </div>
+            </button>
+            {isCodeOpen && (
+              <div className="code-snippets-body">
+                {codeSnippets.map((snippet) => (
+                  <div key={snippet.id} className="code-snippet-card">
+                    <div className="code-snippet-title">{snippet.title}</div>
+                    <SyntaxHighlighter
+                      style={oneLight}
+                      language={snippet.language}
+                      PreTag="div"
+                      customStyle={{ 
+                        margin: 0, 
+                        padding: '14px 16px', 
+                        borderRadius: '0 0 8px 8px',
+                        overflowX: 'auto',
+                        overflowY: 'auto',
+                        height: '100%',
+                        maxWidth: '100%',
+                        flex: '1',
+                      }}
+                    >
+                      {snippet.code}
+                    </SyntaxHighlighter>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
