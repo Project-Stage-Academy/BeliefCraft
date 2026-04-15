@@ -25,7 +25,7 @@ class EnvSubAgent(BaseAgent):
         self,
         system_prompt: str | None = None,
         tool_registry: ToolRegistry | None = None,
-        max_iterations: int = 15,
+        max_iterations: int = settings.env_sub_agent.max_iterations,
     ) -> None:
         if tool_registry is None:
             raise ValueError("A configured ToolRegistry must be explicitly injected.")
