@@ -1190,9 +1190,9 @@ function ResponsePanel({ response }: { response: AgentResponse }) {
                       style={oneLight}
                       language={snippet.language}
                       PreTag="div"
-                      customStyle={{ 
-                        margin: 0, 
-                        padding: '14px 16px', 
+                      customStyle={{
+                        margin: 0,
+                        padding: '14px 16px',
                         borderRadius: '0 0 8px 8px',
                         overflowX: 'auto',
                         overflowY: 'auto',
