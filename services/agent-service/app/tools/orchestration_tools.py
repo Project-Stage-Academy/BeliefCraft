@@ -92,6 +92,7 @@ class CallRAGSubAgentTool(BaseTool):
             description=(
                 "Delegate document retrieval and semantic search to a specialized sub-agent. "
                 "This sub-agent finds relevant information in Algorithms for Decision Making book. "
+                "Book is abstract, not Warehouse specific. "
                 "The sub-agent has access to the following "
                 f"specific RAG tools: [{self._capability_summary}]. Sub-agent will return list of "
                 "relevant documents. Don't instruct sub-agent how to perform a task, just give "
@@ -108,7 +109,19 @@ class CallRAGSubAgentTool(BaseTool):
                             "Clear, specific natural language instructions "
                             "outlining exactly what information to find."
                         ),
-                    }
+                    },
+                    "max_iterations": {
+                        "type": "integer",
+                        "description": (
+                            "Maximum number of ReAct iterations for the sub-agent. "
+                            "Controls depth of reasoning and tool usage. "
+                            "Set lower for simpler narrow queries to save tokens, "
+                            "higher for complex queries."
+                        ),
+                        "default": 5,
+                        "minimum": 2,
+                        "maximum": 5,
+                    },
                 },
                 "required": ["agent_query"],
             },
@@ -122,7 +135,9 @@ class CallRAGSubAgentTool(BaseTool):
         from app.services.rag_sub_agent import RAGSubAgent
 
         sub_agent = RAGSubAgent(tool_registry=self.rag_registry)
-        final_state = await sub_agent.run(agent_query=kwargs["agent_query"])
+        final_state = await sub_agent.run(
+            agent_query=kwargs["agent_query"], max_iterations=kwargs["max_iterations"]
+        )
 
         # Extract all documents from ToolMessages in the history
         all_docs: dict[str, dict[str, Any]] = {}

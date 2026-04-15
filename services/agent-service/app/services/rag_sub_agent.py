@@ -264,7 +264,7 @@ class RAGSubAgent(BaseAgent):
     async def run(
         self,
         agent_query: str,
-        max_iterations: int = 10,
+        max_iterations: int = 5,
     ) -> RAGSubAgentState:
         """Run the ReAct loop for a main agent query.
 
