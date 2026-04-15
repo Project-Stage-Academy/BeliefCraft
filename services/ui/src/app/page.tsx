@@ -128,9 +128,7 @@ type NormalizedReasoningIteration = {
 
 const EMPTY_OPTION_LABEL = '—';
 
-const PROBLEM_DEFINITION =
-  'Rank these three supplier orders by expected utility. Spencer-Lee Carroll, ' +
-  'Sullivan and Bass Lawson, Morris and Ramos.';
+const PROBLEM_DEFINITION ='';
 const USE_MOCK_RESPONSE = false;
 
 const DEFAULT_CONTEXT: QueryContext = {
@@ -530,11 +528,6 @@ export default function Home() {
   };
 
   const submitAnalysis = async () => {
-    if (!origin || !destination || !selectedProductValue || !transportMode) {
-      setError('Select origin, destination, product, and transport mode.');
-      return;
-    }
-
     const nextContext: QueryContext = {
       origin: origin.trim(),
       destination: destination.trim(),
@@ -591,8 +584,6 @@ export default function Home() {
       setIsLoading(false);
     }
   };
-
-  const isSubmitDisabled = isLoading || isOptionsLoading || !formOptions;
 
   return (
     <>
@@ -949,7 +940,7 @@ export default function Home() {
               </div>
 
               <div className="button-group">
-                <button className="btn-primary" onClick={submitAnalysis} disabled={isSubmitDisabled || problemDefinitionDisplay.length > 1000}>
+                <button className="btn-primary" onClick={submitAnalysis} disabled={problemDefinitionDisplay.length > 1000}>
                   {isLoading ? 'Analyzing…' : 'Analyze Scenarios'}
                 </button>
                 <button className="btn-secondary" onClick={clearForm}>
